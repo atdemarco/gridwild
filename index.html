@@ -59,6 +59,8 @@
   ></script>
 
   <script>
+    console.log(`Beginning 10:07am`);
+
     // ─────────────────────────────────────────────────────────────
     // Map init
     // ─────────────────────────────────────────────────────────────
@@ -78,6 +80,96 @@
 
     const hud = document.getElementById("status");
 
+	// BEGIN NEW CODE FOR GRID // // // // // // // // // // // // // // // // // // // // // // 
+	// ─────────────────────────────────────────────────────────────
+	// 100x100 ft grid overlay (backdrop for future heatmap)
+	// Uses EPSG:3857 meters via map.project/unproject
+	// ─────────────────────────────────────────────────────────────
+
+	// Put grid above tiles but below markers (tune zIndex as you like)
+	map.createPane("gridPane");
+	map.getPane("gridPane").style.zIndex = 420;
+	map.getPane("gridPane").style.pointerEvents = "none";
+
+	// Grid layer container
+	const gridLayer = L.layerGroup([], { pane: "gridPane" }).addTo(map);
+
+	// 100 ft in meters
+	const GRID_SIZE_M = 50 * 0.3048;
+
+	// Optional: style
+	const GRID_LINE_STYLE = {
+	  pane: "gridPane",
+	  interactive: false,
+	  weight: 1,
+	  opacity: 0.35
+	  // color: "#000"   // uncomment if you want to force a color
+	};
+
+	// How far beyond the viewport to draw (avoids edge gaps)
+	const GRID_PAD_PX = 200;
+
+	// Snap helper
+	function snapDown(x, step) {
+	  return Math.floor(x / step) * step;
+	}
+	function snapUp(x, step) {
+	  return Math.ceil(x / step) * step;
+	}
+
+	function updateGrid() {
+	  gridLayer.clearLayers();
+
+	  const z = map.getZoom();
+	  // If you want to hide grid when zoomed out:
+	  // if (z < 16) return;
+
+	  // Expand bounds a bit so lines don't pop at edges
+	  const b = map.getBounds();
+	  const nw = map.project(b.getNorthWest(), z);
+	  const se = map.project(b.getSouthEast(), z);
+
+	  const paddedNW = L.point(nw.x - GRID_PAD_PX, nw.y - GRID_PAD_PX);
+	  const paddedSE = L.point(se.x + GRID_PAD_PX, se.y + GRID_PAD_PX);
+
+	  // Convert padded pixel points back to latlng, then to projected meters
+	  const llNW = map.unproject(paddedNW, z);
+	  const llSE = map.unproject(paddedSE, z);
+
+	  const pNWm = map.options.crs.project(llNW); // meters in EPSG:3857-ish units
+	  const pSEm = map.options.crs.project(llSE);
+
+	  const minX = Math.min(pNWm.x, pSEm.x);
+	  const maxX = Math.max(pNWm.x, pSEm.x);
+	  const minY = Math.min(pNWm.y, pSEm.y);
+	  const maxY = Math.max(pNWm.y, pSEm.y);
+
+	  // Snap to grid
+	  const startX = snapDown(minX, GRID_SIZE_M);
+	  const endX   = snapUp(maxX, GRID_SIZE_M);
+	  const startY = snapDown(minY, GRID_SIZE_M);
+	  const endY   = snapUp(maxY, GRID_SIZE_M);
+
+	  // Vertical grid lines (constant X)
+	  for (let x = startX; x <= endX; x += GRID_SIZE_M) {
+		const a = map.options.crs.unproject(L.point(x, startY));
+		const b = map.options.crs.unproject(L.point(x, endY));
+		L.polyline([a, b], GRID_LINE_STYLE).addTo(gridLayer);
+	  }
+
+	  // Horizontal grid lines (constant Y)
+	  for (let y = startY; y <= endY; y += GRID_SIZE_M) {
+		const a = map.options.crs.unproject(L.point(startX, y));
+		const b = map.options.crs.unproject(L.point(endX, y));
+		L.polyline([a, b], GRID_LINE_STYLE).addTo(gridLayer);
+	  }
+	}
+
+	// Update on map changes
+	map.on("moveend zoomend resize", updateGrid);
+	updateGrid();
+	//END NEW CODE FOR GRID // // // // // // // // // // // // // // // // // // // // // // // // // // // 
+	
     // ─────────────────────────────────────────────────────────────
     // User location marker + accuracy circle
     // ─────────────────────────────────────────────────────────────
@@ -157,7 +249,87 @@
 	updateFog();
 	
 	// OK END FOG CHUNK OF CODE...
-	
+	// ─────────────────────────────────────────────────────────────
+// On page load: query iNaturalist near map center and plot points
+// ─────────────────────────────────────────────────────────────
+
+const iNatLayer = L.layerGroup().addTo(map);
+
+// Optional: style knobs
+const INAT_POINT_RADIUS = 4;
+const INAT_POINT_OPACITY = 0.9;
+
+// 0.1km = 100 meters
+const INAT_RADIUS_KM = 0.05; // originally .05
+
+// How many obs to fetch (iNat caps per_page; 200 is typical max)
+const INAT_PER_PAGE = 200;
+
+async function fetchINatObservationsNearCenter() {
+  const c = map.getCenter();
+  const lat = c.lat;
+  const lng = c.lng;
+
+  // Build iNaturalist API URL
+  const url = new URL("https://api.inaturalist.org/v1/observations");
+  url.searchParams.set("lat", lat.toString());
+  url.searchParams.set("lng", lng.toString());
+  url.searchParams.set("radius", INAT_RADIUS_KM.toString());     // km
+  url.searchParams.set("per_page", INAT_PER_PAGE.toString());
+  url.searchParams.set("order_by", "created_at");
+  url.searchParams.set("order", "desc");
+  url.searchParams.set("geo", "true"); // ensure georeferenced results
+
+  // If you want only "research grade", uncomment:
+  // url.searchParams.set("quality_grade", "research");
+
+  let data;
+  try {
+    const resp = await fetch(url.toString(), { method: "GET" });
+    if (!resp.ok) throw new Error(`iNat HTTP ${resp.status}`);
+    data = await resp.json();
+  } catch (err) {
+    console.error("iNat fetch failed:", err);
+    return;
+  }
+
+  const results = Array.isArray(data?.results) ? data.results : [];
+  console.log(`iNat: ${results.length} observations within ${INAT_RADIUS_KM} km of center - lat= ${lat.toFixed(6)} long= ${lng.toFixed(6)}`);
+
+  // Clear prior points
+  iNatLayer.clearLayers();
+
+  // Plot as a scatter of circle markers
+  for (const obs of results) {
+    const coords = obs?.geojson?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) continue;
+
+    const oLng = coords[0];
+    const oLat = coords[1];
+
+    const marker = L.circleMarker([oLat, oLng], {
+      radius: INAT_POINT_RADIUS,
+      stroke: false,
+      fill: true,
+      fillOpacity: INAT_POINT_OPACITY
+    });
+
+    // Optional popup
+    const taxon = obs?.taxon?.name ?? "Unknown taxon";
+    const when = obs?.observed_on ?? obs?.time_observed_at ?? "Unknown date";
+    marker.bindPopup(`<b>${taxon}</b><br/>${when}`);
+
+    marker.addTo(iNatLayer);
+  }
+}
+
+// Fire once when the page finishes loading
+window.addEventListener("DOMContentLoaded", () => {
+  // fetchINatObservationsNearCenter(); // version 1 this is the way we listened to fetch inat observations
+});
+
+// end inat layer???
+
 
     function setUserLocation(lat, lng, accuracyMeters) {
       const latlng = [lat, lng];
@@ -200,6 +372,17 @@
           lastFix = { latitude, longitude, accuracy };
           setUserLocation(latitude, longitude, accuracy);
           map.setView([latitude, longitude], 18);
+
+		// 🔥 Run after map finishes moving
+		map.once("moveend", () => {
+		  fetchINatObservationsNearCenter();
+		});
+
+		map.on("moveend", fetchINatObservationsNearCenter);
+		// ^^ NEW CODE YIKES!
+
+
+
         },
         (err) => {
           // Common causes: permission denied, not https, no GPS, timeout
