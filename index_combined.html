@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GridWild</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100%; width: 100%; }
+    .hud {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.92);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-size: 14px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+      max-width: calc(100% - 24px);
+    }
+    .hud b { display: block; margin-bottom: 6px; }
+    .btn {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      background: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:active { transform: translateY(1px); }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="hud" id="hud">
+    <b>GridWild</b>
+    <div id="status">Requesting location…</div>
+    <button class="btn" id="recenter">Recenter</button>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <script>
+    console.log(`Beginning 10:07am`);
+
+    // ─────────────────────────────────────────────────────────────
+    // Map init
+    // ─────────────────────────────────────────────────────────────
+    const map = L.map("map", {
+      zoomControl: true,
+      attributionControl: true
+    });
+
+    // OSM tiles (fine for prototyping; for heavy use, use a proper tile provider)
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Default view (in case location fails)
+    map.setView([38.9072, -77.0369], 13); // DC fallback
+
+    const hud = document.getElementById("status");
+
+	// BEGIN NEW CODE FOR GRID // // // // // // // // // // // // // // // // // // // // // // 
+	// ─────────────────────────────────────────────────────────────
+	// 100x100 ft grid overlay (backdrop for future heatmap)
+	// Uses EPSG:3857 meters via map.project/unproject
+	// ─────────────────────────────────────────────────────────────
+
+	// Put grid above tiles but below markers (tune zIndex as you like)
+	map.createPane("gridPane");
+	map.getPane("gridPane").style.zIndex = 420;
+	map.getPane("gridPane").style.pointerEvents = "none";
+
+	// Grid layer container
+	const gridLayer = L.layerGroup([], { pane: "gridPane" }).addTo(map);
+
+	// 100 ft in meters
+	const GRID_SIZE_M = 50 * 0.3048;
+
+	// Optional: style
+	const GRID_LINE_STYLE = {
+	  pane: "gridPane",
+	  interactive: false,
+	  weight: 1,
+	  opacity: 0.35
+	  // color: "#000"   // uncomment if you want to force a color
+	};
+
+	// How far beyond the viewport to draw (avoids edge gaps)
+	const GRID_PAD_PX = 200;
+
+	// Snap helper
+	function snapDown(x, step) {
+	  return Math.floor(x / step) * step;
+	}
+	function snapUp(x, step) {
+	  return Math.ceil(x / step) * step;
+	}
+
+	function updateGrid() {
+	  gridLayer.clearLayers();
+
+	  const z = map.getZoom();
+	  // If you want to hide grid when zoomed out:
+	  // if (z < 16) return;
+
+	  // Expand bounds a bit so lines don't pop at edges
+	  const b = map.getBounds();
+	  const nw = map.project(b.getNorthWest(), z);
+	  const se = map.project(b.getSouthEast(), z);
+
+	  const paddedNW = L.point(nw.x - GRID_PAD_PX, nw.y - GRID_PAD_PX);
+	  const paddedSE = L.point(se.x + GRID_PAD_PX, se.y + GRID_PAD_PX);
+
+	  // Convert padded pixel points back to latlng, then to projected meters
+	  const llNW = map.unproject(paddedNW, z);
+	  const llSE = map.unproject(paddedSE, z);
+
+	  const pNWm = map.options.crs.project(llNW); // meters in EPSG:3857-ish units
+	  const pSEm = map.options.crs.project(llSE);
+
+	  const minX = Math.min(pNWm.x, pSEm.x);
+	  const maxX = Math.max(pNWm.x, pSEm.x);
+	  const minY = Math.min(pNWm.y, pSEm.y);
+	  const maxY = Math.max(pNWm.y, pSEm.y);
+
+	  // Snap to grid
+	  const startX = snapDown(minX, GRID_SIZE_M);
+	  const endX   = snapUp(maxX, GRID_SIZE_M);
+	  const startY = snapDown(minY, GRID_SIZE_M);
+	  const endY   = snapUp(maxY, GRID_SIZE_M);
+
+	  // Vertical grid lines (constant X)
+	  for (let x = startX; x <= endX; x += GRID_SIZE_M) {
+		const a = map.options.crs.unproject(L.point(x, startY));
+		const b = map.options.crs.unproject(L.point(x, endY));
+		L.polyline([a, b], GRID_LINE_STYLE).addTo(gridLayer);
+	  }
+
+	  // Horizontal grid lines (constant Y)
+	  for (let y = startY; y <= endY; y += GRID_SIZE_M) {
+		const a = map.options.crs.unproject(L.point(startX, y));
+		const b = map.options.crs.unproject(L.point(endX, y));
+		L.polyline([a, b], GRID_LINE_STYLE).addTo(gridLayer);
+	  }
+	}
+
+	// Update on map changes
+	map.on("moveend zoomend resize", updateGrid);
+	updateGrid();
+	//END NEW CODE FOR GRID // // // // // // // // // // // // // // // // // // // // // // // // // // // 
+	
+    // ─────────────────────────────────────────────────────────────
+    // User location marker + accuracy circle
+    // ─────────────────────────────────────────────────────────────
+    let userMarker = null;
+    let accuracyCircle = null;
+	
+	// NOW PSATED FROM GPT
+	
+	// ─────────────────────────────────────────────────────────────
+	// Fog-of-war overlay (pixel-based clear window, viewport-centered)
+	// Clear window stays a fixed fraction of the screen on pan/zoom/resize
+	// ─────────────────────────────────────────────────────────────
+
+	// Put fog above tiles but below markers/popups
+	map.createPane("fogPane");
+	map.getPane("fogPane").style.zIndex = 450;
+	map.getPane("fogPane").style.pointerEvents = "none";
+
+	// World-sized outer ring (big rectangle covering the world)
+	const FOG_WORLD_RING = [ [ 85, -180], [ 85,  180], [-85,  180], [-85, -180]];
+
+	// Clear window as a fraction of the current map container (0..1)
+	const FOG_CLEAR_FRACTION_W = 0.60;  // 60% of map width is clear
+	const FOG_CLEAR_FRACTION_H = 0.60;  // 60% of map height is clear
+
+	let fogLayer = null;
+
+	function ringFromLatLngBounds(bounds) {
+	  const sw = bounds.getSouthWest();
+	  const ne = bounds.getNorthEast();
+	  const nw = L.latLng(ne.lat, sw.lng);
+	  const se = L.latLng(sw.lat, ne.lng);
+
+	  // Ring order: NW -> NE -> SE -> SW
+	  return [ [nw.lat, nw.lng], [ne.lat, ne.lng],[se.lat, se.lng],[sw.lat, sw.lng] ]
+	}
+
+	function updateFog() {
+	  const size = map.getSize();
+	  const cx = size.x / 2;
+	  const cy = size.y / 2;
+
+	  const halfW = (size.x * FOG_CLEAR_FRACTION_W) / 2;
+	  const halfH = (size.y * FOG_CLEAR_FRACTION_H) / 2;
+
+	  // Pixel-space clear rect in container coordinates
+	  const pNW = L.point(cx - halfW, cy - halfH);
+	  const pSE = L.point(cx + halfW, cy + halfH);
+
+	  // Convert to lat/lng bounds (viewport-centered, fixed screen fraction)
+	  const llNW = map.containerPointToLatLng(pNW);
+	  const llSE = map.containerPointToLatLng(pSE);
+
+	  const clearBounds = L.latLngBounds(llNW, llSE);
+	  if (!clearBounds.isValid()) return;
+
+	  const clearRing = ringFromLatLngBounds(clearBounds);
+
+	  // Polygon with a hole: [outerRing, innerRing]
+	  const latlngs = [FOG_WORLD_RING, clearRing];
+
+	  if (!fogLayer) {
+		fogLayer = L.polygon(latlngs, {
+		  pane: "fogPane",
+		  stroke: false,
+		  fill: true,
+		  fillColor: "#6b6f76",
+		  fillOpacity: 0.55,
+		  interactive: false
+		}).addTo(map);
+	  } else {
+		fogLayer.setLatLngs(latlngs);
+	  }
+	}
+
+	map.on("move zoom resize moveend zoomend", updateFog);
+	updateFog();
+	
+	// OK END FOG CHUNK OF CODE...
+	// ─────────────────────────────────────────────────────────────
+	// On page load: query iNaturalist near map center and plot points
+	// ─────────────────────────────────────────────────────────────
+
+	const iNatLayer = L.layerGroup().addTo(map);
+
+	// Optional: style knobs
+	const INAT_POINT_RADIUS = 4;
+	const INAT_POINT_OPACITY = 0.9;
+
+	// 0.1km = 100 meters
+	const INAT_RADIUS_KM = 0.05; // originally .05
+
+	// How many obs to fetch (iNat caps per_page; 200 is typical max)
+	const INAT_PER_PAGE = 200;
+
+	async function fetchINatObservationsNearCenter() {
+	  const c = map.getCenter();
+	  const lat = c.lat;
+	  const lng = c.lng;
+
+	  // Build iNaturalist API URL
+	  const url = new URL("https://api.inaturalist.org/v1/observations");
+	  url.searchParams.set("lat", lat.toString());
+	  url.searchParams.set("lng", lng.toString());
+	  url.searchParams.set("radius", INAT_RADIUS_KM.toString());     // km
+	  url.searchParams.set("per_page", INAT_PER_PAGE.toString());
+	  url.searchParams.set("order_by", "created_at");
+	  url.searchParams.set("order", "desc");
+	  url.searchParams.set("geo", "true"); // ensure georeferenced results
+
+	  // If you want only "research grade", uncomment:
+	  // url.searchParams.set("quality_grade", "research");
+
+	  let data;
+	  try {
+		const resp = await fetch(url.toString(), { method: "GET" });
+		if (!resp.ok) throw new Error(`iNat HTTP ${resp.status}`);
+		data = await resp.json();
+	  } catch (err) {
+		console.error("iNat fetch failed:", err);
+		return;
+	  }
+
+	  const results = Array.isArray(data?.results) ? data.results : [];
+	  console.log(`iNat: ${results.length} observations within ${INAT_RADIUS_KM} km of center - lat= ${lat.toFixed(6)} long= ${lng.toFixed(6)}`);
+
+	  // Clear prior points
+	  iNatLayer.clearLayers();
+
+	  // Plot as a scatter of circle markers
+	  for (const obs of results) {
+		const coords = obs?.geojson?.coordinates;
+		if (!Array.isArray(coords) || coords.length < 2) continue;
+
+		const oLng = coords[0];
+		const oLat = coords[1];
+
+		const marker = L.circleMarker([oLat, oLng], {
+		  radius: INAT_POINT_RADIUS,
+		  stroke: false,
+		  fill: true,
+		  fillOpacity: INAT_POINT_OPACITY
+		});
+
+		// Optional popup
+		const taxon = obs?.taxon?.name ?? "Unknown taxon";
+		const when = obs?.observed_on ?? obs?.time_observed_at ?? "Unknown date";
+		marker.bindPopup(`<b>${taxon}</b><br/>${when}`);
+
+		marker.addTo(iNatLayer);
+	  }
+	}
+
+	// Fire once when the page finishes loading
+	window.addEventListener("DOMContentLoaded", () => {
+	  // fetchINatObservationsNearCenter(); // version 1 this is the way we listened to fetch inat observations
+	});
+
+	// end inat layer???
+
+
+    function setUserLocation(lat, lng, accuracyMeters) {
+      const latlng = [lat, lng];
+
+      if (!userMarker) {
+        userMarker = L.marker(latlng).addTo(map).bindPopup("You are here");
+      } else {
+        userMarker.setLatLng(latlng);
+      }
+
+      if (!accuracyCircle) {
+        accuracyCircle = L.circle(latlng, {
+          radius: Math.max(accuracyMeters || 0, 5)
+        }).addTo(map);
+      } else {
+        accuracyCircle.setLatLng(latlng);
+        accuracyCircle.setRadius(Math.max(accuracyMeters || 0, 5));
+      }
+
+      hud.textContent =
+        `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m)`;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Geolocation
+    // ─────────────────────────────────────────────────────────────
+    let lastFix = null;
+
+    function requestLocationOnce() {
+      if (!("geolocation" in navigator)) {
+        hud.textContent = "Geolocation not supported in this browser.";
+        return;
+      }
+
+      hud.textContent = "Requesting location permission…";
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          lastFix = { latitude, longitude, accuracy };
+          setUserLocation(latitude, longitude, accuracy);
+          map.setView([latitude, longitude], 18);
+
+		// 🔥 Run after map finishes moving
+		map.once("moveend", () => {
+		  fetchINatObservationsNearCenter();
+		});
+
+		map.on("moveend", fetchINatObservationsNearCenter);
+		// ^^ NEW CODE YIKES!
+
+
+
+        },
+        (err) => {
+          // Common causes: permission denied, not https, no GPS, timeout
+          hud.textContent = `Location error: ${err.message}`;
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 5000
+        }
+      );
+    }
+
+    // Live tracking (optional but usually what you want on a phone)
+    function startWatchingLocation() {
+      if (!("geolocation" in navigator)) return null;
+
+      return navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          lastFix = { latitude, longitude, accuracy };
+          setUserLocation(latitude, longitude, accuracy);
+        },
+        (err) => {
+          hud.textContent = `Location error: ${err.message}`;
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 5000
+        }
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // UI
+    // ─────────────────────────────────────────────────────────────
+    document.getElementById("recenter").addEventListener("click", () => {
+      if (lastFix) {
+        map.setView([lastFix.latitude, lastFix.longitude], Math.max(map.getZoom(), 18));
+      } else {
+        requestLocationOnce();
+      }
+    });
+
+    // Kick off
+    requestLocationOnce();
+    const watchId = startWatchingLocation();
+
+    // If you ever need to stop tracking:
+    // if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  </script>
+</body>
+</html>
