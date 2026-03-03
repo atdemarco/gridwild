@@ -5,7 +5,7 @@ async function fetchINatObservationsNearCenter() {
 	const lng = c.lng;
 	console.log(`Beginning iNat query...`);
 
-	const INAT_MAX_RESULTS = 200;
+	const INAT_MAX_RESULTS = 1000;
 	const INAT_RADIUS_KM = 0.03; // 0.05 km = 50 meters
 	window.iNatLayer = window.iNatLayer || L.layerGroup().addTo(map); // so we don't just keep adding new layers...
 
