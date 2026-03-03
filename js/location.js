@@ -20,9 +20,7 @@
         `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m)`;
     }
 
-    // ─────────────────────────────────────────────────────────────
     // Geolocation
-    // ─────────────────────────────────────────────────────────────
     let lastFix = null;
 
     function requestLocationOnce() {
@@ -43,11 +41,16 @@
 		// 🔥 Run after map finishes moving
 		map.once("moveend", () => {
 		  fetchINatObservationsNearCenter();
+		
+			/// BEGN NEW		
+			if (typeof window.scheduleOSMVectorOverlayUpdate === "function") {
+			window.scheduleOSMVectorOverlayUpdate();
+			}
+			// END NEW		  
+			  
 		});
 
 		map.on("moveend", fetchINatObservationsNearCenter);
-
-
 
         },
         (err) => {

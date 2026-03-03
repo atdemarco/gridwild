@@ -1,18 +1,14 @@
 async function fetchINatObservationsNearCenter() {
 	
-	  
-  const c = map.getCenter();
-  const lat = c.lat;
-  const lng = c.lng;
-  console.log(`Beginning iNat query...`);
-
-	// iNat request cancellation + "latest request wins"
-	let inatAbortController = null;
-	let inatRequestSeq = 0; // increments each time we start a new fetch
+	const c = map.getCenter();
+	const lat = c.lat;
+	const lng = c.lng;
+	console.log(`Beginning iNat query...`);
 
 	const INAT_MAX_RESULTS = 200;
-	const INAT_RADIUS_KM = 0.05; // 0.05 km = 50 meters
-	const iNatLayer = L.layerGroup().addTo(map);
+	const INAT_RADIUS_KM = 0.03; // 0.05 km = 50 meters
+	window.iNatLayer = window.iNatLayer || L.layerGroup().addTo(map); // so we don't just keep adding new layers...
+
 
 	// Optional: style knobs
 	const INAT_POINT_RADIUS = 4;
@@ -33,12 +29,11 @@ async function fetchINatObservationsNearCenter() {
 
   let allResults = [];
   let page = 1;
-
-  // ─────────────────────────────────────────────────────────────
+  
+  
   // Paging loop
-  // ─────────────────────────────────────────────────────────────
   while (allResults.length < INAT_MAX_RESULTS) {
-	 
+
     const url = new URL(baseUrl.toString());
     url.searchParams.set("page", page.toString());
 
@@ -80,9 +75,9 @@ async function fetchINatObservationsNearCenter() {
     )} lon=${lng.toFixed(6)}`
   );
 
-  // Clear prior points
-  iNatLayer.clearLayers();
-
+  // Clear prior points 
+  window.iNatLayer.clearLayers();
+  
   // Plot scatter
   for (const obs of allResults) {
     const coords = obs?.geojson?.coordinates;

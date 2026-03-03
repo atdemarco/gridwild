@@ -1,6 +1,4 @@
-    // ─────────────────────────────────────────────────────────────
     // Map init
-    // ─────────────────────────────────────────────────────────────
     const map = L.map("map", {
       zoomControl: true,
       attributionControl: true
@@ -17,8 +15,6 @@
 
     const hud = document.getElementById("status");
 
-  // ─────────────────────────────────────────────────────────────
     // User location marker + accuracy circle
-    // ─────────────────────────────────────────────────────────────
     let userMarker = null;
     let accuracyCircle = null;

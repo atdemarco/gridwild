@@ -13,6 +13,10 @@
     crossorigin=""
   />
 
+
+	<script src="https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js"></script>
+
+
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: 100%; width: 100%; }
@@ -60,10 +64,10 @@
 
 	<script src="js/mapinit.js"></script> 
 	<script src="js/initgrid.js"></script> 
-	<script src="js/initfogofwar.js"></script> 
 	<script src="js/inatscatter.js"></script> 
+<!--	<script src="js/osmoverlay.js"></script>     TEMP DISABLED --> 
 	<script src="js/location.js"></script> 
-
+	
   <script>
     console.log(`Beginning 10:07am`);
     // ─────────────────────────────────────────────────────────────
@@ -71,7 +75,7 @@
     // ─────────────────────────────────────────────────────────────
     document.getElementById("recenter").addEventListener("click", () => {
       if (lastFix) {
-        map.setView([lastFix.latitude, lastFix.longitude], Math.max(map.getZoom(), 18));
+        map.setView([lastFix.latitude, lastFix.longitude], Math.max(map.getZoom(), 10));
       } else {
         requestLocationOnce();
       }

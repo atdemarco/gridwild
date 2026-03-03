@@ -1,5 +1,7 @@
+// ─────────────────────────────────────────────────────────────
 // 100x100 ft grid overlay + heat-tinted tiles
 // Uses EPSG:3857 meters via map.project/unproject
+// ─────────────────────────────────────────────────────────────
 
 // Heat tiles under the grid lines, but above base map tiles
 map.createPane("gridHeatPane");
@@ -16,7 +18,7 @@ const gridHeatLayer = L.layerGroup([], { pane: "gridHeatPane" }).addTo(map);
 const gridLineLayer = L.layerGroup([], { pane: "gridPane" }).addTo(map);
 
 // 50  ft in meters
-const GRID_SIZE_M = 20 * 0.3048;
+const GRID_SIZE_M = 50 * 0.3048;
 
 // Optional: style (grid lines)
 const GRID_LINE_STYLE = {
@@ -129,7 +131,10 @@ function obsResultsToGridCounts(results) {
   return counts;
 }
 
+// ─────────────────────────────────────────────────────────────
 // Grid heat rendering
+// ─────────────────────────────────────────────────────────────
+
 function updateGridHeat(results) {
   gridHeatLayer.clearLayers();
 
@@ -194,3 +199,117 @@ function updateGrid() {
 
 map.on("moveend zoomend resize", updateGrid);
 updateGrid();
+
+// ─────────────────────────────────────────────────────────────
+// OSM buildings (for masking / subdivision)
+// Fetches building footprints from Overpass and exposes them globally
+// ─────────────────────────────────────────────────────────────
+
+map.createPane("osmBuildingsPane");
+map.getPane("osmBuildingsPane").style.zIndex = 412; // under heat (415) and grid (420)
+map.getPane("osmBuildingsPane").style.pointerEvents = "none";
+
+const osmBuildingLayer = L.layerGroup([], { pane: "osmBuildingsPane" }).addTo(map);
+
+// Each entry: { id, latlngs: L.LatLng[], bounds: L.LatLngBounds }
+window.__osmBuildingPolys = window.__osmBuildingPolys || [];
+window.__osmBuildingsLastKey = window.__osmBuildingsLastKey || null;
+
+// A light cache key so we don't hammer Overpass on tiny pans.
+// Rounds bounds to ~3 decimals (~100m) + zoom.
+function __buildingsCacheKey(bounds, zoom) {
+  const s = bounds.getSouthWest();
+  const n = bounds.getNorthEast();
+  const r = (x) => Number(x).toFixed(3);
+  return `${zoom}|${r(s.lat)},${r(s.lng)},${r(n.lat)},${r(n.lng)}`;
+}
+
+async function __fetchOSMBuildingsOverpass(bounds) {
+  // Overpass bbox order: south,west,north,east
+  const s = bounds.getSouthWest();
+  const n = bounds.getNorthEast();
+
+  // Prefer only "ways" with geometry for simplicity (most building footprints are ways).
+  const query =
+    `[out:json][timeout:25];` +
+    `(` +
+    `way["building"](${s.lat},${s.lng},${n.lat},${n.lng});` +
+    `);` +
+    `out geom;`;
+
+  const url = "https://overpass-api.de/api/interpreter";
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body: "data=" + encodeURIComponent(query)
+  });
+
+  if (!resp.ok) {
+    throw new Error(`Overpass HTTP ${resp.status}`);
+  }
+  return await resp.json();
+}
+
+function __ingestOSMBuildingJSON(osmJson) {
+  const elements = Array.isArray(osmJson?.elements) ? osmJson.elements : [];
+  const polys = [];
+
+  for (const el of elements) {
+    if (el?.type !== "way") continue;
+    const geom = Array.isArray(el?.geometry) ? el.geometry : null;
+    if (!geom || geom.length < 3) continue;
+
+    const latlngs = geom.map((g) => L.latLng(g.lat, g.lon));
+
+    // Some ways repeat the first point at end; Leaflet is fine either way.
+    const bounds = L.latLngBounds(latlngs);
+
+    polys.push({
+      id: `way/${el.id}`,
+      latlngs,
+      bounds
+    });
+  }
+
+  return polys;
+}
+
+// Public: ensure buildings are loaded for the current (padded) viewport.
+// Called by the iNat scatter so we can mask dots over buildings.
+window.ensureOSMBuildings = async function ensureOSMBuildings() {
+  // Use a padded bounds to avoid pop-in at edges
+  const b = map.getBounds().pad(0.15);
+  const z = map.getZoom();
+  const key = __buildingsCacheKey(b, z);
+
+  if (window.__osmBuildingsLastKey === key && window.__osmBuildingPolys.length) {
+    return window.__osmBuildingPolys;
+  }
+
+  try {
+    const osm = await __fetchOSMBuildingsOverpass(b);
+    const polys = __ingestOSMBuildingJSON(osm);
+
+    window.__osmBuildingPolys = polys;
+    window.__osmBuildingsLastKey = key;
+
+    // Optional: render a subtle outline so you can see what is being masked.
+    // Comment these lines out if you want it invisible.
+    osmBuildingLayer.clearLayers();
+    for (const p of polys) {
+      L.polygon(p.latlngs, {
+        pane: "osmBuildingsPane",
+        interactive: false,
+        weight: 1,
+        opacity: 0.25,
+        fill: false
+      }).addTo(osmBuildingLayer);
+    }
+
+    return polys;
+  } catch (err) {
+    console.warn("Overpass building fetch failed (masking disabled for now):", err);
+    // Do not throw; just fall back to no-mask behavior.
+    return [];
+  }
+};
