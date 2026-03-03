@@ -1,23 +1,24 @@
 async function fetchINatObservationsNearCenter() {
+	
+	  
   const c = map.getCenter();
   const lat = c.lat;
   const lng = c.lng;
   console.log(`Beginning iNat query...`);
 
-	const INAT_MAX_RESULTS = 200;
-	// 0.05 km = 50 meters
-	const INAT_RADIUS_KM = 0.05;
+	// iNat request cancellation + "latest request wins"
+	let inatAbortController = null;
+	let inatRequestSeq = 0; // increments each time we start a new fetch
 
+	const INAT_MAX_RESULTS = 200;
+	const INAT_RADIUS_KM = 0.05; // 0.05 km = 50 meters
 	const iNatLayer = L.layerGroup().addTo(map);
 
 	// Optional: style knobs
 	const INAT_POINT_RADIUS = 4;
 	const INAT_POINT_OPACITY = 0.9;
 
-
-	// How many obs to fetch (iNat caps per_page; 200 is typical max)
-	const INAT_PER_PAGE = 200;
-
+	const INAT_PER_PAGE = 200; // How many obs to fetch (iNat caps per_page; 200 is typical max)
 
 
   // Build base URL (without page param yet)
@@ -37,6 +38,7 @@ async function fetchINatObservationsNearCenter() {
   // Paging loop
   // ─────────────────────────────────────────────────────────────
   while (allResults.length < INAT_MAX_RESULTS) {
+	 
     const url = new URL(baseUrl.toString());
     url.searchParams.set("page", page.toString());
 

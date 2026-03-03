@@ -46,7 +46,6 @@
 		});
 
 		map.on("moveend", fetchINatObservationsNearCenter);
-		// ^^ NEW CODE YIKES!
 
 
 
