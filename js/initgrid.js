@@ -1,3 +1,6 @@
+// Static heatmap store (when I introduced static assets)
+window.__staticGridCounts = new Map();
+
 // 100x100 ft grid overlay + heat-tinted tiles
 // Uses EPSG:3857 meters via map.project/unproject
 
@@ -38,8 +41,8 @@ const HEAT_TILE_STYLE_BASE = {
 // How far beyond the viewport to draw (avoids edge gaps)
 const GRID_PAD_PX = 200;
 
-// Heat scale cap (user request: max color at 25)
-const HEAT_MAX_COUNT = 25;
+// Heat scale cap ( max color at 25)
+const HEAT_MAX_COUNT = 5;
 
 // Cache the last iNat results so heat can redraw on pan/zoom
 window.__inatLastResults = window.__inatLastResults || [];
@@ -157,11 +160,19 @@ function updateGridHeat(results) {
   }
 }
 
-// Expose a global for the iNat fetcher to call
 window.updateGridHeatmap = function(results) {
+  // Keep caching results for popup logic, etc.
   window.__inatLastResults = Array.isArray(results) ? results : [];
-  updateGridHeat(window.__inatLastResults);
+  // DO NOT redraw heat from live iNat results.
+  // Static CSV is the source of truth for the heat layer.
 };
+
+// Expose a global for the iNat fetcher to call
+//window.updateGridHeatmap = function(results) {
+//  window.__inatLastResults = Array.isArray(results) ? results : [];
+//  updateGridHeat(window.__inatLastResults);
+//};
+
 
 // ─────────────────────────────────────────────────────────────
 // Grid lines rendering
@@ -187,19 +198,25 @@ function updateGridLines() {
   }
 }
 
+// THIS WAS COMMENTED OUT WHEN I INTRODUCED STATIC ASSETS
+//function updateGrid() {
+//  updateGridLines();
+//  updateGridHeat(window.__inatLastResults);
+//}
+
+// this now renders the static assets
 function updateGrid() {
   updateGridLines();
-  updateGridHeat(window.__inatLastResults);
+  updateStaticGridHeat();
 }
 
 map.on("moveend zoomend resize", updateGrid);
 updateGrid();
+loadStaticHeatmapCsv("assets/dc_heat.csv");
 
 ////////
 
-// ─────────────────────────────────────────────────────────────
 // RPG-style grid cell popup on double click
-// ─────────────────────────────────────────────────────────────
 
 // Disable Leaflet dblclick-to-zoom so we can use dblclick for UI
 map.doubleClickZoom.disable();
@@ -429,3 +446,89 @@ function __onGridDblClick(e) {
 
 // Enable by default
 window.enableGridRPGPopup();
+
+// Allow UI SIDEBAR to toggle the heat overlay
+window.setHeatVisible = function (visible) {
+  if (visible) {
+    if (!map.hasLayer(gridHeatLayer)) gridHeatLayer.addTo(map);
+  } else {
+    if (map.hasLayer(gridHeatLayer)) map.removeLayer(gridHeatLayer);
+  }
+};
+// End allow  UI to toggle the heat overlay
+
+
+// Load static CSV: ix,iy,count -- when I added static assets
+async function loadStaticHeatmapCsv(url) {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const text = await resp.text();
+    const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+
+    if (lines.length < 2) {
+      console.warn("Static heat CSV is empty or header-only.");
+      return;
+    }
+
+    const header = lines[0].trim().toLowerCase();
+    if (header !== "ix,iy,count") {
+      console.warn(`Unexpected CSV header: ${header}`);
+    }
+
+    const counts = new Map();
+
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split(",");
+      if (parts.length < 3) continue;
+
+      const ix = Number(parts[0]);
+      const iy = Number(parts[1]);
+      const count = Number(parts[2]);
+
+      if (!Number.isFinite(ix) || !Number.isFinite(iy) || !Number.isFinite(count)) {
+        continue;
+      }
+
+      counts.set(`${ix},${iy}`, count);
+    }
+
+    window.__staticGridCounts = counts;
+    console.log(`Loaded static heatmap cells: ${counts.size}`);
+
+    updateStaticGridHeat();
+  } catch (err) {
+    console.error("Failed to load static heat CSV:", err);
+  }
+}
+
+// more for static assets -- Render precomputed static heatmap
+function updateStaticGridHeat() {
+  gridHeatLayer.clearLayers();
+
+  const counts = window.__staticGridCounts;
+  if (!(counts instanceof Map) || counts.size === 0) return;
+
+  const { startX, endX, startY, endY } = getPaddedBoundsMeters();
+
+  for (let x = startX; x < endX; x += GRID_SIZE_M) {
+    for (let y = startY; y < endY; y += GRID_SIZE_M) {
+      const ix = Math.floor(x / GRID_SIZE_M);
+      const iy = Math.floor(y / GRID_SIZE_M);
+      const key = `${ix},${iy}`;
+
+      const c = counts.get(key) || 0;
+      const style = countToFill(c);
+      if (!style) continue;
+
+      const sw = map.options.crs.unproject(L.point(x, y));
+      const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
+
+      L.rectangle([sw, ne], {
+        ...HEAT_TILE_STYLE_BASE,
+        ...style
+      }).addTo(gridHeatLayer);
+    }
+  }
+}
