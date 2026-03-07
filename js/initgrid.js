@@ -25,8 +25,8 @@ const GRID_SIZE_M = 20 * 0.3048;
 const GRID_LINE_STYLE = {
   pane: "gridPane",
   interactive: false,
-  weight: 1,
-  opacity: 0.35
+  weight: .8,
+  opacity: 0.25
   // color: "#000"   // uncomment if you want to force a color
 };
 
@@ -196,6 +196,40 @@ function updateGridLines() {
     const b = map.options.crs.unproject(L.point(endX, y));
     L.polyline([a, b], GRID_LINE_STYLE).addTo(gridLineLayer);
   }
+
+ // ─────────────────────────────────────────────────────────────
+  // Highlight center cell and its 8 neighbors
+  // ─────────────────────────────────────────────────────────────
+  const c = map.getCenter();
+  const p = map.options.crs.project(c);
+
+  const centerIx = Math.floor(p.x / GRID_SIZE_M);
+  const centerIy = Math.floor(p.y / GRID_SIZE_M);
+
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const ix = centerIx + dx;
+      const iy = centerIy + dy;
+
+      const x0 = ix * GRID_SIZE_M;
+      const y0 = iy * GRID_SIZE_M;
+
+      const sw = map.options.crs.unproject(L.point(x0, y0));
+      const ne = map.options.crs.unproject(L.point(x0 + GRID_SIZE_M, y0 + GRID_SIZE_M));
+
+      const isCenter = dx === 0 && dy === 0;
+
+      L.rectangle([sw, ne], {
+        pane: "gridPane",
+        interactive: false,
+        color: "#000",
+        opacity: isCenter ? 0.55 : 0.28,
+        weight: isCenter ? 3 : 2,
+        fill: false
+      }).addTo(gridLineLayer);
+    }
+  }
+
 }
 
 // THIS WAS COMMENTED OUT WHEN I INTRODUCED STATIC ASSETS
