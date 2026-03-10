@@ -147,35 +147,47 @@
 <div id="sidebar" class="gw-sidebar gw-collapsed">
   <button id="sidebarToggle" class="gw-toggle" title="Toggle sidebar">☰</button>
 
+  
   <div class="gw-panel">
     <div class="gw-title">Layers</div>
 
-    <label class="gw-row">
-      <input type="checkbox" id="togglePoints" checked />
-      <span>Show points</span>
-    </label>
+  
 
-    <label class="gw-row">
-      <input type="checkbox" id="toggleHeat" checked />
-      <span>Show heat</span>
-    </label>
+<label class="gw-row">
+  <input type="checkbox" id="togglePoints" /> 
+  <span>Show points</span>
+</label>
 
-    <div class="gw-title" style="margin-top:10px;">Filter</div>
+<label class="gw-row">
+  <input type="checkbox" id="toggleHeat" checked />
+  <span>Show heat</span>
+</label>
+
+<label class="gw-row">
+  <input type="checkbox" id="toggleDynamicINat" />
+  <span>Live iNat</span>
+</label>
+
+<label class="gw-row">
+  <input type="checkbox" id="toggleFog" checked />
+  <span>Fog of war</span>
+</label>
+
+<label class="gw-row">
+  <input type="checkbox" id="toggleLockLocation" checked />
+  <span>Lock to current location</span>
+</label>
 
     <!-- Multi-check “dropdown” using <details> -->
     <details class="gw-details" id="taxaDetails">
       <summary class="gw-summary">Iconic taxa</summary>
       <div class="gw-checklist" id="taxaChecklist"></div>
       <div class="gw-hint">Selecting filters affects the iNat query + plot.</div>
-    </details>
+    </details> 
+  
   </div>
 </div>
-<!-- ─────────────────────────────────────────────────────────────
-     END Sidebar UI (collapsible)
-     ───────────────────────────────────────────────────────────── -->
-
-
-
+<!-- END Sidebar UI (collapsible) -->
 
 
 
@@ -185,6 +197,7 @@
     <button class="btn" id="recenter">Recenter</button>
   </div>
 
+  
   <!-- Leaflet JS -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"

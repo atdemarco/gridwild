@@ -1,5 +1,19 @@
 // Static heatmap store (when I introduced static assets)
 window.__staticGridCounts = new Map();
+// const FOG_RADIUS_CELLS = 12;
+
+function getCurrentUserCellIndices() {
+  if (typeof lastFix === "undefined" || !lastFix) return null;
+
+  const p = map.options.crs.project(
+    L.latLng(lastFix.latitude, lastFix.longitude)
+  );
+
+  return {
+    ix: Math.floor(p.x / GRID_SIZE_M),
+    iy: Math.floor(p.y / GRID_SIZE_M)
+  };
+}
 
 // 100x100 ft grid overlay + heat-tinted tiles
 // Uses EPSG:3857 meters via map.project/unproject
@@ -61,8 +75,30 @@ function clamp01(t) {
   return Math.max(0, Math.min(1, t));
 }
 
-// Pleasant ramp using HSL: blue -> orange/red
+// NEW
 function countToFill(count) {
+  if (!count || count <= 0) return null;
+
+  const maxCount = HEAT_MAX_COUNT;
+  const logDen = Math.log1p(maxCount);
+  const tLinear = Math.min(count, maxCount) / maxCount;
+  const tLog = Math.log1p(Math.min(count, maxCount)) / logDen;
+
+  const useLog = window.__gwState?.logHeat ?? true;
+  const t = useLog ? tLog : tLinear;
+
+  const hue = 200 + (20 - 200) * t;
+  const sat = 85;
+  const light = 60 - 12 * t;
+  const fillColor = `hsl(${hue.toFixed(1)}, ${sat}%, ${light.toFixed(1)}%)`;
+  const fillOpacity = 0.10 + 0.55 * Math.pow(t, 0.85);
+
+  return { fillColor, fillOpacity };
+}
+
+
+// Pleasant ramp using HSL: blue -> orange/red
+function countToFillOLD(count) {
   if (!count || count <= 0) return null; // transparent for 0
   const t = clamp01(Math.min(count, HEAT_MAX_COUNT) / HEAT_MAX_COUNT);
 
@@ -232,26 +268,22 @@ function updateGridLines() {
 
 }
 
-// THIS WAS COMMENTED OUT WHEN I INTRODUCED STATIC ASSETS
-//function updateGrid() {
-//  updateGridLines();
-//  updateGridHeat(window.__inatLastResults);
-//}
-
 // this now renders the static assets
 function updateGrid() {
   updateGridLines();
   updateStaticGridHeat();
 }
 
-map.on("moveend zoomend resize", updateGrid);
+map.on("zoomend resize", updateGrid);
+map.on("moveend", updateGridLines);
 updateGrid();
+
+
 loadStaticHeatmapCsv("assets/dc_heat.csv");
 
 ////////
 
 // RPG-style grid cell popup on double click
-
 // Disable Leaflet dblclick-to-zoom so we can use dblclick for UI
 map.doubleClickZoom.disable();
 
@@ -538,8 +570,15 @@ async function loadStaticHeatmapCsv(url) {
 }
 
 // more for static assets -- Render precomputed static heatmap
+function isWithinFogRadius(ix, iy, cx, cy, radiusCells = 25) {
+  return Math.abs(ix - cx) <= radiusCells && Math.abs(iy - cy) <= radiusCells;
+}
+
 function updateStaticGridHeat() {
   gridHeatLayer.clearLayers();
+
+  const fogOn = window.__gwState?.showFog ?? true;
+  const centerCell = getCurrentUserCellIndices();
 
   const counts = window.__staticGridCounts;
   if (!(counts instanceof Map) || counts.size === 0) return;
@@ -550,8 +589,14 @@ function updateStaticGridHeat() {
     for (let y = startY; y < endY; y += GRID_SIZE_M) {
       const ix = Math.floor(x / GRID_SIZE_M);
       const iy = Math.floor(y / GRID_SIZE_M);
-      const key = `${ix},${iy}`;
 
+      if (fogOn && centerCell) {
+        if (!isWithinFogRadius(ix, iy, centerCell.ix, centerCell.iy, 10)) {
+          continue;
+        }
+      }
+
+      const key = `${ix},${iy}`;
       const c = counts.get(key) || 0;
       const style = countToFill(c);
       if (!style) continue;
@@ -565,4 +610,57 @@ function updateStaticGridHeat() {
       }).addTo(gridHeatLayer);
     }
   }
+}
+
+//
+
+function latLngToDisplayCellKey(lat, lng) {
+  const p = map.options.crs.project(L.latLng(lat, lng));
+  const ix = Math.floor(p.x / GRID_SIZE_M);
+  const iy = Math.floor(p.y / GRID_SIZE_M);
+  return `${ix},${iy}`;
+}
+
+function latLngToStaticChunkKey(lat, lng) {
+  const chunkSize = window.__gwState?.staticChunkSizeM ?? 500;
+  const p = map.options.crs.project(L.latLng(lat, lng));
+  const cx = Math.floor(p.x / chunkSize);
+  const cy = Math.floor(p.y / chunkSize);
+  return `${cx},${cy}`;
+}
+
+function staticChunkUrlFromKey(chunkKey) {
+  return `assets/chunks/${chunkKey}.csv`;
+}
+
+window.handleUserPositionUpdate = async function(lat, lng, force = false) {
+  const cellKey = latLngToDisplayCellKey(lat, lng);
+  const chunkKey = latLngToStaticChunkKey(lat, lng);
+
+  const state = window.__gwState || {};
+
+  const enteredNewCell = force || (cellKey !== state.lastUserCellKey);
+  const enteredNewChunk = force || (chunkKey !== state.lastLoadedChunkKey);
+
+  state.lastUserCellKey = cellKey;
+
+  if (state.lockToLocation) {
+    const currentZoom = map.getZoom();
+    map.setView([lat, lng], currentZoom, { animate: false });
+  }
+
+if (enteredNewChunk) {
+  state.lastLoadedChunkKey = chunkKey;
+  await loadStaticHeatmapCsv(staticChunkUrlFromKey(chunkKey));
+} else if (enteredNewCell) {
+  updateStaticGridHeat();
+}
+
+if (enteredNewCell) {
+  updateGridLines();
+
+  if (typeof window.maybeRefreshDynamicINat === "function") {
+    window.maybeRefreshDynamicINat(false, cellKey);
+  }
+}
 }

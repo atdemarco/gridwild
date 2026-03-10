@@ -10,11 +10,6 @@
     { key: "Fungi", label: "Fungi" },
     { key: "Mammalia", label: "Mammals" },
     { key: "Aves", label: "Birds" },
-    { key: "Reptilia", label: "Reptiles" },
-    { key: "Amphibia", label: "Amphibians" },
-    { key: "Actinopterygii", label: "Ray-finned fish" },
-    { key: "Mollusca", label: "Mollusks" },
-    { key: "Arachnida", label: "Arachnids" }
   ];
 
   function $(id) { return document.getElementById(id); }
@@ -28,9 +23,28 @@
     return selected;
   }
 
+  // add state:
+  function syncStateFromUI() {
+  window.__gwFilters = window.__gwFilters || {};
+  window.__gwState = window.__gwState || {};
+
+  window.__gwFilters.showPoints = $("togglePoints")?.checked ?? false;
+  window.__gwFilters.showHeat = $("toggleHeat")?.checked ?? true;
+  window.__gwFilters.iconicTaxa = getSelectedIconicTaxa();
+
+  window.__gwState.showPoints = $("togglePoints")?.checked ?? true;
+  window.__gwState.showHeat = $("toggleHeat")?.checked ?? true;
+  window.__gwState.dynamicINatEnabled = $("toggleDynamicINat")?.checked ?? false;
+  window.__gwState.showFog = $("toggleFog")?.checked ?? true;
+  window.__gwState.lockToLocation = $("toggleLockLocation")?.checked ?? true;
+
+  saveUIState();
+}
+
   function setQueryFromUI() {
+ //this function is old- replaced by STATE   
     window.__gwFilters = window.__gwFilters || {};
-    window.__gwFilters.showPoints = $("togglePoints")?.checked ?? true;
+    window.__gwFilters.showPoints = $("togglePoints")?.checked ?? false;
     window.__gwFilters.showHeat = $("toggleHeat")?.checked ?? true;
     window.__gwFilters.iconicTaxa = getSelectedIconicTaxa(); // [] means “no filter”
   }
@@ -62,7 +76,7 @@
   function applyLayerVisibility() {
     // Points
     if (window.iNatLayer) {
-      const wantPoints = window.__gwFilters?.showPoints ?? true;
+      const wantPoints = window.__gwFilters?.showPoints ?? false;
       if (wantPoints) {
         if (!map.hasLayer(window.iNatLayer)) window.iNatLayer.addTo(map);
       } else {
@@ -85,26 +99,84 @@
     });
 
     // Defaults
-    window.__gwFilters = { showPoints: true, showHeat: true, iconicTaxa: [] };
-    setQueryFromUI();
+    window.__gwFilters = { showPoints: false, showHeat: true, iconicTaxa: [] };
+    applySavedUIState();
+    syncStateFromUI();
     applyLayerVisibility();
 
-    // Wire up toggles
-    $("togglePoints")?.addEventListener("change", () => {
-      setQueryFromUI();
-      applyLayerVisibility();
-    });
+// NEW 
+[
+  "togglePoints",
+  "toggleHeat",
+  "toggleDynamicINat",
+  "toggleFog",
+  "toggleLockLocation"
+].forEach(id => {
+  $(id)?.addEventListener("change", () => {
+    syncStateFromUI();
+    applyLayerVisibility();
+
+    if (id === "toggleDynamicINat" && window.__gwState.dynamicINatEnabled) {
+      if (typeof window.maybeRefreshDynamicINat === "function") {
+        window.maybeRefreshDynamicINat(true);
+      }
+    }
+
+    if (id === "toggleFog" && typeof window.updateGrid === "function") {
+      window.updateGrid();
+    }
+  });
+});
 
     $("toggleHeat")?.addEventListener("change", () => {
-      setQueryFromUI();
+      syncStateFromUI();
       applyLayerVisibility();
     });
 
     // Any taxa change triggers refetch
     $("taxaChecklist")?.addEventListener("change", () => {
-      setQueryFromUI();
-      applyLayerVisibility();
-      refreshINat();
+  syncStateFromUI();
+  applyLayerVisibility();
+
+  if (window.__gwState?.dynamicINatEnabled &&
+      typeof window.maybeRefreshDynamicINat === "function") {
+    window.maybeRefreshDynamicINat(true);
+  }
     });
   });
 })();
+
+// below for state-based 
+function loadUIState() {
+  try {
+    const raw = localStorage.getItem("gw_ui_state");
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveUIState() {
+  const byId = (id) => document.getElementById(id);
+
+  const state = {
+    showPoints: byId("togglePoints")?.checked ?? false,
+    showHeat: byId("toggleHeat")?.checked ?? true,
+    dynamicINatEnabled: byId("toggleDynamicINat")?.checked ?? false,
+    showFog: byId("toggleFog")?.checked ?? true,
+    lockToLocation: byId("toggleLockLocation")?.checked ?? true
+  };
+
+  localStorage.setItem("gw_ui_state", JSON.stringify(state));
+}
+
+function applySavedUIState() {
+  const byId = (id) => document.getElementById(id);
+  const s = loadUIState();
+
+  if (byId("togglePoints"))       byId("togglePoints").checked = s.showPoints ?? false;
+  if (byId("toggleHeat"))         byId("toggleHeat").checked = s.showHeat ?? true;
+  if (byId("toggleDynamicINat"))  byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
+  if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? true;
+  if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
+}

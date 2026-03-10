@@ -1,3 +1,22 @@
+window.maybeRefreshDynamicINat = async function(force = false, cellKey = null) {
+  const state = window.__gwState || {};
+
+  if (!state.dynamicINatEnabled) return;
+
+  const key = cellKey || (() => {
+    const c = map.getCenter();
+    const p = map.options.crs.project(c);
+    const ix = Math.floor(p.x / GRID_SIZE_M);
+    const iy = Math.floor(p.y / GRID_SIZE_M);
+    return `${ix},${iy}`;
+  })();
+
+  if (!force && key === state.lastDynamicFetchCellKey) return;
+
+  state.lastDynamicFetchCellKey = key;
+  await fetchINatObservationsNearCenter();
+};
+
 async function fetchINatObservationsNearCenter() {
 	
 	const c = map.getCenter();
@@ -40,9 +59,7 @@ function styleForObs(obs) {
     ...s
   };
 }
-  // ─────────────────────────────────────────────────────────────
-// END iNat points layer (global so UI can toggle it)
-// ─────────────────────────────────────────────────────────────
+  // END iNat points layer (global so UI can toggle it)
 
 	// Optional: style knobs
 	const INAT_POINT_RADIUS = 4;
@@ -61,18 +78,14 @@ function styleForObs(obs) {
   baseUrl.searchParams.set("order", "desc");
   baseUrl.searchParams.set("geo", "true");
 
-  // ─────────────────────────────────────────────────────────────
   // Apply filters from sidebar (iconic_taxa)
-  // ─────────────────────────────────────────────────────────────
   const iconicTaxa = window.__gwFilters?.iconicTaxa || [];
   if (Array.isArray(iconicTaxa) && iconicTaxa.length > 0) {
     // iNat accepts iconic_taxa; pass as comma-separated
     baseUrl.searchParams.set("iconic_taxa", iconicTaxa.join(","));
   }
-  // ─────────────────────────────────────────────────────────────
   // END Apply filters from sidebar (iconic_taxa)
-  // ─────────────────────────────────────────────────────────────
-
+  
 
 
   let allResults = [];
@@ -125,30 +138,7 @@ function styleForObs(obs) {
 
   // Clear prior points 
   window.iNatLayer.clearLayers();
-  
-  // // Plot scatter
-  // for (const obs of allResults) {
-  //   const coords = obs?.geojson?.coordinates;
-  //   if (!Array.isArray(coords) || coords.length < 2) continue;
 
-  //   const oLng = coords[0];
-  //   const oLat = coords[1];
-
-  //   const marker = L.circleMarker([oLat, oLng], {
-  //     radius: INAT_POINT_RADIUS,
-  //     stroke: false,
-  //     fill: true,
-  //     fillOpacity: INAT_POINT_OPACITY
-  //   });
-
-  //   const taxon = obs?.taxon?.name ?? "Unknown taxon";
-  //   const when = obs?.observed_on ?? obs?.time_observed_at ?? "Unknown date";
-  //   marker.bindPopup(`<b>${taxon}</b><br/>${when}`);
-
-  //   marker.addTo(iNatLayer);
-  // }
-
-    // NEW Plot scatter
   for (const obs of allResults) {
     const coords = obs?.geojson?.coordinates;
     if (!Array.isArray(coords) || coords.length < 2) continue;
@@ -165,8 +155,7 @@ function styleForObs(obs) {
 
     marker.addTo(window.iNatLayer);
   }
-  // END NEW PLOT SCATTER
-
+  
   // Update grid heat
   if (typeof window.updateGridHeatmap === "function") {
     window.updateGridHeatmap(allResults);
