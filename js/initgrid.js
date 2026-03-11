@@ -1,6 +1,6 @@
 // Static heatmap store (when I introduced static assets)
 window.__staticGridCounts = new Map();
-// const FOG_RADIUS_CELLS = 12;
+const FOG_RADIUS_CELLS = 10;
 
 function getCurrentUserCellIndices() {
   if (typeof lastFix === "undefined" || !lastFix) return null;
@@ -32,8 +32,71 @@ map.getPane("gridPane").style.pointerEvents = "none";
 const gridHeatLayer = L.layerGroup([], { pane: "gridHeatPane" }).addTo(map);
 const gridLineLayer = L.layerGroup([], { pane: "gridPane" }).addTo(map);
 
-// 50  ft in meters
+// 20 ft in meters
 const GRID_SIZE_M = 20 * 0.3048;
+
+// // // // // define helpers for the central 3×3 macro square
+
+const CENTER_MACRO_SIZE_CELLS = 3;
+const CENTER_MACRO_SIZE_M = GRID_SIZE_M * CENTER_MACRO_SIZE_CELLS;
+
+function getCenterFineCell() {
+  const c = map.getCenter();
+  const p = map.options.crs.project(c);
+  return {
+    ix: Math.floor(p.x / GRID_SIZE_M),
+    iy: Math.floor(p.y / GRID_SIZE_M)
+  };
+}
+
+function getCenterMacroAnchor() {
+  const { ix, iy } = getCenterFineCell();
+
+  // Anchor the macro block so the user’s current fine cell is the middle of a 3x3 block
+  return {
+    ix0: ix - 1,
+    iy0: iy - 1
+  };
+}
+
+function fineCellBoundsLL(ix, iy) {
+  const x0 = ix * GRID_SIZE_M;
+  const y0 = iy * GRID_SIZE_M;
+  const sw = map.options.crs.unproject(L.point(x0, y0));
+  const ne = map.options.crs.unproject(L.point(x0 + GRID_SIZE_M, y0 + GRID_SIZE_M));
+  return { sw, ne };
+}
+
+function macroCellBoundsLL(ix0, iy0) {
+  const x0 = ix0 * GRID_SIZE_M;
+  const y0 = iy0 * GRID_SIZE_M;
+  const sw = map.options.crs.unproject(L.point(x0, y0));
+  const ne = map.options.crs.unproject(
+    L.point(x0 + CENTER_MACRO_SIZE_M, y0 + CENTER_MACRO_SIZE_M)
+  );
+  return { sw, ne };
+}
+
+function getCentralNineCellKeys() {
+  const { ix0, iy0 } = getCenterMacroAnchor();
+  const keys = [];
+
+  for (let dx = 0; dx < 5; dx++) {
+    for (let dy = 0; dy < 5; dy++) {
+      keys.push(`${ix0 + dx},${iy0 + dy}`);
+    }
+  }
+  return keys;
+}
+
+function sumCountsForCentralNine(countsMap) {
+  let total = 0;
+  for (const key of getCentralNineCellKeys()) {
+    total += countsMap.get(key) || 0;
+  }
+  return total;
+}
+// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // 
 
 // Optional: style (grid lines)
 const GRID_LINE_STYLE = {
@@ -79,7 +142,8 @@ function clamp01(t) {
 function countToFill(count) {
   if (!count || count <= 0) return null;
 
-  const maxCount = HEAT_MAX_COUNT;
+  //const maxCount = HEAT_MAX_COUNT;
+  const maxCount = getHeatCap(); // dynamic
   const logDen = Math.log1p(maxCount);
   const tLinear = Math.min(count, maxCount) / maxCount;
   const tLog = Math.log1p(Math.min(count, maxCount)) / logDen;
@@ -169,6 +233,14 @@ function obsResultsToGridCounts(results) {
 }
 
 // Grid heat rendering
+function getHeatCap() {
+  const metric = window.__gwState?.heatMetric ?? "count";
+
+  if (metric === "species") return 20;
+  if (metric === "observers") return 5;
+  return 30;
+}
+
 function updateGridHeat(results) {
   gridHeatLayer.clearLayers();
 
@@ -179,10 +251,12 @@ function updateGridHeat(results) {
     for (let y = startY; y < endY; y += GRID_SIZE_M) {
       const ix = Math.floor(x / GRID_SIZE_M);
       const iy = Math.floor(y / GRID_SIZE_M);
-      const key = `${ix},${iy}`;
 
-      const c = counts.get(key) || 0;
-      const style = countToFill(c);
+      const key = `${ix},${iy}`;
+      const metrics = counts.get(key) || null;
+      const value = getHeatValueForCell(metrics);
+      const style = countToFill(value);
+
       if (!style) continue; // 0 obs => transparent => skip drawing
 
       const sw = map.options.crs.unproject(L.point(x, y));
@@ -199,22 +273,28 @@ function updateGridHeat(results) {
 window.updateGridHeatmap = function(results) {
   // Keep caching results for popup logic, etc.
   window.__inatLastResults = Array.isArray(results) ? results : [];
-  // DO NOT redraw heat from live iNat results.
-  // Static CSV is the source of truth for the heat layer.
 };
 
-// Expose a global for the iNat fetcher to call
-//window.updateGridHeatmap = function(results) {
-//  window.__inatLastResults = Array.isArray(results) ? results : [];
-//  updateGridHeat(window.__inatLastResults);
-//};
 
-
-// ─────────────────────────────────────────────────────────────
 // Grid lines rendering
-// ─────────────────────────────────────────────────────────────
-
 function updateGridLines() {
+  gridLineLayer.clearLayers();
+
+  const { ix0, iy0 } = getCenterMacroAnchor();
+  const { sw, ne } = macroCellBoundsLL(ix0, iy0);
+
+  // Draw only ONE big square = the central 3x3 block
+  L.rectangle([sw, ne], {
+    pane: "gridPane",
+    interactive: false,
+    color: "#000",
+    opacity: 0.45,
+    weight: 3,
+    fill: false
+  }).addTo(gridLineLayer);
+}
+
+function updateGridLinesORIG() { // small grid originally...
   gridLineLayer.clearLayers();
 
   const { startX, endX, startY, endY } = getPaddedBoundsMeters();
@@ -233,9 +313,7 @@ function updateGridLines() {
     L.polyline([a, b], GRID_LINE_STYLE).addTo(gridLineLayer);
   }
 
- // ─────────────────────────────────────────────────────────────
   // Highlight center cell and its 8 neighbors
-  // ─────────────────────────────────────────────────────────────
   const c = map.getCenter();
   const p = map.options.crs.project(c);
 
@@ -278,10 +356,7 @@ map.on("zoomend resize", updateGrid);
 map.on("moveend", updateGridLines);
 updateGrid();
 
-
 loadStaticHeatmapCsv("assets/dc_heat.csv");
-
-////////
 
 // RPG-style grid cell popup on double click
 // Disable Leaflet dblclick-to-zoom so we can use dblclick for UI
@@ -539,7 +614,7 @@ async function loadStaticHeatmapCsv(url) {
     }
 
     const header = lines[0].trim().toLowerCase();
-    if (header !== "ix,iy,count") {
+    if (header !== "ix,iy,count,species,observers") {
       console.warn(`Unexpected CSV header: ${header}`);
     }
 
@@ -547,17 +622,29 @@ async function loadStaticHeatmapCsv(url) {
 
     for (let i = 1; i < lines.length; i++) {
       const parts = lines[i].split(",");
-      if (parts.length < 3) continue;
+      if (parts.length < 5) continue;
 
       const ix = Number(parts[0]);
       const iy = Number(parts[1]);
       const count = Number(parts[2]);
+      const species = Number(parts[3]);
+      const observers = Number(parts[4]);
 
-      if (!Number.isFinite(ix) || !Number.isFinite(iy) || !Number.isFinite(count)) {
+      if (
+        !Number.isFinite(ix) ||
+        !Number.isFinite(iy) ||
+        !Number.isFinite(count) ||
+        !Number.isFinite(species) ||
+        !Number.isFinite(observers)
+      ) {
         continue;
       }
 
-      counts.set(`${ix},${iy}`, count);
+      counts.set(`${ix},${iy}`, {
+        count,
+        species,
+        observers
+      });
     }
 
     window.__staticGridCounts = counts;
@@ -572,6 +659,18 @@ async function loadStaticHeatmapCsv(url) {
 // more for static assets -- Render precomputed static heatmap
 function isWithinFogRadius(ix, iy, cx, cy, radiusCells = 25) {
   return Math.abs(ix - cx) <= radiusCells && Math.abs(iy - cy) <= radiusCells;
+}
+
+// render which heat metric?
+function getHeatValueForCell(cellMetrics) {
+  if (!cellMetrics) return 0;
+
+  const metric = window.__gwState?.heatMetric ?? "count";
+
+  if (metric === "species") return cellMetrics.species || 0;
+  if (metric === "observers") return cellMetrics.observers || 0;
+
+  return cellMetrics.count || 0;
 }
 
 function updateStaticGridHeat() {
@@ -591,14 +690,15 @@ function updateStaticGridHeat() {
       const iy = Math.floor(y / GRID_SIZE_M);
 
       if (fogOn && centerCell) {
-        if (!isWithinFogRadius(ix, iy, centerCell.ix, centerCell.iy, 10)) {
+        if (!isWithinFogRadius(ix, iy, centerCell.ix, centerCell.iy, FOG_RADIUS_CELLS)) {
           continue;
         }
       }
 
       const key = `${ix},${iy}`;
-      const c = counts.get(key) || 0;
-      const style = countToFill(c);
+      const metrics = counts.get(key) || 0;
+      const value = getHeatValueForCell(metrics);
+      const style = countToFill(value);
       if (!style) continue;
 
       const sw = map.options.crs.unproject(L.point(x, y));
@@ -664,3 +764,40 @@ if (enteredNewCell) {
   }
 }
 }
+
+
+// // //
+function getCenterMacroBoundsForCurrentLocation() {
+  const { ix0, iy0 } = getCenterMacroAnchor();
+  const { sw, ne } = macroCellBoundsLL(ix0, iy0);
+  return L.latLngBounds(sw, ne);
+}
+
+function getStickyZoomTarget() {
+  const bounds = getCenterMacroBoundsForCurrentLocation();
+
+  // Fit so the macro square spans the screen width as closely as Leaflet allows
+  return map.getBoundsZoom(bounds, false);
+}
+
+function applyStickyZoom(force = false) {
+  const state = window.__gwState || {};
+  if (!state.stickyZoomEnabled) return;
+
+  const targetZoom = getStickyZoomTarget();
+  const currentZoom = map.getZoom();
+  const tol = state.stickyZoomTolerance ?? 0.35;
+
+  if (!force && Math.abs(currentZoom - targetZoom) > tol) return;
+  if (Math.abs(currentZoom - targetZoom) < 0.001) return;
+
+  state.stickyZoomAnimating = true;
+  map.setZoom(targetZoom, { animate: true });
+
+  setTimeout(() => {
+    state.stickyZoomAnimating = false;
+  }, 250);
+}
+
+// add sticky zoom enable
+map.on("zoomend", applyStickyZoom);

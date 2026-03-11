@@ -1,7 +1,4 @@
-// ─────────────────────────────────────────────────────────────
 // Sidebar UI wiring
-// ─────────────────────────────────────────────────────────────
-
 (function () {
   // Iconic taxa options (iNat uses these names in obs.taxon.iconic_taxon_name)
   const TAXA_OPTIONS = [
@@ -23,6 +20,7 @@
     return selected;
   }
 
+
   // add state:
   function syncStateFromUI() {
   window.__gwFilters = window.__gwFilters || {};
@@ -30,10 +28,11 @@
 
   window.__gwFilters.showPoints = $("togglePoints")?.checked ?? false;
   window.__gwFilters.showHeat = $("toggleHeat")?.checked ?? true;
+  window.__gwState.heatMetric = getSelectedHeatMetric();
+
   window.__gwFilters.iconicTaxa = getSelectedIconicTaxa();
 
   window.__gwState.showPoints = $("togglePoints")?.checked ?? true;
-  window.__gwState.showHeat = $("toggleHeat")?.checked ?? true;
   window.__gwState.dynamicINatEnabled = $("toggleDynamicINat")?.checked ?? false;
   window.__gwState.showFog = $("toggleFog")?.checked ?? true;
   window.__gwState.lockToLocation = $("toggleLockLocation")?.checked ?? true;
@@ -93,13 +92,24 @@
   document.addEventListener("DOMContentLoaded", () => {
     buildChecklist();
 
+    // heamap radiobutton list
+    document.querySelectorAll('input[name="heatMetric"]').forEach(el => {
+  el.addEventListener("change", () => {
+    syncStateFromUI();
+    if (typeof window.updateGrid === "function") {
+      window.updateGrid();
+    }
+  });
+});
+
     // Sidebar collapse
     $("sidebarToggle")?.addEventListener("click", () => {
       $("sidebar")?.classList.toggle("gw-collapsed");
     });
 
     // Defaults
-    window.__gwFilters = { showPoints: false, showHeat: true, iconicTaxa: [] };
+   // window.__gwFilters = { showPoints: false, showHeat: true, iconicTaxa: [] };
+    window.__gwFilters = window.__gwFilters || {};
     applySavedUIState();
     syncStateFromUI();
     applyLayerVisibility();
@@ -146,6 +156,11 @@
   });
 })();
 
+  function getSelectedHeatMetric() {
+  const selected = document.querySelector('input[name="heatMetric"]:checked');
+  return selected?.value || "count";
+}
+
 // below for state-based 
 function loadUIState() {
   try {
@@ -164,8 +179,9 @@ function saveUIState() {
     showHeat: byId("toggleHeat")?.checked ?? true,
     dynamicINatEnabled: byId("toggleDynamicINat")?.checked ?? false,
     showFog: byId("toggleFog")?.checked ?? true,
-    lockToLocation: byId("toggleLockLocation")?.checked ?? true
-  };
+    lockToLocation: byId("toggleLockLocation")?.checked ?? true,
+    heatMetric: getSelectedHeatMetric()
+    };
 
   localStorage.setItem("gw_ui_state", JSON.stringify(state));
 }
@@ -179,4 +195,8 @@ function applySavedUIState() {
   if (byId("toggleDynamicINat"))  byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
   if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? true;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
+
+  const metric = s.heatMetric ?? "count";
+  const radio = document.querySelector(`input[name="heatMetric"][value="${metric}"]`);
+  if (radio) radio.checked = true;
 }

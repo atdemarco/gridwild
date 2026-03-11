@@ -1,10 +1,39 @@
-    function setUserLocation(lat, lng, accuracyMeters) {
+function makeUserHeadingIcon(headingDeg = 0) {
+  return L.divIcon({
+    className: "gw-user-heading-icon",
+    html: `
+      <div class="gw-user-heading-wrap" style="transform: rotate(${headingDeg}deg);">
+        <div class="gw-user-heading-body">🧍</div>
+        <div class="gw-user-heading-arrow">▲</div>
+      </div>
+    `,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20]
+  });
+}
+
+function updateUserMarkerHeading(headingDeg = 0) {
+  if (!userMarker) return;
+
+  const el = userMarker.getElement();
+  if (!el) return;
+
+  const wrap = el.querySelector(".gw-user-heading-wrap");
+  if (wrap) {
+    wrap.style.transform = `rotate(${headingDeg}deg)`;
+  }
+}
+
+function setUserLocation(lat, lng, accuracyMeters) {
       const latlng = [lat, lng];
 
       if (!userMarker) {
-        userMarker = L.marker(latlng).addTo(map).bindPopup("You are here");
+        userMarker = L.marker(latlng, {
+          icon: makeUserHeadingIcon(lastHeading ?? 0)
+        }).addTo(map).bindPopup("You are here");
       } else {
         userMarker.setLatLng(latlng);
+        updateUserMarkerHeading(lastHeading ?? 0);
       }
 
       if (!accuracyCircle) {
@@ -22,6 +51,8 @@
 
 // Geolocation
 let lastFix = null;
+let lastHeading = null;   // degrees, 0 = north
+
 
 function requestLocationOnce() {
   if (!("geolocation" in navigator)) {
@@ -85,4 +116,24 @@ function startWatchingLocation() {
       maximumAge: 5000
     }
   );
+}
+
+function normalizeHeading(deg) {
+  deg = deg % 360;
+  if (deg < 0) deg += 360;
+  return deg;
+}
+
+function handleDeviceOrientation(event) {
+  // On many phones, alpha is compass-like but browser/platform dependent.
+  if (typeof event.alpha !== "number") return;
+
+  // This may need sign-flipping depending on platform testing.
+  lastHeading = normalizeHeading(event.alpha);
+  updateUserMarkerHeading(lastHeading);
+}
+
+function enableDeviceOrientation() {
+  window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
+  window.addEventListener("deviceorientation", handleDeviceOrientation, true);
 }

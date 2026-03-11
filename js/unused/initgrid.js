@@ -200,6 +200,8 @@ function updateGrid() {
 map.on("moveend zoomend resize", updateGrid);
 updateGrid();
 
+applyStickyZoom(true); // ?
+
 // ─────────────────────────────────────────────────────────────
 // OSM buildings (for masking / subdivision)
 // Fetches building footprints from Overpass and exposes them globally
