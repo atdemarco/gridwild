@@ -557,7 +557,7 @@ function annotateTreePaths(node, parentPath = "root") {
 
 function renderCladogramSvg(root, opts = {}) {
   const W = 260;
-  const H = 280;
+  const H = 380;
   const PAD_L = 14;
   const PAD_R = 78;
   const PAD_T = 14;
@@ -637,8 +637,8 @@ function renderCladogramSvg(root, opts = {}) {
     const isLeaf = !node.children || node.children.length === 0;
     const showLabel = isLeaf || node.depth <= 2 || (node.genusCount || 0) >= 3;
 
-    const labelDx = isLeaf ? 8 : 0;
-    const labelDy = isLeaf ? 0 : -12;
+    const labelDx = isLeaf ? -2 : 0;
+    const labelDy = isLeaf ? 10 : -12;
     const labelAnchor = isLeaf ? "start" : "middle";
 
     const r = rScale(node.genusCount);
@@ -655,13 +655,14 @@ function renderCladogramSvg(root, opts = {}) {
         />
         <circle class="gw-clado-nodecore" cx="${x}" cy="${y}" r="${innerR}" fill="${innerFill(node)}" />
         ${showLabel ? `
-          <text
-            class="${isLeaf ? "gw-clado-tip" : "gw-clado-label"}"
-            x="${x + labelDx}"
-            y="${y + labelDy}"
-            text-anchor="${labelAnchor}"
-          >${escapeHtml(node.name)}</text>
-        ` : ""}
+        <text
+          class="${isLeaf ? "gw-clado-tip" : "gw-clado-label"}"
+          x="${x + labelDx}"
+          y="${y + labelDy}"
+          text-anchor="${labelAnchor}"
+          ${isLeaf ? `transform="rotate(90 ${x + labelDx} ${y + labelDy})"` : ""}
+        >${escapeHtml(node.name)}</text>
+      ` : ""}
       </g>
     `;
   }).join("");
@@ -1902,16 +1903,19 @@ function clampCladoViewBox(vb, baseW, baseH) {
 
   // ------------------------------------------------------------
   // Extra pan margin so you can reach edge labels / strokes
-  // and also "overscroll" slightly past the nominal content box
+  // Give MUCH more room at the bottom so the leaf tips/labels
+  // can be dragged fully into view.
   // ------------------------------------------------------------
-  const padX = Math.max(18, baseW * 0.10);
-  const padY = Math.max(18, baseH * 0.10);
+  const padLeft   = Math.max(18, baseW * 0.10);
+  const padRight  = Math.max(24, baseW * 0.16);
+  const padTop    = Math.max(18, baseH * 0.10);
+  const padBottom = Math.max(150, baseH * 0.88);   // <- bigger bottom allowance
 
-  const minX = -padX;
-  const maxX = baseW - vb.w + padX;
+  const minX = -padLeft;
+  const maxX = baseW - vb.w + padRight;
 
-  const minY = -padY;
-  const maxY = baseH - vb.h + padY;
+  const minY = -padTop;
+  const maxY = baseH - vb.h + padBottom;
 
   vb.x = Math.max(minX, Math.min(maxX, vb.x));
   vb.y = Math.max(minY, Math.min(maxY, vb.y));

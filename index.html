@@ -177,6 +177,88 @@
 }
 
 
+.hud {
+  overflow: hidden;
+}
+
+.hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hud-header b {
+  margin-bottom: 0;
+}
+
+.hud-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: white;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.hud-content {
+  margin-top: 8px;
+}
+
+.hud.is-collapsed .hud-content {
+  display: none;
+}
+
+.hud.is-collapsed .hud-toggle {
+  transform: rotate(-90deg);
+}
+
+/* Mobile behavior */
+@media (max-width: 700px), (pointer: coarse) {
+  .hud {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    max-width: none;
+    width: auto;
+    padding: 8px 10px;
+    font-size: 12px;
+    border-radius: 12px;
+  }
+
+  .hud-content {
+    max-height: min(52vh, 420px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
+  }
+
+  .hud .btn {
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+
+  .gw-legend-subtitle,
+  .gw-summary-body,
+  .gw-legend-foot,
+  .gw-clado-subtitle {
+    font-size: 10.5px;
+  }
+
+  .gw-clado-wrap {
+    height: 180px;
+    max-height: 180px;
+  }
+}
+
+
+
 .gw-legend{
   margin-top: 10px;
   padding-top: 10px;
@@ -539,82 +621,84 @@
 </div>
 <!-- END Sidebar UI (collapsible) -->
 
-
-<!-- NEW HUD :D -->
 <div class="hud" id="hud">
-  <b>GridWild</b>
-  <div id="status">Requesting location…</div>
-  <button class="btn" id="recenter">Recenter</button>
-
-  <div class="gw-legend" id="gwLegend">
-  <div class="gw-legend-title">Biodiversity layer</div>
-
-  <div class="gw-legend-subtitle">
-    Hue = observers • vividness = species • opacity = observations
+  <div class="hud-header">
+    <b>GridWild</b>
+    <button class="hud-toggle" id="hudToggle" aria-expanded="true" title="Toggle info panel">▾</button>
   </div>
 
-  <div class="gw-legend-section">
-    <div class="gw-legend-rowlabel">Observers</div>
-    <div class="gw-huebar"></div>
-    <div class="gw-legend-axislabels">
-      <span>few</span>
-      <span>mid</span>
-      <span>many</span>
+  <div class="hud-content" id="hudContent">
+    <div id="status">Requesting location…</div>
+    <button class="btn" id="recenter">Recenter</button>
+
+    <div class="gw-legend" id="gwLegend">
+      <div class="gw-legend-title">Biodiversity layer</div>
+
+      <div class="gw-legend-subtitle">
+        Hue = observers • vividness = species • opacity = observations
+      </div>
+
+      <div class="gw-legend-section">
+        <div class="gw-legend-rowlabel">Observers</div>
+        <div class="gw-huebar"></div>
+        <div class="gw-legend-axislabels">
+          <span>few</span>
+          <span>mid</span>
+          <span>many</span>
+        </div>
+      </div>
+
+      <div class="gw-legend-section">
+        <div class="gw-legend-rowlabel">Species</div>
+        <div class="gw-chiprow">
+          <div class="gw-chip chip-dull"></div>
+          <div class="gw-chip chip-mid"></div>
+          <div class="gw-chip chip-vivid"></div>
+        </div>
+        <div class="gw-legend-axislabels">
+          <span>low</span>
+          <span></span>
+          <span>high</span>
+        </div>
+      </div>
+
+      <div class="gw-legend-section">
+        <div class="gw-legend-rowlabel">Observations</div>
+        <div class="gw-chiprow">
+          <div class="gw-chip chip-faint"></div>
+          <div class="gw-chip chip-medium"></div>
+          <div class="gw-chip chip-opaque"></div>
+        </div>
+        <div class="gw-legend-axislabels">
+          <span>few</span>
+          <span></span>
+          <span>many</span>
+        </div>
+      </div>
+
+      <div class="gw-legend-foot" id="gwLegendFoot">
+        Lime/green usually means a middle number of observers.
+      </div>
+
+      <div class="gw-summarypane" id="gwSummaryPane">
+        <div class="gw-summary-title">Center square</div>
+        <div class="gw-summary-body" id="gwSummaryBody">
+          Loading…
+        </div>
+
+        <div class="gw-cladopane" id="gwCladoPane">
+          <div class="gw-clado-title">Taxonomic structure</div>
+          <div class="gw-clado-subtitle">
+            Center 3×3 square observations collapsed to a rooted hierarchy
+          </div>
+          <div class="gw-clado-wrap" id="gwCladoWrap">
+            <div id="gwCladoBody" class="gw-clado-empty">Waiting for taxonomy data…</div>
+            <div class="gw-clado-hint">scroll/pinch = zoom • drag = pan</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-
-  <div class="gw-legend-section">
-    <div class="gw-legend-rowlabel">Species</div>
-    <div class="gw-chiprow">
-      <div class="gw-chip chip-dull"></div>
-      <div class="gw-chip chip-mid"></div>
-      <div class="gw-chip chip-vivid"></div>
-    </div>
-    <div class="gw-legend-axislabels">
-      <span>low</span>
-      <span></span>
-      <span>high</span>
-    </div>
-  </div>
-
-  <div class="gw-legend-section">
-    <div class="gw-legend-rowlabel">Observations</div>
-    <div class="gw-chiprow">
-      <div class="gw-chip chip-faint"></div>
-      <div class="gw-chip chip-medium"></div>
-      <div class="gw-chip chip-opaque"></div>
-    </div>
-    <div class="gw-legend-axislabels">
-      <span>few</span>
-      <span></span>
-      <span>many</span>
-    </div>
-  </div>
-
-  <div class="gw-legend-foot" id="gwLegendFoot">
-    Lime/green usually means a middle number of observers.
-  </div>
-
-  <!-- BIODIVERSITY CARD - statistics  -->
-  <div class="gw-summarypane" id="gwSummaryPane">
-  <div class="gw-summary-title">Center square</div>
-  <div class="gw-summary-body" id="gwSummaryBody">
-    Loading…
-  </div>
-
-  <!-- CLADO BABY  -->
-<div class="gw-cladopane" id="gwCladoPane">
-  <div class="gw-clado-title">Taxonomic structure</div>
-  <div class="gw-clado-subtitle">
-      Center 3×3 square observations collapsed to a rooted hierarchy
-  </div>
-  <div class="gw-clado-wrap" id="gwCladoWrap">
-       <div id="gwCladoBody" class="gw-clado-empty">Waiting for taxonomy data…</div>
-  <div class="gw-clado-hint">scroll/pinch = zoom • drag = pan</div>
-</div>
-</div>
-</div>
-</div>
 </div>
   
   <!-- Leaflet JS -->
@@ -632,32 +716,48 @@
   <script src="js/sidebar.js"></script>
 	
   <script>
-    // UI
-    document.getElementById("recenter").addEventListener("click", () => {
-  if (window.__gwState) {
-    window.__gwState.lockToLocation = true;
-    window.__gwState.suspendAutoCenterUntil = 0;
-  }
+  document.getElementById("recenter").addEventListener("click", () => {
+    if (window.__gwState) {
+      window.__gwState.lockToLocation = true;
+      window.__gwState.suspendAutoCenterUntil = 0;
+    }
 
-  const cb = document.getElementById("toggleLockLocation");
-  if (cb && !cb.checked) {
-    cb.checked = true;
-    cb.dispatchEvent(new Event("change", { bubbles: true }));
-  }
+    const cb = document.getElementById("toggleLockLocation");
+    if (cb && !cb.checked) {
+      cb.checked = true;
+      cb.dispatchEvent(new Event("change", { bubbles: true }));
+    }
 
-  if (lastFix) {
-    map.setView([lastFix.latitude, lastFix.longitude], Math.max(map.getZoom(), 10));
-  } else {
-    requestLocationOnce();
-  }
+    if (lastFix) {
+      map.setView([lastFix.latitude, lastFix.longitude], Math.max(map.getZoom(), 10));
+    } else {
+      requestLocationOnce();
+    }
   });
 
-    // Kick off
-    requestLocationOnce();
-    const watchId = startWatchingLocation();
+  // HUD collapse / expand
+  (function initHudCollapse() {
+    const hud = document.getElementById("hud");
+    const btn = document.getElementById("hudToggle");
+    if (!hud || !btn) return;
 
-    // If you ever need to stop tracking:
-    // if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-  </script>
+    function setCollapsed(collapsed) {
+      hud.classList.toggle("is-collapsed", collapsed);
+      btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      btn.textContent = collapsed ? "▸" : "▾";
+    }
+
+    btn.addEventListener("click", () => {
+      setCollapsed(!hud.classList.contains("is-collapsed"));
+    });
+
+    // Default to collapsed on phones / touch devices
+    const mobileLike = window.matchMedia("(max-width: 700px), (pointer: coarse)").matches;
+    setCollapsed(mobileLike);
+  })();
+
+  requestLocationOnce();
+  const watchId = startWatchingLocation();
+</script>
 </body>
 </html>
