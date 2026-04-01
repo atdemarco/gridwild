@@ -23,6 +23,8 @@
 
   // add state:
   function syncStateFromUI() {
+
+    
   window.__gwFilters = window.__gwFilters || {};
   window.__gwState = window.__gwState || {};
 
@@ -37,7 +39,11 @@
   window.__gwState.showFog = $("toggleFog")?.checked ?? true;
   window.__gwState.lockToLocation = $("toggleLockLocation")?.checked ?? true;
 
-  saveUIState();
+  updateLegendText();
+ saveUIState();
+  if (typeof paintLegendFromHeatFunction === "function") {
+  paintLegendFromHeatFunction();
+}
 }
 
   function setQueryFromUI() {
@@ -92,6 +98,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     buildChecklist();
 
+
     // heamap radiobutton list
     document.querySelectorAll('input[name="heatMetric"]').forEach(el => {
   el.addEventListener("change", () => {
@@ -113,8 +120,8 @@
     applySavedUIState();
     syncStateFromUI();
     applyLayerVisibility();
+    paintLegendFromHeatFunction();
 
-// NEW 
 [
   "togglePoints",
   "toggleHeat",
@@ -124,6 +131,15 @@
 ].forEach(id => {
   $(id)?.addEventListener("change", () => {
     syncStateFromUI();
+
+    if (id === "toggleLockLocation") {
+      if (window.__gwState.lockToLocation) {
+        window.__gwState.suspendAutoCenterUntil = 0;
+      } else {
+        window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
+      }
+    }
+
     applyLayerVisibility();
 
     if (id === "toggleDynamicINat" && window.__gwState.dynamicINatEnabled) {
@@ -199,4 +215,69 @@ function applySavedUIState() {
   const metric = s.heatMetric ?? "count";
   const radio = document.querySelector(`input[name="heatMetric"][value="${metric}"]`);
   if (radio) radio.checked = true;
+}
+
+function updateLegendText() {
+  const foot = document.getElementById("gwLegendFoot");
+  const subtitle = document.querySelector(".gw-legend-subtitle");
+  if (!foot || !subtitle) return;
+
+  const useLog = window.__gwState?.logHeat ?? true;
+
+  subtitle.textContent =
+    "Hue = observers • vividness = species • opacity = observations";
+
+  foot.textContent = useLog
+    ? "More opaque = more observations (log-scaled)"
+    : "More opaque = more observations";
+}
+
+// programmatically update the map color legend
+function paintLegendFromHeatFunction() {
+  if (typeof window.metricsToFill !== "function") return;
+
+  const dull = document.querySelector(".chip-dull");
+  const mid = document.querySelector(".chip-mid");
+  const vivid = document.querySelector(".chip-vivid");
+
+  const faint = document.querySelector(".chip-faint");
+  const medium = document.querySelector(".chip-medium");
+  const opaque = document.querySelector(".chip-opaque");
+
+  const huebar = document.querySelector(".gw-huebar");
+
+  const lowObsr  = window.metricsToFill({ count: 10, species: 8, observers: 1 });
+  const midObsr  = window.metricsToFill({ count: 10, species: 8, observers: 3 });
+  const highObsr = window.metricsToFill({ count: 10, species: 8, observers: 6 });
+
+  if (huebar) {
+    huebar.style.background = `linear-gradient(
+      to right,
+      ${lowObsr.fillColor},
+      ${midObsr.fillColor},
+      ${highObsr.fillColor}
+    )`;
+  }
+
+  if (dull)  dull.style.background  = window.metricsToFill({ count: 10, species: 2,  observers: 3 }).fillColor;
+  if (mid)   mid.style.background   = window.metricsToFill({ count: 10, species: 7,  observers: 3 }).fillColor;
+  if (vivid) vivid.style.background = window.metricsToFill({ count: 10, species: 15, observers: 3 }).fillColor;
+
+  if (faint) {
+    const s = window.metricsToFill({ count: 1, species: 8, observers: 3 });
+    faint.style.background = s.fillColor;
+    faint.style.opacity = s.fillOpacity;
+  }
+
+  if (medium) {
+    const s = window.metricsToFill({ count: 8, species: 8, observers: 3 });
+    medium.style.background = s.fillColor;
+    medium.style.opacity = s.fillOpacity;
+  }
+
+  if (opaque) {
+    const s = window.metricsToFill({ count: 30, species: 8, observers: 3 });
+    opaque.style.background = s.fillColor;
+    opaque.style.opacity = s.fillOpacity;
+  }
 }

@@ -46,6 +46,7 @@ let __osmTimer = null;
 
 // Public function you can call from anywhere
 window.scheduleOSMVectorOverlayUpdate = function () {
+  console.log("running scheduleOSMVectorOverlayUpdate")
   if (__osmTimer) clearTimeout(__osmTimer);
   __osmTimer = setTimeout(fetchOSMVectorOverlayInView, 250);
 };

@@ -45,8 +45,30 @@ function setUserLocation(lat, lng, accuracyMeters) {
         accuracyCircle.setRadius(Math.max(accuracyMeters || 0, 5));
       }
 
-      hud.textContent =
-        `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m)`;
+     // const zoom = map.getZoom();
+//const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
+
+const zoom = map.getZoom();
+const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
+
+const metersPerPixel = getMapResolution();
+const cellMeters = 20 * 0.3048; // same constant used in grid code
+const cellPixels = (cellMeters / metersPerPixel).toFixed(0);
+
+hud.innerHTML =
+  `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m)
+   <span style="opacity:.65"> <br>Zoom ×${zoomMultiplier}
+   • ${metersPerPixel.toFixed(2)} m/px
+   • cell ≈ ${cellPixels}px
+   </span>`;
+
+
+//hud.textContent =
+ // `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m) • Zoom ×${zoomMultiplier}`;
+
+// original hud text :)  
+//      hud.textContent =
+ //       `Lat: ${Math.round(lat.toFixed(6),4)}, Lng: ${Math.round(lng.toFixed(6),4)} (±${Math.round(accuracyMeters)} m)`;
     }
 
 // Geolocation
@@ -62,25 +84,24 @@ function requestLocationOnce() {
 
   hud.textContent = "Requesting location permission…";
 
-  navigator.geolocation.getCurrentPosition(
-(pos) => {
-  const { latitude, longitude, accuracy } = pos.coords;
-  lastFix = { latitude, longitude, accuracy };
-  setUserLocation(latitude, longitude, accuracy);
+navigator.geolocation.getCurrentPosition(
+  (pos) => {
+    const { latitude, longitude, accuracy } = pos.coords;
 
-  if (typeof window.handleUserPositionUpdate === "function") {
-    window.handleUserPositionUpdate(latitude, longitude, true);
-  } else {
-    map.setView([latitude, longitude], 18);
-  }
+    lastFix = { latitude, longitude, accuracy };
+    setUserLocation(latitude, longitude, accuracy);
 
-  map.once("moveend", () => {
-    if (typeof window.scheduleOSMVectorOverlayUpdate === "function") {
-      window.scheduleOSMVectorOverlayUpdate();
+    // Let the central logic decide whether auto-centering is allowed
+    if (typeof window.handleUserPositionUpdate === "function") {
+      window.handleUserPositionUpdate(latitude, longitude, true);
     }
-  });
-}
-,
+
+    map.once("moveend", () => {
+      if (typeof window.scheduleOSMVectorOverlayUpdate === "function") {
+        window.scheduleOSMVectorOverlayUpdate();
+      }
+    });
+  },
     (err) => {
       // Common causes: permission denied, not https, no GPS, timeout
       hud.textContent = `Location error: ${err.message}`;
@@ -92,6 +113,30 @@ function requestLocationOnce() {
     }
   );
 }
+
+
+function disableAutoCenterFromUserGesture() {
+  //console.log("disableAutoCenterFromUserGesture() Triggering disable auto center from user gesture...")
+  if (!window.__gwState) return;
+  if (!window.__gwState.lockToLocation) return;
+
+  const cb = document.getElementById("toggleLockLocation");
+
+  window.__gwState.lockToLocation = false;
+  window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
+
+  if (cb && cb.checked) {
+    cb.checked = false;
+    cb.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
+
+map.on("dragstart", disableAutoCenterFromUserGesture);
+map.on("zoomstart", disableAutoCenterFromUserGesture);
+map.on("mousedown", disableAutoCenterFromUserGesture);
+map.on("touchstart", disableAutoCenterFromUserGesture);
+
+
 
 // Live tracking (optional but usually what you want on a phone)
 function startWatchingLocation() {
@@ -124,16 +169,59 @@ function normalizeHeading(deg) {
   return deg;
 }
 
+function applyMapRotation(headingDeg = 0) {
+  const mapPane = map.getPane("mapPane");
+  if (!mapPane) return;
+
+  mapPane.style.transformOrigin = "50% 50%";
+  mapPane.style.transform = `rotate(${-headingDeg}deg)`;
+}
+
 function handleDeviceOrientation(event) {
-  // On many phones, alpha is compass-like but browser/platform dependent.
   if (typeof event.alpha !== "number") return;
 
-  // This may need sign-flipping depending on platform testing.
   lastHeading = normalizeHeading(event.alpha);
+
   updateUserMarkerHeading(lastHeading);
+  applyMapRotation(lastHeading);
 }
 
 function enableDeviceOrientation() {
-  window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
-  window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+//  window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
+//  window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+}
+
+map.on("moveend zoomend", () => {
+//  applyMapRotation(lastHeading ?? 0);
+});
+
+map.on("zoomend", () => {
+  if (!lastFix) return;
+  const { latitude, longitude, accuracy } = lastFix;
+  setUserLocation(latitude, longitude, accuracy);
+});
+
+hud.innerHTML =
+//  `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m)
+//   <span style="opacity:.6"> • Zoom ×${zoomMultiplier}</span>`;
+
+   function getMapResolution() {
+  const lat = map.getCenter().lat;
+  const zoom = map.getZoom();
+
+  const metersPerPixel =
+    (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, zoom);
+
+  return metersPerPixel;
+}
+
+// ok getting info to label square size in pixels.
+function getMapResolution() {
+  const lat = map.getCenter().lat;
+  const zoom = map.getZoom();
+
+  const metersPerPixel =
+    (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, zoom);
+
+  return metersPerPixel;
 }

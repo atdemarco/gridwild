@@ -33,14 +33,16 @@ window.__gwState = {
 
 };
 
-    // OSM tiles (fine for prototyping; for heavy use, use a proper tile provider)
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 21,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    maxZoom: 20,
+    attribution:
+      '&copy; OpenStreetMap contributors &copy; CARTO'
+  }
+  ).addTo(map);
+
 
     // Default view (in case location fails)
-    map.setView([38.9072, -77.0369], 13); // DC fallback
+    map.setView([38.9072, -77.0369], 17); // DC fallback
 
     const hud = document.getElementById("status");
 

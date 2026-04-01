@@ -13,9 +13,7 @@
     crossorigin=""
   />
 
-
 	<script src="https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js"></script>
-
 
   <style>
     html, body { height: 100%; margin: 0; }
@@ -42,6 +40,7 @@
   background: transparent;
   border: none;
 }
+
 
 .gw-user-heading-wrap {
   width: 40px;
@@ -85,7 +84,7 @@
     font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   }
 
-  .gw-collapsed{ transform: translateX(-210px); }
+  .gw-collapsed{ transform: translateX(-255px); }
 
   .gw-toggle{
     position:absolute;
@@ -169,6 +168,307 @@
       cursor: pointer;
     }
     .btn:active { transform: translateY(1px); }
+
+    
+.hud .btn{
+  margin-top: 6px;
+  margin-bottom: 2px;
+  width: 100%;
+}
+
+
+.gw-legend{
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+.gw-legend-title{
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin-bottom: 4px;
+  color: rgba(0,0,0,0.82);
+}
+
+.gw-legend-subtitle{
+  font-size: 11px;
+  line-height: 1.25;
+  color: rgba(0,0,0,0.62);
+  margin-bottom: 10px;
+  max-width: 220px;
+}
+
+.gw-legend-section{
+  margin-top: 8px;
+}
+
+.gw-legend-rowlabel{
+  font-size: 10.5px;
+  font-weight: 700;
+  color: rgba(0,0,0,0.72);
+  margin-bottom: 4px;
+}
+
+.gw-huebar{
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.10);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+  background: linear-gradient(
+    to right,
+    hsl(200, 70%, 56%),
+    hsl(120, 70%, 56%),
+    hsl(60, 78%, 56%),
+    hsl(20, 82%, 54%)
+  );
+}
+
+.gw-chiprow{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.gw-chip{
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.10);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+
+.gw-legend-axislabels{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 3px;
+  font-size: 10px;
+  color: rgba(0,0,0,0.55);
+}
+
+.gw-legend-axislabels span:nth-child(2){
+  text-align: center;
+}
+
+.gw-legend-axislabels span:nth-child(3){
+  text-align: right;
+}
+
+.chip-dull   { background: hsl(120, 38%, 56%); }
+.chip-mid    { background: hsl(120, 62%, 56%); }
+.chip-vivid  { background: hsl(120, 88%, 56%); }
+
+.chip-faint  { background: hsla(120, 72%, 56%, 0.20); }
+.chip-medium { background: hsla(120, 72%, 56%, 0.42); }
+.chip-opaque { background: hsla(120, 72%, 56%, 0.70); }
+
+.gw-legend-foot{
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: rgba(0,0,0,0.56);
+  line-height: 1.2;
+}
+
+/* Example swatches for the 2x2 rule space */
+.swatch-a{ background: hsla(200, 40%, 64%, 0.28); } /* few obsr, low spp */
+.swatch-b{ background: hsla(200, 88%, 58%, 0.28); } /* few obsr, high spp */
+.swatch-c{ background: hsla(20, 42%, 56%, 0.28); }  /* many obsr, low spp */
+.swatch-d{ background: hsla(20, 88%, 50%, 0.55); }  /* many obsr, high spp */
+
+
+
+/* biodiveristy summary card */
+.gw-summarypane{
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  transition: opacity 0.18s ease;
+}
+
+.gw-summary-title{
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin-bottom: 6px;
+  color: rgba(0,0,0,0.82);
+}
+
+.gw-summary-body{
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(0,0,0,0.70);
+}
+
+.gw-summary-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+
+.gw-summary-k{
+  opacity: 0.62;
+}
+
+.gw-summary-v{
+  font-weight: 700;
+  text-align: right;
+}
+
+/* ─────────────────────────────────────────────
+   Cladogram pane
+   ───────────────────────────────────────────── */
+   
+.gw-cladopane{
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+.gw-clado-title{
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.25px;
+  margin-bottom: 6px;
+  color: rgba(0,0,0,0.84);
+}
+
+.gw-clado-subtitle{
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: rgba(0,0,0,0.58);
+  margin-bottom: 8px;
+}
+
+.gw-clado-wrap{
+  position: relative;
+  width: 100%;
+  height: 255px;
+  max-height: 290px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,255,255,0.92), rgba(245,248,244,0.82) 58%, rgba(235,240,236,0.76) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.65),
+    0 4px 14px rgba(0,0,0,0.08);
+  cursor: grab;
+}
+
+.gw-clado-wrap.is-dragging{
+  cursor: grabbing;
+}
+
+.gw-clado-svg{
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gw-clado-hint{
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  color: rgba(0,0,0,0.62);
+  background: rgba(255,255,255,0.75);
+  border: 1px solid rgba(0,0,0,0.06);
+  pointer-events: none;
+}
+
+.gw-clado-svg{
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
+}
+
+.gw-clado-edge{
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.gw-clado-node,
+.gw-clado-nodehalo,
+.gw-clado-nodecore{
+  vector-effect: non-scaling-stroke;
+}
+
+.gw-clado-label,
+.gw-clado-tip{
+  paint-order: stroke fill;
+  stroke: rgba(255,255,255,0.85);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+}
+
+.gw-clado-empty{
+  font-size: 11px;
+  color: rgba(0,0,0,0.62);
+  line-height: 1.35;
+  padding: 10px 2px 2px 2px;
+}
+
+.gw-clado-edge{
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gw-clado-node{
+  stroke-width: 1.15;
+}
+
+.gw-clado-root{
+  stroke-width: 1.6;
+}
+
+.gw-clado-nodehalo{
+  pointer-events: none;
+}
+
+.gw-clado-nodecore{
+  pointer-events: none;
+}
+
+.gw-clado-label{
+  font-size: 8.5px;
+  font-weight: 600;
+  fill: rgba(30,36,34,0.72);
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: rgba(255,255,255,0.85);
+  stroke-width: 2px;
+}
+
+.gw-clado-tip{
+  font-size: 9px;
+  font-weight: 700;
+  fill: rgba(24,28,27,0.82);
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: rgba(255,255,255,0.88);
+  stroke-width: 2px;
+}
+
+.gw-clado-togglemark{
+  font-size: 9px;
+  font-weight: 700;
+  fill: rgba(255,255,255,0.92);
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+
   </style>
 </head>
 <body>
@@ -233,7 +533,6 @@
     <details class="gw-details" id="taxaDetails">
       <summary class="gw-summary">Iconic taxa</summary>
       <div class="gw-checklist" id="taxaChecklist"></div>
-      <div class="gw-hint">Selecting filters affects the iNat query + plot.</div>
     </details> 
   
   </div>
@@ -241,13 +540,82 @@
 <!-- END Sidebar UI (collapsible) -->
 
 
+<!-- NEW HUD :D -->
+<div class="hud" id="hud">
+  <b>GridWild</b>
+  <div id="status">Requesting location…</div>
+  <button class="btn" id="recenter">Recenter</button>
 
-  <div class="hud" id="hud">
-    <b>GridWild</b>
-    <div id="status">Requesting location…</div>
-    <button class="btn" id="recenter">Recenter</button>
+  <div class="gw-legend" id="gwLegend">
+  <div class="gw-legend-title">Biodiversity layer</div>
+
+  <div class="gw-legend-subtitle">
+    Hue = observers • vividness = species • opacity = observations
   </div>
 
+  <div class="gw-legend-section">
+    <div class="gw-legend-rowlabel">Observers</div>
+    <div class="gw-huebar"></div>
+    <div class="gw-legend-axislabels">
+      <span>few</span>
+      <span>mid</span>
+      <span>many</span>
+    </div>
+  </div>
+
+  <div class="gw-legend-section">
+    <div class="gw-legend-rowlabel">Species</div>
+    <div class="gw-chiprow">
+      <div class="gw-chip chip-dull"></div>
+      <div class="gw-chip chip-mid"></div>
+      <div class="gw-chip chip-vivid"></div>
+    </div>
+    <div class="gw-legend-axislabels">
+      <span>low</span>
+      <span></span>
+      <span>high</span>
+    </div>
+  </div>
+
+  <div class="gw-legend-section">
+    <div class="gw-legend-rowlabel">Observations</div>
+    <div class="gw-chiprow">
+      <div class="gw-chip chip-faint"></div>
+      <div class="gw-chip chip-medium"></div>
+      <div class="gw-chip chip-opaque"></div>
+    </div>
+    <div class="gw-legend-axislabels">
+      <span>few</span>
+      <span></span>
+      <span>many</span>
+    </div>
+  </div>
+
+  <div class="gw-legend-foot" id="gwLegendFoot">
+    Lime/green usually means a middle number of observers.
+  </div>
+
+  <!-- BIODIVERSITY CARD - statistics  -->
+  <div class="gw-summarypane" id="gwSummaryPane">
+  <div class="gw-summary-title">Center square</div>
+  <div class="gw-summary-body" id="gwSummaryBody">
+    Loading…
+  </div>
+
+  <!-- CLADO BABY  -->
+<div class="gw-cladopane" id="gwCladoPane">
+  <div class="gw-clado-title">Taxonomic structure</div>
+  <div class="gw-clado-subtitle">
+      Center 3×3 square observations collapsed to a rooted hierarchy
+  </div>
+  <div class="gw-clado-wrap" id="gwCladoWrap">
+       <div id="gwCladoBody" class="gw-clado-empty">Waiting for taxonomy data…</div>
+  <div class="gw-clado-hint">scroll/pinch = zoom • drag = pan</div>
+</div>
+</div>
+</div>
+</div>
+</div>
   
   <!-- Leaflet JS -->
   <script
@@ -264,15 +632,25 @@
   <script src="js/sidebar.js"></script>
 	
   <script>
-    console.log(`Beginning 10:07am`);
     // UI
     document.getElementById("recenter").addEventListener("click", () => {
-      if (lastFix) {
-        map.setView([lastFix.latitude, lastFix.longitude], Math.max(map.getZoom(), 10));
-      } else {
-        requestLocationOnce();
-      }
-    });
+  if (window.__gwState) {
+    window.__gwState.lockToLocation = true;
+    window.__gwState.suspendAutoCenterUntil = 0;
+  }
+
+  const cb = document.getElementById("toggleLockLocation");
+  if (cb && !cb.checked) {
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  if (lastFix) {
+    map.setView([lastFix.latitude, lastFix.longitude], Math.max(map.getZoom(), 10));
+  } else {
+    requestLocationOnce();
+  }
+  });
 
     // Kick off
     requestLocationOnce();

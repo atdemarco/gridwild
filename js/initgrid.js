@@ -77,26 +77,1037 @@ function macroCellBoundsLL(ix0, iy0) {
   return { sw, ne };
 }
 
-function getCentralNineCellKeys() {
+// // // // ///
+
+function getCenterMacroCellKeys() {
   const { ix0, iy0 } = getCenterMacroAnchor();
   const keys = [];
 
-  for (let dx = 0; dx < 5; dx++) {
-    for (let dy = 0; dy < 5; dy++) {
+  for (let dx = 0; dx < CENTER_MACRO_SIZE_CELLS; dx++) {
+    for (let dy = 0; dy < CENTER_MACRO_SIZE_CELLS; dy++) {
       keys.push(`${ix0 + dx},${iy0 + dy}`);
     }
   }
   return keys;
 }
 
-function sumCountsForCentralNine(countsMap) {
-  let total = 0;
-  for (const key of getCentralNineCellKeys()) {
-    total += countsMap.get(key) || 0;
+function summarizeCenterMacroSquare() {
+
+  const counts = window.__staticGridCounts;
+  if (!(counts instanceof Map) || counts.size === 0) {
+    return null;
   }
-  return total;
+
+  const keys = getCenterMacroCellKeys();
+
+  let nCells = 0;
+  let nNonzero = 0;
+  let sumObs = 0;
+  let sumSpecies = 0;
+  let sumObservers = 0;
+
+  let maxObs = 0;
+  let maxSpecies = 0;
+  let maxObservers = 0;
+
+  for (const key of keys) {
+    nCells += 1;
+
+    const m = counts.get(key);
+    if (!m) continue;
+
+    const obs = m.count || 0;
+    const species = m.species || 0;
+    const observers = m.observers || 0;
+
+    if (obs > 0 || species > 0 || observers > 0) nNonzero += 1;
+
+    sumObs += obs;
+    sumSpecies += species;
+    sumObservers += observers;
+
+    if (obs > maxObs) maxObs = obs;
+    if (species > maxSpecies) maxSpecies = species;
+    if (observers > maxObservers) maxObservers = observers;
+  }
+
+
+  // COOL CUSTOM FANCY METRICS!
+  const speciesDensity = sumObs > 0 ? (sumSpecies / sumObs) : 0;
+  //const discoveryScore = sumSpecies / (sumObservers + 1);
+  const discoveryScore =  sumSpecies / Math.max(1, sumObservers); // smooth
+
+
+
+  return {
+    nCells,
+    nNonzero,
+    sumObs,
+    sumSpecies,
+    sumObservers,
+    meanObsPerCell: nCells ? sumObs / nCells : 0,
+    meanSpeciesPerCell: nCells ? sumSpecies / nCells : 0,
+    meanObserversPerCell: nCells ? sumObservers / nCells : 0,
+    maxObs,
+    maxSpecies,
+    maxObservers,
+    speciesDensity,
+    discoveryScore
+  };
 }
+
+function getCenterSquareLabel() {
+  const n = CENTER_MACRO_SIZE_CELLS;
+  const widthFeet = Math.round((n * GRID_SIZE_M) / 0.3048);
+  return `Center square (${n}×${n} cells ≈ ${widthFeet} ft × ${widthFeet} ft)`;
+}
+
+window.updateHudCenterSummary = function updateHudCenterSummary() {
+  const el = document.getElementById("gwSummaryBody");
+  if (!el) return;
+
+  const titleEl = document.querySelector("#gwSummaryPane .gw-summary-title");
+if (titleEl) {
+  titleEl.textContent = getCenterSquareLabel();
+}
+
+  const s = summarizeCenterMacroSquare();
+  if (!s) {
+    el.textContent = "No center-square data loaded yet.";
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="gw-summary-grid">
+    
+      <div class="gw-summary-k">Discovery</div>
+      <div class="gw-summary-v">${s.discoveryScore.toFixed(2)}</div>
+
+      <div class="gw-summary-k">Observations</div>
+      <div class="gw-summary-v">${s.sumObs}</div>
+
+      <div class="gw-summary-k">Species</div>
+      <div class="gw-summary-v">${s.sumSpecies}</div>
+
+      <div class="gw-summary-k">Species density</div>
+      <div class="gw-summary-v">${s.speciesDensity.toFixed(2)}</div>
+
+      <div class="gw-summary-k">Observers</div>
+      <div class="gw-summary-v">${s.sumObservers}</div>
+
+      <div class="gw-summary-k">Mean obs/cell</div>
+      <div class="gw-summary-v">${s.meanObsPerCell.toFixed(1)}</div>
+
+      <div class="gw-summary-k">Cells</div>
+      <div class="gw-summary-v">${s.nCells}</div>
+
+      <div class="gw-summary-k">Active cells</div>
+      <div class="gw-summary-v">${s.nNonzero}</div>
+
+    </div>
+  `;
+};
+
+function mergeSquareGeneraRecords(squareRecords) {
+  const genusCounts = new Map();
+
+  for (const rec of squareRecords) {
+    const genera = Array.isArray(rec?.genera) ? rec.genera : [];
+    for (const g of genera) {
+      const genusName = g?.genus_name;
+      if (!genusName) continue;
+
+      const n = Math.max(1, Number(g.count) || 1);
+      genusCounts.set(genusName, (genusCounts.get(genusName) || 0) + n);
+    }
+  }
+
+  return {
+    genera: Array.from(genusCounts.entries()).map(([genus_name, count]) => ({
+      genus_name,
+      count
+    }))
+  };
+}
+
+
+
+
 // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // 
+
+// ─────────────────────────────────────────────────────────────
+// Taxonomy dictionary + square genera superchunk caches
+// ─────────────────────────────────────────────────────────────
+window.__genusTaxonomyDict = window.__genusTaxonomyDict || null;
+window.__squareGeneraSuperchunkCache = window.__squareGeneraSuperchunkCache || new Map();
+
+const GENERA_SUPERCHUNK_SIZE = 32; // must match your MATLAB writer
+const GENERA_SUPERCHUNK_BASE = "assets/square_genera_superchunks";
+const GENUS_TAXONOMY_DICT_URL = "assets/genus_taxonomy_dictionary.json";
+
+async function loadGenusTaxonomyDictionary() {
+  if (window.__genusTaxonomyDict) return window.__genusTaxonomyDict;
+
+  const resp = await fetch(GENUS_TAXONOMY_DICT_URL);
+  if (!resp.ok) {
+    throw new Error(`Failed to load genus taxonomy dictionary: HTTP ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  window.__genusTaxonomyDict = data;
+  return data;
+}
+
+function getGeneraSuperchunkKey(ix, iy) {
+  const super_ix = Math.floor(ix / GENERA_SUPERCHUNK_SIZE);
+  const super_iy = Math.floor(iy / GENERA_SUPERCHUNK_SIZE);
+  return `${super_ix}_${super_iy}`;
+}
+
+function getGeneraSuperchunkUrl(ix, iy) {
+  const key = getGeneraSuperchunkKey(ix, iy);
+  const url = `${GENERA_SUPERCHUNK_BASE}/super_${key}.json`;
+  //console.log("GENERA url", { ix, iy, key, url });
+  return url;
+}
+
+async function loadGeneraSuperchunk(ix, iy) {
+  const key = getGeneraSuperchunkKey(ix, iy);
+  const cache = window.__squareGeneraSuperchunkCache;
+
+  if (cache.has(key)) {
+    const data = cache.get(key);
+    //console.log("GENERA cache hit", key);
+    //console.log("GENERA cached keys sample", Object.keys(data?.squares || {}).slice(0, 20));
+    return data;
+  }
+
+  const url = getGeneraSuperchunkUrl(ix, iy);
+  const resp = await fetch(url);
+  //console.log("GENERA fetch", url, resp.status);
+
+  if (!resp.ok) {
+    throw new Error(`Failed to load square genera superchunk: HTTP ${resp.status} for ${url}`);
+  }
+
+  const data = await resp.json();
+//  console.log("GENERA loaded keys sample", Object.keys(data?.squares || {}).slice(0, 20));
+  cache.set(key, data);
+  return data;
+}
+
+function encodeGeneraSquareId(ix, iy) {
+  const enc = (n) => (n < 0 ? `m${Math.abs(n)}` : `p${n}`);
+  return `sq_${enc(ix)}_${enc(iy)}`;
+}
+
+async function getSquareGeneraRecord(ix, iy) {
+  const squareId = encodeGeneraSquareId(ix, iy);
+  //console.log("GENERA squareId wanted", squareId);
+
+  try {
+    const chunk = await loadGeneraSuperchunk(ix, iy);
+    const rec = chunk?.squares?.[squareId] || null;
+    //console.log("GENERA record found?", !!rec, rec);
+    return rec;
+  } catch (err) {
+    console.warn("No square genera record available:", err);
+    return null;
+  }
+}
+
+window.__genusNameToTaxonomyEntry = window.__genusNameToTaxonomyEntry || null;
+
+function buildGenusNameToTaxonomyEntryIndex(genusDict) {
+  const idx = Object.create(null);
+
+  for (const [genusId, entry] of Object.entries(genusDict || {})) {
+    const name = entry?.name;
+    if (!name) continue;
+
+    idx[name] = {
+      genus_id: genusId,
+      ...entry
+    };
+  }
+
+  return idx;
+}
+
+async function loadGenusNameToTaxonomyEntryIndex() {
+  if (window.__genusNameToTaxonomyEntry) {
+    return window.__genusNameToTaxonomyEntry;
+  }
+
+  const genusDict = await loadGenusTaxonomyDictionary();
+  const idx = buildGenusNameToTaxonomyEntryIndex(genusDict);
+  window.__genusNameToTaxonomyEntry = idx;
+  return idx;
+}
+
+function buildTaxonomyTreeFromSquareRecord(squareRec, genusNameIndex) {
+  const root = {
+    name: "Life",
+    children: new Map(),
+    weight: 0,
+    genusCount: 0,
+    depth: 0
+  };
+
+  const genera = Array.isArray(squareRec?.genera) ? squareRec.genera : [];
+  const seenGeneraPerNode = new Map();
+
+  function markGenus(node, genusName) {
+    if (!seenGeneraPerNode.has(node)) {
+      seenGeneraPerNode.set(node, new Set());
+    }
+    const s = seenGeneraPerNode.get(node);
+    if (!s.has(genusName)) {
+      s.add(genusName);
+      node.genusCount = (node.genusCount || 0) + 1;
+    }
+  }
+
+  for (const g of genera) {
+    const genusName = g?.genus_name;
+    if (!genusName) continue;
+
+    const n = Math.max(1, Number(g.count) || 1);
+    const entry = genusNameIndex?.[genusName];
+
+    const pathNames = Array.isArray(entry?.path_names) ? entry.path_names : [];
+    const pathRanks = Array.isArray(entry?.path_ranks) ? entry.path_ranks : [];
+
+    let cappedPath = [];
+
+    if (pathNames.length && pathRanks.length && pathNames.length === pathRanks.length) {
+      for (let i = 0; i < pathNames.length; i++) {
+        cappedPath.push(pathNames[i]);
+        if (String(pathRanks[i]).toLowerCase() === "order") break;
+      }
+    } else {
+      // fallback if ranks are missing
+      cappedPath = pathNames.slice(0, 5);
+    }
+
+    if (!cappedPath.length) {
+      cappedPath = ["Unmapped"];
+    }
+
+    let node = root;
+    node.weight += n;
+    markGenus(node, genusName);
+
+    cappedPath.forEach((part, depthIdx) => {
+      if (!node.children.has(part)) {
+        node.children.set(part, {
+          name: part,
+          children: new Map(),
+          weight: 0,
+          genusCount: 0,
+          depth: depthIdx + 1
+        });
+      }
+
+      node = node.children.get(part);
+      node.weight += n;
+      markGenus(node, genusName);
+    });
+  }
+
+  return root;
+}
+
+
+function finalizeTree(node, parent = null, out = []) {
+  const kids = Array.from(node.children.values())
+    .sort((a, b) =>
+      (b.genusCount || 0) - (a.genusCount || 0) ||
+      (b.weight || 0) - (a.weight || 0) ||
+      a.name.localeCompare(b.name)
+    );
+
+  const finalized = {
+    name: node.name,
+    weight: node.weight || 0,
+    genusCount: node.genusCount || 0,
+    depth: node.depth || 0,
+    parent,
+    children: kids.map(child => finalizeTree(child, node.name, out))
+  };
+
+  out.push(finalized);
+  return finalized;
+}
+
+function getLeafCount(node) {
+  if (!node.children || node.children.length === 0) return 1;
+  return node.children.reduce((s, c) => s + getLeafCount(c), 0);
+}
+
+function assignTreeLayout(root) {
+  let maxDepth = 0;
+
+  function prep(node, depth = 0) {
+    node.depth = depth;
+    maxDepth = Math.max(maxDepth, depth);
+
+    const kids = node.children || [];
+    if (kids.length === 0) {
+      node._leafCount = 1;
+      return 1;
+    }
+
+    let total = 0;
+    kids.forEach((child) => {
+      total += prep(child, depth + 1);
+    });
+
+    node._leafCount = Math.max(1, total);
+    return node._leafCount;
+  }
+
+  prep(root, 0);
+
+  function assignSpan(node, x0, x1) {
+    node._x0 = x0;
+    node._x1 = x1;
+    node._x = 0.5 * (x0 + x1);
+
+    const kids = node.children || [];
+    if (kids.length === 0) return;
+
+    const totalLeaves = kids.reduce((s, c) => s + (c._leafCount || 1), 0) || 1;
+    let cursor = x0;
+
+    kids.forEach((child) => {
+      const frac = (child._leafCount || 1) / totalLeaves;
+      const w = (x1 - x0) * frac;
+      assignSpan(child, cursor, cursor + w);
+      cursor += w;
+    });
+  }
+
+  // Use a normalized 0..1 horizontal domain
+  assignSpan(root, 0, 1);
+
+  return {
+    leafCount: Math.max(1, root._leafCount || 1),
+    maxDepth
+  };
+}
+
+
+function flattenTree(root) {
+  const nodes = [];
+  const edges = [];
+
+  function walk(node, parent = null) {
+    nodes.push(node);
+    if (parent) edges.push({ source: parent, target: node });
+    (node.children || []).forEach(child => walk(child, node));
+  }
+
+  walk(root);
+  return { nodes, edges };
+}
+
+window.__gwCladoState = window.__gwCladoState || {
+  fullTree: null,
+  collapsed: new Set(),
+  lastRenderedNodes: [],
+  lastRenderedEdges: [],
+  currentViewBox: null,
+
+  zoom: 1,
+  minZoom: 1,
+  maxZoom: 6,
+  panX: 0,
+  panY: 0,
+
+  pointers: new Map(),
+  pinchStartDist: null,
+  pinchStartZoom: 1,
+  pinchAnchorClient: null,
+
+  dragging: false,
+  dragStartPanX: 0,
+  dragStartPanY: 0,
+  dragStartClientX: 0,
+  dragStartClientY: 0
+};
+
+function slugifyCladoName(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "node";
+}
+
+function annotateTreePaths(node, parentPath = "root") {
+  const myPath = node.depth === 0
+    ? "root"
+    : `${parentPath}/${slugifyCladoName(node.name)}`;
+
+  node._path = myPath;
+  (node.children || []).forEach(child => annotateTreePaths(child, myPath));
+  return node;
+}
+
+
+function renderCladogramSvg(root, opts = {}) {
+  const W = 260;
+  const H = 280;
+  const PAD_L = 14;
+  const PAD_R = 78;
+  const PAD_T = 14;
+  const PAD_B = 14;
+
+  const { maxDepth } = assignTreeLayout(root);
+  const { nodes, edges } = flattenTree(root);
+
+  const xScale = (x) => PAD_L + x * (W - PAD_L - PAD_R);
+
+  const yScale = (depth) => {
+    if (maxDepth <= 0) return PAD_T + 8;
+    return PAD_T + (depth / maxDepth) * (H - PAD_T - PAD_B);
+  };
+
+  const rScale = (g) => {
+    const t = Math.sqrt(Math.max(1, g || 1));
+    return Math.max(3, Math.min(11, 1.8 + 1.15 * t));
+  };
+
+  const edgeScale = (w) => {
+    const t = Math.sqrt(Math.max(1, w || 1));
+    return Math.max(0.9, Math.min(3.5, 0.5 + 0.28 * t));
+  };
+
+  const depthHue = (depth) => {
+    const t = maxDepth <= 0 ? 0 : depth / maxDepth;
+    return 205 - 150 * t;
+  };
+
+  const nodeFill = (node) => {
+    const h = depthHue(node.depth);
+    const s = node.depth === 0 ? 78 : 68;
+    const l = node.depth === 0 ? 42 : 54;
+    return `hsl(${h.toFixed(1)}, ${s}%, ${l}%)`;
+  };
+
+  const nodeStroke = (node) => {
+    const h = depthHue(node.depth);
+    return `hsl(${h.toFixed(1)}, 52%, 30%)`;
+  };
+
+  const innerFill = (node) => {
+    const h = depthHue(node.depth);
+    return `hsla(${h.toFixed(1)}, 85%, 98%, 0.90)`;
+  };
+
+  const edgeSvg = edges.map(({ source, target }, i) => {
+    const x1 = xScale(source._x);
+    const y1 = yScale(source.depth);
+    const x2 = xScale(target._x);
+    const y2 = yScale(target.depth);
+    const gradId = `gwEdgeGrad${i}`;
+    const h1 = depthHue(source.depth);
+    const h2 = depthHue(target.depth);
+
+    return `
+      <defs>
+        <linearGradient id="${gradId}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="hsla(${h1.toFixed(1)}, 45%, 42%, 0.55)" />
+          <stop offset="100%" stop-color="hsla(${h2.toFixed(1)}, 55%, 40%, 0.35)" />
+        </linearGradient>
+      </defs>
+      <path
+        class="gw-clado-edge"
+        d="M ${x1} ${y1} L ${x1} ${(y1 + y2) / 2} L ${x2} ${(y1 + y2) / 2} L ${x2} ${y2}"
+        stroke="url(#${gradId})"
+        stroke-width="${edgeScale(target.weight)}"
+      />
+    `;
+  }).join("");
+
+  const nodeSvg = nodes.map((node) => {
+    const x = xScale(node._x);
+    const y = yScale(node.depth);
+    const isRoot = node.depth === 0;
+    const isLeaf = !node.children || node.children.length === 0;
+    const showLabel = isLeaf || node.depth <= 2 || (node.genusCount || 0) >= 3;
+
+    const labelDx = isLeaf ? 8 : 0;
+    const labelDy = isLeaf ? 0 : -12;
+    const labelAnchor = isLeaf ? "start" : "middle";
+
+    const r = rScale(node.genusCount);
+    const innerR = Math.max(1.6, r * 0.34);
+
+    return `
+      <g class="gw-clado-nodegroup" data-node-path="${escapeHtml(node._path || "")}">
+        <circle class="gw-clado-nodehalo" cx="${x}" cy="${y}" r="${r + 2.2}" fill="rgba(255,255,255,0.28)" />
+        <circle
+          class="${isRoot ? "gw-clado-node gw-clado-root" : "gw-clado-node"}"
+          cx="${x}" cy="${y}" r="${r}"
+          fill="${nodeFill(node)}"
+          stroke="${nodeStroke(node)}"
+        />
+        <circle class="gw-clado-nodecore" cx="${x}" cy="${y}" r="${innerR}" fill="${innerFill(node)}" />
+        ${showLabel ? `
+          <text
+            class="${isLeaf ? "gw-clado-tip" : "gw-clado-label"}"
+            x="${x + labelDx}"
+            y="${y + labelDy}"
+            text-anchor="${labelAnchor}"
+          >${escapeHtml(node.name)}</text>
+        ` : ""}
+      </g>
+    `;
+  }).join("");
+
+  const vb = opts.viewBox || `0 0 ${W} ${H}`;
+
+  return `
+    <svg
+      id="gwCladoSvg"
+      class="gw-clado-svg"
+      viewBox="${vb}"
+      data-base-width="${W}"
+      data-base-height="${H}"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      <defs>
+        <filter id="gwCladoSoftShadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="1.8" flood-color="rgba(0,0,0,0.18)"/>
+        </filter>
+      </defs>
+      <g filter="url(#gwCladoSoftShadow)">
+        ${edgeSvg}
+        ${nodeSvg}
+      </g>
+    </svg>
+  `;
+}
+
+function getCladoElements() {
+  return {
+    wrap: document.getElementById("gwCladoWrap"),
+    svg: document.getElementById("gwCladoSvg")
+  };
+}
+
+
+function getPointerDistance(a, b) {
+  const dx = a.clientX - b.clientX;
+  const dy = a.clientY - b.clientY;
+  return Math.hypot(dx, dy);
+}
+
+function getPointerMidpoint(a, b) {
+  return {
+    clientX: 0.5 * (a.clientX + b.clientX),
+    clientY: 0.5 * (a.clientY + b.clientY)
+  };
+}
+
+
+function bindCladogramInteractions() {
+  const svg = document.getElementById("gwCladoSvg");
+  const wrap = document.getElementById("gwCladoWrap");
+  if (!svg || !wrap) return;
+
+  window.__gwCladoState = window.__gwCladoState || {};
+  const state = window.__gwCladoState;
+  state.pointers = state.pointers || new Map();
+
+  // ------------------------------------------------------------
+  // IMPORTANT: remove old wrap-level listeners before rebinding
+  // ------------------------------------------------------------
+  if (wrap.__gwCladoCleanup) {
+    wrap.__gwCladoCleanup();
+    wrap.__gwCladoCleanup = null;
+  }
+
+  // ------------------------------------------------------------
+  // Node dblclick: collapse / expand subtree
+  // These are fine to rebind because the SVG is recreated on rerender
+  // ------------------------------------------------------------
+  svg.querySelectorAll(".gw-clado-nodegroup").forEach((g) => {
+    g.addEventListener("dblclick", (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      const nodePath = g.dataset.nodePath;
+      if (!nodePath || nodePath === "root") return;
+
+      const fullNode = findNodeByPath(state.fullTree, nodePath);
+      if (!fullNode || !fullNode.children || fullNode.children.length === 0) return;
+
+      if (!state.collapsed) state.collapsed = new Set();
+      if (state.collapsed.has(nodePath)) state.collapsed.delete(nodePath);
+      else state.collapsed.add(nodePath);
+
+      rerenderCladogram();
+    });
+  });
+
+  // ------------------------------------------------------------
+  // Local gesture state
+  // ------------------------------------------------------------
+  let dragStart = null;
+  let pinchStart = null;
+
+  // ------------------------------------------------------------
+  // Wheel zoom
+  // ------------------------------------------------------------
+  const onWheel = (evt) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    const baseW = Number(svg.dataset.baseWidth || 260);
+    const baseH = Number(svg.dataset.baseHeight || 280);
+
+    let vb = parseViewBox(svg);
+    const anchor = clientToSvgCoords(svg, evt.clientX, evt.clientY, vb);
+
+    const zoomFactor = evt.deltaY < 0 ? 0.88 : (1 / 0.88);
+    const nextW = vb.w * zoomFactor;
+    const nextH = vb.h * zoomFactor;
+
+    const rx = (anchor.x - vb.x) / vb.w;
+    const ry = (anchor.y - vb.y) / vb.h;
+
+    vb = {
+      x: anchor.x - rx * nextW,
+      y: anchor.y - ry * nextH,
+      w: nextW,
+      h: nextH
+    };
+
+    vb = clampCladoViewBox(vb, baseW, baseH);
+    setSvgViewBox(vb);
+  };
+
+  // ------------------------------------------------------------
+  // Pointer down
+  // ------------------------------------------------------------
+  const onPointerDown = (evt) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    wrap.setPointerCapture?.(evt.pointerId);
+
+    state.pointers.set(evt.pointerId, {
+      clientX: evt.clientX,
+      clientY: evt.clientY
+    });
+
+    if (state.pointers.size === 1) {
+      dragStart = {
+        clientX: evt.clientX,
+        clientY: evt.clientY,
+        viewBox: parseViewBox(svg)
+      };
+      pinchStart = null;
+      wrap.classList.add("is-dragging");
+    } else if (state.pointers.size === 2) {
+      const pts = Array.from(state.pointers.values());
+      pinchStart = {
+        viewBox: parseViewBox(svg),
+        dist: getPointerDistance(pts[0], pts[1]),
+        mid: getPointerMidpoint(pts[0], pts[1])
+      };
+      dragStart = null;
+      wrap.classList.remove("is-dragging");
+    }
+  };
+
+  // ------------------------------------------------------------
+  // Pointer move
+  // ------------------------------------------------------------
+  const onPointerMove = (evt) => {
+    if (!state.pointers.has(evt.pointerId)) return;
+
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    state.pointers.set(evt.pointerId, {
+      clientX: evt.clientX,
+      clientY: evt.clientY
+    });
+
+    const baseW = Number(svg.dataset.baseWidth || 260);
+    const baseH = Number(svg.dataset.baseHeight || 280);
+
+    // One-finger drag
+    if (state.pointers.size === 1 && dragStart) {
+      const dxPx = evt.clientX - dragStart.clientX;
+      const dyPx = evt.clientY - dragStart.clientY;
+
+      const rect = svg.getBoundingClientRect();
+      const vb0 = dragStart.viewBox;
+
+      let vb = {
+        x: vb0.x - (dxPx / rect.width) * vb0.w,
+        y: vb0.y - (dyPx / rect.height) * vb0.h,
+        w: vb0.w,
+        h: vb0.h
+      };
+
+      vb = clampCladoViewBox(vb, baseW, baseH);
+      setSvgViewBox(vb);
+      return;
+    }
+
+    // Two-finger pinch
+    if (state.pointers.size === 2 && pinchStart) {
+      const pts = Array.from(state.pointers.values());
+      const distNow = getPointerDistance(pts[0], pts[1]);
+      if (!distNow || !pinchStart.dist) return;
+
+      const midNow = getPointerMidpoint(pts[0], pts[1]);
+
+      const scale = pinchStart.dist / distNow;
+      const vb0 = pinchStart.viewBox;
+
+      let nextW = vb0.w * scale;
+      let nextH = vb0.h * scale;
+
+      const anchor0 = clientToSvgCoords(
+        svg,
+        pinchStart.mid.clientX,
+        pinchStart.mid.clientY,
+        vb0
+      );
+
+      const rect = svg.getBoundingClientRect();
+      const dxPx = midNow.clientX - pinchStart.mid.clientX;
+      const dyPx = midNow.clientY - pinchStart.mid.clientY;
+
+      let vb = {
+        x: anchor0.x - ((anchor0.x - vb0.x) / vb0.w) * nextW - (dxPx / rect.width) * nextW,
+        y: anchor0.y - ((anchor0.y - vb0.y) / vb0.h) * nextH - (dyPx / rect.height) * nextH,
+        w: nextW,
+        h: nextH
+      };
+
+      vb = clampCladoViewBox(vb, baseW, baseH);
+      setSvgViewBox(vb);
+    }
+  };
+
+  // ------------------------------------------------------------
+  // Pointer end
+  // ------------------------------------------------------------
+  const endPointer = (evt) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    state.pointers.delete(evt.pointerId);
+
+    try {
+      wrap.releasePointerCapture?.(evt.pointerId);
+    } catch (_) {
+      // ignore
+    }
+
+    if (state.pointers.size === 0) {
+      dragStart = null;
+      pinchStart = null;
+      wrap.classList.remove("is-dragging");
+      return;
+    }
+
+    if (state.pointers.size === 1) {
+      const remaining = Array.from(state.pointers.values())[0];
+      dragStart = {
+        clientX: remaining.clientX,
+        clientY: remaining.clientY,
+        viewBox: parseViewBox(svg)
+      };
+      pinchStart = null;
+      wrap.classList.add("is-dragging");
+    }
+  };
+
+  // ------------------------------------------------------------
+  // Background dblclick: reset zoom
+  // ------------------------------------------------------------
+  const onSvgDblClick = (evt) => {
+    if (evt.target !== svg) return;
+
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    const baseW = Number(svg.dataset.baseWidth || 260);
+    const baseH = Number(svg.dataset.baseHeight || 280);
+    setSvgViewBox({ x: 0, y: 0, w: baseW, h: baseH });
+
+  };
+
+  // ------------------------------------------------------------
+  // Prevent map gestures underneath
+  // ------------------------------------------------------------
+  const stopUnderlay = (evt) => {
+    evt.stopPropagation();
+  };
+
+  // Bind
+  wrap.addEventListener("wheel", onWheel, { passive: false });
+  wrap.addEventListener("pointerdown", onPointerDown, { passive: false });
+  wrap.addEventListener("pointermove", onPointerMove, { passive: false });
+  wrap.addEventListener("pointerup", endPointer, { passive: false });
+  wrap.addEventListener("pointercancel", endPointer, { passive: false });
+
+  // NOTE: intentionally DO NOT use pointerleave here
+  // because pointer capture makes it counterproductive.
+
+  svg.addEventListener("dblclick", onSvgDblClick);
+
+  [
+    "mousedown", "mousemove", "mouseup", "click",
+    "touchstart", "touchmove", "touchend",
+    "pointerdown", "pointermove", "pointerup", "pointercancel",
+    "wheel"
+  ].forEach((type) => {
+    wrap.addEventListener(type, stopUnderlay, { passive: false });
+  });
+
+  // Cleanup hook so future rerenders can unbind these
+  wrap.__gwCladoCleanup = () => {
+    wrap.removeEventListener("wheel", onWheel, { passive: false });
+    wrap.removeEventListener("pointerdown", onPointerDown, { passive: false });
+    wrap.removeEventListener("pointermove", onPointerMove, { passive: false });
+    wrap.removeEventListener("pointerup", endPointer, { passive: false });
+    wrap.removeEventListener("pointercancel", endPointer, { passive: false });
+
+    svg.removeEventListener("dblclick", onSvgDblClick);
+
+    [
+      "mousedown", "mousemove", "mouseup", "click",
+      "touchstart", "touchmove", "touchend",
+      "pointerdown", "pointermove", "pointerup", "pointercancel",
+      "wheel"
+    ].forEach((type) => {
+      wrap.removeEventListener(type, stopUnderlay, { passive: false });
+    });
+  };
+}
+
+function formatViewBox(vb) {
+  return `${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
+}
+
+function setSvgViewBox(vb) {
+  const svg = document.getElementById("gwCladoSvg");
+  if (!svg) return;
+  svg.setAttribute("viewBox", formatViewBox(vb));
+  window.__gwCladoState.currentViewBox = formatViewBox(vb);
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+window.updateHudCladogram = async function updateHudCladogram() {
+  const el = document.getElementById("gwCladoBody");
+  if (!el) return;
+
+  try {
+    const subtitleEl = document.querySelector("#gwCladoPane .gw-clado-subtitle");
+    if (subtitleEl) {
+   subtitleEl.textContent =
+      `Center ${CENTER_MACRO_SIZE_CELLS}×${CENTER_MACRO_SIZE_CELLS} square taxonomy through Order; node size scales with unique genera`;
+    }
+
+    const keys = getCenterMacroCellKeys();
+
+    const squareRecords = await Promise.all(
+      keys.map((key) => {
+        const [ixStr, iyStr] = key.split(",");
+        return getSquareGeneraRecord(Number(ixStr), Number(iyStr));
+      })
+    );
+
+    //console.log("CLADO keys", keys);
+    //console.log("CLADO squareRecords", squareRecords);
+    const mergedRecord = mergeSquareGeneraRecords(squareRecords.filter(Boolean));
+    //console.log("CLADO mergedRecord", mergedRecord);
+
+    if (!Array.isArray(mergedRecord.genera) || mergedRecord.genera.length === 0) {
+      el.className = "gw-clado-empty";
+      el.innerHTML = `No genus data for the current center ${CENTER_MACRO_SIZE_CELLS}×${CENTER_MACRO_SIZE_CELLS} square.`;
+      return;
+    }
+const genusNameIndex = await loadGenusNameToTaxonomyEntryIndex();
+const rawTree = buildTaxonomyTreeFromSquareRecord(mergedRecord, genusNameIndex);
+const tree = annotateTreePaths(finalizeTree(rawTree));
+
+window.__gwCladoState.fullTree = tree;
+window.__gwCladoState.currentViewBox = null;
+window.__gwCladoState.collapsed = new Set();
+window.__gwCladoState.zoom = 1;
+window.__gwCladoState.panX = 0;
+window.__gwCladoState.panY = 0;
+
+el.className = "";
+el.innerHTML = renderCladogramSvg(tree, {
+  viewBox: window.__gwCladoState.currentViewBox || undefined
+});
+bindCladogramInteractions();
+
+
+  } catch (err) {
+    console.warn("Failed to update cladogram:", err);
+    el.className = "gw-clado-empty";
+    el.innerHTML = "Could not load taxonomy data.";
+  }
+};
+
+function findNodeByPath(node, path) {
+  if (!node) return null;
+  if (node._path === path) return node;
+
+  for (const child of (node.children || [])) {
+    const found = findNodeByPath(child, path);
+    if (found) return found;
+  }
+  return null;
+}
+
+function cloneVisibleTree(node, collapsedSet) {
+  const clone = {
+    ...node,
+    children: []
+  };
+
+  if (collapsedSet.has(node._path)) {
+    clone.children = [];
+    return clone;
+  }
+
+  clone.children = (node.children || []).map(child => cloneVisibleTree(child, collapsedSet));
+  return clone;
+}
+
+function rerenderCladogram() {
+  const state = window.__gwCladoState || {};
+  const el = document.getElementById("gwCladoBody");
+  if (!el || !state.fullTree) return;
+
+  const visibleTree = cloneVisibleTree(state.fullTree, state.collapsed || new Set());
+  const vb = state.currentViewBox || null;
+
+  el.className = "";
+  el.innerHTML = renderCladogramSvg(visibleTree, { viewBox: vb });
+  bindCladogramInteractions();
+}
 
 // Optional: style (grid lines)
 const GRID_LINE_STYLE = {
@@ -160,26 +1171,55 @@ function countToFill(count) {
   return { fillColor, fillOpacity };
 }
 
+// BLENDED COLORMAP!!!!!
+function metricsToFill(metrics) {
+  if (!metrics) return null;
 
-// Pleasant ramp using HSL: blue -> orange/red
-function countToFillOLD(count) {
-  if (!count || count <= 0) return null; // transparent for 0
-  const t = clamp01(Math.min(count, HEAT_MAX_COUNT) / HEAT_MAX_COUNT);
+  const obs = metrics.count || 0;
+  const species = metrics.species || 0;
+  const observers = metrics.observers || 0;
 
-  // Hue from 200 (blue) down to 20 (orange/red)
-  const hue = 200 + (20 - 200) * t;
+  if (obs <= 0) return null;
 
-  // Keep saturation high; reduce lightness slightly as density increases
-  const sat = 85;
-  const light = 60 - 12 * t;
+  // caps (tweak later)
+  const OBS_CAP = 30;
+  const SPECIES_CAP = 15;
+  const OBSERVER_CAP = 6;
 
-  const fillColor = `hsl(${hue.toFixed(1)}, ${sat}%, ${light.toFixed(1)}%)`;
+// make room for log scaling on the colormap...
+//  const tObs = Math.min(obs, OBS_CAP) / OBS_CAP;
+const logDen = Math.log1p(OBS_CAP);
+const tObsLinear = Math.min(obs, OBS_CAP) / OBS_CAP;
+const tObsLog = Math.log1p(Math.min(obs, OBS_CAP)) / logDen;
+const useLog = window.__gwState?.logHeat ?? true;
+const tObs = useLog ? tObsLog : tObsLinear;
 
-  // Opacity ramps up with density; stays "pleasant"
-  const fillOpacity = 0.10 + 0.55 * Math.pow(t, 0.85);
+// make room for log scaling of species... :\
+//  const tSpecies = Math.min(species, SPECIES_CAP) / SPECIES_CAP;
+const logDenSpecies = Math.log1p(SPECIES_CAP);
+const tSpeciesLinear = Math.min(species, SPECIES_CAP) / SPECIES_CAP;
+const tSpeciesLog = Math.log1p(Math.min(species, SPECIES_CAP)) / logDenSpecies;
+const tSpecies = useLog ? tSpeciesLog : tSpeciesLinear;
+
+  const tObservers = Math.min(observers, OBSERVER_CAP) / OBSERVER_CAP;
+
+  // observers control hue
+  const hue = 200 + (20 - 200) * tObservers;
+
+  // species control saturation
+  const sat = 40 + 50 * tSpecies;
+
+  // observations control lightness
+  const light = 65 - 20 * tObs;
+
+  const fillColor = `hsl(${hue.toFixed(1)}, ${sat.toFixed(1)}%, ${light.toFixed(1)}%)`;
+
+  const fillOpacity = 0.15 + 0.65 * Math.pow(tObs, 0.8);
 
   return { fillColor, fillOpacity };
 }
+
+window.metricsToFill = metricsToFill;
 
 function getPaddedBoundsMeters() {
   const z = map.getZoom();
@@ -254,8 +1294,9 @@ function updateGridHeat(results) {
 
       const key = `${ix},${iy}`;
       const metrics = counts.get(key) || null;
-      const value = getHeatValueForCell(metrics);
-      const style = countToFill(value);
+//      const value = getHeatValueForCell(metrics);
+//      const style = countToFill(value);
+const style = metricsToFill(metrics);
 
       if (!style) continue; // 0 obs => transparent => skip drawing
 
@@ -294,67 +1335,23 @@ function updateGridLines() {
   }).addTo(gridLineLayer);
 }
 
-function updateGridLinesORIG() { // small grid originally...
-  gridLineLayer.clearLayers();
-
-  const { startX, endX, startY, endY } = getPaddedBoundsMeters();
-
-  // Vertical lines
-  for (let x = startX; x <= endX; x += GRID_SIZE_M) {
-    const a = map.options.crs.unproject(L.point(x, startY));
-    const b = map.options.crs.unproject(L.point(x, endY));
-    L.polyline([a, b], GRID_LINE_STYLE).addTo(gridLineLayer);
-  }
-
-  // Horizontal lines
-  for (let y = startY; y <= endY; y += GRID_SIZE_M) {
-    const a = map.options.crs.unproject(L.point(startX, y));
-    const b = map.options.crs.unproject(L.point(endX, y));
-    L.polyline([a, b], GRID_LINE_STYLE).addTo(gridLineLayer);
-  }
-
-  // Highlight center cell and its 8 neighbors
-  const c = map.getCenter();
-  const p = map.options.crs.project(c);
-
-  const centerIx = Math.floor(p.x / GRID_SIZE_M);
-  const centerIy = Math.floor(p.y / GRID_SIZE_M);
-
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const ix = centerIx + dx;
-      const iy = centerIy + dy;
-
-      const x0 = ix * GRID_SIZE_M;
-      const y0 = iy * GRID_SIZE_M;
-
-      const sw = map.options.crs.unproject(L.point(x0, y0));
-      const ne = map.options.crs.unproject(L.point(x0 + GRID_SIZE_M, y0 + GRID_SIZE_M));
-
-      const isCenter = dx === 0 && dy === 0;
-
-      L.rectangle([sw, ne], {
-        pane: "gridPane",
-        interactive: false,
-        color: "#000",
-        opacity: isCenter ? 0.55 : 0.28,
-        weight: isCenter ? 3 : 2,
-        fill: false
-      }).addTo(gridLineLayer);
-    }
-  }
-
-}
-
 // this now renders the static assets
 function updateGrid() {
   updateGridLines();
   updateStaticGridHeat();
+    if (typeof window.updateHudCenterSummary === "function") {
+    window.updateHudCenterSummary();
+  }
+
+  if (typeof window.updateHudCladogram === "function") {
+    window.updateHudCladogram();
+  }
+
 }
 
-map.on("zoomend resize", updateGrid);
-map.on("moveend", updateGridLines);
+map.on("zoomend resize moveend", updateGrid);
 updateGrid();
+
 
 loadStaticHeatmapCsv("assets/dc_heat.csv");
 
@@ -501,12 +1498,41 @@ function classifyCell(count) {
   return { label: "Hotspot", badge: "HOT" };
 }
 
-function buildRPGPopupHTML({ ix, iy, count, centerLL }) {
-  const cls = classifyCell(count);
+// ─────────────────────────────────────────────────────────────
+// Superchunk taxonomy store
+// ─────────────────────────────────────────────────────────────
 
-  // Convert meters->feet for display
+function getStaticMetricsForCell(ix, iy) {
+  const m = window.__staticGridCounts?.get(`${ix},${iy}`);
+  return {
+    count: Number(m?.count) || 0,
+    species: Number(m?.species) || 0,
+    observers: Number(m?.observers) || 0
+  };
+}
+
+function summarizeSquareGenera(squareRec) {
+  const genera = Array.isArray(squareRec?.genera) ? squareRec.genera : [];
+
+  const nGenera = genera.length;
+  const totalGenusObs = genera.reduce((s, g) => s + (Number(g.count) || 0), 0);
+
+  const topGenera = genera
+    .slice(0, 5)
+    .map(g => `${g.genus_name} (${g.count})`)
+    .join(", ");
+
+  return {
+    nGenera,
+    totalGenusObs,
+    topGenera: topGenera || "—"
+  };
+}
+
+function buildRPGPopupHTML({ ix, iy, centerLL, metrics, genusSummary }) {
+  const cls = classifyCell(metrics.count);
+
   const cellFeet = (GRID_SIZE_M / 0.3048).toFixed(0);
-
   const lat = centerLL.lat.toFixed(6);
   const lng = centerLL.lng.toFixed(6);
 
@@ -523,25 +1549,38 @@ function buildRPGPopupHTML({ ix, iy, count, centerLL }) {
 
       <div class="rpg-statgrid">
         <div class="rpg-stat">
-          <div class="rpg-k">Observations (cached)</div>
-          <div class="rpg-v">${count}</div>
+          <div class="rpg-k">Observations</div>
+          <div class="rpg-v">${metrics.count}</div>
         </div>
+
         <div class="rpg-stat">
-          <div class="rpg-k">Heat cap</div>
-          <div class="rpg-v">${HEAT_MAX_COUNT}</div>
+          <div class="rpg-k">Species</div>
+          <div class="rpg-v">${metrics.species}</div>
         </div>
+
+        <div class="rpg-stat">
+          <div class="rpg-k">Observers</div>
+          <div class="rpg-v">${metrics.observers}</div>
+        </div>
+
+        <div class="rpg-stat">
+          <div class="rpg-k">Genera</div>
+          <div class="rpg-v">${genusSummary.nGenera}</div>
+        </div>
+
         <div class="rpg-stat">
           <div class="rpg-k">Center lat</div>
           <div class="rpg-v">${lat}</div>
         </div>
+
         <div class="rpg-stat">
           <div class="rpg-k">Center lon</div>
           <div class="rpg-v">${lng}</div>
         </div>
       </div>
 
-      <div class="rpg-mini">
-        Tip: “Undiscovered” means 0 obs in the last fetched iNat batch (not necessarily 0 in reality).
+      <div class="rpg-mini" style="margin-top:10px;">
+        Top genera: ${escapeHtml(genusSummary.topGenera)}
       </div>
     </div>
   `;
@@ -551,11 +1590,9 @@ function buildRPGPopupHTML({ ix, iy, count, centerLL }) {
 window.enableGridRPGPopup = function enableGridRPGPopup() {
   map.off("dblclick", __onGridDblClick);
   map.on("dblclick", __onGridDblClick);
-  console.log("Grid RPG popup enabled (dblclick).");
 };
 
-function __onGridDblClick(e) {
-  // Stop other dblclick behaviors
+async function __onGridDblClick(e) {
   if (e?.originalEvent?.preventDefault) e.originalEvent.preventDefault();
   if (e?.originalEvent?.stopPropagation) e.originalEvent.stopPropagation();
 
@@ -565,14 +1602,25 @@ function __onGridDblClick(e) {
   const { swLL, neLL } = gridIndexToBoundsLL(ix, iy);
   flashGridCell(swLL, neLL);
 
-  const count = countObsInCell(ix, iy, window.__inatLastResults || []);
-
   const centerLL = L.latLng(
     (swLL.lat + neLL.lat) / 2,
     (swLL.lng + neLL.lng) / 2
   );
 
-  const html = buildRPGPopupHTML({ ix, iy, count, centerLL });
+  // Pull precomputed square metrics from static heat store
+  const metrics = getStaticMetricsForCell(ix, iy);
+
+  // Load optional genus record from superchunk asset
+  const squareGeneraRec = await getSquareGeneraRecord(ix, iy);
+  const genusSummary = summarizeSquareGenera(squareGeneraRec);
+
+  const html = buildRPGPopupHTML({
+    ix,
+    iy,
+    centerLL,
+    metrics,
+    genusSummary
+  });
 
   L.popup({
     className: "rpg-popup",
@@ -614,9 +1662,17 @@ async function loadStaticHeatmapCsv(url) {
     }
 
     const header = lines[0].trim().toLowerCase();
-    if (header !== "ix,iy,count,species,observers") {
-      console.warn(`Unexpected CSV header: ${header}`);
-    }
+//    if (header !== "ix,iy,count,species,observers") {
+ //     console.warn(`Unexpected CSV header: ${header}`);
+ //   }
+ const allowedHeaders = new Set([
+  "ix,iy,count,species,observers",
+  "ix,iy,count,n_species,n_observers"
+]);
+
+if (!allowedHeaders.has(header)) {
+  console.warn(`Unexpected CSV header: ${header}`);
+}
 
     const counts = new Map();
 
@@ -648,9 +1704,21 @@ async function loadStaticHeatmapCsv(url) {
     }
 
     window.__staticGridCounts = counts;
+
     console.log(`Loaded static heatmap cells: ${counts.size}`);
 
+    // updating the static grid heat
     updateStaticGridHeat();
+
+    if (typeof window.updateHudCenterSummary === "function") {
+      window.updateHudCenterSummary();
+    }
+
+    if (typeof window.updateHudCladogram === "function") {
+      window.updateHudCladogram();
+    }
+
+  
   } catch (err) {
     console.error("Failed to load static heat CSV:", err);
   }
@@ -697,8 +1765,9 @@ function updateStaticGridHeat() {
 
       const key = `${ix},${iy}`;
       const metrics = counts.get(key) || 0;
-      const value = getHeatValueForCell(metrics);
-      const style = countToFill(value);
+      //const value = getHeatValueForCell(metrics);
+      //const style = countToFill(value);
+      const style = metricsToFill(metrics);
       if (!style) continue;
 
       const sw = map.options.crs.unproject(L.point(x, y));
@@ -735,35 +1804,48 @@ function staticChunkUrlFromKey(chunkKey) {
 
 window.handleUserPositionUpdate = async function(lat, lng, force = false) {
   const cellKey = latLngToDisplayCellKey(lat, lng);
-  const chunkKey = latLngToStaticChunkKey(lat, lng);
 
   const state = window.__gwState || {};
+  const now = Date.now();
+
+  const suspendUntil = state.suspendAutoCenterUntil ?? 0;
+
+  const autoCenterAllowed =
+      state.lockToLocation === true &&
+      suspendUntil !== Number.POSITIVE_INFINITY &&
+      now >= (suspendUntil ?? 0);
 
   const enteredNewCell = force || (cellKey !== state.lastUserCellKey);
-  const enteredNewChunk = force || (chunkKey !== state.lastLoadedChunkKey);
-
   state.lastUserCellKey = cellKey;
 
-  if (state.lockToLocation) {
-    const currentZoom = map.getZoom();
-    map.setView([lat, lng], currentZoom, { animate: false });
+  if (autoCenterAllowed) {
+    const TARGET_ZOOM = 18;
+
+    if (!state.hasDoneInitialZoom) {
+      state.hasDoneInitialZoom = true;
+      map.flyTo([lat, lng], TARGET_ZOOM, { duration: 1.0 });
+    } else if (enteredNewCell) {
+      map.flyTo([lat, lng], map.getZoom(), { duration: 0.5 });
+    }
   }
 
-if (enteredNewChunk) {
-  state.lastLoadedChunkKey = chunkKey;
-  await loadStaticHeatmapCsv(staticChunkUrlFromKey(chunkKey));
-} else if (enteredNewCell) {
-  updateStaticGridHeat();
-}
+  if (enteredNewCell) {
+    updateStaticGridHeat();
+    updateGridLines();
 
-if (enteredNewCell) {
-  updateGridLines();
+    if (typeof window.updateHudCenterSummary === "function") {
+      window.updateHudCenterSummary();
+    }
 
-  if (typeof window.maybeRefreshDynamicINat === "function") {
-    window.maybeRefreshDynamicINat(false, cellKey);
+    if (typeof window.updateHudCladogram === "function") {
+      window.updateHudCladogram();
+    }
+
+    if (typeof window.maybeRefreshDynamicINat === "function") {
+      window.maybeRefreshDynamicINat(false, cellKey);
+    }
   }
-}
-}
+};
 
 
 // // //
@@ -801,3 +1883,48 @@ function applyStickyZoom(force = false) {
 
 // add sticky zoom enable
 map.on("zoomend", applyStickyZoom);
+
+function parseViewBox(svg) {
+  const vb = (svg.getAttribute("viewBox") || "0 0 260 280").trim().split(/\s+/).map(Number);
+  return { x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
+}
+
+function setCurrentCladoViewBox(vb) {
+  window.__gwCladoState.currentViewBox = `${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
+}
+
+function clampCladoViewBox(vb, baseW, baseH) {
+  // ------------------------------------------------------------
+  // Zoom limits
+  // ------------------------------------------------------------
+  vb.w = Math.max(baseW * 0.18, Math.min(baseW, vb.w));
+  vb.h = Math.max(baseH * 0.18, Math.min(baseH, vb.h));
+
+  // ------------------------------------------------------------
+  // Extra pan margin so you can reach edge labels / strokes
+  // and also "overscroll" slightly past the nominal content box
+  // ------------------------------------------------------------
+  const padX = Math.max(18, baseW * 0.10);
+  const padY = Math.max(18, baseH * 0.10);
+
+  const minX = -padX;
+  const maxX = baseW - vb.w + padX;
+
+  const minY = -padY;
+  const maxY = baseH - vb.h + padY;
+
+  vb.x = Math.max(minX, Math.min(maxX, vb.x));
+  vb.y = Math.max(minY, Math.min(maxY, vb.y));
+
+  return vb;
+}
+
+function clientToSvgCoords(svg, clientX, clientY, vb) {
+  const rect = svg.getBoundingClientRect();
+  const px = (clientX - rect.left) / rect.width;
+  const py = (clientY - rect.top) / rect.height;
+  return {
+    x: vb.x + px * vb.w,
+    y: vb.y + py * vb.h
+  };
+}
