@@ -409,7 +409,7 @@
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.25px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   color: rgba(0,0,0,0.84);
 }
 
@@ -417,14 +417,22 @@
   font-size: 10.5px;
   line-height: 1.25;
   color: rgba(0,0,0,0.58);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+}
+
+.gw-clado-wrap{
+  height: 230px;
+  max-height: 230px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .gw-clado-wrap{
   position: relative;
   width: 100%;
-  height: 255px;
-  max-height: 290px;
+  height: 230px;
+  max-height: 230px;
   overflow: hidden;
   touch-action: none;
   user-select: none;
@@ -549,6 +557,21 @@
   dominant-baseline: middle;
   pointer-events: none;
 }
+
+.gw-pie-slice {
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+  transform-origin: 130px 130px;
+}
+
+.gw-pie-slice-group:hover .gw-pie-slice {
+  opacity: 0.92;
+}
+
+.gw-clado-wrap {
+  cursor: default;
+}
+
 
 
   </style>
@@ -693,7 +716,7 @@
           </div>
           <div class="gw-clado-wrap" id="gwCladoWrap">
             <div id="gwCladoBody" class="gw-clado-empty">Waiting for taxonomy data…</div>
-            <div class="gw-clado-hint">scroll/pinch = zoom • drag = pan</div>
+            <div class="gw-clado-hint">dbl-click slice = drill down • dbl-click outside = back</div>
           </div>
         </div>
       </div>

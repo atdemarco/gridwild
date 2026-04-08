@@ -512,30 +512,6 @@ function flattenTree(root) {
   return { nodes, edges };
 }
 
-window.__gwCladoState = window.__gwCladoState || {
-  fullTree: null,
-  collapsed: new Set(),
-  lastRenderedNodes: [],
-  lastRenderedEdges: [],
-  currentViewBox: null,
-
-  zoom: 1,
-  minZoom: 1,
-  maxZoom: 6,
-  panX: 0,
-  panY: 0,
-
-  pointers: new Map(),
-  pinchStartDist: null,
-  pinchStartZoom: 1,
-  pinchAnchorClient: null,
-
-  dragging: false,
-  dragStartPanX: 0,
-  dragStartPanY: 0,
-  dragStartClientX: 0,
-  dragStartClientY: 0
-};
 
 function slugifyCladoName(s) {
   return String(s || "")
@@ -555,140 +531,236 @@ function annotateTreePaths(node, parentPath = "root") {
 }
 
 
-function renderCladogramSvg(root, opts = {}) {
+
+// ─────────────────────────────────────────────────────────────
+// Simple pie-navigation state
+// ─────────────────────────────────────────────────────────────
+window.__gwCladoState = window.__gwCladoState || {
+  fullTree: null,
+  currentNodePath: "root",
+  pathStack: []
+};
+
+function findNodeByPath(node, path) {
+  if (!node) return null;
+  if (node._path === path) return node;
+
+  for (const child of (node.children || [])) {
+    const found = findNodeByPath(child, path);
+    if (found) return found;
+  }
+  return null;
+}
+
+function getCurrentPieNode() {
+  const state = window.__gwCladoState || {};
+  return findNodeByPath(state.fullTree, state.currentNodePath || "root");
+}
+
+function colorForPieDepth(depth, frac = 0.5) {
+  const hue = 120 + depth * 38 + frac * 30;
+  const sat = 58;
+  const light = 52 - Math.min(depth * 2, 10);
+  return `hsl(${hue}, ${sat}%, ${light}%)`;
+}
+
+function colorForPieSlice(child, diversityFrac, siblingIndexFrac = 0.5) {
+  // Keep hue mostly stable within a view, with a slight spread across siblings
+  const baseHue = 120 + 18 * siblingIndexFrac;
+
+  // Diversity drives vividness and a bit of darkness
+  const sat = 28 + 58 * diversityFrac;     // low diversity = duller
+  const light = 70 - 20 * diversityFrac;   // high diversity = a bit darker/richer
+
+  return `hsl(${baseHue}, ${sat}%, ${light}%)`;
+}
+
+
+function polarToCartesian(cx, cy, r, angleDeg) {
+  const a = (angleDeg - 90) * Math.PI / 180;
+  return {
+    x: cx + r * Math.cos(a),
+    y: cy + r * Math.sin(a)
+  };
+}
+
+function describeArc(cx, cy, rOuter, rInner, startAngle, endAngle) {
+  const p1 = polarToCartesian(cx, cy, rOuter, startAngle);
+  const p2 = polarToCartesian(cx, cy, rOuter, endAngle);
+  const p3 = polarToCartesian(cx, cy, rInner, endAngle);
+  const p4 = polarToCartesian(cx, cy, rInner, startAngle);
+
+  const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
+
+  return [
+    `M ${p1.x} ${p1.y}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${p2.x} ${p2.y}`,
+    `L ${p3.x} ${p3.y}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 0 ${p4.x} ${p4.y}`,
+    "Z"
+  ].join(" ");
+}
+
+const TAXON_COMMON_NAMES = {
+  Diptera: "Flies",
+  Lepidoptera: "Butterflies & Moths",
+  Coleoptera: "Beetles",
+  Hymenoptera: "Bees, Wasps & Ants",
+  Hemiptera: "True Bugs",
+  Orthoptera: "Grasshoppers & Crickets",
+  Odonata: "Dragonflies & Damselflies",
+  Araneae: "Spiders"
+};
+
+function getDisplayName(node) {
+  return TAXON_COMMON_NAMES[node.name] || node.name;
+}
+
+function renderPieSvg(node) {
   const W = 260;
-  const H = 380;
-  const PAD_L = 14;
-  const PAD_R = 78;
-  const PAD_T = 14;
-  const PAD_B = 14;
+  const H = 260;
+  const cx = 130;
+  const cy = 120;   // try 115–125 range
+  const rOuter = 92;
+  const rInner = 28;
 
-  const { maxDepth } = assignTreeLayout(root);
-  const { nodes, edges } = flattenTree(root);
+  const kids = (node?.children || []).slice();
 
-  const xScale = (x) => PAD_L + x * (W - PAD_L - PAD_R);
-
-  const yScale = (depth) => {
-    if (maxDepth <= 0) return PAD_T + 8;
-    return PAD_T + (depth / maxDepth) * (H - PAD_T - PAD_B);
-  };
-
-  const rScale = (g) => {
-    const t = Math.sqrt(Math.max(1, g || 1));
-    return Math.max(3, Math.min(11, 1.8 + 1.15 * t));
-  };
-
-  const edgeScale = (w) => {
-    const t = Math.sqrt(Math.max(1, w || 1));
-    return Math.max(0.9, Math.min(3.5, 0.5 + 0.28 * t));
-  };
-
-  const depthHue = (depth) => {
-    const t = maxDepth <= 0 ? 0 : depth / maxDepth;
-    return 205 - 150 * t;
-  };
-
-  const nodeFill = (node) => {
-    const h = depthHue(node.depth);
-    const s = node.depth === 0 ? 78 : 68;
-    const l = node.depth === 0 ? 42 : 54;
-    return `hsl(${h.toFixed(1)}, ${s}%, ${l}%)`;
-  };
-
-  const nodeStroke = (node) => {
-    const h = depthHue(node.depth);
-    return `hsl(${h.toFixed(1)}, 52%, 30%)`;
-  };
-
-  const innerFill = (node) => {
-    const h = depthHue(node.depth);
-    return `hsla(${h.toFixed(1)}, 85%, 98%, 0.90)`;
-  };
-
-  const edgeSvg = edges.map(({ source, target }, i) => {
-    const x1 = xScale(source._x);
-    const y1 = yScale(source.depth);
-    const x2 = xScale(target._x);
-    const y2 = yScale(target.depth);
-    const gradId = `gwEdgeGrad${i}`;
-    const h1 = depthHue(source.depth);
-    const h2 = depthHue(target.depth);
-
+  if (!kids.length) {
     return `
-      <defs>
-        <linearGradient id="${gradId}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="hsla(${h1.toFixed(1)}, 45%, 42%, 0.55)" />
-          <stop offset="100%" stop-color="hsla(${h2.toFixed(1)}, 55%, 40%, 0.35)" />
-        </linearGradient>
-      </defs>
-      <path
-        class="gw-clado-edge"
-        d="M ${x1} ${y1} L ${x1} ${(y1 + y2) / 2} L ${x2} ${(y1 + y2) / 2} L ${x2} ${y2}"
-        stroke="url(#${gradId})"
-        stroke-width="${edgeScale(target.weight)}"
-      />
+      <svg id="gwCladoSvg" class="gw-clado-svg" viewBox="0 0 ${W} ${H}">
+        <circle cx="${cx}" cy="${cy}" r="${rOuter}" fill="rgba(80,120,80,0.08)" stroke="rgba(0,0,0,0.08)" />
+        <circle cx="${cx}" cy="${cy}" r="${rInner}" fill="white" stroke="rgba(0,0,0,0.08)" />
+        <text x="${cx}" y="${cy - 6}" text-anchor="middle" font-size="13" font-weight="700">${escapeHtml(node?.name || "Node")}</text>
+        <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="11" opacity="0.65">Leaf node</text>
+      </svg>
     `;
-  }).join("");
+  }
 
-  const nodeSvg = nodes.map((node) => {
-    const x = xScale(node._x);
-    const y = yScale(node.depth);
-    const isRoot = node.depth === 0;
-    const isLeaf = !node.children || node.children.length === 0;
-    const showLabel = isLeaf || node.depth <= 2 || (node.genusCount || 0) >= 3;
+  const total = kids.reduce((s, k) => s + Math.max(1, k.weight || 1), 0) || 1;
+  const maxDiversity = Math.max(...kids.map(k => k.genusCount || 0), 1);
 
-    const labelDx = isLeaf ? -2 : 0;
-    const labelDy = isLeaf ? 10 : -12;
-    const labelAnchor = isLeaf ? "start" : "middle";
+  let cursor = 0;
+  const slices = kids.map((child, i) => {
+    const value = Math.max(1, child.weight || 1);
+    const frac = value / total;
+    const startAngle = cursor * 360;
+    const endAngle = (cursor + frac) * 360;
+    cursor += frac;
 
-    const r = rScale(node.genusCount);
-    const innerR = Math.max(1.6, r * 0.34);
+    const mid = 0.5 * (startAngle + endAngle);
+    const labelPt = polarToCartesian(cx, cy, 62, mid);
+    
+    // const fill = colorForPieDepth(child.depth || 1, i / Math.max(1, kids.length - 1));
+    const diversityFrac = (child.genusCount || 0) / maxDiversity;
+    const fill = colorForPieSlice(
+      child,
+      diversityFrac,
+      i / Math.max(1, kids.length - 1)
+    );
+
 
     return `
-      <g class="gw-clado-nodegroup" data-node-path="${escapeHtml(node._path || "")}">
-        <circle class="gw-clado-nodehalo" cx="${x}" cy="${y}" r="${r + 2.2}" fill="rgba(255,255,255,0.28)" />
-        <circle
-          class="${isRoot ? "gw-clado-node gw-clado-root" : "gw-clado-node"}"
-          cx="${x}" cy="${y}" r="${r}"
-          fill="${nodeFill(node)}"
-          stroke="${nodeStroke(node)}"
+      <g class="gw-pie-slice-group" data-node-path="${escapeHtml(child._path || "")}">
+        <title>
+        ${getDisplayName(child)} (${child.name}) • ${child.weight} obs • ${child.genusCount} genera
+        </title>
+        <path
+          class="gw-pie-slice"
+          d="${describeArc(cx, cy, rOuter, rInner, startAngle, endAngle)}"
+          fill="${fill}"
+          stroke="rgba(255,255,255,0.95)"
+          stroke-width="1.5"
         />
-        <circle class="gw-clado-nodecore" cx="${x}" cy="${y}" r="${innerR}" fill="${innerFill(node)}" />
-        ${showLabel ? `
-        <text
-          class="${isLeaf ? "gw-clado-tip" : "gw-clado-label"}"
-          x="${x + labelDx}"
-          y="${y + labelDy}"
-          text-anchor="${labelAnchor}"
-          ${isLeaf ? `transform="rotate(90 ${x + labelDx} ${y + labelDy})"` : ""}
-        >${escapeHtml(node.name)}</text>
-      ` : ""}
+        ${frac > 0.06 ? `
+          <text
+            x="${labelPt.x}"
+            y="${labelPt.y}"
+            text-anchor="middle"
+            dominant-baseline="middle"
+            font-size="10.5"
+            font-weight="600"
+            fill="rgba(0,0,0,0.78)"
+            pointer-events="none"
+          >${escapeHtml(getDisplayName(child))}</text>
+        ` : ""}
       </g>
     `;
   }).join("");
-
-  const vb = opts.viewBox || `0 0 ${W} ${H}`;
 
   return `
-    <svg
-      id="gwCladoSvg"
-      class="gw-clado-svg"
-      viewBox="${vb}"
-      data-base-width="${W}"
-      data-base-height="${H}"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <defs>
-        <filter id="gwCladoSoftShadow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="1.5" stdDeviation="1.8" flood-color="rgba(0,0,0,0.18)"/>
-        </filter>
-      </defs>
-      <g filter="url(#gwCladoSoftShadow)">
-        ${edgeSvg}
-        ${nodeSvg}
-      </g>
+    <svg id="gwCladoSvg" class="gw-clado-svg" viewBox="0 0 ${W} ${H}">
+      <circle
+        id="gwPieBackHit"
+        cx="${cx}" cy="${cy}" r="${rOuter + 18}"
+        fill="transparent"
+        pointer-events="all"
+      />
+      ${slices}
+      <circle cx="${cx}" cy="${cy}" r="${rInner}" fill="white" stroke="rgba(0,0,0,0.10)" />
+      <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="12.5" font-weight="800">
+        ${escapeHtml(node.name)}
+      </text>
+      <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="10.5" opacity="0.64">
+        dbl-click slice to drill in
+      </text>
     </svg>
   `;
+}
+
+function rerenderCladogram() {
+  const state = window.__gwCladoState || {};
+  const el = document.getElementById("gwCladoBody");
+  if (!el || !state.fullTree) return;
+
+  const node = getCurrentPieNode();
+  if (!node) return;
+
+  el.className = "";
+  el.innerHTML = renderPieSvg(node);
+  bindCladogramInteractions();
+}
+
+function bindCladogramInteractions() {
+  const svg = document.getElementById("gwCladoSvg");
+  if (!svg) return;
+
+  const state = window.__gwCladoState || {};
+
+  // Drill down on slice dbl-click
+  svg.querySelectorAll(".gw-pie-slice-group").forEach((g) => {
+    g.addEventListener("dblclick", (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      const nodePath = g.dataset.nodePath;
+      if (!nodePath) return;
+
+      const nextNode = findNodeByPath(state.fullTree, nodePath);
+      if (!nextNode) return;
+      if (!nextNode.children || nextNode.children.length === 0) return;
+
+      state.pathStack = state.pathStack || [];
+      state.pathStack.push(state.currentNodePath || "root");
+      state.currentNodePath = nodePath;
+
+      rerenderCladogram();
+    });
+  });
+
+  // Step back when dbl-clicking outside slices
+  svg.addEventListener("dblclick", (evt) => {
+    const hitSlice = evt.target.closest(".gw-pie-slice-group");
+    if (hitSlice) return;
+
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    if (state.pathStack && state.pathStack.length > 0) {
+      state.currentNodePath = state.pathStack.pop();
+      rerenderCladogram();
+    }
+  });
 }
 
 function getCladoElements() {
@@ -713,288 +785,7 @@ function getPointerMidpoint(a, b) {
 }
 
 
-function bindCladogramInteractions() {
-  const svg = document.getElementById("gwCladoSvg");
-  const wrap = document.getElementById("gwCladoWrap");
-  if (!svg || !wrap) return;
 
-  window.__gwCladoState = window.__gwCladoState || {};
-  const state = window.__gwCladoState;
-  state.pointers = state.pointers || new Map();
-
-  // ------------------------------------------------------------
-  // IMPORTANT: remove old wrap-level listeners before rebinding
-  // ------------------------------------------------------------
-  if (wrap.__gwCladoCleanup) {
-    wrap.__gwCladoCleanup();
-    wrap.__gwCladoCleanup = null;
-  }
-
-  // ------------------------------------------------------------
-  // Node dblclick: collapse / expand subtree
-  // These are fine to rebind because the SVG is recreated on rerender
-  // ------------------------------------------------------------
-  svg.querySelectorAll(".gw-clado-nodegroup").forEach((g) => {
-    g.addEventListener("dblclick", (evt) => {
-      evt.preventDefault();
-      evt.stopPropagation();
-
-      const nodePath = g.dataset.nodePath;
-      if (!nodePath || nodePath === "root") return;
-
-      const fullNode = findNodeByPath(state.fullTree, nodePath);
-      if (!fullNode || !fullNode.children || fullNode.children.length === 0) return;
-
-      if (!state.collapsed) state.collapsed = new Set();
-      if (state.collapsed.has(nodePath)) state.collapsed.delete(nodePath);
-      else state.collapsed.add(nodePath);
-
-      rerenderCladogram();
-    });
-  });
-
-  // ------------------------------------------------------------
-  // Local gesture state
-  // ------------------------------------------------------------
-  let dragStart = null;
-  let pinchStart = null;
-
-  // ------------------------------------------------------------
-  // Wheel zoom
-  // ------------------------------------------------------------
-  const onWheel = (evt) => {
-    evt.preventDefault();
-    evt.stopPropagation();
-
-    const baseW = Number(svg.dataset.baseWidth || 260);
-    const baseH = Number(svg.dataset.baseHeight || 280);
-
-    let vb = parseViewBox(svg);
-    const anchor = clientToSvgCoords(svg, evt.clientX, evt.clientY, vb);
-
-    const zoomFactor = evt.deltaY < 0 ? 0.88 : (1 / 0.88);
-    const nextW = vb.w * zoomFactor;
-    const nextH = vb.h * zoomFactor;
-
-    const rx = (anchor.x - vb.x) / vb.w;
-    const ry = (anchor.y - vb.y) / vb.h;
-
-    vb = {
-      x: anchor.x - rx * nextW,
-      y: anchor.y - ry * nextH,
-      w: nextW,
-      h: nextH
-    };
-
-    vb = clampCladoViewBox(vb, baseW, baseH);
-    setSvgViewBox(vb);
-  };
-
-  // ------------------------------------------------------------
-  // Pointer down
-  // ------------------------------------------------------------
-  const onPointerDown = (evt) => {
-    evt.preventDefault();
-    evt.stopPropagation();
-
-    wrap.setPointerCapture?.(evt.pointerId);
-
-    state.pointers.set(evt.pointerId, {
-      clientX: evt.clientX,
-      clientY: evt.clientY
-    });
-
-    if (state.pointers.size === 1) {
-      dragStart = {
-        clientX: evt.clientX,
-        clientY: evt.clientY,
-        viewBox: parseViewBox(svg)
-      };
-      pinchStart = null;
-      wrap.classList.add("is-dragging");
-    } else if (state.pointers.size === 2) {
-      const pts = Array.from(state.pointers.values());
-      pinchStart = {
-        viewBox: parseViewBox(svg),
-        dist: getPointerDistance(pts[0], pts[1]),
-        mid: getPointerMidpoint(pts[0], pts[1])
-      };
-      dragStart = null;
-      wrap.classList.remove("is-dragging");
-    }
-  };
-
-  // ------------------------------------------------------------
-  // Pointer move
-  // ------------------------------------------------------------
-  const onPointerMove = (evt) => {
-    if (!state.pointers.has(evt.pointerId)) return;
-
-    evt.preventDefault();
-    evt.stopPropagation();
-
-    state.pointers.set(evt.pointerId, {
-      clientX: evt.clientX,
-      clientY: evt.clientY
-    });
-
-    const baseW = Number(svg.dataset.baseWidth || 260);
-    const baseH = Number(svg.dataset.baseHeight || 280);
-
-    // One-finger drag
-    if (state.pointers.size === 1 && dragStart) {
-      const dxPx = evt.clientX - dragStart.clientX;
-      const dyPx = evt.clientY - dragStart.clientY;
-
-      const rect = svg.getBoundingClientRect();
-      const vb0 = dragStart.viewBox;
-
-      let vb = {
-        x: vb0.x - (dxPx / rect.width) * vb0.w,
-        y: vb0.y - (dyPx / rect.height) * vb0.h,
-        w: vb0.w,
-        h: vb0.h
-      };
-
-      vb = clampCladoViewBox(vb, baseW, baseH);
-      setSvgViewBox(vb);
-      return;
-    }
-
-    // Two-finger pinch
-    if (state.pointers.size === 2 && pinchStart) {
-      const pts = Array.from(state.pointers.values());
-      const distNow = getPointerDistance(pts[0], pts[1]);
-      if (!distNow || !pinchStart.dist) return;
-
-      const midNow = getPointerMidpoint(pts[0], pts[1]);
-
-      const scale = pinchStart.dist / distNow;
-      const vb0 = pinchStart.viewBox;
-
-      let nextW = vb0.w * scale;
-      let nextH = vb0.h * scale;
-
-      const anchor0 = clientToSvgCoords(
-        svg,
-        pinchStart.mid.clientX,
-        pinchStart.mid.clientY,
-        vb0
-      );
-
-      const rect = svg.getBoundingClientRect();
-      const dxPx = midNow.clientX - pinchStart.mid.clientX;
-      const dyPx = midNow.clientY - pinchStart.mid.clientY;
-
-      let vb = {
-        x: anchor0.x - ((anchor0.x - vb0.x) / vb0.w) * nextW - (dxPx / rect.width) * nextW,
-        y: anchor0.y - ((anchor0.y - vb0.y) / vb0.h) * nextH - (dyPx / rect.height) * nextH,
-        w: nextW,
-        h: nextH
-      };
-
-      vb = clampCladoViewBox(vb, baseW, baseH);
-      setSvgViewBox(vb);
-    }
-  };
-
-  // ------------------------------------------------------------
-  // Pointer end
-  // ------------------------------------------------------------
-  const endPointer = (evt) => {
-    evt.preventDefault();
-    evt.stopPropagation();
-
-    state.pointers.delete(evt.pointerId);
-
-    try {
-      wrap.releasePointerCapture?.(evt.pointerId);
-    } catch (_) {
-      // ignore
-    }
-
-    if (state.pointers.size === 0) {
-      dragStart = null;
-      pinchStart = null;
-      wrap.classList.remove("is-dragging");
-      return;
-    }
-
-    if (state.pointers.size === 1) {
-      const remaining = Array.from(state.pointers.values())[0];
-      dragStart = {
-        clientX: remaining.clientX,
-        clientY: remaining.clientY,
-        viewBox: parseViewBox(svg)
-      };
-      pinchStart = null;
-      wrap.classList.add("is-dragging");
-    }
-  };
-
-  // ------------------------------------------------------------
-  // Background dblclick: reset zoom
-  // ------------------------------------------------------------
-  const onSvgDblClick = (evt) => {
-    if (evt.target !== svg) return;
-
-    evt.preventDefault();
-    evt.stopPropagation();
-
-    const baseW = Number(svg.dataset.baseWidth || 260);
-    const baseH = Number(svg.dataset.baseHeight || 280);
-    setSvgViewBox({ x: 0, y: 0, w: baseW, h: baseH });
-
-  };
-
-  // ------------------------------------------------------------
-  // Prevent map gestures underneath
-  // ------------------------------------------------------------
-  const stopUnderlay = (evt) => {
-    evt.stopPropagation();
-  };
-
-  // Bind
-  wrap.addEventListener("wheel", onWheel, { passive: false });
-  wrap.addEventListener("pointerdown", onPointerDown, { passive: false });
-  wrap.addEventListener("pointermove", onPointerMove, { passive: false });
-  wrap.addEventListener("pointerup", endPointer, { passive: false });
-  wrap.addEventListener("pointercancel", endPointer, { passive: false });
-
-  // NOTE: intentionally DO NOT use pointerleave here
-  // because pointer capture makes it counterproductive.
-
-  svg.addEventListener("dblclick", onSvgDblClick);
-
-  [
-    "mousedown", "mousemove", "mouseup", "click",
-    "touchstart", "touchmove", "touchend",
-    "pointerdown", "pointermove", "pointerup", "pointercancel",
-    "wheel"
-  ].forEach((type) => {
-    wrap.addEventListener(type, stopUnderlay, { passive: false });
-  });
-
-  // Cleanup hook so future rerenders can unbind these
-  wrap.__gwCladoCleanup = () => {
-    wrap.removeEventListener("wheel", onWheel, { passive: false });
-    wrap.removeEventListener("pointerdown", onPointerDown, { passive: false });
-    wrap.removeEventListener("pointermove", onPointerMove, { passive: false });
-    wrap.removeEventListener("pointerup", endPointer, { passive: false });
-    wrap.removeEventListener("pointercancel", endPointer, { passive: false });
-
-    svg.removeEventListener("dblclick", onSvgDblClick);
-
-    [
-      "mousedown", "mousemove", "mouseup", "click",
-      "touchstart", "touchmove", "touchend",
-      "pointerdown", "pointermove", "pointerup", "pointercancel",
-      "wheel"
-    ].forEach((type) => {
-      wrap.removeEventListener(type, stopUnderlay, { passive: false });
-    });
-  };
-}
 
 function formatViewBox(vb) {
   return `${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
@@ -1023,11 +814,10 @@ window.updateHudCladogram = async function updateHudCladogram() {
   try {
     const subtitleEl = document.querySelector("#gwCladoPane .gw-clado-subtitle");
     if (subtitleEl) {
-   subtitleEl.textContent =
-      `Center ${CENTER_MACRO_SIZE_CELLS}×${CENTER_MACRO_SIZE_CELLS} square taxonomy through Order; node size scales with unique genera`;
+      subtitleEl.textContent =
+      `Center ${CENTER_MACRO_SIZE_CELLS}×${CENTER_MACRO_SIZE_CELLS} square taxonomy through Order; slice size = observations, color vividness = genus diversity`;
     }
-
-    const keys = getCenterMacroCellKeys();
+  const keys = getCenterMacroCellKeys();
 
     const squareRecords = await Promise.all(
       keys.map((key) => {
@@ -1051,16 +841,11 @@ const rawTree = buildTaxonomyTreeFromSquareRecord(mergedRecord, genusNameIndex);
 const tree = annotateTreePaths(finalizeTree(rawTree));
 
 window.__gwCladoState.fullTree = tree;
-window.__gwCladoState.currentViewBox = null;
-window.__gwCladoState.collapsed = new Set();
-window.__gwCladoState.zoom = 1;
-window.__gwCladoState.panX = 0;
-window.__gwCladoState.panY = 0;
+window.__gwCladoState.currentNodePath = "root";
+window.__gwCladoState.pathStack = [];
 
 el.className = "";
-el.innerHTML = renderCladogramSvg(tree, {
-  viewBox: window.__gwCladoState.currentViewBox || undefined
-});
+el.innerHTML = renderPieSvg(tree);
 bindCladogramInteractions();
 
 
@@ -1082,33 +867,6 @@ function findNodeByPath(node, path) {
   return null;
 }
 
-function cloneVisibleTree(node, collapsedSet) {
-  const clone = {
-    ...node,
-    children: []
-  };
-
-  if (collapsedSet.has(node._path)) {
-    clone.children = [];
-    return clone;
-  }
-
-  clone.children = (node.children || []).map(child => cloneVisibleTree(child, collapsedSet));
-  return clone;
-}
-
-function rerenderCladogram() {
-  const state = window.__gwCladoState || {};
-  const el = document.getElementById("gwCladoBody");
-  if (!el || !state.fullTree) return;
-
-  const visibleTree = cloneVisibleTree(state.fullTree, state.collapsed || new Set());
-  const vb = state.currentViewBox || null;
-
-  el.className = "";
-  el.innerHTML = renderCladogramSvg(visibleTree, { viewBox: vb });
-  bindCladogramInteractions();
-}
 
 // Optional: style (grid lines)
 const GRID_LINE_STYLE = {
