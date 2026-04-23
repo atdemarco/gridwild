@@ -2,30 +2,102 @@
   "super_ix": -43931,
   "super_iy": 24132,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 3,
   "squares": {
     "sq_m1405790_p772254": {
       "ix": -1.40579E+6,
       "iy": 772254,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Odonata",
+        "family_name": "Libellulidae",
         "genus_name": "Erythemis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.117286E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405769_p772232": {
       "ix": -1.405769E+6,
       "iy": 772232,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Turdidae",
         "genus_name": "Turdus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405768_p772235": {
       "ix": -1.405768E+6,
       "iy": 772235,
       "genera": {
-        "genus_name": "Fungi",
-        "count": 1
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 1,
+        "species": 1
       }
     }
   }

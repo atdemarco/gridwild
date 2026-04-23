@@ -2,6 +2,12 @@
   "super_ix": -43912,
   "super_iy": 24126,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 2,
   "squares": {
     "sq_m1405172_p772062": {
@@ -9,25 +15,103 @@
       "iy": 772062,
       "genera": [
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Columbiformes",
+          "family_name": "Columbidae",
           "genus_name": "Columba",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Passeridae",
           "genus_name": "Passer",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Sturnidae",
           "genus_name": "Sturnus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 3,
+        "species": 3
+      }
     },
     "sq_m1405159_p772047": {
       "ix": -1.405159E+6,
       "iy": 772047,
       "genera": {
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Araneae",
+        "family_name": "Salticidae",
         "genus_name": "Hentzia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.581791E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

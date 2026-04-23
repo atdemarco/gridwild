@@ -2,22 +2,102 @@
   "super_ix": -43996,
   "super_iy": 24087,
   "superchunk_size": 32,
-  "n_squares": 4,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 5,
   "squares": {
     "sq_m1407866_p770791": {
       "ix": -1.407866E+6,
       "iy": 770791,
       "genera": {
-        "genus_name": "Cicadellidae",
-        "count": 1
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Cicadellidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.56545E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407863_p770794": {
+      "ix": -1.407863E+6,
+      "iy": 770794,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fabales",
+        "family_name": "Fabaceae",
+        "genus_name": "Cladrastis",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.557497E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407862_p770815": {
       "ix": -1.407862E+6,
       "iy": 770815,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Lepidoptera",
+        "family_name": "Notodontidae",
         "genus_name": "Datana",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 914362,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407852_p770784": {
@@ -25,21 +105,82 @@
       "iy": 770784,
       "genera": [
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Dermaptera",
+          "family_name": "Forficulidae",
           "genus_name": "Forficula",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Reptilia",
+          "order_name": "Squamata",
+          "family_name": "Colubridae",
           "genus_name": "Storeria",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 237305,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1407842_p770811": {
       "ix": -1.407842E+6,
       "iy": 770811,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Cicadidae",
         "genus_name": "Magicicada",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     }
   }

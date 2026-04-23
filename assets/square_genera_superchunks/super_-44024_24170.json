@@ -2,22 +2,72 @@
   "super_ix": -44024,
   "super_iy": 24170,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 2,
   "squares": {
     "sq_m1408768_p773443": {
       "ix": -1.408768E+6,
       "iy": 773443,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Cardinalidae",
         "genus_name": "Cardinalis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408741_p773454": {
       "ix": -1.408741E+6,
       "iy": 773454,
       "genera": {
+        "iconic_taxon_name": "Animalia",
+        "order_name": "Isopoda",
+        "family_name": "Armadillidiidae",
         "genus_name": "Armadillidium",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     }
   }

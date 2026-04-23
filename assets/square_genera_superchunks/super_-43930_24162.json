@@ -2,52 +2,215 @@
   "super_ix": -43930,
   "super_iy": 24162,
   "superchunk_size": 32,
-  "n_squares": 5,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 6,
   "squares": {
     "sq_m1405759_p773193": {
       "ix": -1.405759E+6,
       "iy": 773193,
       "genera": [
         {
-          "genus_name": "Agaricineae",
-          "count": 1
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hymenoptera",
+          "family_name": "Formicidae",
+          "genus_name": "Tetramorium",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
-          "genus_name": "Tetramorium",
-          "count": 1
+          "iconic_taxon_name": "Fungi",
+          "order_name": "Agaricales",
+          "family_name": "Unknown",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1405758_p773192": {
       "ix": -1.405758E+6,
       "iy": 773192,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Agaricales",
+        "family_name": "Amanitaceae",
         "genus_name": "Saproamanita",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.259773E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405749_p773207": {
       "ix": -1.405749E+6,
       "iy": 773207,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Sturnidae",
         "genus_name": "Sturnus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405739_p773204": {
       "ix": -1.405739E+6,
       "iy": 773204,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Lamiaceae",
         "genus_name": "Melissa",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.868608E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405732_p773185": {
       "ix": -1.405732E+6,
       "iy": 773185,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Polyporales",
+        "family_name": "Grifolaceae",
         "genus_name": "Grifola",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 221128,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1405729_p773211": {
+      "ix": -1.405729E+6,
+      "iy": 773211,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Rosaceae",
+        "genus_name": "Prunus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.218797E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

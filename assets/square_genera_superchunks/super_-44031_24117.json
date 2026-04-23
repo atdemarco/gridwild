@@ -2,22 +2,72 @@
   "super_ix": -44031,
   "super_iy": 24117,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 2,
   "squares": {
     "sq_m1408963_p771770": {
       "ix": -1.408963E+6,
       "iy": 771770,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Passerellidae",
         "genus_name": "Melospiza",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 209231,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408963_p771775": {
       "ix": -1.408963E+6,
       "iy": 771775,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Ulmaceae",
         "genus_name": "Ulmus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 155274,
+        "count": 1,
+        "species": 1
       }
     }
   }

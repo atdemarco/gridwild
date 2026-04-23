@@ -2,30 +2,102 @@
   "super_ix": -43972,
   "super_iy": 24096,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 3,
   "squares": {
     "sq_m1407094_p771095": {
       "ix": -1.407094E+6,
       "iy": 771095,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Diptera",
+        "family_name": "Ulidiidae",
         "genus_name": "Euxesta",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407092_p771082": {
       "ix": -1.407092E+6,
       "iy": 771082,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Commelinales",
+        "family_name": "Commelinaceae",
         "genus_name": "Tradescantia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.934791E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407087_p771088": {
       "ix": -1.407087E+6,
       "iy": 771088,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Sapindales",
+        "family_name": "Sapindaceae",
         "genus_name": "Acer",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 919663,
+        "count": 1,
+        "species": 1
       }
     }
   }

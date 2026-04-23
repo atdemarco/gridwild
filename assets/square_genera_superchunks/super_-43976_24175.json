@@ -2,38 +2,132 @@
   "super_ix": -43976,
   "super_iy": 24175,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 5,
   "squares": {
     "sq_m1407216_p773613": {
       "ix": -1.407216E+6,
       "iy": 773613,
       "genera": {
-        "genus_name": "Plantae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 9.082452E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407211_p773627": {
       "ix": -1.407211E+6,
       "iy": 773627,
       "genera": {
+        "iconic_taxon_name": "Mollusca",
+        "order_name": "Stylommatophora",
+        "family_name": "Arionidae",
         "genus_name": "Arion",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.210749E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407207_p773617": {
       "ix": -1.407207E+6,
       "iy": 773617,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asterales",
+        "family_name": "Asteraceae",
         "genus_name": "Erechtites",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.503235E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407203_p773600": {
       "ix": -1.407203E+6,
       "iy": 773600,
       "genera": {
-        "genus_name": "Chelidonieae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Ranunculales",
+        "family_name": "Papaveraceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.659651E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407202_p773604": {
@@ -41,14 +135,53 @@
       "iy": 773604,
       "genera": [
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Sapindales",
+          "family_name": "Sapindaceae",
           "genus_name": "Acer",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Pinales",
+          "family_name": "Pinaceae",
           "genus_name": "Tsuga",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 5.071021E+6,
+        "count": 2,
+        "species": 2
+      }
     }
   }
 }

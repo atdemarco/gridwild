@@ -2,14 +2,42 @@
   "super_ix": -43962,
   "super_iy": 24053,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 1,
   "squares": {
     "sq_m1406775_p769708": {
       "ix": -1.406775E+6,
       "iy": 769708,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Polyporales",
+        "family_name": "Polyporaceae",
         "genus_name": "Ganoderma",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 9432,
+        "count": 1,
+        "species": 1
       }
     }
   }

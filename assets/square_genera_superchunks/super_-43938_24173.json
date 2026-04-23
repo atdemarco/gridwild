@@ -2,38 +2,162 @@
   "super_ix": -43938,
   "super_iy": 24173,
   "superchunk_size": 32,
-  "n_squares": 4,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 5,
   "squares": {
     "sq_m1406015_p773549": {
       "ix": -1.406015E+6,
       "iy": 773549,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Membracidae",
         "genus_name": "Telamona",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 221128,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406008_p773561": {
       "ix": -1.406008E+6,
       "iy": 773561,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Carnivora",
+        "family_name": "Felidae",
         "genus_name": "Felis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.594264E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406008_p773564": {
       "ix": -1.406008E+6,
       "iy": 773564,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Carnivora",
+        "family_name": "Felidae",
         "genus_name": "Felis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.594264E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406006_p773562": {
       "ix": -1.406006E+6,
       "iy": 773562,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Carnivora",
+        "family_name": "Felidae",
         "genus_name": "Felis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.594264E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1405993_p773546": {
+      "ix": -1.405993E+6,
+      "iy": 773546,
+      "genera": {
+        "iconic_taxon_name": "Unknown",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.387898E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

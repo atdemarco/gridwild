@@ -2,22 +2,162 @@
   "super_ix": -44030,
   "super_iy": 24128,
   "superchunk_size": 32,
-  "n_squares": 7,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 10,
   "squares": {
+    "sq_m1408939_p772124": {
+      "ix": -1.408939E+6,
+      "iy": 772124,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Cucurbitales",
+        "family_name": "Cucurbitaceae",
+        "genus_name": "Luffa",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 237305,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1408932_p772121": {
+      "ix": -1.408932E+6,
+      "iy": 772121,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Brassicales",
+        "family_name": "Brassicaceae",
+        "genus_name": "Cardamine",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.283234E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1408932_p772122": {
       "ix": -1.408932E+6,
       "iy": 772122,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asparagales",
+        "family_name": "Asparagaceae",
         "genus_name": "Yucca",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.283234E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1408932_p772123": {
+      "ix": -1.408932E+6,
+      "iy": 772123,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Lamiaceae",
+        "genus_name": "Stachys",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.283234E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408931_p772099": {
       "ix": -1.408931E+6,
       "iy": 772099,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Rodentia",
+        "family_name": "Cricetidae",
         "genus_name": "Peromyscus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.7606E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408930_p772105": {
@@ -25,72 +165,332 @@
       "iy": 772105,
       "genera": [
         {
+          "iconic_taxon_name": "Mammalia",
+          "order_name": "Rodentia",
+          "family_name": "Cricetidae",
           "genus_name": "Microtus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Tyrannidae",
           "genus_name": "Myiarchus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Troglodytidae",
           "genus_name": "Thryothorus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Columbiformes",
+          "family_name": "Columbidae",
           "genus_name": "Zenaida",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 3.7606E+6,
+        "count": 4,
+        "species": 4
+      }
     },
     "sq_m1408929_p772102": {
       "ix": -1.408929E+6,
       "iy": 772102,
       "genera": [
         {
-          "genus_name": "Carnivora",
-          "count": 1
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Passerellidae",
+          "genus_name": "Melospiza",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
-          "genus_name": "Melospiza",
-          "count": 1
+          "iconic_taxon_name": "Mammalia",
+          "order_name": "Carnivora",
+          "family_name": "Unknown",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 4.526701E+6,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1408929_p772103": {
       "ix": -1.408929E+6,
       "iy": 772103,
       "genera": [
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Piciformes",
+          "family_name": "Picidae",
           "genus_name": "Colaptes",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Corvidae",
           "genus_name": "Cyanocitta",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Lepidoptera",
+          "family_name": "Nymphalidae",
           "genus_name": "Danaus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Piciformes",
+          "family_name": "Picidae",
           "genus_name": "Dryobates",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Icteridae",
           "genus_name": "Molothrus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Tyrannidae",
           "genus_name": "Myiarchus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Turdidae",
           "genus_name": "Turdus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Vireonidae",
           "genus_name": "Vireo",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 3.7606E+6,
+          "count": 6,
+          "species": 6
+        },
+        {
+          "observer_id": 4.526701E+6,
+          "count": 2,
+          "species": 2
         }
       ]
     },
@@ -99,64 +499,378 @@
       "iy": 772104,
       "genera": [
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Parulidae",
           "genus_name": "Setophaga",
-          "count": 3
+          "count": 3,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Paridae",
           "genus_name": "Baeolophus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Cardinalidae",
           "genus_name": "Cardinalis",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Corvidae",
           "genus_name": "Corvus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Piciformes",
+          "family_name": "Picidae",
           "genus_name": "Dryobates",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hemiptera",
+          "family_name": "Membracidae",
           "genus_name": "Enchenopa",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Aquifoliales",
+          "family_name": "Aquifoliaceae",
+          "genus_name": "Ilex",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Passerellidae",
           "genus_name": "Junco",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Lepidoptera",
+          "family_name": "Hesperiidae",
           "genus_name": "Lon",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Passerellidae",
           "genus_name": "Melospiza",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
-          "genus_name": "Physinae",
-          "count": 1
-        },
-        {
+          "iconic_taxon_name": "Mammalia",
+          "order_name": "Carnivora",
+          "family_name": "Procyonidae",
           "genus_name": "Procyon",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
         },
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Rosales",
+          "family_name": "Rosaceae",
+          "genus_name": "Rosa",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Mammalia",
+          "order_name": "Rodentia",
+          "family_name": "Sciuridae",
           "genus_name": "Tamias",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Mimidae",
           "genus_name": "Toxostoma",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Troglodytidae",
           "genus_name": "Troglodytes",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Mollusca",
+          "order_name": "Unknown",
+          "family_name": "Physidae",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Columbiformes",
+          "family_name": "Columbidae",
           "genus_name": "Zenaida",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 3.7606E+6,
+          "count": 17,
+          "species": 17
+        },
+        {
+          "observer_id": 3.76073E+6,
+          "count": 1,
+          "species": 1
+        },
+        {
+          "observer_id": 4.526701E+6,
+          "count": 1,
+          "species": 1
         }
       ]
     },
@@ -165,18 +879,74 @@
       "iy": 772105,
       "genera": [
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Bombycillidae",
           "genus_name": "Bombycilla",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Mammalia",
+          "order_name": "Rodentia",
+          "family_name": "Cricetidae",
           "genus_name": "Microtus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Tyrannidae",
           "genus_name": "Tyrannus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 3.7606E+6,
+        "count": 3,
+        "species": 3
+      }
     }
   }
 }

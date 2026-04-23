@@ -2,30 +2,132 @@
   "super_ix": -43992,
   "super_iy": 24115,
   "superchunk_size": 32,
-  "n_squares": 3,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 4,
   "squares": {
     "sq_m1407737_p771685": {
       "ix": -1.407737E+6,
       "iy": 771685,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Passerellidae",
         "genus_name": "Pipilo",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.650445E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407729_p771701": {
+      "ix": -1.407729E+6,
+      "iy": 771701,
+      "genera": {
+        "iconic_taxon_name": "Unknown",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.242867E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407719_p771681": {
       "ix": -1.407719E+6,
       "iy": 771681,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Apiales",
+        "family_name": "Apiaceae",
         "genus_name": "Conium",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 86246,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407719_p771707": {
       "ix": -1.407719E+6,
       "iy": 771707,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Aquifoliales",
+        "family_name": "Aquifoliaceae",
         "genus_name": "Ilex",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.740428E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

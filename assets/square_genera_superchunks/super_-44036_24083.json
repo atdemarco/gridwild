@@ -2,14 +2,42 @@
   "super_ix": -44036,
   "super_iy": 24083,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 1,
   "squares": {
     "sq_m1409121_p770669": {
       "ix": -1.409121E+6,
       "iy": 770669,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Lepidoptera",
+        "family_name": "Attevidae",
         "genus_name": "Atteva",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.626465E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

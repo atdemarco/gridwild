@@ -2,30 +2,102 @@
   "super_ix": -43969,
   "super_iy": 24137,
   "superchunk_size": 32,
-  "n_squares": 41,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 55,
   "squares": {
     "sq_m1407008_p772406": {
       "ix": -1.407008E+6,
       "iy": 772406,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Malpighiales",
+        "family_name": "Violaceae",
         "genus_name": "Viola",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.581684E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407008_p772409": {
       "ix": -1.407008E+6,
       "iy": 772409,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Rosaceae",
         "genus_name": "Prunus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407008_p772410": {
       "ix": -1.407008E+6,
       "iy": 772410,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Caliciales",
+        "family_name": "Caliciaceae",
         "genus_name": "Pyxine",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407008_p772414": {
@@ -33,57 +105,230 @@
       "iy": 772414,
       "genera": [
         {
-          "genus_name": "Chironomidae",
-          "count": 1
+          "iconic_taxon_name": "Fungi",
+          "order_name": "Polyporales",
+          "family_name": "Laetiporaceae",
+          "genus_name": "Laetiporus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
         },
         {
-          "genus_name": "Laetiporus",
-          "count": 1
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Diptera",
+          "family_name": "Chironomidae",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1407008_p772415": {
       "ix": -1.407008E+6,
       "iy": 772415,
       "genera": [
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hemiptera",
+          "family_name": "Cicadellidae",
           "genus_name": "Jikradia",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Rosales",
+          "family_name": "Moraceae",
           "genus_name": "Morus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Rosales",
+          "family_name": "Ulmaceae",
           "genus_name": "Ulmus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 3,
+        "species": 3
+      }
     },
     "sq_m1407007_p772385": {
       "ix": -1.407007E+6,
       "iy": 772385,
       "genera": [
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Cardinalidae",
           "genus_name": "Cardinalis",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Animalia",
+          "order_name": "Scutigeromorpha",
+          "family_name": "Scutigeridae",
           "genus_name": "Scutigera",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Columbiformes",
+          "family_name": "Columbidae",
           "genus_name": "Zenaida",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 5.61636E+6,
+        "count": 3,
+        "species": 3
+      }
     },
     "sq_m1407007_p772407": {
       "ix": -1.407007E+6,
       "iy": 772407,
       "genera": {
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Sarcoptiformes",
+        "family_name": "Eriophyidae",
         "genus_name": "Vasates",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407007_p772408": {
@@ -91,71 +336,321 @@
       "iy": 772408,
       "genera": [
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hemiptera",
+          "family_name": "Cicadellidae",
           "genus_name": "Jikradia",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hemiptera",
+          "family_name": "Miridae",
           "genus_name": "Lopidea",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1407007_p772415": {
       "ix": -1.407007E+6,
       "iy": 772415,
       "genera": [
         {
+          "iconic_taxon_name": "Arachnida",
+          "order_name": "Sarcoptiformes",
+          "family_name": "Eriophyidae",
           "genus_name": "Aceria",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
-          "genus_name": "Chironominae",
-          "count": 1
-        },
-        {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Corvidae",
           "genus_name": "Corvus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Diptera",
+          "family_name": "Lauxaniidae",
           "genus_name": "Neogriphoneura",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Lepidoptera",
+          "family_name": "Limacodidae",
+          "genus_name": "Phobetron",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Fabales",
+          "family_name": "Fabaceae",
           "genus_name": "Robinia",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Coleoptera",
+          "family_name": "Erotylidae",
           "genus_name": "Triplax",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Diptera",
+          "family_name": "Chironomidae",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Arachnida",
+          "order_name": "Araneae",
+          "family_name": "Anyphaenidae",
           "genus_name": "Wulfila",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 8,
+        "species": 8
+      }
     },
     "sq_m1407006_p772388": {
       "ix": -1.407006E+6,
       "iy": 772388,
       "genera": {
-        "genus_name": "Plantae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.61636E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407006_p772408": {
       "ix": -1.407006E+6,
       "iy": 772408,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Lepidoptera",
+        "family_name": "Tortricidae",
         "genus_name": "Aspila",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407006_p772409": {
       "ix": -1.407006E+6,
       "iy": 772409,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Lepidoptera",
+        "family_name": "Gracillariidae",
         "genus_name": "Parectopa",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407006_p772412": {
@@ -163,12 +658,58 @@
       "iy": 772412,
       "genera": [
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Rosales",
+          "family_name": "Moraceae",
           "genus_name": "Morus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Lepidoptera",
+          "family_name": "Gracillariidae",
           "genus_name": "Parectopa",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 5.79912E+6,
+          "count": 1,
+          "species": 1
+        },
+        {
+          "observer_id": 3.668515E+6,
+          "count": 1,
+          "species": 1
         }
       ]
     },
@@ -176,24 +717,90 @@
       "ix": -1.407006E+6,
       "iy": 772414,
       "genera": {
-        "genus_name": "Rosaceae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Rosaceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.581684E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407006_p772415": {
       "ix": -1.407006E+6,
       "iy": 772415,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Diptera",
+        "family_name": "Anthomyiidae",
         "genus_name": "Eutrichota",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407005_p772409": {
       "ix": -1.407005E+6,
       "iy": 772409,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Lepidoptera",
+        "family_name": "Gracillariidae",
         "genus_name": "Parectopa",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407005_p772414": {
@@ -201,12 +808,58 @@
       "iy": 772414,
       "genera": [
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Rosales",
+          "family_name": "Rosaceae",
           "genus_name": "Crataegus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hemiptera",
+          "family_name": "Miridae",
           "genus_name": "Lopidea",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 5.79912E+6,
+          "count": 1,
+          "species": 1
+        },
+        {
+          "observer_id": 454247,
+          "count": 1,
+          "species": 1
         }
       ]
     },
@@ -214,192 +867,1223 @@
       "ix": -1.407005E+6,
       "iy": 772415,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Pucciniales",
+        "family_name": "Gymnosporangiaceae",
         "genus_name": "Gymnosporangium",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407004_p772402": {
+      "ix": -1.407004E+6,
+      "iy": 772402,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Ranunculales",
+        "family_name": "Berberidaceae",
+        "genus_name": "Nandina",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 184471,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407004_p772412": {
+      "ix": -1.407004E+6,
+      "iy": 772412,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fabales",
+        "family_name": "Fabaceae",
+        "genus_name": "Robinia",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 9.433201E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407004_p772413": {
       "ix": -1.407004E+6,
       "iy": 772413,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Pucciniales",
+        "family_name": "Gymnosporangiaceae",
         "genus_name": "Gymnosporangium",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407004_p772414": {
       "ix": -1.407004E+6,
       "iy": 772414,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Moraceae",
         "genus_name": "Morus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407001_p772407": {
+      "ix": -1.407001E+6,
+      "iy": 772407,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Solanales",
+        "family_name": "Solanaceae",
+        "genus_name": "Solanum",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.506376E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407000_p772408": {
+      "ix": -1.407E+6,
+      "iy": 772408,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Ranunculales",
+        "family_name": "Berberidaceae",
+        "genus_name": "Nandina",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.506376E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406997_p772408": {
       "ix": -1.406997E+6,
       "iy": 772408,
       "genera": {
-        "genus_name": "Stegomyia",
-        "count": 1
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Diptera",
+        "family_name": "Culicidae",
+        "genus_name": "Aedes",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.576068E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406996_p772397": {
       "ix": -1.406996E+6,
       "iy": 772397,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Coleoptera",
+        "family_name": "Scarabaeidae",
         "genus_name": "Cyclocephala",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 508087,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406996_p772401": {
       "ix": -1.406996E+6,
       "iy": 772401,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asterales",
+        "family_name": "Asteraceae",
         "genus_name": "Sonchus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.506376E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406996_p772406": {
       "ix": -1.406996E+6,
       "iy": 772406,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Apiales",
+        "family_name": "Araliaceae",
         "genus_name": "Hedera",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 401030,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406995_p772408": {
+      "ix": -1.406995E+6,
+      "iy": 772408,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Ranunculales",
+        "family_name": "Ranunculaceae",
+        "genus_name": "Helleborus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406994_p772384": {
+      "ix": -1.406994E+6,
+      "iy": 772384,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asparagales",
+        "family_name": "Asparagaceae",
+        "genus_name": "Liriope",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406994_p772391": {
       "ix": -1.406994E+6,
       "iy": 772391,
       "genera": {
-        "genus_name": "Polyporales",
-        "count": 1
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Polyporales",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 959112,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406994_p772392": {
+      "ix": -1.406994E+6,
+      "iy": 772392,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Aquifoliales",
+        "family_name": "Aquifoliaceae",
+        "genus_name": "Ilex",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406994_p772397": {
       "ix": -1.406994E+6,
       "iy": 772397,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Miridae",
         "genus_name": "Neurocolpus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 508087,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406994_p772398": {
       "ix": -1.406994E+6,
       "iy": 772398,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Cydnidae",
         "genus_name": "Sehirus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 508087,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406994_p772413": {
       "ix": -1.406994E+6,
       "iy": 772413,
       "genera": {
-        "genus_name": "Allioideae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asparagales",
+        "family_name": "Amaryllidaceae",
+        "genus_name": "Nothoscordum",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 401030,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406993_p772386": {
+      "ix": -1.406993E+6,
+      "iy": 772386,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Pinales",
+        "family_name": "Taxaceae",
+        "genus_name": "Taxus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406993_p772397": {
+      "ix": -1.406993E+6,
+      "iy": 772397,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Saxifragales",
+        "family_name": "Altingiaceae",
+        "genus_name": "Liquidambar",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.739623E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406993_p772399": {
+      "ix": -1.406993E+6,
+      "iy": 772399,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Aquifoliales",
+        "family_name": "Aquifoliaceae",
+        "genus_name": "Ilex",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406993_p772404": {
+      "ix": -1.406993E+6,
+      "iy": 772404,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Rosaceae",
+        "genus_name": "Prunus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.47971E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406992_p772394": {
       "ix": -1.406992E+6,
       "iy": 772394,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Columbiformes",
+        "family_name": "Columbidae",
         "genus_name": "Zenaida",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 613512,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406992_p772395": {
       "ix": -1.406992E+6,
       "iy": 772395,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Poales",
+        "family_name": "Poaceae",
         "genus_name": "Eleusine",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 292489,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406992_p772410": {
       "ix": -1.406992E+6,
       "iy": 772410,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asparagales",
+        "family_name": "Iridaceae",
         "genus_name": "Crocus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.506376E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406992_p772411": {
       "ix": -1.406992E+6,
       "iy": 772411,
-      "genera": {
-        "genus_name": "Sonchus",
-        "count": 1
+      "genera": [
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Asterales",
+          "family_name": "Asteraceae",
+          "genus_name": "Sonchus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Unknown",
+          "order_name": "Unknown",
+          "family_name": "Unknown",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": {
+        "observer_id": 7.506376E+6,
+        "count": 2,
+        "species": 2
       }
     },
     "sq_m1406991_p772401": {
       "ix": -1.406991E+6,
       "iy": 772401,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Diptera",
+        "family_name": "Ulidiidae",
         "genus_name": "Delphinia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 508087,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406991_p772404": {
       "ix": -1.406991E+6,
       "iy": 772404,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Poales",
+        "family_name": "Poaceae",
         "genus_name": "Hordeum",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.506376E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406989_p772406": {
       "ix": -1.406989E+6,
       "iy": 772406,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Agaricales",
+        "family_name": "Psathyrellaceae",
         "genus_name": "Parasola",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.715594E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406988_p772390": {
       "ix": -1.406988E+6,
       "iy": 772390,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Moraceae",
         "genus_name": "Morus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.739623E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406987_p772400": {
       "ix": -1.406987E+6,
       "iy": 772400,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Coleoptera",
+        "family_name": "Coccinellidae",
         "genus_name": "Harmonia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 508087,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406987_p772414": {
       "ix": -1.406987E+6,
       "iy": 772414,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Poales",
+        "family_name": "Poaceae",
         "genus_name": "Chasmanthium",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.506376E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406986_p772391": {
+      "ix": -1.406986E+6,
+      "iy": 772391,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Ulmaceae",
+        "genus_name": "Ulmus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.739623E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406986_p772406": {
+      "ix": -1.406986E+6,
+      "iy": 772406,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asparagales",
+        "family_name": "Amaryllidaceae",
+        "genus_name": "Allium",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.506376E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406982_p772391": {
       "ix": -1.406982E+6,
       "iy": 772391,
+      "genera": [
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Oxalidales",
+          "family_name": "Oxalidaceae",
+          "genus_name": "Oxalis",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Asterales",
+          "family_name": "Asteraceae",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 3.19423E+6,
+          "count": 1,
+          "species": 1
+        },
+        {
+          "observer_id": 844841,
+          "count": 1,
+          "species": 1
+        }
+      ]
+    },
+    "sq_m1406982_p772406": {
+      "ix": -1.406982E+6,
+      "iy": 772406,
       "genera": {
-        "genus_name": "Asteraceae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asparagales",
+        "family_name": "Iridaceae",
+        "genus_name": "Iris",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.822803E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406981_p772388": {
       "ix": -1.406981E+6,
       "iy": 772388,
-      "genera": {
-        "genus_name": "Corvus",
-        "count": 1
-      }
+      "genera": [
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Dipsacales",
+          "family_name": "Caprifoliaceae",
+          "genus_name": "Abelia",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Aves",
+          "order_name": "Passeriformes",
+          "family_name": "Corvidae",
+          "genus_name": "Corvus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 8.197764E+6,
+          "count": 1,
+          "species": 1
+        },
+        {
+          "observer_id": 356634,
+          "count": 1,
+          "species": 1
+        }
+      ]
     },
     "sq_m1406978_p772405": {
       "ix": -1.406978E+6,
       "iy": 772405,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Aquifoliales",
+        "family_name": "Aquifoliaceae",
         "genus_name": "Ilex",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.47971E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

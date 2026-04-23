@@ -2,22 +2,102 @@
   "super_ix": -44003,
   "super_iy": 24189,
   "superchunk_size": 32,
-  "n_squares": 2,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 3,
   "squares": {
+    "sq_m1408093_p774067": {
+      "ix": -1.408093E+6,
+      "iy": 774067,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Pinales",
+        "family_name": "Taxaceae",
+        "genus_name": "Torreya",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.262627E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1408087_p774054": {
       "ix": -1.408087E+6,
       "iy": 774054,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Apiales",
+        "family_name": "Araliaceae",
         "genus_name": "Panax",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.512202E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408071_p774069": {
       "ix": -1.408071E+6,
       "iy": 774069,
       "genera": {
+        "iconic_taxon_name": "Animalia",
+        "order_name": "Isopoda",
+        "family_name": "Porcellionidae",
         "genus_name": "Porcellionides",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,54 +2,222 @@
   "super_ix": -43927,
   "super_iy": 24141,
   "superchunk_size": 32,
-  "n_squares": 6,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 7,
   "squares": {
     "sq_m1405663_p772543": {
       "ix": -1.405663E+6,
       "iy": 772543,
       "genera": {
-        "genus_name": "Angiospermae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.665838E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405657_p772522": {
       "ix": -1.405657E+6,
       "iy": 772522,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Coleoptera",
+        "family_name": "Coccinellidae",
         "genus_name": "Harmonia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.691039E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405655_p772530": {
       "ix": -1.405655E+6,
       "iy": 772530,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Fulgoridae",
         "genus_name": "Lycorma",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 9.373776E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405651_p772529": {
       "ix": -1.405651E+6,
       "iy": 772529,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asterales",
+        "family_name": "Asteraceae",
         "genus_name": "Tanacetum",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.357803E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1405639_p772515": {
+      "ix": -1.405639E+6,
+      "iy": 772515,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Rosaceae",
+        "genus_name": "Prunus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.620373E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405633_p772532": {
       "ix": -1.405633E+6,
       "iy": 772532,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Coleoptera",
+        "family_name": "Scarabaeidae",
         "genus_name": "Cotinis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.747798E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405633_p772537": {
       "ix": -1.405633E+6,
       "iy": 772537,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Carnivora",
+        "family_name": "Felidae",
         "genus_name": "Felis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.17542E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

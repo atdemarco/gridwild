@@ -2,30 +2,102 @@
   "super_ix": -43975,
   "super_iy": 24117,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 3,
   "squares": {
     "sq_m1407179_p771764": {
       "ix": -1.407179E+6,
       "iy": 771764,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asterales",
+        "family_name": "Asteraceae",
         "genus_name": "Artemisia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 460027,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407176_p771753": {
       "ix": -1.407176E+6,
       "iy": 771753,
       "genera": {
-        "genus_name": "Apoidea",
-        "count": 1
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hymenoptera",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 86246,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407169_p771745": {
       "ix": -1.407169E+6,
       "iy": 771745,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Dipsacales",
+        "family_name": "Caprifoliaceae",
         "genus_name": "Lonicera",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 86246,
+        "count": 1,
+        "species": 1
       }
     }
   }

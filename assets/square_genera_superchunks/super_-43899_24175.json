@@ -2,14 +2,72 @@
   "super_ix": -43899,
   "super_iy": 24175,
   "superchunk_size": 32,
-  "n_squares": 1,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 2,
   "squares": {
     "sq_m1404762_p773603": {
       "ix": -1.404762E+6,
       "iy": 773603,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Agaricales",
+        "family_name": "Agaricaceae",
         "genus_name": "Leucocoprinus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1404756_p773604": {
+      "ix": -1.404756E+6,
+      "iy": 773604,
+      "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Carnivora",
+        "family_name": "Felidae",
+        "genus_name": "Felis",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.17542E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

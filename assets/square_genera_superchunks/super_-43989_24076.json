@@ -2,30 +2,102 @@
   "super_ix": -43989,
   "super_iy": 24076,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 3,
   "squares": {
     "sq_m1407633_p770436": {
       "ix": -1.407633E+6,
       "iy": 770436,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Lagomorpha",
+        "family_name": "Leporidae",
         "genus_name": "Sylvilagus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 9.308272E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407632_p770454": {
       "ix": -1.407632E+6,
       "iy": 770454,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Apiales",
+        "family_name": "Araliaceae",
         "genus_name": "Hedera",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 658563,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407621_p770459": {
       "ix": -1.407621E+6,
       "iy": 770459,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Passerellidae",
         "genus_name": "Zonotrichia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     }
   }

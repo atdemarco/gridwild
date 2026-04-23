@@ -2,22 +2,162 @@
   "super_ix": -43989,
   "super_iy": 24121,
   "superchunk_size": 32,
-  "n_squares": 2,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 5,
   "squares": {
     "sq_m1407645_p771882": {
       "ix": -1.407645E+6,
       "iy": 771882,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Rosaceae",
         "genus_name": "Malus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.16333E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407639_p771887": {
+      "ix": -1.407639E+6,
+      "iy": 771887,
+      "genera": {
+        "iconic_taxon_name": "Unknown",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.9032E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407638_p771886": {
+      "ix": -1.407638E+6,
+      "iy": 771886,
+      "genera": {
+        "iconic_taxon_name": "Unknown",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.9032E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407632_p771892": {
+      "ix": -1.407632E+6,
+      "iy": 771892,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Oleaceae",
+        "genus_name": "Jasminum",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.543829E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407622_p771903": {
       "ix": -1.407622E+6,
       "iy": 771903,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Poales",
+        "family_name": "Poaceae",
         "genus_name": "Sorghum",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.543829E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

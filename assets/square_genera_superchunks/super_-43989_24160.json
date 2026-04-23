@@ -2,14 +2,72 @@
   "super_ix": -43989,
   "super_iy": 24160,
   "superchunk_size": 32,
-  "n_squares": 1,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 2,
   "squares": {
     "sq_m1407648_p773135": {
       "ix": -1.407648E+6,
       "iy": 773135,
       "genera": {
-        "genus_name": "Tacuina",
-        "count": 1
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Cicadidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.008603E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407640_p773128": {
+      "ix": -1.40764E+6,
+      "iy": 773128,
+      "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Paridae",
+        "genus_name": "Poecile",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 922210,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -90,6 +90,7 @@ navigator.geolocation.getCurrentPosition(
 
     lastFix = { latitude, longitude, accuracy };
     setUserLocation(latitude, longitude, accuracy);
+    setLockButtonVisual();
 
     // Let the central logic decide whether auto-centering is allowed
     if (typeof window.handleUserPositionUpdate === "function") {
@@ -114,27 +115,76 @@ navigator.geolocation.getCurrentPosition(
   );
 }
 
+function setLockButtonVisual() {
+  const btn = document.getElementById("recenterFab");
+  if (!btn) return;
 
-function disableAutoCenterFromUserGesture() {
-  //console.log("disableAutoCenterFromUserGesture() Triggering disable auto center from user gesture...")
-  if (!window.__gwState) return;
-  if (!window.__gwState.lockToLocation) return;
+  const locked = !!window.__gwState?.lockToLocation;
+  btn.classList.toggle("is-locked", locked);
+  btn.setAttribute("aria-pressed", locked ? "true" : "false");
+  btn.title = locked ? "Tracking on" : "Find me";
+}
+
+function enableLocationLock(options = {}) {
+  const {
+    zoom = 19,
+    recenterNow = true,
+    force = true
+  } = options;
+
+  window.__gwState = window.__gwState || {};
+  const state = window.__gwState;
+
+  state.lockToLocation = true;
+  state.suspendAutoCenterUntil = 0;
+  state.lockZoom = zoom;
 
   const cb = document.getElementById("toggleLockLocation");
+  if (cb && !cb.checked) {
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change", { bubbles: true }));
+  } else {
+    setLockButtonVisual();
+  }
+
+  if (recenterNow && lastFix) {
+    map.setView([lastFix.latitude, lastFix.longitude], zoom, { animate: true });
+
+    if (typeof window.handleUserPositionUpdate === "function") {
+      window.handleUserPositionUpdate(lastFix.latitude, lastFix.longitude, force);
+    }
+  } else if (recenterNow && typeof requestLocationOnce === "function") {
+    requestLocationOnce();
+  }
+}
+
+function disableLocationLock() {
+  if (!window.__gwState) return;
+  if (!window.__gwState.lockToLocation) return;
 
   window.__gwState.lockToLocation = false;
   window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
 
+  const cb = document.getElementById("toggleLockLocation");
   if (cb && cb.checked) {
     cb.checked = false;
     cb.dispatchEvent(new Event("change", { bubbles: true }));
+  } else {
+    setLockButtonVisual();
+  }
+}
+
+function disableAutoCenterFromUserGesture(e) {
+  if (!window.__gwState?.lockToLocation) return;
+
+  // Only break lock on real user interaction
+  if (e?.originalEvent || e?.sourceTarget) {
+    disableLocationLock();
   }
 }
 
 map.on("dragstart", disableAutoCenterFromUserGesture);
 map.on("zoomstart", disableAutoCenterFromUserGesture);
-map.on("mousedown", disableAutoCenterFromUserGesture);
-map.on("touchstart", disableAutoCenterFromUserGesture);
 
 
 
@@ -147,6 +197,7 @@ function startWatchingLocation() {
       const { latitude, longitude, accuracy } = pos.coords;
       lastFix = { latitude, longitude, accuracy };
       setUserLocation(latitude, longitude, accuracy);
+      setLockButtonVisual();
 
       if (typeof window.handleUserPositionUpdate === "function") {
         window.handleUserPositionUpdate(latitude, longitude, false);
@@ -199,23 +250,9 @@ map.on("zoomend", () => {
   if (!lastFix) return;
   const { latitude, longitude, accuracy } = lastFix;
   setUserLocation(latitude, longitude, accuracy);
+  setLockButtonVisual();
 });
 
-hud.innerHTML =
-//  `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m)
-//   <span style="opacity:.6"> • Zoom ×${zoomMultiplier}</span>`;
-
-   function getMapResolution() {
-  const lat = map.getCenter().lat;
-  const zoom = map.getZoom();
-
-  const metersPerPixel =
-    (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, zoom);
-
-  return metersPerPixel;
-}
-
-// ok getting info to label square size in pixels.
 function getMapResolution() {
   const lat = map.getCenter().lat;
   const zoom = map.getZoom();
@@ -225,3 +262,7 @@ function getMapResolution() {
 
   return metersPerPixel;
 }
+
+window.enableLocationLock = enableLocationLock;
+window.disableLocationLock = disableLocationLock;
+window.setLockButtonVisual = setLockButtonVisual;

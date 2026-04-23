@@ -2,22 +2,72 @@
   "super_ix": -43996,
   "super_iy": 24080,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 2,
   "squares": {
     "sq_m1407845_p770561": {
       "ix": -1.407845E+6,
       "iy": 770561,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Rosaceae",
         "genus_name": "Prunus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 410175,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407842_p770583": {
       "ix": -1.407842E+6,
       "iy": 770583,
       "genera": {
-        "genus_name": "Erythraeidae",
-        "count": 1
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Trombidiformes",
+        "family_name": "Erythraeidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     }
   }

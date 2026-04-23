@@ -2,30 +2,132 @@
   "super_ix": -44000,
   "super_iy": 24160,
   "superchunk_size": 32,
-  "n_squares": 3,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 4,
   "squares": {
     "sq_m1407980_p773129": {
       "ix": -1.40798E+6,
       "iy": 773129,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Vitales",
+        "family_name": "Vitaceae",
         "genus_name": "Parthenocissus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.206331E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407975_p773127": {
+      "ix": -1.407975E+6,
+      "iy": 773127,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Moraceae",
+        "genus_name": "Ficus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.206331E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407974_p773139": {
       "ix": -1.407974E+6,
       "iy": 773139,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Lagomorpha",
+        "family_name": "Leporidae",
         "genus_name": "Sylvilagus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.367379E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407969_p773133": {
       "ix": -1.407969E+6,
       "iy": 773133,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Carnivora",
+        "family_name": "Canidae",
         "genus_name": "Vulpes",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.367379E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

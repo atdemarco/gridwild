@@ -2,22 +2,72 @@
   "super_ix": -43946,
   "super_iy": 24087,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 5,
   "squares": {
     "sq_m1406261_p770794": {
       "ix": -1.406261E+6,
       "iy": 770794,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Flatidae",
         "genus_name": "Metcalfa",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 657180,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406249_p770793": {
       "ix": -1.406249E+6,
       "iy": 770793,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Pentatomidae",
         "genus_name": "Thyanta",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.859978E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406247_p770795": {
@@ -25,29 +75,112 @@
       "iy": 770795,
       "genera": [
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hemiptera",
+          "family_name": "Lygaeidae",
           "genus_name": "Lygaeus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Animalia",
+          "order_name": "Polydesmida",
+          "family_name": "Paradoxosomatidae",
           "genus_name": "Oxidus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 5.859978E+6,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1406243_p770791": {
       "ix": -1.406243E+6,
       "iy": 770791,
       "genera": {
+        "iconic_taxon_name": "Actinopterygii",
+        "order_name": "Anguilliformes",
+        "family_name": "Anguillidae",
         "genus_name": "Anguilla",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 192858,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406242_p770798": {
       "ix": -1.406242E+6,
       "iy": 770798,
       "genera": {
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Araneae",
+        "family_name": "Araneidae",
         "genus_name": "Argiope",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.859978E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

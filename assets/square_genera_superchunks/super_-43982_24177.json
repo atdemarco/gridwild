@@ -2,30 +2,162 @@
   "super_ix": -43982,
   "super_iy": 24177,
   "superchunk_size": 32,
-  "n_squares": 3,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 5,
   "squares": {
     "sq_m1407414_p773671": {
       "ix": -1.407414E+6,
       "iy": 773671,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Lepidoptera",
+        "family_name": "Lasiocampidae",
         "genus_name": "Malacosoma",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.44456E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407404_p773665": {
+      "ix": -1.407404E+6,
+      "iy": 773665,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Pinales",
+        "family_name": "Pinaceae",
+        "genus_name": "Pinus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.865569E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407404_p773675": {
+      "ix": -1.407404E+6,
+      "iy": 773675,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Pinales",
+        "family_name": "Pinaceae",
+        "genus_name": "Picea",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.865569E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407398_p773683": {
       "ix": -1.407398E+6,
       "iy": 773683,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Polyporales",
+        "family_name": "Fomitopsidaceae",
         "genus_name": "Fomitopsis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.695155E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407395_p773674": {
       "ix": -1.407395E+6,
       "iy": 773674,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Accipitriformes",
+        "family_name": "Accipitridae",
         "genus_name": "Astur",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.895205E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,46 +2,192 @@
   "super_ix": -44012,
   "super_iy": 24120,
   "superchunk_size": 32,
-  "n_squares": 5,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 6,
   "squares": {
     "sq_m1408381_p771860": {
       "ix": -1.408381E+6,
       "iy": 771860,
       "genera": {
-        "genus_name": "Fungi",
-        "count": 1
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 919663,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408377_p771855": {
       "ix": -1.408377E+6,
       "iy": 771855,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Ischnorhinidae",
         "genus_name": "Prosapia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 657180,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408377_p771857": {
       "ix": -1.408377E+6,
       "iy": 771857,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Lamiaceae",
         "genus_name": "Lamium",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 919663,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408373_p771867": {
       "ix": -1.408373E+6,
       "iy": 771867,
       "genera": {
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Araneae",
+        "family_name": "Araneidae",
         "genus_name": "Neoscona",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 445200,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1408365_p771869": {
+      "ix": -1.408365E+6,
+      "iy": 771869,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asparagales",
+        "family_name": "Asparagaceae",
+        "genus_name": "Hosta",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.939481E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408356_p771871": {
       "ix": -1.408356E+6,
       "iy": 771871,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Cicadidae",
         "genus_name": "Magicicada",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 445200,
+        "count": 1,
+        "species": 1
       }
     }
   }

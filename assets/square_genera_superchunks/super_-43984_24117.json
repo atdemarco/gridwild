@@ -2,30 +2,192 @@
   "super_ix": -43984,
   "super_iy": 24117,
   "superchunk_size": 32,
-  "n_squares": 3,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 6,
   "squares": {
     "sq_m1407474_p771764": {
       "ix": -1.407474E+6,
       "iy": 771764,
       "genera": {
-        "genus_name": "Phallaceae",
-        "count": 1
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Phallales",
+        "family_name": "Phallaceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.65734E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407469_p771750": {
+      "ix": -1.407469E+6,
+      "iy": 771750,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Cornales",
+        "family_name": "Cornaceae",
+        "genus_name": "Cornus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.769846E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407465_p771754": {
+      "ix": -1.407465E+6,
+      "iy": 771754,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Myrtales",
+        "family_name": "Lythraceae",
+        "genus_name": "Lagerstroemia",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 113495,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407464_p771758": {
       "ix": -1.407464E+6,
       "iy": 771758,
       "genera": {
-        "genus_name": "Cupressaceae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Pinales",
+        "family_name": "Cupressaceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.832714E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407460_p771758": {
+      "ix": -1.40746E+6,
+      "iy": 771758,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Magnoliales",
+        "family_name": "Magnoliaceae",
+        "genus_name": "Magnolia",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1749,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407459_p771774": {
       "ix": -1.407459E+6,
       "iy": 771774,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Gentianales",
+        "family_name": "Apocynaceae",
         "genus_name": "Vinca",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.65734E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

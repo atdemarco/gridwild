@@ -2,38 +2,162 @@
   "super_ix": -44009,
   "super_iy": 24115,
   "superchunk_size": 32,
-  "n_squares": 4,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 5,
   "squares": {
     "sq_m1408283_p771705": {
       "ix": -1.408283E+6,
       "iy": 771705,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Malpighiales",
+        "family_name": "Salicaceae",
         "genus_name": "Salix",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.060383E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408276_p771691": {
       "ix": -1.408276E+6,
       "iy": 771691,
       "genera": {
-        "genus_name": "Agaricales",
-        "count": 1
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Agaricales",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.761885E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1408267_p771704": {
+      "ix": -1.408267E+6,
+      "iy": 771704,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Celastrales",
+        "family_name": "Celastraceae",
+        "genus_name": "Euonymus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.619678E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408265_p771711": {
       "ix": -1.408265E+6,
       "iy": 771711,
       "genera": {
-        "genus_name": "Ageleninae",
-        "count": 1
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Araneae",
+        "family_name": "Agelenidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.144353E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408262_p771705": {
       "ix": -1.408262E+6,
       "iy": 771705,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Agaricales",
+        "family_name": "Pleurotaceae",
         "genus_name": "Pleurotus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.801572E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,22 +2,72 @@
   "super_ix": -44040,
   "super_iy": 24193,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 2,
   "squares": {
     "sq_m1409270_p774206": {
       "ix": -1.40927E+6,
       "iy": 774206,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Mantodea",
+        "family_name": "Mantidae",
         "genus_name": "Stagmomantis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 576678,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1409261_p774184": {
       "ix": -1.409261E+6,
       "iy": 774184,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Diptera",
+        "family_name": "Syrphidae",
         "genus_name": "Eristalis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.922621E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,14 +2,42 @@
   "super_ix": -43945,
   "super_iy": 24197,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 1,
   "squares": {
     "sq_m1406231_p774310": {
       "ix": -1.406231E+6,
       "iy": 774310,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Lepidoptera",
+        "family_name": "Nymphalidae",
         "genus_name": "Vanessa",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.895205E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

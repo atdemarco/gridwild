@@ -2,14 +2,42 @@
   "super_ix": -44000,
   "super_iy": 24107,
   "superchunk_size": 32,
-  "n_squares": 4,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 6,
   "squares": {
     "sq_m1407981_p771444": {
       "ix": -1.407981E+6,
       "iy": 771444,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Accipitriformes",
+        "family_name": "Accipitridae",
         "genus_name": "Buteo",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.242319E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407978_p771450": {
@@ -17,29 +45,172 @@
       "iy": 771450,
       "genera": [
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Malpighiales",
+          "family_name": "Euphorbiaceae",
           "genus_name": "Euphorbia",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Asparagales",
+          "family_name": "Amaryllidaceae",
           "genus_name": "Narcissus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 7.282862E+6,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1407976_p771447": {
       "ix": -1.407976E+6,
       "iy": 771447,
       "genera": {
+        "iconic_taxon_name": "Reptilia",
+        "order_name": "Squamata",
+        "family_name": "Colubridae",
         "genus_name": "Storeria",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 244091,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407976_p771448": {
+      "ix": -1.407976E+6,
+      "iy": 771448,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Dipsacales",
+        "family_name": "Viburnaceae",
+        "genus_name": "Sambucus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.681609E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407976_p771449": {
+      "ix": -1.407976E+6,
+      "iy": 771449,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Rosaceae",
+        "genus_name": "Prunus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.282862E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407976_p771450": {
       "ix": -1.407976E+6,
       "iy": 771450,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asparagales",
+        "family_name": "Amaryllidaceae",
         "genus_name": "Narcissus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.282862E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

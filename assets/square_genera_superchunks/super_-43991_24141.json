@@ -2,30 +2,162 @@
   "super_ix": -43991,
   "super_iy": 24141,
   "superchunk_size": 32,
-  "n_squares": 3,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 5,
   "squares": {
     "sq_m1407702_p772519": {
       "ix": -1.407702E+6,
       "iy": 772519,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Rodentia",
+        "family_name": "Cricetidae",
         "genus_name": "Peromyscus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.498368E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407699_p772523": {
+      "ix": -1.407699E+6,
+      "iy": 772523,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Aquifoliales",
+        "family_name": "Aquifoliaceae",
+        "genus_name": "Ilex",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.96404E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407686_p772514": {
+      "ix": -1.407686E+6,
+      "iy": 772514,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Sapindales",
+        "family_name": "Sapindaceae",
+        "genus_name": "Aesculus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.732815E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407686_p772541": {
       "ix": -1.407686E+6,
       "iy": 772541,
       "genera": {
-        "genus_name": "Pezizomycotina",
-        "count": 1
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.490227E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407682_p772537": {
       "ix": -1.407682E+6,
       "iy": 772537,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Agaricales",
+        "family_name": "Agaricaceae",
         "genus_name": "Agaricus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.490227E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

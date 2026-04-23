@@ -2,14 +2,42 @@
   "super_ix": -43957,
   "super_iy": 24059,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 1,
   "squares": {
     "sq_m1406624_p769897": {
       "ix": -1.406624E+6,
       "iy": 769897,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Coreidae",
         "genus_name": "Leptoglossus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.621627E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

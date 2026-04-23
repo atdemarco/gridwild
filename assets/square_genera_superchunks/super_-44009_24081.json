@@ -2,22 +2,72 @@
   "super_ix": -44009,
   "super_iy": 24081,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 2,
   "squares": {
     "sq_m1408276_p770593": {
       "ix": -1.408276E+6,
       "iy": 770593,
       "genera": {
-        "genus_name": "Noctuinae",
-        "count": 1
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Lepidoptera",
+        "family_name": "Noctuidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.603479E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408267_p770608": {
       "ix": -1.408267E+6,
       "iy": 770608,
       "genera": {
-        "genus_name": "Tachinidae",
-        "count": 1
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Diptera",
+        "family_name": "Tachinidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 657180,
+        "count": 1,
+        "species": 1
       }
     }
   }

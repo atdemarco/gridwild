@@ -2,22 +2,72 @@
   "super_ix": -43954,
   "super_iy": 24190,
   "superchunk_size": 32,
-  "n_squares": 6,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 7,
   "squares": {
     "sq_m1406514_p774094": {
       "ix": -1.406514E+6,
       "iy": 774094,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Coleoptera",
+        "family_name": "Scarabaeidae",
         "genus_name": "Cotinis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 449442,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406513_p774098": {
       "ix": -1.406513E+6,
       "iy": 774098,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asterales",
+        "family_name": "Asteraceae",
         "genus_name": "Senecio",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 523356,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406512_p774099": {
@@ -25,37 +75,172 @@
       "iy": 774099,
       "genera": [
         {
-          "genus_name": "Cicadinae",
-          "count": 1
+          "iconic_taxon_name": "Fungi",
+          "order_name": "Hymenochaetales",
+          "family_name": "Hymenochaetaceae",
+          "genus_name": "Fulvifomes",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
-          "genus_name": "Fulvifomes",
-          "count": 1
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hemiptera",
+          "family_name": "Cicadidae",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 523356,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1406512_p774105": {
       "ix": -1.406512E+6,
       "iy": 774105,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Hymenochaetales",
+        "family_name": "Hymenochaetaceae",
         "genus_name": "Fulvifomes",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.217914E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406511_p774082": {
+      "ix": -1.406511E+6,
+      "iy": 774082,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fabales",
+        "family_name": "Fabaceae",
+        "genus_name": "Laburnum",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 959439,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406511_p774094": {
       "ix": -1.406511E+6,
       "iy": 774094,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Lagomorpha",
+        "family_name": "Leporidae",
         "genus_name": "Sylvilagus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406511_p774106": {
       "ix": -1.406511E+6,
       "iy": 774106,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Ulmaceae",
         "genus_name": "Ulmus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.021748E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

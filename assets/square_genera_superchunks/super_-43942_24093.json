@@ -2,30 +2,102 @@
   "super_ix": -43942,
   "super_iy": 24093,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 3,
   "squares": {
     "sq_m1406132_p770976": {
       "ix": -1.406132E+6,
       "iy": 770976,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hymenoptera",
+        "family_name": "Megachilidae",
         "genus_name": "Megachile",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406125_p770977": {
       "ix": -1.406125E+6,
       "iy": 770977,
       "genera": {
-        "genus_name": "Calyptostoma",
-        "count": 1
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Trombidiformes",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 9.164339E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406123_p770995": {
       "ix": -1.406123E+6,
       "iy": 770995,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Diptera",
+        "family_name": "Syrphidae",
         "genus_name": "Ocyptamus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 922210,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,38 +2,162 @@
   "super_ix": -43997,
   "super_iy": 24128,
   "superchunk_size": 32,
-  "n_squares": 6,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 7,
   "squares": {
     "sq_m1407900_p772106": {
       "ix": -1.4079E+6,
       "iy": 772106,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asterales",
+        "family_name": "Asteraceae",
         "genus_name": "Erigeron",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 922210,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407896_p772110": {
       "ix": -1.407896E+6,
       "iy": 772110,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Vitales",
+        "family_name": "Vitaceae",
         "genus_name": "Ampelopsis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.268817E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407895_p772112": {
       "ix": -1.407895E+6,
       "iy": 772112,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Oleaceae",
         "genus_name": "Forsythia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.268817E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407881_p772116": {
+      "ix": -1.407881E+6,
+      "iy": 772116,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 184679,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407874_p772112": {
       "ix": -1.407874E+6,
       "iy": 772112,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hymenoptera",
+        "family_name": "Apidae",
         "genus_name": "Xylocopa",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.277065E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407874_p772121": {
@@ -41,21 +165,82 @@
       "iy": 772121,
       "genera": [
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Coleoptera",
+          "family_name": "Dermestidae",
           "genus_name": "Anthrenus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
-          "genus_name": "Insecta",
-          "count": 1
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Unknown",
+          "family_name": "Unknown",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 3.070313E+6,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1407873_p772121": {
       "ix": -1.407873E+6,
       "iy": 772121,
       "genera": {
-        "genus_name": "Insecta",
-        "count": 1
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.070313E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

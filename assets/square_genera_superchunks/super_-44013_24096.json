@@ -2,14 +2,42 @@
   "super_ix": -44013,
   "super_iy": 24096,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 1,
   "squares": {
     "sq_m1408393_p771082": {
       "ix": -1.408393E+6,
       "iy": 771082,
       "genera": {
-        "genus_name": "Entomobryomorpha",
-        "count": 1
+        "iconic_taxon_name": "Animalia",
+        "order_name": "Entomobryomorpha",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     }
   }

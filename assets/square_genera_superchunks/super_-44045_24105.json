@@ -2,14 +2,72 @@
   "super_ix": -44045,
   "super_iy": 24105,
   "superchunk_size": 32,
-  "n_squares": 1,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 2,
   "squares": {
     "sq_m1409421_p771375": {
       "ix": -1.409421E+6,
       "iy": 771375,
       "genera": {
-        "genus_name": "Oribatida",
-        "count": 1
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Sarcoptiformes",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1409421_p771384": {
+      "ix": -1.409421E+6,
+      "iy": 771384,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.044337E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,14 +2,42 @@
   "super_ix": -43993,
   "super_iy": 24184,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 1,
   "squares": {
     "sq_m1407746_p773888": {
       "ix": -1.407746E+6,
       "iy": 773888,
       "genera": {
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Araneae",
+        "family_name": "Tetragnathidae",
         "genus_name": "Leucauge",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.101464E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

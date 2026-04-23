@@ -2,46 +2,192 @@
   "super_ix": -44000,
   "super_iy": 24090,
   "superchunk_size": 32,
-  "n_squares": 10,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 11,
   "squares": {
     "sq_m1407989_p770884": {
       "ix": -1.407989E+6,
       "iy": 770884,
       "genera": {
-        "genus_name": "Dendryphantina",
-        "count": 1
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Araneae",
+        "family_name": "Salticidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 922210,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407985_p770902": {
+      "ix": -1.407985E+6,
+      "iy": 770902,
+      "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Phasmida",
+        "family_name": "Diapheromeridae",
+        "genus_name": "Diapheromera",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 166155,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407983_p770901": {
       "ix": -1.407983E+6,
       "iy": 770901,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fagales",
+        "family_name": "Fagaceae",
         "genus_name": "Quercus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 166155,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407982_p770906": {
       "ix": -1.407982E+6,
       "iy": 770906,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Apiales",
+        "family_name": "Araliaceae",
         "genus_name": "Aralia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.268582E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407973_p770886": {
       "ix": -1.407973E+6,
       "iy": 770886,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Malpighiales",
+        "family_name": "Violaceae",
         "genus_name": "Viola",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.241282E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407972_p770880": {
       "ix": -1.407972E+6,
       "iy": 770880,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Dipsacales",
+        "family_name": "Viburnaceae",
         "genus_name": "Sambucus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 166155,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407970_p770880": {
@@ -49,30 +195,132 @@
       "iy": 770880,
       "genera": [
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Piperales",
+          "family_name": "Saururaceae",
           "genus_name": "Houttuynia",
-          "count": 2
+          "count": 2,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
-          "genus_name": "Agromyzidae",
-          "count": 1
-        },
-        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Caryophyllales",
+          "family_name": "Polygonaceae",
           "genus_name": "Persicaria",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Diptera",
+          "family_name": "Agromyzidae",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 166155,
+        "count": 4,
+        "species": 3
+      }
     },
     "sq_m1407970_p770881": {
       "ix": -1.40797E+6,
       "iy": 770881,
       "genera": [
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Piperales",
+          "family_name": "Saururaceae",
           "genus_name": "Houttuynia",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Lepidoptera",
+          "family_name": "Hesperiidae",
           "genus_name": "Polites",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 166155,
+          "count": 1,
+          "species": 1
+        },
+        {
+          "observer_id": 7.064868E+6,
+          "count": 1,
+          "species": 1
         }
       ]
     },
@@ -81,29 +329,112 @@
       "iy": 770880,
       "genera": [
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Piperales",
+          "family_name": "Saururaceae",
           "genus_name": "Houttuynia",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Diptera",
+          "family_name": "Stratiomyidae",
           "genus_name": "Myxosargus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 166155,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1407969_p770881": {
       "ix": -1.407969E+6,
       "iy": 770881,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Piperales",
+        "family_name": "Saururaceae",
         "genus_name": "Houttuynia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.156648E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407969_p770904": {
       "ix": -1.407969E+6,
       "iy": 770904,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Poales",
+        "family_name": "Cyperaceae",
         "genus_name": "Carex",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 175531,
+        "count": 1,
+        "species": 1
       }
     }
   }

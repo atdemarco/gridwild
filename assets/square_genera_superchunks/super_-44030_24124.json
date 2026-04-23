@@ -2,14 +2,42 @@
   "super_ix": -44030,
   "super_iy": 24124,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 5,
   "squares": {
     "sq_m1408960_p771973": {
       "ix": -1.40896E+6,
       "iy": 771973,
       "genera": {
-        "genus_name": "Fagales",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fagales",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.683715E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408960_p771984": {
@@ -17,12 +45,58 @@
       "iy": 771984,
       "genera": [
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Rosales",
+          "family_name": "Rosaceae",
           "genus_name": "Prunus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Fagales",
+          "family_name": "Fagaceae",
           "genus_name": "Quercus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 5.584559E+6,
+          "count": 1,
+          "species": 1
+        },
+        {
+          "observer_id": 790406,
+          "count": 1,
+          "species": 1
         }
       ]
     },
@@ -30,24 +104,90 @@
       "ix": -1.408959E+6,
       "iy": 771986,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Agaricales",
+        "family_name": "Psathyrellaceae",
         "genus_name": "Coprinopsis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 237305,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408958_p771988": {
       "ix": -1.408958E+6,
       "iy": 771988,
       "genera": {
-        "genus_name": "Lepidoptera",
-        "count": 1
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Lepidoptera",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.67682E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408955_p771998": {
       "ix": -1.408955E+6,
       "iy": 771998,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Diptera",
+        "family_name": "Bombyliidae",
         "genus_name": "Xenox",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.487339E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

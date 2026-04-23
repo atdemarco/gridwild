@@ -2,22 +2,132 @@
   "super_ix": -43997,
   "super_iy": 24104,
   "superchunk_size": 32,
-  "n_squares": 2,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 4,
   "squares": {
     "sq_m1407898_p771338": {
       "ix": -1.407898E+6,
       "iy": 771338,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Caliciales",
+        "family_name": "Physciaceae",
         "genus_name": "Hyperphyscia",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.465033E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407897_p771341": {
       "ix": -1.407897E+6,
       "iy": 771341,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Lecanorales",
+        "family_name": "Ramalinaceae",
         "genus_name": "Ramalina",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.465033E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407887_p771345": {
+      "ix": -1.407887E+6,
+      "iy": 771345,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fabales",
+        "family_name": "Fabaceae",
+        "genus_name": "Cercis",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.532943E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407877_p771331": {
+      "ix": -1.407877E+6,
+      "iy": 771331,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asparagales",
+        "family_name": "Iridaceae",
+        "genus_name": "Iris",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.064868E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

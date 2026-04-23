@@ -2,14 +2,42 @@
   "super_ix": -44038,
   "super_iy": 24062,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 1,
   "squares": {
     "sq_m1409187_p770009": {
       "ix": -1.409187E+6,
       "iy": 770009,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Sapindales",
+        "family_name": "Rutaceae",
         "genus_name": "Citrus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.305365E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

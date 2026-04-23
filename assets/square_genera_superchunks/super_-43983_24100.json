@@ -2,22 +2,72 @@
   "super_ix": -43983,
   "super_iy": 24100,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 2,
   "squares": {
     "sq_m1407452_p771213": {
       "ix": -1.407452E+6,
       "iy": 771213,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Suliformes",
+        "family_name": "Phalacrocoracidae",
         "genus_name": "Nannopterum",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.626465E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407451_p771207": {
       "ix": -1.407451E+6,
       "iy": 771207,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Carnivora",
+        "family_name": "Felidae",
         "genus_name": "Felis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.17542E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

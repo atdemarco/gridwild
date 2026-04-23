@@ -2,30 +2,132 @@
   "super_ix": -43943,
   "super_iy": 24179,
   "superchunk_size": 32,
-  "n_squares": 3,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 4,
   "squares": {
     "sq_m1406166_p773745": {
       "ix": -1.406166E+6,
       "iy": 773745,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Dipsacales",
+        "family_name": "Viburnaceae",
         "genus_name": "Sambucus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.8173E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406155_p773753": {
       "ix": -1.406155E+6,
       "iy": 773753,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asterales",
+        "family_name": "Asteraceae",
         "genus_name": "Conoclinium",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.201742E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406153_p773739": {
+      "ix": -1.406153E+6,
+      "iy": 773739,
+      "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Sturnidae",
+        "genus_name": "Sturnus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 164735,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406149_p773750": {
       "ix": -1.406149E+6,
       "iy": 773750,
       "genera": {
-        "genus_name": "Chthoniidae",
-        "count": 1
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Pseudoscorpiones",
+        "family_name": "Chthoniidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     }
   }

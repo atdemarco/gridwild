@@ -2,30 +2,132 @@
   "super_ix": -43939,
   "super_iy": 24111,
   "superchunk_size": 32,
-  "n_squares": 3,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 4,
   "squares": {
+    "sq_m1406048_p771554": {
+      "ix": -1.406048E+6,
+      "iy": 771554,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Lamiaceae",
+        "genus_name": "Callicarpa",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.747798E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1406047_p771554": {
       "ix": -1.406047E+6,
       "iy": 771554,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Suliformes",
+        "family_name": "Phalacrocoracidae",
         "genus_name": "Nannopterum",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "top_observers": {
+        "observer_id": 454247,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406043_p771552": {
       "ix": -1.406043E+6,
       "iy": 771552,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Accipitriformes",
+        "family_name": "Pandionidae",
         "genus_name": "Pandion",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.10368E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406042_p771553": {
       "ix": -1.406042E+6,
       "iy": 771553,
       "genera": {
-        "genus_name": "Anatidae",
-        "count": 1
+        "iconic_taxon_name": "Aves",
+        "order_name": "Anseriformes",
+        "family_name": "Anatidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 454247,
+        "count": 1,
+        "species": 1
       }
     }
   }

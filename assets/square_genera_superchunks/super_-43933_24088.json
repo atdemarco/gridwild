@@ -2,22 +2,102 @@
   "super_ix": -43933,
   "super_iy": 24088,
   "superchunk_size": 32,
-  "n_squares": 2,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 3,
   "squares": {
+    "sq_m1405855_p770820": {
+      "ix": -1.405855E+6,
+      "iy": 770820,
+      "genera": {
+        "iconic_taxon_name": "Unknown",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.321595E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1405843_p770829": {
       "ix": -1.405843E+6,
       "iy": 770829,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Cannabaceae",
         "genus_name": "Celtis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.321595E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405841_p770832": {
       "ix": -1.405841E+6,
       "iy": 770832,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Coleoptera",
+        "family_name": "Elateridae",
         "genus_name": "Monocrepidius",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,22 +2,72 @@
   "super_ix": -43994,
   "super_iy": 24105,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 2,
   "squares": {
     "sq_m1407791_p771378": {
       "ix": -1.407791E+6,
       "iy": 771378,
       "genera": {
+        "iconic_taxon_name": "Actinopterygii",
+        "order_name": "Clupeiformes",
+        "family_name": "Alosidae",
         "genus_name": "Alosa",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 204678,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407785_p771369": {
       "ix": -1.407785E+6,
       "iy": 771369,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Solanales",
+        "family_name": "Solanaceae",
         "genus_name": "Solanum",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.465033E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

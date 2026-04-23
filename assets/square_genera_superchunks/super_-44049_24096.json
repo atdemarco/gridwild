@@ -2,14 +2,72 @@
   "super_ix": -44049,
   "super_iy": 24096,
   "superchunk_size": 32,
-  "n_squares": 1,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 2,
   "squares": {
+    "sq_m1409565_p771095": {
+      "ix": -1.409565E+6,
+      "iy": 771095,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Caryophyllales",
+        "family_name": "Cactaceae",
+        "genus_name": "Parodia",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.628151E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1409552_p771099": {
       "ix": -1.409552E+6,
       "iy": 771099,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Artiodactyla",
+        "family_name": "Cervidae",
         "genus_name": "Odocoileus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.666197E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,30 +2,102 @@
   "super_ix": -43972,
   "super_iy": 24104,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 6,
   "squares": {
     "sq_m1407098_p771340": {
       "ix": -1.407098E+6,
       "iy": 771340,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Malpighiales",
+        "family_name": "Salicaceae",
         "genus_name": "Populus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.358736E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407094_p771358": {
       "ix": -1.407094E+6,
       "iy": 771358,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Malpighiales",
+        "family_name": "Salicaceae",
         "genus_name": "Populus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.35204E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407093_p771329": {
       "ix": -1.407093E+6,
       "iy": 771329,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Agaricales",
+        "family_name": "Agaricaceae",
         "genus_name": "Macropsalliota",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.309884E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407084_p771358": {
@@ -33,29 +105,112 @@
       "iy": 771358,
       "genera": [
         {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Lepidoptera",
+          "family_name": "Nymphalidae",
           "genus_name": "Junonia",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
         },
         {
-          "genus_name": "Pterygota",
-          "count": 1
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Unknown",
+          "family_name": "Unknown",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 9.683216E+6,
+        "count": 2,
+        "species": 2
+      }
     },
     "sq_m1407084_p771359": {
       "ix": -1.407084E+6,
       "iy": 771359,
       "genera": {
+        "iconic_taxon_name": "Animalia",
+        "order_name": "Scutigeromorpha",
+        "family_name": "Scutigeridae",
         "genus_name": "Scutigera",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 9.683216E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407083_p771358": {
       "ix": -1.407083E+6,
       "iy": 771358,
       "genera": {
-        "genus_name": "Salticinae",
-        "count": 1
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Araneae",
+        "family_name": "Salticidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 9.683216E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

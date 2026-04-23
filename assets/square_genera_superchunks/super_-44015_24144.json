@@ -2,22 +2,185 @@
   "super_ix": -44015,
   "super_iy": 24144,
   "superchunk_size": 32,
-  "n_squares": 2,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 5,
   "squares": {
     "sq_m1408480_p772626": {
       "ix": -1.40848E+6,
       "iy": 772626,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fagales",
+        "family_name": "Fagaceae",
         "genus_name": "Fagus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.303524E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1408480_p772629": {
+      "ix": -1.40848E+6,
+      "iy": 772629,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Pinales",
+        "family_name": "Cupressaceae",
+        "genus_name": "Metasequoia",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.303524E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408479_p772627": {
       "ix": -1.408479E+6,
       "iy": 772627,
+      "genera": [
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Asterales",
+          "family_name": "Asteraceae",
+          "genus_name": "Solidago",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Lamiales",
+          "family_name": "Unknown",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": {
+        "observer_id": 3.303524E+6,
+        "count": 2,
+        "species": 2
+      }
+    },
+    "sq_m1408472_p772612": {
+      "ix": -1.408472E+6,
+      "iy": 772612,
       "genera": {
-        "genus_name": "Solidago",
-        "count": 1
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Primates",
+        "family_name": "Hominidae",
+        "genus_name": "Homo",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.79912E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1408459_p772639": {
+      "ix": -1.408459E+6,
+      "iy": 772639,
+      "genera": {
+        "iconic_taxon_name": "Amphibia",
+        "order_name": "Anura",
+        "family_name": "Bufonidae",
+        "genus_name": "Anaxyrus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.626465E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

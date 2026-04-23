@@ -2,30 +2,162 @@
   "super_ix": -43955,
   "super_iy": 24165,
   "superchunk_size": 32,
-  "n_squares": 3,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 5,
   "squares": {
+    "sq_m1406535_p773302": {
+      "ix": -1.406535E+6,
+      "iy": 773302,
+      "genera": {
+        "iconic_taxon_name": "Animalia",
+        "order_name": "Isopoda",
+        "family_name": "Armadillidiidae",
+        "genus_name": "Armadillidium",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.0159556E+7,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1406535_p773311": {
       "ix": -1.406535E+6,
       "iy": 773311,
       "genera": {
-        "genus_name": "Eucerini",
-        "count": 1
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hymenoptera",
+        "family_name": "Apidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406533_p773303": {
       "ix": -1.406533E+6,
       "iy": 773303,
       "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Rodentia",
+        "family_name": "Muridae",
         "genus_name": "Rattus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.191611E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406532_p773285": {
+      "ix": -1.406532E+6,
+      "iy": 773285,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Malpighiales",
+        "family_name": "Violaceae",
+        "genus_name": "Viola",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.602118E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406531_p773284": {
       "ix": -1.406531E+6,
       "iy": 773284,
       "genera": {
-        "genus_name": "Faboideae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fabales",
+        "family_name": "Fabaceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.406986E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

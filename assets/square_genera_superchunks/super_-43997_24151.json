@@ -2,46 +2,192 @@
   "super_ix": -43997,
   "super_iy": 24151,
   "superchunk_size": 32,
-  "n_squares": 5,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 6,
   "squares": {
     "sq_m1407903_p772861": {
       "ix": -1.407903E+6,
       "iy": 772861,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Vitales",
+        "family_name": "Vitaceae",
         "genus_name": "Ampelopsis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.83177E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407902_p772850": {
       "ix": -1.407902E+6,
       "iy": 772850,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Caryophyllales",
+        "family_name": "Polygonaceae",
         "genus_name": "Rumex",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 651182,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407902_p772855": {
       "ix": -1.407902E+6,
       "iy": 772855,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asterales",
+        "family_name": "Asteraceae",
         "genus_name": "Solidago",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 410175,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407901_p772834": {
+      "ix": -1.407901E+6,
+      "iy": 772834,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Oleaceae",
+        "genus_name": "Syringa",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.685516E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407897_p772846": {
       "ix": -1.407897E+6,
       "iy": 772846,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Fulgoridae",
         "genus_name": "Lycorma",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 9.459489E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407892_p772846": {
       "ix": -1.407892E+6,
       "iy": 772846,
       "genera": {
+        "iconic_taxon_name": "Reptilia",
+        "order_name": "Testudines",
+        "family_name": "Emydidae",
         "genus_name": "Terrapene",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.451585E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

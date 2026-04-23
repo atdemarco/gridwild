@@ -2,22 +2,102 @@
   "super_ix": -43991,
   "super_iy": 24093,
   "superchunk_size": 32,
-  "n_squares": 2,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 3,
   "squares": {
     "sq_m1407698_p770978": {
       "ix": -1.407698E+6,
       "iy": 770978,
       "genera": {
-        "genus_name": "Polygonaceae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Caryophyllales",
+        "family_name": "Polygonaceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7.489345E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407698_p770979": {
       "ix": -1.407698E+6,
       "iy": 770979,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Caryophyllales",
+        "family_name": "Polygonaceae",
         "genus_name": "Rumex",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.548379E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407692_p770994": {
+      "ix": -1.407692E+6,
+      "iy": 770994,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Ericales",
+        "family_name": "Sarraceniaceae",
+        "genus_name": "Sarracenia",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.932477E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

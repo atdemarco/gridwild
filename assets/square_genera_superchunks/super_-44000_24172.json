@@ -2,38 +2,132 @@
   "super_ix": -44000,
   "super_iy": 24172,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 4,
   "squares": {
     "sq_m1407987_p773514": {
       "ix": -1.407987E+6,
       "iy": 773514,
       "genera": {
+        "iconic_taxon_name": "Reptilia",
+        "order_name": "Testudines",
+        "family_name": "Emydidae",
         "genus_name": "Pseudemys",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 22589,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407982_p773512": {
       "ix": -1.407982E+6,
       "iy": 773512,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Aphididae",
         "genus_name": "Aphis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.603479E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407978_p773510": {
       "ix": -1.407978E+6,
       "iy": 773510,
       "genera": {
+        "iconic_taxon_name": "Animalia",
+        "order_name": "Isopoda",
+        "family_name": "Armadillidiidae",
         "genus_name": "Armadillidium",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407975_p773526": {
       "ix": -1.407975E+6,
       "iy": 773526,
       "genera": {
+        "iconic_taxon_name": "Animalia",
+        "order_name": "Polyxenida",
+        "family_name": "Polyxenidae",
         "genus_name": "Polyxenus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,22 +2,72 @@
   "super_ix": -43988,
   "super_iy": 24119,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 2,
   "squares": {
     "sq_m1407606_p771829": {
       "ix": -1.407606E+6,
       "iy": 771829,
       "genera": {
-        "genus_name": "Mesostigmata",
-        "count": 1
+        "iconic_taxon_name": "Arachnida",
+        "order_name": "Mesostigmata",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407598_p771828": {
       "ix": -1.407598E+6,
       "iy": 771828,
       "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Passeridae",
         "genus_name": "Passer",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.567577E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

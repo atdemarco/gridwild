@@ -2,54 +2,395 @@
   "super_ix": -43983,
   "super_iy": 24172,
   "superchunk_size": 32,
-  "n_squares": 6,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 12,
   "squares": {
+    "sq_m1407447_p773514": {
+      "ix": -1.407447E+6,
+      "iy": 773514,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Ranunculales",
+        "family_name": "Ranunculaceae",
+        "genus_name": "Eriocapitella",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.08593E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1407442_p773516": {
       "ix": -1.407442E+6,
       "iy": 773516,
       "genera": {
-        "genus_name": "Boletaceae",
-        "count": 1
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Boletales",
+        "family_name": "Boletaceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.718211E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407442_p773520": {
+      "ix": -1.407442E+6,
+      "iy": 773520,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Pinales",
+        "family_name": "Cupressaceae",
+        "genus_name": "Metasequoia",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.886553E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407441_p773535": {
       "ix": -1.407441E+6,
       "iy": 773535,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asterales",
+        "family_name": "Asteraceae",
         "genus_name": "Erigeron",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.654959E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407440_p773509": {
+      "ix": -1.40744E+6,
+      "iy": 773509,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Laurales",
+        "family_name": "Calycanthaceae",
+        "genus_name": "Calycanthus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.772739E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407440_p773512": {
       "ix": -1.40744E+6,
       "iy": 773512,
       "genera": {
-        "genus_name": "Fungi",
-        "count": 1
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.718211E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407440_p773531": {
+      "ix": -1.40744E+6,
+      "iy": 773531,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Asparagales",
+        "family_name": "Iridaceae",
+        "genus_name": "Iris",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 441417,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407438_p773530": {
       "ix": -1.407438E+6,
       "iy": 773530,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Aquifoliales",
+        "family_name": "Aquifoliaceae",
         "genus_name": "Ilex",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.654959E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407435_p773508": {
       "ix": -1.407435E+6,
       "iy": 773508,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Caryophyllales",
+        "family_name": "Polygonaceae",
         "genus_name": "Rumex",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.122255E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407435_p773531": {
+      "ix": -1.407435E+6,
+      "iy": 773531,
+      "genera": [
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Lamiales",
+          "family_name": "Plantaginaceae",
+          "genus_name": "Penstemon",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Lamiales",
+          "family_name": "Lamiaceae",
+          "genus_name": "Salvia",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": {
+        "observer_id": 2.989337E+6,
+        "count": 2,
+        "species": 2
+      }
+    },
+    "sq_m1407433_p773531": {
+      "ix": -1.407433E+6,
+      "iy": 773531,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fabales",
+        "family_name": "Fabaceae",
+        "genus_name": "Baptisia",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.989337E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407426_p773507": {
       "ix": -1.407426E+6,
       "iy": 773507,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Coccidae",
         "genus_name": "Pulvinaria",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.665838E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

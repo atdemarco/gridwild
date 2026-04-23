@@ -2,14 +2,72 @@
   "super_ix": -43909,
   "super_iy": 24139,
   "superchunk_size": 32,
-  "n_squares": 3,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 4,
   "squares": {
+    "sq_m1405061_p772474": {
+      "ix": -1.405061E+6,
+      "iy": 772474,
+      "genera": {
+        "iconic_taxon_name": "Actinopterygii",
+        "order_name": "Anabantiformes",
+        "family_name": "Channidae",
+        "genus_name": "Channa",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.397314E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1405060_p772460": {
       "ix": -1.40506E+6,
       "iy": 772460,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Rosales",
+        "family_name": "Urticaceae",
         "genus_name": "Urtica",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 77600,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1405058_p772457": {
@@ -17,12 +75,58 @@
       "iy": 772457,
       "genera": [
         {
+          "iconic_taxon_name": "Protozoa",
+          "order_name": "Reticulariales",
+          "family_name": "Reticulariaceae",
           "genus_name": "Lycogala",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Animalia",
+          "order_name": "Decapoda",
+          "family_name": "Cambaridae",
           "genus_name": "Procambarus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 1.823351E+6,
+          "count": 1,
+          "species": 1
+        },
+        {
+          "observer_id": 3.874951E+6,
+          "count": 1,
+          "species": 1
         }
       ]
     },
@@ -31,18 +135,74 @@
       "iy": 772461,
       "genera": [
         {
+          "iconic_taxon_name": "Actinopterygii",
+          "order_name": "Perciformes",
+          "family_name": "Percidae",
           "genus_name": "Etheostoma",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Actinopterygii",
+          "order_name": "Cyprinodontiformes",
+          "family_name": "Fundulidae",
           "genus_name": "Fundulus",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
         },
         {
+          "iconic_taxon_name": "Actinopterygii",
+          "order_name": "Cyprinodontiformes",
+          "family_name": "Poeciliidae",
           "genus_name": "Gambusia",
-          "count": 1
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 3.874951E+6,
+        "count": 3,
+        "species": 3
+      }
     }
   }
 }

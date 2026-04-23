@@ -2,21 +2,126 @@
   "super_ix": -43940,
   "super_iy": 24150,
   "superchunk_size": 32,
-  "n_squares": 1,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 3,
   "squares": {
+    "sq_m1406073_p772830": {
+      "ix": -1.406073E+6,
+      "iy": 772830,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Malpighiales",
+        "family_name": "Euphorbiaceae",
+        "genus_name": "Acalypha",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.352809E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406071_p772829": {
+      "ix": -1.406071E+6,
+      "iy": 772829,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.352809E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1406069_p772823": {
       "ix": -1.406069E+6,
       "iy": 772823,
       "genera": [
         {
-          "genus_name": "Araneae",
-          "count": 1
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Proteales",
+          "family_name": "Platanaceae",
+          "genus_name": "Platanus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
         },
         {
-          "genus_name": "Platanus",
-          "count": 1
+          "iconic_taxon_name": "Arachnida",
+          "order_name": "Araneae",
+          "family_name": "Unknown",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
         }
-      ]
+      ],
+      "top_observers": {
+        "observer_id": 4.352809E+6,
+        "count": 2,
+        "species": 2
+      }
     }
   }
 }

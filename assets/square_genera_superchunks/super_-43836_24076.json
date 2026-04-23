@@ -2,14 +2,42 @@
   "super_ix": -43836,
   "super_iy": 24076,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 1,
   "squares": {
     "sq_m1402723_p770459": {
       "ix": -1.402723E+6,
       "iy": 770459,
       "genera": {
+        "iconic_taxon_name": "Protozoa",
+        "order_name": "Stemonitidales",
+        "family_name": "Stemonitidaceae",
         "genus_name": "Stemonitis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,22 +2,132 @@
   "super_ix": -43986,
   "super_iy": 24151,
   "superchunk_size": 32,
-  "n_squares": 2,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 4,
   "squares": {
     "sq_m1407550_p772839": {
       "ix": -1.40755E+6,
       "iy": 772839,
       "genera": {
-        "genus_name": "Dialictus",
-        "count": 1
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hymenoptera",
+        "family_name": "Halictidae",
+        "genus_name": "Lasioglossum",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.603479E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407546_p772835": {
       "ix": -1.407546E+6,
       "iy": 772835,
       "genera": {
-        "genus_name": "Cupressaceae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Pinales",
+        "family_name": "Cupressaceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.419834E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407530_p772835": {
+      "ix": -1.40753E+6,
+      "iy": 772835,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Ericales",
+        "family_name": "Primulaceae",
+        "genus_name": "Primula",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.256939E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407526_p772835": {
+      "ix": -1.407526E+6,
+      "iy": 772835,
+      "genera": {
+        "iconic_taxon_name": "Unknown",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.01712E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

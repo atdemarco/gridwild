@@ -2,47 +2,193 @@
   "super_ix": -43984,
   "super_iy": 24131,
   "superchunk_size": 32,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
   "n_squares": 5,
   "squares": {
     "sq_m1407480_p772206": {
       "ix": -1.40748E+6,
       "iy": 772206,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Rhopalidae",
         "genus_name": "Boisea",
-        "count": 7
+        "count": 7,
+        "month_counts": [
+          0,
+          0,
+          0,
+          7,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 375342,
+        "count": 7,
+        "species": 1
       }
     },
     "sq_m1407477_p772205": {
       "ix": -1.407477E+6,
       "iy": 772205,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Rhopalidae",
         "genus_name": "Boisea",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 375342,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407476_p772204": {
       "ix": -1.407476E+6,
       "iy": 772204,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Rhopalidae",
         "genus_name": "Boisea",
-        "count": 9
+        "count": 9,
+        "month_counts": [
+          0,
+          0,
+          0,
+          9,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 375342,
+        "count": 9,
+        "species": 1
       }
     },
     "sq_m1407476_p772206": {
       "ix": -1.407476E+6,
       "iy": 772206,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Dipsacales",
+        "family_name": "Caprifoliaceae",
         "genus_name": "Lonicera",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.122734E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1407473_p772203": {
       "ix": -1.407473E+6,
       "iy": 772203,
-      "genera": {
-        "genus_name": "Aleuria",
-        "count": 1
-      }
+      "genera": [
+        {
+          "iconic_taxon_name": "Fungi",
+          "order_name": "Pezizales",
+          "family_name": "Pyronemataceae",
+          "genus_name": "Aleuria",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Gentianales",
+          "family_name": "Apocynaceae",
+          "genus_name": "Vincetoxicum",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 4.122734E+6,
+          "count": 1,
+          "species": 1
+        },
+        {
+          "observer_id": 744517,
+          "count": 1,
+          "species": 1
+        }
+      ]
     }
   }
 }

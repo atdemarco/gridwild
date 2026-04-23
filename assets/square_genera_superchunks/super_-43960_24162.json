@@ -2,62 +2,252 @@
   "super_ix": -43960,
   "super_iy": 24162,
   "superchunk_size": 32,
-  "n_squares": 7,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 8,
   "squares": {
     "sq_m1406719_p773205": {
       "ix": -1.406719E+6,
       "iy": 773205,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hymenoptera",
+        "family_name": "Vespidae",
         "genus_name": "Vespa",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.071774E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406719_p773206": {
       "ix": -1.406719E+6,
       "iy": 773206,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Pezizales",
+        "family_name": "Pezizaceae",
         "genus_name": "Peziza",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 4.071774E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406718_p773212": {
       "ix": -1.406718E+6,
       "iy": 773212,
       "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Mantodea",
+        "family_name": "Mantidae",
         "genus_name": "Stagmomantis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 3.407632E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406710_p773204": {
       "ix": -1.40671E+6,
       "iy": 773204,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Agaricales",
+        "family_name": "Psathyrellaceae",
         "genus_name": "Coprinopsis",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.694043E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406703_p773197": {
       "ix": -1.406703E+6,
       "iy": 773197,
       "genera": {
-        "genus_name": "Malvaceae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Malvales",
+        "family_name": "Malvaceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.066758E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406703_p773208": {
       "ix": -1.406703E+6,
       "iy": 773208,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Scrophulariaceae",
         "genus_name": "Buddleja",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.066758E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406700_p773185": {
+      "ix": -1.4067E+6,
+      "iy": 773185,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Ginkgoales",
+        "family_name": "Ginkgoaceae",
+        "genus_name": "Ginkgo",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 8.734903E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1406689_p773205": {
       "ix": -1.406689E+6,
       "iy": 773205,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fabales",
+        "family_name": "Fabaceae",
         "genus_name": "Pueraria",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 916058,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -2,14 +2,72 @@
   "super_ix": -43944,
   "super_iy": 24179,
   "superchunk_size": 32,
-  "n_squares": 1,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 2,
   "squares": {
     "sq_m1406189_p773746": {
       "ix": -1.406189E+6,
       "iy": 773746,
       "genera": {
-        "genus_name": "Genisteae",
-        "count": 1
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fabales",
+        "family_name": "Fabaceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.833898E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406183_p773735": {
+      "ix": -1.406183E+6,
+      "iy": 773735,
+      "genera": {
+        "iconic_taxon_name": "Mammalia",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 6.467017E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

@@ -42,7 +42,8 @@ window.__gwState = {
 
 
     // Default view (in case location fails)
-    map.setView([38.9072, -77.0369], 17); // DC fallback
+    //map.setView([38.9072, -77.0369], 17); // DC fallback
+    map.setView([38.911325, -77.076678], 19); // GEORGETOWN POLLINATOR GARDEN HOME!
 
     const hud = document.getElementById("status");
 

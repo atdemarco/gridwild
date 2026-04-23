@@ -1,6 +1,14 @@
 // Static heatmap store (when I introduced static assets)
 window.__staticGridCounts = new Map();
 const FOG_RADIUS_CELLS = 10;
+window.GW_SHOW_MOBILE_SMALL_TEXT = window.GW_SHOW_MOBILE_SMALL_TEXT ?? false;
+
+function shouldShowSmallText() {
+  const mobileLike = window.matchMedia("(max-width: 700px), (pointer: coarse)").matches;
+  return !mobileLike || window.GW_SHOW_MOBILE_SMALL_TEXT;
+}
+
+window.shouldShowSmallText = shouldShowSmallText;
 
 function getCurrentUserCellIndices() {
   if (typeof lastFix === "undefined" || !lastFix) return null;
@@ -22,18 +30,140 @@ function getCurrentUserCellIndices() {
 map.createPane("gridHeatPane");
 map.getPane("gridHeatPane").style.zIndex = 415;
 map.getPane("gridHeatPane").style.pointerEvents = "none";
+//map.getPane("gridHeatPane").style.filter = "blur(1px)";
 
 // Grid lines pane (above heat tiles)
 map.createPane("gridPane");
 map.getPane("gridPane").style.zIndex = 420;
 map.getPane("gridPane").style.pointerEvents = "none";
 
+// Shimmer overlay pane: above heat fill, below bold grid outline
+map.createPane("gridShimmerPane");
+map.getPane("gridShimmerPane").style.zIndex = 418;
+map.getPane("gridShimmerPane").style.pointerEvents = "none";
+
 // Layer containers
 const gridHeatLayer = L.layerGroup([], { pane: "gridHeatPane" }).addTo(map);
 const gridLineLayer = L.layerGroup([], { pane: "gridPane" }).addTo(map);
+const gridShimmerLayer = L.layerGroup([], { pane: "gridShimmerPane" }).addTo(map);
+
+window.setShimmerVisible = function(show = true) {
+  const pane = map.getPane("gridShimmerPane");
+  if (!pane) return;
+  pane.style.display = show ? "block" : "none";
+};
+
+map.getPane("gridShimmerPane").style.display = "none";
 
 // 20 ft in meters
 const GRID_SIZE_M = 20 * 0.3048;
+
+
+function getCaptiveFrac(metrics) {
+  if (!metrics) return 0;
+
+  const count = Number(metrics.count) || 0;
+  const nCaptive = Number(metrics.n_captive) || 0;
+
+  if (count <= 0) return 0;
+  return Math.max(0, Math.min(1, nCaptive / count));
+}
+
+function captiveFracToShimmerStyle(frac) {
+  if (frac < 0.20) return null;
+
+  if (frac < 0.40) {
+    return {
+      tileSizePx: 18,
+      streakWidthPx: 1.0,
+      overlayOpacity: 0.16,
+      strokeA: "rgba(255,255,255,0.34)",
+      strokeB: "rgba(255,255,255,0.12)"
+    };
+  }
+
+  if (frac < 0.70) {
+    return {
+      tileSizePx: 16,
+      streakWidthPx: 1.15,
+      overlayOpacity: 0.40,
+      strokeA: "rgba(255,255,255,0.42)",
+      strokeB: "rgba(255,255,255,0.16)"
+    };
+  }
+
+  return {
+    tileSizePx: 14,
+    streakWidthPx: 1.3,
+    overlayOpacity: 0.74,
+    strokeA: "rgba(255,255,255,0.50)",
+    strokeB: "rgba(255,255,255,0.20)"
+  };
+}
+
+function makeShimmerIcon(style) {
+  const { tileSizePx, streakWidthPx, overlayOpacity, strokeA, strokeB } = style;
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="${tileSizePx}" height="${tileSizePx}"
+         viewBox="0 0 ${tileSizePx} ${tileSizePx}">
+      <line x1="-2" y1="${tileSizePx - 2}" x2="${tileSizePx - 6}" y2="-2"
+            stroke="${strokeA}" stroke-width="${streakWidthPx}" stroke-linecap="round" />
+      <line x1="5" y1="${tileSizePx + 1}" x2="${tileSizePx + 1}" y2="5"
+            stroke="${strokeB}" stroke-width="${Math.max(0.6, streakWidthPx * 0.7)}" stroke-linecap="round" />
+    </svg>
+  `;
+
+  return L.divIcon({
+    className: "gw-shimmer-icon",
+    html: `<div style="
+      width:100%;
+      height:100%;
+      background-image:url('data:image/svg+xml;utf8,${encodeURIComponent(svg)}');
+      background-repeat:repeat;
+      opacity:${overlayOpacity};
+      pointer-events:none;
+    "></div>`,
+    iconSize: null
+  });
+}
+
+function drawShimmerOverlayForCell(sw, ne, metrics) {
+  const frac = getCaptiveFrac(metrics);
+  const shimmerStyle = captiveFracToShimmerStyle(frac);
+  if (!shimmerStyle) return;
+
+  const bounds = L.latLngBounds(sw, ne);
+  const center = bounds.getCenter();
+  const icon = makeShimmerIcon(shimmerStyle);
+
+  const marker = L.marker(center, {
+    icon,
+    pane: "gridShimmerPane",
+    interactive: false
+  });
+
+  marker.on("add", () => {
+    const el = marker.getElement();
+    if (!el) return;
+
+    const nw = map.latLngToLayerPoint(bounds.getNorthWest());
+    const se = map.latLngToLayerPoint(bounds.getSouthEast());
+
+    const w = Math.max(1, se.x - nw.x);
+    const h = Math.max(1, se.y - nw.y);
+
+    el.style.width = `${w}px`;
+    el.style.height = `${h}px`;
+    el.style.marginLeft = `${-w / 2}px`;
+    el.style.marginTop = `${-h / 2}px`;
+    el.style.opacity = "1";
+    el.style.pointerEvents = "none";
+  });
+
+  marker.addTo(gridShimmerLayer);
+}
 
 // // // // // define helpers for the central 3×3 macro square
 
@@ -208,32 +338,116 @@ if (titleEl) {
   `;
 };
 
+window.updateTopObserversPanel = async function updateTopObserversPanel() {
+  const el = document.getElementById("gwTopObserversBody");
+  if (!el) return;
+
+  try {
+    const { ix, iy } = getCenterFineCell();
+    const squareRec = await getSquareGeneraRecord(ix, iy);
+    const observerDict = await loadObserverDictionary();
+
+    const top = Array.isArray(squareRec?.top_observers)
+      ? squareRec.top_observers
+      : [];
+
+    if (!top.length) {
+      el.innerHTML = `<div class="gw-muted">No observer leaderboard for this square.</div>`;
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="gw-list">
+        ${top.slice(0, 5).map((row, idx) => {
+          const meta = getObserverMeta(observerDict, row.observer_id) || {};
+          const login = meta.login || `user ${row.observer_id}`;
+          const name = meta.name || "";
+          const icon = meta.icon_url || "";
+          const count = Number(row.count || 0);
+          const species = Number(row.species || 0);
+
+          return `
+            <div class="gw-rowline">
+              <span style="display:flex;align-items:center;gap:10px;min-width:0;">
+                <span class="gw-muted">#${idx + 1}</span>
+                ${icon ? `
+                  <img
+                    src="${escapeHtml(icon)}"
+                    alt=""
+                    style="
+                      width:26px;
+                      height:26px;
+                      border-radius:999px;
+                      object-fit:cover;
+                      flex:0 0 auto;
+                      border:1px solid rgba(0,0,0,0.08);
+                    "
+                  >
+                ` : ""}
+                <span style="min-width:0;display:flex;flex-direction:column;line-height:1.15;">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                    @${escapeHtml(login)}
+                  </span>
+                  ${name ? `
+                    <span class="gw-muted" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                      ${escapeHtml(name)}
+                    </span>
+                  ` : ""}
+                </span>
+              </span>
+
+              <span class="gw-muted" style="white-space:nowrap;">
+                ${count} obs · ${species} spp
+              </span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  } catch (err) {
+    console.warn("Failed to render top observers panel:", err);
+    el.innerHTML = `<div class="gw-muted">Could not load top observers.</div>`;
+  }
+};
+
+
 function mergeSquareGeneraRecords(squareRecords) {
-  const genusCounts = new Map();
+  const genusMap = new Map();
 
   for (const rec of squareRecords) {
     const genera = Array.isArray(rec?.genera) ? rec.genera : [];
-    for (const g of genera) {
-      const genusName = g?.genus_name;
-      if (!genusName) continue;
 
-      const n = Math.max(1, Number(g.count) || 1);
-      genusCounts.set(genusName, (genusCounts.get(genusName) || 0) + n);
+    for (const g of genera) {
+      const iconic = g?.iconic_taxon_name || "Unknown";
+      const order  = g?.order_name || "Unknown";
+      const family = g?.family_name || "Unknown";
+      const genus  = g?.genus_name || "Unknown";
+
+      const key = [iconic, order, family, genus].join("||");
+
+      if (!genusMap.has(key)) {
+        genusMap.set(key, {
+          iconic_taxon_name: iconic,
+          order_name: order,
+          family_name: family,
+          genus_name: genus,
+          count: 0,
+          month_counts: new Array(12).fill(0)
+        });
+      }
+
+      const dest = genusMap.get(key);
+      dest.count += Number(g?.count) || 0;
+
+      const srcMonths = Array.isArray(g?.month_counts) ? g.month_counts : [];
+      for (let i = 0; i < 12; i++) {
+        dest.month_counts[i] += Number(srcMonths[i]) || 0;
+      }
     }
   }
 
-  return {
-    genera: Array.from(genusCounts.entries()).map(([genus_name, count]) => ({
-      genus_name,
-      count
-    }))
-  };
+  return { genera: Array.from(genusMap.values()) };
 }
-
-
-
-
-// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // 
 
 // ─────────────────────────────────────────────────────────────
 // Taxonomy dictionary + square genera superchunk caches
@@ -244,6 +458,22 @@ window.__squareGeneraSuperchunkCache = window.__squareGeneraSuperchunkCache || n
 const GENERA_SUPERCHUNK_SIZE = 32; // must match your MATLAB writer
 const GENERA_SUPERCHUNK_BASE = "assets/square_genera_superchunks";
 const GENUS_TAXONOMY_DICT_URL = "assets/genus_taxonomy_dictionary.json";
+
+window.__gwObserverDict = window.__gwObserverDict || null;
+const OBSERVER_DICT_URL = "assets/observer_dictionary.json";
+
+async function loadObserverDictionary() {
+  if (window.__gwObserverDict) return window.__gwObserverDict;
+
+  const resp = await fetch(OBSERVER_DICT_URL);
+  if (!resp.ok) {
+    throw new Error(`Failed to load observer dictionary: HTTP ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  window.__gwObserverDict = data || {};
+  return window.__gwObserverDict;
+}
 
 async function loadGenusTaxonomyDictionary() {
   if (window.__genusTaxonomyDict) return window.__genusTaxonomyDict;
@@ -315,6 +545,24 @@ async function getSquareGeneraRecord(ix, iy) {
     return null;
   }
 }
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function getObserverMeta(observerDict, observerId) {
+  if (!observerDict) return null;
+
+  return (
+    observerDict[String(observerId)] ||
+    observerDict[`id_${observerId}`] ||
+    null
+  );
+}
 
 window.__genusNameToTaxonomyEntry = window.__genusNameToTaxonomyEntry || null;
 
@@ -345,9 +593,10 @@ async function loadGenusNameToTaxonomyEntryIndex() {
   return idx;
 }
 
-function buildTaxonomyTreeFromSquareRecord(squareRec, genusNameIndex) {
+function buildTaxonomyTreeFromSquareRecord(squareRec) {
   const root = {
     name: "Life",
+    rank: "root",
     children: new Map(),
     weight: 0,
     genusCount: 0,
@@ -357,51 +606,45 @@ function buildTaxonomyTreeFromSquareRecord(squareRec, genusNameIndex) {
   const genera = Array.isArray(squareRec?.genera) ? squareRec.genera : [];
   const seenGeneraPerNode = new Map();
 
-  function markGenus(node, genusName) {
+  function markGenus(node, genusKey) {
     if (!seenGeneraPerNode.has(node)) {
       seenGeneraPerNode.set(node, new Set());
     }
     const s = seenGeneraPerNode.get(node);
-    if (!s.has(genusName)) {
-      s.add(genusName);
+    if (!s.has(genusKey)) {
+      s.add(genusKey);
       node.genusCount = (node.genusCount || 0) + 1;
     }
   }
 
   for (const g of genera) {
-    const genusName = g?.genus_name;
-    if (!genusName) continue;
+    const iconic = g?.iconic_taxon_name || "Unknown";
+    const order  = g?.order_name || "Unknown";
+    const family = g?.family_name || "Unknown";
+    const genus  = g?.genus_name || "Unknown";
 
-    const n = Math.max(1, Number(g.count) || 1);
-    const entry = genusNameIndex?.[genusName];
+    const genusKey = [iconic, order, family, genus].join("||");
+    const n = Math.max(1, Number(g?.count) || 1);
 
-    const pathNames = Array.isArray(entry?.path_names) ? entry.path_names : [];
-    const pathRanks = Array.isArray(entry?.path_ranks) ? entry.path_ranks : [];
-
-    let cappedPath = [];
-
-    if (pathNames.length && pathRanks.length && pathNames.length === pathRanks.length) {
-      for (let i = 0; i < pathNames.length; i++) {
-        cappedPath.push(pathNames[i]);
-        if (String(pathRanks[i]).toLowerCase() === "order") break;
-      }
-    } else {
-      // fallback if ranks are missing
-      cappedPath = pathNames.slice(0, 5);
-    }
-
-    if (!cappedPath.length) {
-      cappedPath = ["Unmapped"];
-    }
+    const fixedPath = [
+      { name: iconic, rank: "iconic_taxon" },
+      { name: order,  rank: "order" },
+      { name: family, rank: "family" },
+      { name: genus,  rank: "genus" }
+    ];
 
     let node = root;
     node.weight += n;
-    markGenus(node, genusName);
+    markGenus(node, genusKey);
 
-    cappedPath.forEach((part, depthIdx) => {
-      if (!node.children.has(part)) {
-        node.children.set(part, {
-          name: part,
+    fixedPath.forEach((part, depthIdx) => {
+      const childKey = `${part.rank}:${part.name}`;
+
+      if (!node.children.has(childKey)) {
+        node.children.set(childKey, {
+          key: childKey,
+          name: part.name,
+          rank: part.rank,
           children: new Map(),
           weight: 0,
           genusCount: 0,
@@ -409,15 +652,14 @@ function buildTaxonomyTreeFromSquareRecord(squareRec, genusNameIndex) {
         });
       }
 
-      node = node.children.get(part);
+      node = node.children.get(childKey);
       node.weight += n;
-      markGenus(node, genusName);
+      markGenus(node, genusKey);
     });
   }
 
   return root;
 }
-
 
 function finalizeTree(node, parent = null, out = []) {
   const kids = Array.from(node.children.values())
@@ -429,6 +671,7 @@ function finalizeTree(node, parent = null, out = []) {
 
   const finalized = {
     name: node.name,
+    rank: node.rank || null,
     weight: node.weight || 0,
     genusCount: node.genusCount || 0,
     depth: node.depth || 0,
@@ -602,6 +845,17 @@ function describeArc(cx, cy, rOuter, rInner, startAngle, endAngle) {
 }
 
 const TAXON_COMMON_NAMES = {
+  Aves: "Birds",
+  Mammalia: "Mammals",
+  Plantae: "Plants",
+  Fungi: "Fungi",
+  Insecta: "Insects",
+  Reptilia: "Reptiles",
+  Amphibia: "Amphibians",
+  Arachnida: "Arachnids",
+  Mollusca: "Mollusks",
+  Actinopterygii: "Ray-finned Fishes",
+
   Diptera: "Flies",
   Lepidoptera: "Butterflies & Moths",
   Coleoptera: "Beetles",
@@ -609,7 +863,8 @@ const TAXON_COMMON_NAMES = {
   Hemiptera: "True Bugs",
   Orthoptera: "Grasshoppers & Crickets",
   Odonata: "Dragonflies & Damselflies",
-  Araneae: "Spiders"
+  Araneae: "Spiders",
+  Unknown: "Unknown"
 };
 
 function getDisplayName(node) {
@@ -617,12 +872,16 @@ function getDisplayName(node) {
 }
 
 function renderPieSvg(node) {
-  const W = 260;
-  const H = 260;
-  const cx = 130;
-  const cy = 120;   // try 115–125 range
-  const rOuter = 92;
-  const rInner = 28;
+  
+const mobile = window.matchMedia("(max-width: 700px), (pointer: coarse)").matches;
+const W = 260;
+const H = mobile ? 10 : 240;
+const cx     = 130;
+const cy     = mobile ? 5 : 120;
+const rOuter = mobile ? 100 : 92;
+const rInner = mobile ? 20 : 28;
+
+  const showSmallText = shouldShowSmallText();
 
   const kids = (node?.children || []).slice();
 
@@ -678,9 +937,9 @@ function renderPieSvg(node) {
             y="${labelPt.y}"
             text-anchor="middle"
             dominant-baseline="middle"
-            font-size="10.5"
+            font-size="${mobile ? 10.5 : 10.5}"
             font-weight="600"
-            fill="rgba(0,0,0,0.78)"
+            fill="rgba(28, 22, 14, 0.96)"
             pointer-events="none"
           >${escapeHtml(getDisplayName(child))}</text>
         ` : ""}
@@ -698,12 +957,26 @@ function renderPieSvg(node) {
       />
       ${slices}
       <circle cx="${cx}" cy="${cy}" r="${rInner}" fill="white" stroke="rgba(0,0,0,0.10)" />
-      <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="12.5" font-weight="800">
-        ${escapeHtml(node.name)}
-      </text>
-      <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="10.5" opacity="0.64">
-        dbl-click slice to drill in
-      </text>
+      <text
+  x="${cx}"
+  y="${cy - 4}"
+  text-anchor="middle"
+  dominant-baseline="middle"
+  font-size="${mobile ? 11 : 10}"
+  font-weight="800"
+  fill="rgba(36,28,18,0.96)"
+  stroke="rgba(255,255,255,0.30)"
+  stroke-width="0.7"
+  paint-order="stroke"
+  style="letter-spacing:0.4px; text-transform:uppercase;"
+>
+  ${escapeHtml(getDisplayName(node))}
+</text>
+      ${showSmallText ? `
+        <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="10.5" opacity="0.64">
+          tap slice to drill in
+        </text>
+      ` : ""}
     </svg>
   `;
 }
@@ -727,39 +1000,74 @@ function bindCladogramInteractions() {
 
   const state = window.__gwCladoState || {};
 
-  // Drill down on slice dbl-click
+  function drillToNodePath(nodePath) {
+    if (!nodePath) return;
+
+    const nextNode = findNodeByPath(state.fullTree, nodePath);
+    if (!nextNode) return;
+    if (!nextNode.children || nextNode.children.length === 0) return;
+
+    state.pathStack = state.pathStack || [];
+    state.pathStack.push(state.currentNodePath || "root");
+    state.currentNodePath = nodePath;
+
+    rerenderCladogram();
+  }
+
+  function stepBack() {
+    if (state.pathStack && state.pathStack.length > 0) {
+      state.currentNodePath = state.pathStack.pop();
+      rerenderCladogram();
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Slice drill-down
+  // Desktop: dblclick
+  // Mobile: single click / tap
+  // ------------------------------------------------------------
   svg.querySelectorAll(".gw-pie-slice-group").forEach((g) => {
+    const nodePath = g.dataset.nodePath;
+
     g.addEventListener("dblclick", (evt) => {
       evt.preventDefault();
       evt.stopPropagation();
+      drillToNodePath(nodePath);
+    });
 
-      const nodePath = g.dataset.nodePath;
-      if (!nodePath) return;
-
-      const nextNode = findNodeByPath(state.fullTree, nodePath);
-      if (!nextNode) return;
-      if (!nextNode.children || nextNode.children.length === 0) return;
-
-      state.pathStack = state.pathStack || [];
-      state.pathStack.push(state.currentNodePath || "root");
-      state.currentNodePath = nodePath;
-
-      rerenderCladogram();
+    g.addEventListener("click", (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      drillToNodePath(nodePath);
     });
   });
 
-  // Step back when dbl-clicking outside slices
+  // ------------------------------------------------------------
+  // Back navigation
+  // Tap/click center or empty background to go back
+  // ------------------------------------------------------------
+  const backHit = svg.querySelector("#gwPieBackHit");
+  if (backHit) {
+    backHit.addEventListener("click", (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      stepBack();
+    });
+
+    backHit.addEventListener("dblclick", (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      stepBack();
+    });
+  }
+
   svg.addEventListener("dblclick", (evt) => {
     const hitSlice = evt.target.closest(".gw-pie-slice-group");
     if (hitSlice) return;
 
     evt.preventDefault();
     evt.stopPropagation();
-
-    if (state.pathStack && state.pathStack.length > 0) {
-      state.currentNodePath = state.pathStack.pop();
-      rerenderCladogram();
-    }
+    stepBack();
   });
 }
 
@@ -812,12 +1120,18 @@ window.updateHudCladogram = async function updateHudCladogram() {
   if (!el) return;
 
   try {
+    const showSmallText = shouldShowSmallText();
     const subtitleEl = document.querySelector("#gwCladoPane .gw-clado-subtitle");
     if (subtitleEl) {
+      subtitleEl.hidden = !showSmallText;
       subtitleEl.textContent =
-      `Center ${CENTER_MACRO_SIZE_CELLS}×${CENTER_MACRO_SIZE_CELLS} square taxonomy through Order; slice size = observations, color vividness = genus diversity`;
+        `Center ${CENTER_MACRO_SIZE_CELLS}×${CENTER_MACRO_SIZE_CELLS} square taxonomy: iconic taxon → order → family → genus; slice size = observations, color vividness = genus diversity`;
     }
-  const keys = getCenterMacroCellKeys();
+
+    const hintEl = document.querySelector("#gwCladoPane .gw-clado-hint");
+    if (hintEl) hintEl.hidden = !showSmallText;
+
+    const keys = getCenterMacroCellKeys();
 
     const squareRecords = await Promise.all(
       keys.map((key) => {
@@ -826,28 +1140,24 @@ window.updateHudCladogram = async function updateHudCladogram() {
       })
     );
 
-    //console.log("CLADO keys", keys);
-    //console.log("CLADO squareRecords", squareRecords);
     const mergedRecord = mergeSquareGeneraRecords(squareRecords.filter(Boolean));
-    //console.log("CLADO mergedRecord", mergedRecord);
 
     if (!Array.isArray(mergedRecord.genera) || mergedRecord.genera.length === 0) {
       el.className = "gw-clado-empty";
-      el.innerHTML = `No genus data for the current center ${CENTER_MACRO_SIZE_CELLS}×${CENTER_MACRO_SIZE_CELLS} square.`;
+      el.innerHTML = `No taxonomy data for the current center ${CENTER_MACRO_SIZE_CELLS}×${CENTER_MACRO_SIZE_CELLS} square.`;
       return;
     }
-const genusNameIndex = await loadGenusNameToTaxonomyEntryIndex();
-const rawTree = buildTaxonomyTreeFromSquareRecord(mergedRecord, genusNameIndex);
-const tree = annotateTreePaths(finalizeTree(rawTree));
 
-window.__gwCladoState.fullTree = tree;
-window.__gwCladoState.currentNodePath = "root";
-window.__gwCladoState.pathStack = [];
+    const rawTree = buildTaxonomyTreeFromSquareRecord(mergedRecord);
+    const tree = annotateTreePaths(finalizeTree(rawTree));
 
-el.className = "";
-el.innerHTML = renderPieSvg(tree);
-bindCladogramInteractions();
+    window.__gwCladoState.fullTree = tree;
+    window.__gwCladoState.currentNodePath = "root";
+    window.__gwCladoState.pathStack = [];
 
+    el.className = "";
+    el.innerHTML = renderPieSvg(tree);
+    bindCladogramInteractions();
 
   } catch (err) {
     console.warn("Failed to update cladogram:", err);
@@ -1121,70 +1431,106 @@ map.doubleClickZoom.disable();
 // One-time CSS inject for the RPG popup
 (function injectRPGPopupCSS() {
   if (document.getElementById("rpg-popup-css")) return;
-
   const css = `
-    .rpg-popup .leaflet-popup-content-wrapper{
-      border-radius: 14px;
-      padding: 0;
-      background: rgba(18,18,22,0.95);
-      color: #f3f3f7;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-      border: 1px solid rgba(255,255,255,0.10);
-      backdrop-filter: blur(6px);
-    }
-    .rpg-popup .leaflet-popup-tip{
-      background: rgba(18,18,22,0.95);
-      border: 1px solid rgba(255,255,255,0.10);
-    }
-    .rpg-card{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      width: 260px;
-      padding: 12px 12px 10px 12px;
-    }
-    .rpg-title{
-      display:flex; align-items:center; justify-content:space-between;
-      gap: 10px;
-      font-weight: 800;
-      letter-spacing: 0.3px;
-      font-size: 13px;
-      margin-bottom: 6px;
-    }
-    .rpg-badge{
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.10);
-      border: 1px solid rgba(255,255,255,0.12);
-      white-space: nowrap;
-    }
-    .rpg-statgrid{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 8px;
-    }
-    .rpg-stat{
-      border-radius: 10px;
-      padding: 8px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.10);
-    }
-    .rpg-k{
-      font-size: 10px;
-      opacity: 0.85;
-      margin-bottom: 4px;
-    }
-    .rpg-v{
-      font-size: 13px;
-      font-weight: 700;
-      line-height: 1.1;
-    }
-    .rpg-mini{
-      font-size: 10px;
-      opacity: 0.75;
-      margin-top: 8px;
-    }
-  `;
+  .rpg-popup .leaflet-popup-content-wrapper{
+    border-radius: 16px;
+    padding: 0;
+    background:
+      linear-gradient(180deg, rgba(42,35,29,0.97), rgba(19,16,14,0.985));
+    color: #efe6d3;
+    box-shadow:
+      0 14px 34px rgba(0,0,0,0.42),
+      inset 0 1px 0 rgba(255,255,255,0.04),
+      inset 0 0 0 1px rgba(255,255,255,0.02);
+    border: 1px solid rgba(215,183,116,0.28);
+    backdrop-filter: blur(5px);
+  }
+
+  .rpg-popup .leaflet-popup-tip{
+    background: rgba(24,20,17,0.98);
+    border: 1px solid rgba(215,183,116,0.20);
+  }
+
+  .rpg-card{
+    font-family: Georgia, "Times New Roman", serif;
+    width: 264px;
+    padding: 12px 12px 11px 12px;
+    position: relative;
+    color: #efe6d3;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.55);
+  }
+
+  .rpg-card::before{
+    content:"";
+    position:absolute;
+    inset: 7px;
+    border: 1px solid rgba(215,183,116,0.10);
+    border-radius: 11px;
+    pointer-events:none;
+  }
+
+  .rpg-title{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: #d7b774;
+    text-transform: uppercase;
+  }
+
+  .rpg-badge{
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: #f5ead3;
+    background: linear-gradient(180deg, rgba(101,78,42,0.92), rgba(61,45,24,0.96));
+    border: 1px solid rgba(215,183,116,0.24);
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+  }
+
+  .rpg-statgrid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .rpg-stat{
+    border-radius: 10px;
+    padding: 8px;
+    background:
+      linear-gradient(180deg, rgba(71,57,45,0.54), rgba(39,31,25,0.74));
+    border: 1px solid rgba(215,183,116,0.10);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  .rpg-k{
+    font-size: 10px;
+    color: rgba(239,230,211,0.64);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.45px;
+  }
+
+  .rpg-v{
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #f4e8cf;
+  }
+
+  .rpg-mini{
+    font-size: 10px;
+    color: rgba(239,230,211,0.74);
+    margin-top: 9px;
+    line-height: 1.35;
+  }
+`;
 
   const style = document.createElement("style");
   style.id = "rpg-popup-css";
@@ -1266,7 +1612,8 @@ function getStaticMetricsForCell(ix, iy) {
   return {
     count: Number(m?.count) || 0,
     species: Number(m?.species) || 0,
-    observers: Number(m?.observers) || 0
+    observers: Number(m?.observers) || 0,
+    n_captive: Number(m?.n_captive) || 0
   };
 }
 
@@ -1315,6 +1662,15 @@ function buildRPGPopupHTML({ ix, iy, centerLL, metrics, genusSummary }) {
         <div class="rpg-stat">
           <div class="rpg-k">Species</div>
           <div class="rpg-v">${metrics.species}</div>
+        </div>
+      
+        <div class="rpg-stat">
+          <div class="rpg-k">Captive</div>
+          <div class="rpg-v">${
+            metrics.count > 0
+              ? `${Math.round(100 * metrics.n_captive / metrics.count)}%`
+              : "0%"
+          }</div>
         </div>
 
         <div class="rpg-stat">
@@ -1424,14 +1780,16 @@ async function loadStaticHeatmapCsv(url) {
 //    if (header !== "ix,iy,count,species,observers") {
  //     console.warn(`Unexpected CSV header: ${header}`);
  //   }
- const allowedHeaders = new Set([
-  "ix,iy,count,species,observers",
-  "ix,iy,count,n_species,n_observers"
-]);
+    
+    const allowedHeaders = new Set([
+      "ix,iy,count,species,observers,n_captive",
+      "ix,iy,count,n_species,n_observers,n_captive",
+      "ix,iy,count,species,observers"
+    ]);
 
-if (!allowedHeaders.has(header)) {
-  console.warn(`Unexpected CSV header: ${header}`);
-}
+    if (!allowedHeaders.has(header)) {
+      console.warn(`Unexpected CSV header: ${header}`);
+    }
 
     const counts = new Map();
 
@@ -1444,13 +1802,15 @@ if (!allowedHeaders.has(header)) {
       const count = Number(parts[2]);
       const species = Number(parts[3]);
       const observers = Number(parts[4]);
+      const n_captive = Number(parts[5] ?? 0);
 
       if (
         !Number.isFinite(ix) ||
         !Number.isFinite(iy) ||
         !Number.isFinite(count) ||
         !Number.isFinite(species) ||
-        !Number.isFinite(observers)
+        !Number.isFinite(observers) ||
+        !Number.isFinite(n_captive)
       ) {
         continue;
       }
@@ -1458,7 +1818,8 @@ if (!allowedHeaders.has(header)) {
       counts.set(`${ix},${iy}`, {
         count,
         species,
-        observers
+        observers,
+        n_captive
       });
     }
 
@@ -1471,6 +1832,10 @@ if (!allowedHeaders.has(header)) {
 
     if (typeof window.updateHudCenterSummary === "function") {
       window.updateHudCenterSummary();
+    }
+
+    if (typeof window.updateTopObserversPanel === "function") {
+      window.updateTopObserversPanel();
     }
 
     if (typeof window.updateHudCladogram === "function") {
@@ -1502,6 +1867,7 @@ function getHeatValueForCell(cellMetrics) {
 
 function updateStaticGridHeat() {
   gridHeatLayer.clearLayers();
+  gridShimmerLayer.clearLayers();
 
   const fogOn = window.__gwState?.showFog ?? true;
   const centerCell = getCurrentUserCellIndices();
@@ -1523,9 +1889,8 @@ function updateStaticGridHeat() {
       }
 
       const key = `${ix},${iy}`;
-      const metrics = counts.get(key) || 0;
-      //const value = getHeatValueForCell(metrics);
-      //const style = countToFill(value);
+      const metrics = counts.get(key) || null;
+
       const style = metricsToFill(metrics);
       if (!style) continue;
 
@@ -1536,11 +1901,11 @@ function updateStaticGridHeat() {
         ...HEAT_TILE_STYLE_BASE,
         ...style
       }).addTo(gridHeatLayer);
+
+      drawShimmerOverlayForCell(sw, ne, metrics);
     }
   }
-}
-
-//
+} 
 
 function latLngToDisplayCellKey(lat, lng) {
   const p = map.options.crs.project(L.latLng(lat, lng));
@@ -1570,21 +1935,27 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
   const suspendUntil = state.suspendAutoCenterUntil ?? 0;
 
   const autoCenterAllowed =
-      state.lockToLocation === true &&
-      suspendUntil !== Number.POSITIVE_INFINITY &&
-      now >= (suspendUntil ?? 0);
+    state.lockToLocation === true &&
+    suspendUntil !== Number.POSITIVE_INFINITY &&
+    now >= suspendUntil;
 
   const enteredNewCell = force || (cellKey !== state.lastUserCellKey);
   state.lastUserCellKey = cellKey;
 
   if (autoCenterAllowed) {
-    const TARGET_ZOOM = 18;
+    const targetZoom = state.lockZoom ?? 19;
+    const currentZoom = map.getZoom();
+    const userLatLng = [lat, lng];
 
-    if (!state.hasDoneInitialZoom) {
-      state.hasDoneInitialZoom = true;
-      map.flyTo([lat, lng], TARGET_ZOOM, { duration: 1.0 });
-    } else if (enteredNewCell) {
-      map.flyTo([lat, lng], map.getZoom(), { duration: 0.5 });
+    const center = map.getCenter();
+    const centerDistM = center.distanceTo(userLatLng);
+
+    // When lock is enabled, always follow.
+    // If zoom has drifted, restore the lock zoom.
+    if (Math.abs(currentZoom - targetZoom) > 0.05) {
+      map.setView(userLatLng, targetZoom, { animate: true });
+    } else if (force || centerDistM > 2) {
+      map.panTo(userLatLng, { animate: true });
     }
   }
 
@@ -1605,7 +1976,6 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
     }
   }
 };
-
 
 // // //
 function getCenterMacroBoundsForCurrentLocation() {
@@ -1667,7 +2037,8 @@ function clampCladoViewBox(vb, baseW, baseH) {
   const padLeft   = Math.max(18, baseW * 0.10);
   const padRight  = Math.max(24, baseW * 0.16);
   const padTop    = Math.max(18, baseH * 0.10);
-  const padBottom = Math.max(150, baseH * 0.88);   // <- bigger bottom allowance
+  //const padBottom = Math.max(150, baseH * 0.88);   // <- bigger bottom allowance
+  const padBottom = Math.max(10, baseH * 0.1);   // <- bigger bottom allowance
 
   const minX = -padLeft;
   const maxX = baseW - vb.w + padRight;

@@ -132,14 +132,17 @@
   $(id)?.addEventListener("change", () => {
     syncStateFromUI();
 
-    if (id === "toggleLockLocation") {
-      if (window.__gwState.lockToLocation) {
-        window.__gwState.suspendAutoCenterUntil = 0;
-      } else {
-        window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
-      }
+   if (id === "toggleLockLocation") {
+    if (window.__gwState.lockToLocation) {
+      window.__gwState.suspendAutoCenterUntil = 0;
+    } else {
+      window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
     }
 
+    if (typeof window.setLockButtonVisual === "function") {
+      window.setLockButtonVisual();
+    }
+  }
     applyLayerVisibility();
 
     if (id === "toggleDynamicINat" && window.__gwState.dynamicINatEnabled) {
@@ -223,6 +226,12 @@ function updateLegendText() {
   if (!foot || !subtitle) return;
 
   const useLog = window.__gwState?.logHeat ?? true;
+  const showSmallText = typeof window.shouldShowSmallText === "function"
+    ? window.shouldShowSmallText()
+    : true;
+
+  subtitle.hidden = !showSmallText;
+  foot.hidden = !showSmallText;
 
   subtitle.textContent =
     "Hue = observers • vividness = species • opacity = observations";

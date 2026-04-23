@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>GridWild</title>
 
-  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -13,774 +12,1339 @@
     crossorigin=""
   />
 
-	<script src="https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js"></script>
+  <script src="https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js"></script>
 
   <style>
-    html, body { height: 100%; margin: 0; }
-    #map { height: 100%; width: 100%; }
-    .hud {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      z-index: 1000;
-      background: rgba(255,255,255,0.92);
-      padding: 10px 12px;
-      border-radius: 12px;
+    html, body {
+      height: 100%;
+      margin: 0;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      font-size: 14px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
-      max-width: calc(100% - 24px);
+      background: #f4f6f3;
     }
 
-
-    /* HEADING */
-
-
-    .gw-user-heading-icon {
-  background: transparent;
-  border: none;
-}
-
-
-.gw-user-heading-wrap {
-  width: 40px;
-  height: 40px;
-  position: relative;
-  transform-origin: 50% 50%;
-  transition: transform 120ms linear;
-}
-
-.gw-user-heading-body {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 22px;
-  line-height: 1;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
-}
-
-.gw-user-heading-arrow {
-  position: absolute;
-  left: 50%;
-  top: 2px;
-  transform: translateX(-50%);
-  font-size: 12px;
-  line-height: 1;
-  color: #1565c0;
-  text-shadow: 0 1px 2px rgba(255,255,255,0.85);
-}
-
-
-  /*GridWild sidebar (unobtrusive) */
-  .gw-sidebar{
-    position:absolute;
-    top:12px;
-    left:12px;
-    z-index:1100;
-    width:240px;
-    max-width: calc(100% - 24px);
-    transition: transform 160ms ease;
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  }
-
-  .gw-collapsed{ transform: translateX(-255px); }
-
-  .gw-toggle{
-    position:absolute;
-    top:0;
-    right:-42px;
-    width:38px;
-    height:38px;
-    border-radius:12px;
-    border:1px solid #ddd;
-    background: rgba(255,255,255,0.92);
-    box-shadow: 0 6px 18px rgba(0,0,0,0.15);
-    cursor:pointer;
-    font-weight:800;
-  }
-
-  .gw-panel{
-    background: rgba(255,255,255,0.92);
-    border:1px solid #e6e6e6;
-    border-radius:14px;
-    padding:10px 12px;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.15);
-  }
-
-  .gw-title{
-    font-weight:800;
-    font-size:13px;
-    margin-bottom:6px;
-  }
-
-  .gw-row{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    margin:6px 0;
-    font-size:13px;
-  }
-
-  .gw-details{ margin-top:6px; }
-  .gw-summary{
-    cursor:pointer;
-    font-weight:650;
-    font-size:13px;
-  }
-
-  .gw-checklist{
-    margin-top:6px;
-    max-height:220px;
-    overflow:auto;
-    border:1px solid #eee;
-    border-radius:10px;
-    padding:8px;
-    background: rgba(255,255,255,0.65);
-  }
-
-  .gw-checklist label{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    font-size:13px;
-    margin:4px 0;
-  }
-
-  .gw-hint{
-    margin-top:6px;
-    font-size:12px;
-    opacity:0.75;
-  }
-  /* END GridWild sidebar (unobtrusive)*/
-
-
-
-    .hud b { display: block; margin-bottom: 6px; }
-    .btn {
-      display: inline-block;
-      margin-top: 8px;
-      padding: 8px 10px;
-      border-radius: 10px;
-      border: 1px solid #ddd;
-      background: white;
-      font-weight: 600;
-      cursor: pointer;
+    body {
+      overflow: hidden;
     }
-    .btn:active { transform: translateY(1px); }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Keep old sidebar/HUD in DOM for compatibility, but hide them       */
+    /* ------------------------------------------------------------------ */
+    #sidebar,
+    .gw-sidebar,
+    #hud {
+      display: none !important;
+      pointer-events: none !important;
+    }
 
     
-.hud .btn{
-  margin-top: 6px;
-  margin-bottom: 2px;
-  width: 100%;
-}
+    .gw-topbtn.is-locked {
+      color: #0f6a57;
+      border-color: rgba(15,106,87,0.34);
+      box-shadow:
+        0 0 0 2px rgba(15,106,87,0.10),
+        0 6px 18px rgba(0,0,0,0.12);
+    }
 
+    .gw-topbtn svg {
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
 
-.hud {
-  overflow: hidden;
-}
+    /* ------------------------------------------------------------------ */
+    /* Top utility buttons                                                */
+    /* ------------------------------------------------------------------ */
+    .gw-topbar {
+      position: absolute;
+      top: max(12px, env(safe-area-inset-top));
+      left: 12px;
+      right: 12px;
+      z-index: 1400;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      pointer-events: none;
+    }
 
-.hud-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
+    .gw-topbar-left,
+    .gw-topbar-right {
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
 
-.hud-header b {
-  margin-bottom: 0;
-}
+    .gw-pill,
+    .gw-topbtn {
+      border: 1px solid rgba(0,0,0,0.10);
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+      color: rgba(0,0,0,0.82);
+    }
 
-.hud-toggle {
+    .gw-pill {
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .gw-topbtn {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .gw-topbtn:active {
+      transform: translateY(1px) scale(0.98);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Bottom nav                                                         */
+    /* ------------------------------------------------------------------ */
+
+    .gw-camera-icon {
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  border: 1px solid #ddd;
-  background: white;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
-  line-height: 1;
 }
 
-.hud-content {
-  margin-top: 8px;
+.gw-camera-icon svg {
+  width: 30px;
+  height: 30px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.35));
 }
 
-.hud.is-collapsed .hud-content {
-  display: none;
-}
+    .gw-bottomnav {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: max(10px, env(safe-area-inset-bottom));
+      z-index: 1500;
+      height: 76px;
+      border-radius: 24px;
+      background: rgba(255,255,255,0.94);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.16);
+      display: grid;
+      grid-template-columns: 1fr 1fr 92px 1fr 1fr;
+      align-items: center;
+      padding: 0 6px;
+      pointer-events: auto;
+    }
 
-.hud.is-collapsed .hud-toggle {
-  transform: rotate(-90deg);
-}
+    .gw-navbtn {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: rgba(0,0,0,0.74);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: 100%;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-/* Mobile behavior */
-@media (max-width: 700px), (pointer: coarse) {
-  .hud {
-    top: 10px;
-    left: 10px;
-    right: 10px;
-    max-width: none;
-    width: auto;
-    padding: 8px 10px;
-    font-size: 12px;
-    border-radius: 12px;
+    .gw-navicon-badged {
+    position: relative;
   }
 
-  .hud-content {
-    max-height: min(52vh, 420px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-right: 2px;
+  .gw-notify-dot {
+    position: absolute;
+    top: -2px;
+    right: -4px;
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: #d84c3f;
+    box-shadow:
+      0 0 0 2px rgba(30,24,20,0.95),
+      0 0 8px rgba(216,76,63,0.35);
   }
 
-  .hud .btn {
-    padding: 7px 9px;
-    font-size: 12px;
-  }
-
-  .gw-legend-subtitle,
-  .gw-summary-body,
-  .gw-legend-foot,
-  .gw-clado-subtitle {
-    font-size: 10.5px;
-  }
-
-  .gw-clado-wrap {
-    height: 180px;
-    max-height: 180px;
-  }
-}
-
-
-
-.gw-legend{
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(0,0,0,0.08);
-}
-
-.gw-legend-title{
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  margin-bottom: 4px;
-  color: rgba(0,0,0,0.82);
-}
-
-.gw-legend-subtitle{
-  font-size: 11px;
-  line-height: 1.25;
-  color: rgba(0,0,0,0.62);
-  margin-bottom: 10px;
-  max-width: 220px;
-}
-
-.gw-legend-section{
-  margin-top: 8px;
-}
-
-.gw-legend-rowlabel{
-  font-size: 10.5px;
-  font-weight: 700;
-  color: rgba(0,0,0,0.72);
-  margin-bottom: 4px;
-}
-
-.gw-huebar{
-  height: 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,0.10);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
-  background: linear-gradient(
-    to right,
-    hsl(200, 70%, 56%),
-    hsl(120, 70%, 56%),
-    hsl(60, 78%, 56%),
-    hsl(20, 82%, 54%)
-  );
-}
-
-.gw-chiprow{
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.gw-chip{
-  height: 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,0.10);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
-}
-
-.gw-legend-axislabels{
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  margin-top: 3px;
-  font-size: 10px;
-  color: rgba(0,0,0,0.55);
-}
-
-.gw-legend-axislabels span:nth-child(2){
-  text-align: center;
-}
-
-.gw-legend-axislabels span:nth-child(3){
-  text-align: right;
-}
-
-.chip-dull   { background: hsl(120, 38%, 56%); }
-.chip-mid    { background: hsl(120, 62%, 56%); }
-.chip-vivid  { background: hsl(120, 88%, 56%); }
-
-.chip-faint  { background: hsla(120, 72%, 56%, 0.20); }
-.chip-medium { background: hsla(120, 72%, 56%, 0.42); }
-.chip-opaque { background: hsla(120, 72%, 56%, 0.70); }
-
-.gw-legend-foot{
-  margin-top: 8px;
-  font-size: 10.5px;
-  color: rgba(0,0,0,0.56);
-  line-height: 1.2;
-}
-
-/* Example swatches for the 2x2 rule space */
-.swatch-a{ background: hsla(200, 40%, 64%, 0.28); } /* few obsr, low spp */
-.swatch-b{ background: hsla(200, 88%, 58%, 0.28); } /* few obsr, high spp */
-.swatch-c{ background: hsla(20, 42%, 56%, 0.28); }  /* many obsr, low spp */
-.swatch-d{ background: hsla(20, 88%, 50%, 0.55); }  /* many obsr, high spp */
-
-
-
-/* biodiveristy summary card */
-.gw-summarypane{
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(0,0,0,0.08);
-  transition: opacity 0.18s ease;
-}
-
-.gw-summary-title{
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  margin-bottom: 6px;
-  color: rgba(0,0,0,0.82);
-}
-
-.gw-summary-body{
-  font-size: 11px;
-  line-height: 1.35;
-  color: rgba(0,0,0,0.70);
-}
-
-.gw-summary-grid{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 10px;
-}
-
-.gw-summary-k{
-  opacity: 0.62;
-}
-
-.gw-summary-v{
-  font-weight: 700;
-  text-align: right;
-}
-
-/* ─────────────────────────────────────────────
-   Cladogram pane
-   ───────────────────────────────────────────── */
-   
-.gw-cladopane{
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(0,0,0,0.08);
-}
-
-.gw-clado-title{
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.25px;
-  margin-bottom: 4px;
-  color: rgba(0,0,0,0.84);
-}
-
-.gw-clado-subtitle{
-  font-size: 10.5px;
-  line-height: 1.25;
-  color: rgba(0,0,0,0.58);
-  margin-bottom: 4px;
-}
-
-.gw-clado-wrap{
-  height: 230px;
-  max-height: 230px;
-  display: flex;
+ .gw-navbtn .gw-navicon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 1;
+  margin-bottom: 1px;
 }
 
-.gw-clado-wrap{
-  position: relative;
-  width: 100%;
-  height: 230px;
-  max-height: 230px;
-  overflow: hidden;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 12px;
-  background:
-    radial-gradient(circle at 50% 0%, rgba(255,255,255,0.92), rgba(245,248,244,0.82) 58%, rgba(235,240,236,0.76) 100%);
+.gw-navbtn .gw-navicon svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.96;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.35));
+}
+
+.gw-navbtn .gw-navicon.gw-navicon-fill svg .gw-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+    .gw-navbtn.is-active {
+      color: #0f6a57;
+    }
+
+    .gw-camera-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+
+    .gw-camera-btn {
+      appearance: none;
+      border: 0;
+      width: 74px;
+      height: 74px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #1d8a6f, #0f6a57);
+      color: white;
+      font-size: 28px;
+      box-shadow: 0 12px 24px rgba(15,106,87,0.35);
+      transform: translateY(-18px);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .gw-camera-btn:active {
+      transform: translateY(-17px) scale(0.98);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Bottom sheets                                                      */
+    /* ------------------------------------------------------------------ */
+    .gw-sheet {
+      position: absolute;
+      left: 0;
+      right: 0;
+
+      /* final open position: above the floating nav */
+      bottom: calc(max(10px, env(safe-area-inset-bottom)) + 76px + 12px);
+
+      z-index: 1450;
+
+      /* when closed, push it farther down so it fully hides */
+      transform: translateY(calc(105% + 110px));
+
+      transition: transform 180ms ease;
+      pointer-events: none;
+    }
+
+    .gw-sheet.is-open {
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .gw-sheet-card {
+      margin: 0 8px;
+      max-height: min(78vh, 760px);
+      background: rgba(255,255,255,0.97);
+      backdrop-filter: blur(14px);
+      border-radius: 24px 24px 0 0;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-bottom: 0;
+      box-shadow: 0 -8px 28px rgba(0,0,0,0.18);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .gw-sheet-handle {
+      width: 44px;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.14);
+      margin: 10px auto 6px auto;
+      flex: 0 0 auto;
+    }
+
+    .gw-sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 16px 10px 16px;
+      flex: 0 0 auto;
+    }
+
+    .gw-sheet-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: rgba(0,0,0,0.86);
+    }
+
+    .gw-sheet-close {
+      appearance: none;
+      border: 0;
+      background: rgba(0,0,0,0.05);
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .gw-sheet-body {
+      padding: 0 16px 18px 16px;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .gw-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 1425;
+      background: rgba(0,0,0,0.20);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+
+    .gw-backdrop.is-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Cardy content                                                      */
+    /* ------------------------------------------------------------------ */
+    .gw-card {
+      background: rgba(249,250,248,0.95);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 16px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    }
+
+    .gw-card-title {
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: rgba(0,0,0,0.82);
+    }
+
+    .gw-kpi-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .gw-kpi {
+      background: white;
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 14px;
+      padding: 10px;
+    }
+
+    .gw-kpi-k {
+      font-size: 11px;
+      opacity: 0.62;
+      margin-bottom: 4px;
+    }
+
+    .gw-kpi-v {
+      font-size: 18px;
+      font-weight: 800;
+      color: rgba(0,0,0,0.82);
+    }
+
+    .gw-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .gw-rowline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      font-size: 13px;
+    }
+
+    .gw-rowline:last-child {
+      border-bottom: 0;
+    }
+
+    .gw-muted {
+      color: rgba(0,0,0,0.58);
+    }
+
+    .gw-mini-btn {
+      appearance: none;
+      border: 1px solid rgba(0,0,0,0.10);
+      background: white;
+      border-radius: 12px;
+      padding: 9px 11px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .gw-togglegrid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .gw-toggleline {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    .gw-toggleline input {
+      transform: scale(1.12);
+    }
+
+    .gw-checklist {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 10px;
+    }
+
+    .gw-checklist label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Re-used legend / summary / cladogram blocks                        */
+    /* ------------------------------------------------------------------ */
+    .gw-legend-title,
+    .gw-summary-title,
+    .gw-clado-title {
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      color: rgba(0,0,0,0.82);
+    }
+
+    .gw-legend-subtitle,
+    .gw-clado-subtitle {
+      font-size: 11px;
+      line-height: 1.3;
+      color: rgba(0,0,0,0.60);
+      margin-bottom: 10px;
+    }
+
+    .gw-legend-section {
+      margin-top: 10px;
+    }
+
+    .gw-legend-rowlabel {
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 5px;
+      color: rgba(0,0,0,0.72);
+    }
+
+    .gw-huebar,
+    .gw-chip {
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(0,0,0,0.10);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+    }
+
+    .gw-chiprow {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .gw-legend-axislabels {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      margin-top: 4px;
+      font-size: 10px;
+      color: rgba(0,0,0,0.55);
+    }
+
+    .gw-legend-axislabels span:nth-child(2) { text-align: center; }
+    .gw-legend-axislabels span:nth-child(3) { text-align: right; }
+
+    .chip-dull   { background: hsl(120, 38%, 56%); }
+    .chip-mid    { background: hsl(120, 62%, 56%); }
+    .chip-vivid  { background: hsl(120, 88%, 56%); }
+
+    .chip-faint  { background: hsla(120, 72%, 56%, 0.20); }
+    .chip-medium { background: hsla(120, 72%, 56%, 0.42); }
+    .chip-opaque { background: hsla(120, 72%, 56%, 0.70); }
+
+    .gw-legend-foot {
+      margin-top: 8px;
+      font-size: 10.5px;
+      color: rgba(0,0,0,0.56);
+      line-height: 1.25;
+    }
+
+    .gw-summary-body {
+      font-size: 12px;
+      line-height: 1.35;
+      color: rgba(0,0,0,0.72);
+    }
+
+    .gw-summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px 12px;
+    }
+
+    .gw-summary-k {
+      opacity: 0.62;
+      white-space: nowrap;
+    }
+
+    .gw-summary-v {
+      text-align: right;
+      font-weight: 800;
+    }
+
+    .gw-clado-wrap {
+      height: 260px;
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+      touch-action: none;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 14px;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,0.92), rgba(245,248,244,0.82) 58%, rgba(235,240,236,0.76) 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.65),
+        0 4px 14px rgba(0,0,0,0.08);
+    }
+
+    #gwCladoBody,
+    .gw-clado-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .gw-clado-hint {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      z-index: 2;
+      padding: 3px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      color: rgba(0,0,0,0.62);
+      background: rgba(255,255,255,0.75);
+      border: 1px solid rgba(0,0,0,0.06);
+      pointer-events: none;
+    }
+
+    .gw-clado-empty {
+      font-size: 12px;
+      color: rgba(0,0,0,0.62);
+      line-height: 1.35;
+      padding: 12px;
+    }
+
+    .gw-pie-slice {
+      cursor: pointer;
+      transition: opacity 120ms ease;
+    }
+
+    .gw-pie-slice-group:hover .gw-pie-slice {
+      opacity: 0.92;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Desktop tweaks                                                     */
+    /* ------------------------------------------------------------------ */
+    @media (min-width: 900px) {
+      .gw-bottomnav {
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(720px, calc(100vw - 48px));
+        right: auto;
+      }
+
+      .gw-sheet-card {
+        margin: 0 auto;
+        width: min(760px, calc(100vw - 24px));
+      }
+    }
+
+    /* ====================================================================== */
+/* JRPG / gritty field UI skin                                            */
+/* ====================================================================== */
+
+:root {
+  --gw-jrpg-bg: linear-gradient(180deg, rgba(34,30,26,0.96), rgba(18,16,14,0.98));
+  --gw-jrpg-panel: rgba(30, 26, 22, 0.94);
+  --gw-jrpg-panel-2: rgba(44, 38, 31, 0.92);
+  --gw-jrpg-border: rgba(180, 150, 94, 0.42);
+  --gw-jrpg-border-strong: rgba(215, 183, 116, 0.72);
+  --gw-jrpg-gold: #d7b774;
+  --gw-jrpg-gold-dim: #9e8452;
+  --gw-jrpg-ink: #efe6d3;
+  --gw-jrpg-muted: rgba(239, 230, 211, 0.66);
+  --gw-jrpg-shadow: 0 14px 36px rgba(0,0,0,0.42);
+  --gw-jrpg-inner: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(255,255,255,0.02);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Top controls                                                           */
+/* ---------------------------------------------------------------------- */
+.gw-pill,
+.gw-topbtn {
+  background: var(--gw-jrpg-bg);
+  color: #8f6b34;
+  border: 1px solid var(--gw-jrpg-border);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.65),
-    0 4px 14px rgba(0,0,0,0.08);
-  cursor: grab;
+    var(--gw-jrpg-shadow),
+    var(--gw-jrpg-inner);
+  backdrop-filter: blur(6px);
 }
 
-.gw-clado-wrap.is-dragging{
-  cursor: grabbing;
+.gw-pill {
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 800;
 }
 
-.gw-clado-svg{
-  display: block;
-  width: 100%;
-  height: 100%;
+.gw-topbtn {
+  border-radius: 12px;
 }
 
-.gw-clado-hint{
+/* ---------------------------------------------------------------------- */
+/* Bottom nav                                                             */
+/* ---------------------------------------------------------------------- */
+.gw-bottomnav {
+  background:
+    linear-gradient(180deg, rgba(42,36,30,0.97), rgba(20,17,15,0.98));
+  border: 1px solid var(--gw-jrpg-border);
+  box-shadow:
+    0 16px 40px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.gw-bottomnav::before {
+  content: "";
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  z-index: 2;
-  padding: 3px 7px;
-  border-radius: 999px;
-  font-size: 10px;
-  color: rgba(0,0,0,0.62);
-  background: rgba(255,255,255,0.75);
-  border: 1px solid rgba(0,0,0,0.06);
+  inset: 6px;
+  border-radius: 18px;
+  border: 1px solid rgba(215,183,116,0.12);
   pointer-events: none;
 }
 
-.gw-clado-svg{
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  shape-rendering: geometricPrecision;
-  text-rendering: geometricPrecision;
+.gw-navbtn {
+  color: #b39a6a;   /* darker brass */
+  text-shadow:
+    0 1px 0 rgba(0,0,0,0.72),
+    0 0 1px rgba(0,0,0,0.35);
+  opacity: 0.96;
 }
 
-.gw-clado-edge{
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
+.gw-navbtn span:last-child {
+  font-weight: 800;
+  letter-spacing: 0.45px;
 }
 
-.gw-clado-node,
-.gw-clado-nodehalo,
-.gw-clado-nodecore{
-  vector-effect: non-scaling-stroke;
+.gw-navbtn.is-active {
+  color: #f0d18a;   /* bright gold when selected */
+  text-shadow:
+    0 1px 0 rgba(0,0,0,0.82),
+    0 0 8px rgba(215,183,116,0.18);
 }
 
-.gw-clado-label,
-.gw-clado-tip{
-  paint-order: stroke fill;
-  stroke: rgba(255,255,255,0.85);
-  stroke-width: 2px;
-  stroke-linejoin: round;
+.gw-navbtn .gw-navicon svg {
+  stroke-width: 2.1;
 }
 
-.gw-clado-empty{
-  font-size: 11px;
-  color: rgba(0,0,0,0.62);
-  line-height: 1.35;
-  padding: 10px 2px 2px 2px;
+.gw-camera-btn {
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255,255,255,0.18), transparent 32%),
+    linear-gradient(180deg, #7f5d2e, #4f391c 58%, #2d2117);
+  color: #f6eddc;
+  border: 1px solid rgba(223,190,126,0.55);
+  box-shadow:
+    0 14px 28px rgba(0,0,0,0.48),
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -8px 14px rgba(0,0,0,0.25);
 }
 
-.gw-clado-edge{
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+/* ---------------------------------------------------------------------- */
+/* Sheets                                                                 */
+/* ---------------------------------------------------------------------- */
+.gw-backdrop {
+  background:
+    radial-gradient(circle at 50% 70%, rgba(67,49,28,0.15), transparent 35%),
+    rgba(0,0,0,0.46);
 }
 
-.gw-clado-node{
-  stroke-width: 1.15;
+.gw-sheet-card {
+  background:
+    linear-gradient(180deg, rgba(47,40,33,0.98), rgba(23,19,16,0.985));
+  border: 1px solid var(--gw-jrpg-border);
+  border-bottom: 0;
+  box-shadow:
+    0 -10px 32px rgba(0,0,0,0.42),
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    inset 0 0 0 1px rgba(255,255,255,0.02);
+  position: relative;
 }
 
-.gw-clado-root{
-  stroke-width: 1.6;
-}
-
-.gw-clado-nodehalo{
+.gw-sheet-card::before {
+  content: "";
+  position: absolute;
+  inset: 8px 8px 0 8px;
+  border-radius: 18px 18px 0 0;
+  border: 1px solid rgba(215,183,116,0.12);
   pointer-events: none;
 }
 
-.gw-clado-nodecore{
-  pointer-events: none;
+.gw-sheet-handle {
+  background: linear-gradient(90deg, rgba(215,183,116,0.18), rgba(215,183,116,0.55), rgba(215,183,116,0.18));
 }
 
-.gw-clado-label{
-  font-size: 8.5px;
-  font-weight: 600;
-  fill: rgba(30,36,34,0.72);
-  dominant-baseline: middle;
-  paint-order: stroke;
-  stroke: rgba(255,255,255,0.85);
-  stroke-width: 2px;
+.gw-sheet-title {
+  color: var(--gw-jrpg-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 900;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.65);
 }
 
-.gw-clado-tip{
-  font-size: 9px;
-  font-weight: 700;
-  fill: rgba(24,28,27,0.82);
-  dominant-baseline: middle;
-  paint-order: stroke;
-  stroke: rgba(255,255,255,0.88);
-  stroke-width: 2px;
+.gw-sheet-close {
+  background:
+    linear-gradient(180deg, rgba(86,70,44,0.95), rgba(46,35,23,0.98));
+  color: var(--gw-jrpg-ink);
+  border: 1px solid rgba(215,183,116,0.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
-.gw-clado-togglemark{
-  font-size: 9px;
-  font-weight: 700;
-  fill: rgba(255,255,255,0.92);
-  dominant-baseline: middle;
-  pointer-events: none;
+.gw-sheet-body {
+  color: var(--gw-jrpg-ink);
 }
 
-.gw-pie-slice {
-  cursor: pointer;
-  transition: transform 120ms ease, opacity 120ms ease;
-  transform-origin: 130px 130px;
+/* ---------------------------------------------------------------------- */
+/* Interior cards                                                         */
+/* ---------------------------------------------------------------------- */
+.gw-card {
+  background:
+    linear-gradient(180deg, rgba(57,48,39,0.92), rgba(34,28,23,0.94));
+  border: 1px solid rgba(215,183,116,0.18);
+  box-shadow:
+    0 6px 18px rgba(0,0,0,0.24),
+    inset 0 1px 0 rgba(255,255,255,0.035);
+  color: var(--gw-jrpg-ink);
 }
 
-.gw-pie-slice-group:hover .gw-pie-slice {
-  opacity: 0.92;
+.gw-card-title,
+.gw-legend-title,
+.gw-summary-title,
+.gw-clado-title {
+  color: var(--gw-jrpg-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  font-weight: 900;
 }
 
+.gw-legend-subtitle,
+.gw-clado-subtitle,
+.gw-muted,
+.gw-legend-foot,
+.gw-summary-body,
+.gw-kpi-k,
+.gw-summary-k {
+  color: var(--gw-jrpg-muted) !important;
+}
+
+.gw-kpi {
+  background:
+    linear-gradient(180deg, rgba(72,60,47,0.68), rgba(42,35,28,0.82));
+  border: 1px solid rgba(215,183,116,0.14);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.gw-kpi-v,
+.gw-summary-v {
+  color: #f4e8cf;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+}
+
+.gw-rowline {
+  border-bottom: 1px solid rgba(215,183,116,0.10);
+  color: var(--gw-jrpg-ink);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Buttons inside sheets                                                  */
+/* ---------------------------------------------------------------------- */
+.gw-mini-btn {
+  background:
+    linear-gradient(180deg, rgba(92,73,43,0.95), rgba(49,36,20,0.98));
+  border: 1px solid rgba(215,183,116,0.30);
+  color: var(--gw-jrpg-ink);
+  box-shadow:
+    0 4px 10px rgba(0,0,0,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.gw-mini-btn:active,
+.gw-sheet-close:active,
+.gw-topbtn:active,
+.gw-pill:active {
+  transform: translateY(1px);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Inputs                                                                 */
+/* ---------------------------------------------------------------------- */
+.gw-toggleline,
+.gw-checklist label {
+  color: var(--gw-jrpg-ink);
+}
+
+.gw-toggleline input,
+.gw-checklist input {
+  accent-color: #b99655;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Cladogram / taxonomy panel                                             */
+/* ---------------------------------------------------------------------- */
 .gw-clado-wrap {
-  cursor: default;
+  border: 1px solid rgba(215,183,116,0.18);
+  background:
+    radial-gradient(circle at 50% 8%, rgba(96,77,49,0.20), transparent 45%),
+    linear-gradient(180deg, rgba(46,39,32,0.96), rgba(28,24,21,0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    0 4px 14px rgba(0,0,0,0.22);
 }
 
+.gw-clado-hint {
+  color: var(--gw-jrpg-muted);
+  background: rgba(38,31,25,0.86);
+  border: 1px solid rgba(215,183,116,0.10);
+}
 
+/* ---------------------------------------------------------------------- */
+/* Legend chips                                                           */
+/* ---------------------------------------------------------------------- */
+.gw-huebar,
+.gw-chip {
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 1px 2px rgba(0,0,0,0.18);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Tiny texture pass                                                      */
+/* ---------------------------------------------------------------------- */
+.gw-sheet-card,
+.gw-card,
+.gw-bottomnav,
+.gw-pill,
+.gw-topbtn {
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,0.015), rgba(0,0,0,0.03)),
+    radial-gradient(circle at 20% 10%, rgba(255,255,255,0.028) 0, transparent 18%),
+    radial-gradient(circle at 78% 84%, rgba(255,255,255,0.018) 0, transparent 20%);
+}
 
   </style>
 </head>
 <body>
   <div id="map"></div>
 
+  <!-- Hidden compatibility sidebar -->
+  <div id="sidebar" class="gw-sidebar gw-collapsed" aria-hidden="true">
+    <button id="sidebarToggle" class="gw-toggle" title="Toggle sidebar">☰</button>
+    <div class="gw-panel">
+      <label class="gw-row">
+        <input type="checkbox" id="togglePoints" />
+        <span>Show points</span>
+      </label>
 
-<!-- Sidebar UI (collapsible) -->
-<div id="sidebar" class="gw-sidebar gw-collapsed">
-  <button id="sidebarToggle" class="gw-toggle" title="Toggle sidebar">☰</button>
+      <label class="gw-row">
+        <input type="checkbox" id="toggleHeat" checked />
+        <span>Show heat</span>
+      </label>
 
-  
-  <div class="gw-panel">
-    <div class="gw-title">Layers</div>
+      <label class="gw-row">
+        <input type="radio" name="heatMetric" value="count" checked />
+        <span>n observations</span>
+      </label>
 
-  
+      <label class="gw-row">
+        <input type="radio" name="heatMetric" value="species" />
+        <span>n species</span>
+      </label>
 
-<label class="gw-row">
-  <input type="checkbox" id="togglePoints" /> 
-  <span>Show points</span>
-</label>
+      <label class="gw-row">
+        <input type="radio" name="heatMetric" value="observers" />
+        <span>n observers</span>
+      </label>
 
-<label class="gw-row">
-  <input type="checkbox" id="toggleHeat" checked />
-  <span>Show heat</span>
-</label>
+      <label class="gw-row">
+        <input type="checkbox" id="toggleDynamicINat" />
+        <span>Live iNat</span>
+      </label>
 
-<!-- begin heat map config end -->
-<div class="gw-title" style="margin-top:10px;">Heat metric</div>
+      <label class="gw-row">
+        <input type="checkbox" id="toggleFog" checked />
+        <span>Fog of war</span>
+      </label>
 
-<label class="gw-row">
-  <input type="radio" name="heatMetric" value="count" checked />
-  <span>n observations</span>
-</label>
+      <label class="gw-row">
+        <input type="checkbox" id="toggleLockLocation" checked />
+        <span>Lock to current location</span>
+      </label>
 
-<label class="gw-row">
-  <input type="radio" name="heatMetric" value="species" />
-  <span>n species</span>
-</label>
-
-<label class="gw-row">
-  <input type="radio" name="heatMetric" value="observers" />
-  <span>n observers</span>
-</label>
-<!-- heat map config end -->
-
-<label class="gw-row">
-  <input type="checkbox" id="toggleDynamicINat" />
-  <span>Live iNat</span>
-</label>
-
-<label class="gw-row">
-  <input type="checkbox" id="toggleFog" checked />
-  <span>Fog of war</span>
-</label>
-
-<label class="gw-row">
-  <input type="checkbox" id="toggleLockLocation" checked />
-  <span>Lock to current location</span>
-</label>
-
-    <!-- Multi-check “dropdown” using <details> -->
-    <details class="gw-details" id="taxaDetails">
-      <summary class="gw-summary">Iconic taxa</summary>
-      <div class="gw-checklist" id="taxaChecklist"></div>
-    </details> 
-  
-  </div>
-</div>
-<!-- END Sidebar UI (collapsible) -->
-
-<div class="hud" id="hud">
-  <div class="hud-header">
-    <b>GridWild</b>
-    <button class="hud-toggle" id="hudToggle" aria-expanded="true" title="Toggle info panel">▾</button>
-  </div>
-
-  <div class="hud-content" id="hudContent">
-    <div id="status">Requesting location…</div>
-    <button class="btn" id="recenter">Recenter</button>
-
-    <div class="gw-legend" id="gwLegend">
-      <div class="gw-legend-title">Biodiversity layer</div>
-
-      <div class="gw-legend-subtitle">
-        Hue = observers • vividness = species • opacity = observations
-      </div>
-
-      <div class="gw-legend-section">
-        <div class="gw-legend-rowlabel">Observers</div>
-        <div class="gw-huebar"></div>
-        <div class="gw-legend-axislabels">
-          <span>few</span>
-          <span>mid</span>
-          <span>many</span>
-        </div>
-      </div>
-
-      <div class="gw-legend-section">
-        <div class="gw-legend-rowlabel">Species</div>
-        <div class="gw-chiprow">
-          <div class="gw-chip chip-dull"></div>
-          <div class="gw-chip chip-mid"></div>
-          <div class="gw-chip chip-vivid"></div>
-        </div>
-        <div class="gw-legend-axislabels">
-          <span>low</span>
-          <span></span>
-          <span>high</span>
-        </div>
-      </div>
-
-      <div class="gw-legend-section">
-        <div class="gw-legend-rowlabel">Observations</div>
-        <div class="gw-chiprow">
-          <div class="gw-chip chip-faint"></div>
-          <div class="gw-chip chip-medium"></div>
-          <div class="gw-chip chip-opaque"></div>
-        </div>
-        <div class="gw-legend-axislabels">
-          <span>few</span>
-          <span></span>
-          <span>many</span>
-        </div>
-      </div>
-
-      <div class="gw-legend-foot" id="gwLegendFoot">
-        Lime/green usually means a middle number of observers.
-      </div>
-
-      <div class="gw-summarypane" id="gwSummaryPane">
-        <div class="gw-summary-title">Center square</div>
-        <div class="gw-summary-body" id="gwSummaryBody">
-          Loading…
-        </div>
-
-        <div class="gw-cladopane" id="gwCladoPane">
-          <div class="gw-clado-title">Taxonomic structure</div>
-          <div class="gw-clado-subtitle">
-            Center 3×3 square observations collapsed to a rooted hierarchy
-          </div>
-          <div class="gw-clado-wrap" id="gwCladoWrap">
-            <div id="gwCladoBody" class="gw-clado-empty">Waiting for taxonomy data…</div>
-            <div class="gw-clado-hint">dbl-click slice = drill down • dbl-click outside = back</div>
-          </div>
-        </div>
-      </div>
+      <details class="gw-details" id="taxaDetails">
+        <summary class="gw-summary">Iconic taxa</summary>
+        <div class="gw-checklist" id="taxaChecklist"></div>
+      </details>
     </div>
   </div>
-</div>
-  
-  <!-- Leaflet JS -->
+
+  <!-- Hidden compatibility HUD -->
+  <div class="hud" id="hud" aria-hidden="true">
+    <div class="hud-header">
+      <b>GridWild</b>
+      <button class="hud-toggle" id="hudToggle" aria-expanded="false">▾</button>
+    </div>
+    <div class="hud-content" id="hudContent">
+      <div id="status">Requesting location…</div>
+    </div>
+  </div>
+
+  <!-- Top controls -->
+  <div class="gw-topbar">
+    <div class="gw-topbar-left">
+      <button class="gw-pill" id="legendPill" type="button">🗺️ Legend</button>
+    </div>
+
+    <div class="gw-topbar-right">
+      <button class="gw-topbtn" id="recenterFab" aria-label="Recenter">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <circle cx="12" cy="12" r="7"></circle>
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3"></path>
+          <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Backdrop -->
+  <div class="gw-backdrop" id="gwBackdrop"></div>
+
+  <!-- ME sheet -->
+  <section class="gw-sheet" id="sheetMe">
+    <div class="gw-sheet-card">
+      <div class="gw-sheet-handle"></div>
+      <div class="gw-sheet-header">
+        <div class="gw-sheet-title">Me</div>
+        <button class="gw-sheet-close" data-close-sheet>&times;</button>
+      </div>
+      <div class="gw-sheet-body" id="sheetMeBody"></div>
+    </div>
+  </section>
+
+  <!-- INFO sheet -->
+  <section class="gw-sheet" id="sheetInfo">
+    <div class="gw-sheet-card">
+      <div class="gw-sheet-handle"></div>
+      <div class="gw-sheet-header">
+        <div class="gw-sheet-title">Scan</div>
+        <button class="gw-sheet-close" data-close-sheet>&times;</button>
+      </div>
+      <div class="gw-sheet-body" id="sheetInfoBody"></div>
+    </div>
+  </section>
+
+  <!-- COMMUNITY sheet -->
+  <section class="gw-sheet" id="sheetCommunity">
+    <div class="gw-sheet-card">
+      <div class="gw-sheet-handle"></div>
+      <div class="gw-sheet-header">
+        <div class="gw-sheet-title">Guild</div>
+        <button class="gw-sheet-close" data-close-sheet>&times;</button>
+      </div>
+      <div class="gw-sheet-body" id="sheetCommunityBody"></div>
+    </div>
+  </section>
+
+  <!-- QUEST sheet -->
+  <section class="gw-sheet" id="sheetQuest">
+    <div class="gw-sheet-card">
+      <div class="gw-sheet-handle"></div>
+      <div class="gw-sheet-header">
+        <div class="gw-sheet-title">Quest</div>
+        <button class="gw-sheet-close" data-close-sheet>&times;</button>
+      </div>
+      <div class="gw-sheet-body" id="sheetQuestBody"></div>
+    </div>
+  </section>
+
+  <!-- LEGEND quick sheet -->
+  <section class="gw-sheet" id="sheetLegend">
+    <div class="gw-sheet-card">
+      <div class="gw-sheet-handle"></div>
+      <div class="gw-sheet-header">
+        <div class="gw-sheet-title">Map legend</div>
+        <button class="gw-sheet-close" data-close-sheet>&times;</button>
+      </div>
+      <div class="gw-sheet-body" id="sheetLegendBody"></div>
+    </div>
+  </section>
+
+  <!-- Bottom nav -->
+  <nav class="gw-bottomnav" aria-label="GridWild mobile navigation">
+      <button class="gw-navbtn" id="btnMe" type="button">
+      <span class="gw-navicon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="img" focusable="false">
+          <circle cx="12" cy="8" r="3.2"></circle>
+          <path d="M6.5 19.5c.8-3.4 3-5.1 5.5-5.1s4.7 1.7 5.5 5.1"></path>
+          <path d="M4.5 19.5h15"></path>
+        </svg>
+      </span>
+      <span>ME</span>
+    </button>
+
+    <button class="gw-navbtn" id="btnInfo" type="button">
+      <span class="gw-navicon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="img" focusable="false">
+          <circle cx="12" cy="12" r="8.5"></circle>
+          <path d="M12 10.2v5.3"></path>
+          <path d="M12 7.4h.01"></path>
+        </svg>
+      </span>
+      <span>SCAN</span>
+    </button>
+
+    <div class="gw-camera-wrap">
+      <button class="gw-camera-btn" id="btnCamera" type="button" aria-label="Open camera">
+      <span class="gw-camera-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="img" focusable="false">
+          <path d="M8 7.5l1.2-2h5.6l1.2 2H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3z"></path>
+          <circle cx="12" cy="12.5" r="3.6"></circle>
+        </svg>
+      </span>
+    </button>
+      <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
+    </div>
+
+    <button class="gw-navbtn" id="btnCommunity" type="button">
+      <span class="gw-navicon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="img" focusable="false">
+          <circle cx="8" cy="9" r="2.4"></circle>
+          <circle cx="16" cy="9" r="2.4"></circle>
+          <path d="M4.8 18.3c.5-2.6 2.2-4 4.4-4 1.4 0 2.6.5 3.5 1.6"></path>
+          <path d="M11.3 15.9c.9-1 2-1.6 3.5-1.6 2.2 0 3.9 1.4 4.4 4"></path>
+        </svg>
+      </span>
+      <span>GUILD</span>
+    </button>
+
+    <button class="gw-navbtn" id="btnQuest" type="button">
+      <span class="gw-navicon gw-navicon-fill gw-navicon-badged" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="img" focusable="false">
+          <path class="gw-fill" d="M12 3.6l2.15 4.36 4.81.7-3.48 3.39.82 4.79L12 14.58 7.7 16.84l.82-4.79-3.48-3.39 4.81-.7L12 3.6z"></path>
+        </svg>
+        <span class="gw-notify-dot" id="questNotifyDot" hidden></span>
+      </span>
+      <span>QUEST</span>
+    </button>
+
+  </nav>
+
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
     crossorigin=""
   ></script>
 
-	<script src="js/mapinit.js"></script> 
-	<script src="js/initgrid.js"></script> 
-	<script src="js/inatscatter.js"></script> 
-<!--	<script src="js/osmoverlay.js"></script>     TEMP DISABLED --> 
-	<script src="js/location.js"></script> 
-  <script src="js/sidebar.js"></script>
-	
   <script>
-  document.getElementById("recenter").addEventListener("click", () => {
-    if (window.__gwState) {
-      window.__gwState.lockToLocation = true;
-      window.__gwState.suspendAutoCenterUntil = 0;
+    window.GW_SHOW_MOBILE_SMALL_TEXT = false;
+  </script>
+
+  <script src="js/mapinit.js"></script>
+  <script src="js/initgrid.js"></script>
+  <script src="js/inatscatter.js"></script>
+  <!-- <script src="js/osmoverlay.js"></script> -->
+  <script src="js/location.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script src="js/mobilepanels.js"></script>
+
+  <script>
+    // --------------------------------------------------------------------
+    // Bottom sheets
+    // --------------------------------------------------------------------
+    const gwBackdrop = document.getElementById("gwBackdrop");
+
+    
+    const sheets = {
+      me: document.getElementById("sheetMe"),
+      info: document.getElementById("sheetInfo"),
+      community: document.getElementById("sheetCommunity"),
+      quest: document.getElementById("sheetQuest"),
+      legend: document.getElementById("sheetLegend")
+    };
+
+    const navButtons = {
+      me: document.getElementById("btnMe"),
+      info: document.getElementById("btnInfo"),
+      community: document.getElementById("btnCommunity"),
+      quest: document.getElementById("btnQuest")
+    };
+
+    function closeAllSheets() {
+      Object.values(sheets).forEach(el => el.classList.remove("is-open"));
+      Object.values(navButtons).forEach(el => el.classList.remove("is-active"));
+      gwBackdrop.classList.remove("is-open");
     }
 
-    const cb = document.getElementById("toggleLockLocation");
-    if (cb && !cb.checked) {
-      cb.checked = true;
-      cb.dispatchEvent(new Event("change", { bubbles: true }));
+    function setQuestBadge(visible) {
+    const dot = document.getElementById("questNotifyDot");
+    if (!dot) return;
+    dot.hidden = !visible;
+  }
+
+    setQuestBadge(true); // demo...
+   
+  function openSheet(name) {
+      closeAllSheets();
+      const sheet = sheets[name];
+      if (!sheet) return;
+
+      sheet.classList.add("is-open");
+      gwBackdrop.classList.add("is-open");
+
+      if (navButtons[name]) {
+        navButtons[name].classList.add("is-active");
+      }
+
+      if (name === "info" || name === "legend") {
+        if (typeof window.refreshGridWildMobileInfo === "function") {
+          window.refreshGridWildMobileInfo();
+        }
+      }
     }
 
-    if (lastFix) {
-      map.setView([lastFix.latitude, lastFix.longitude], Math.max(map.getZoom(), 10));
-    } else {
-      requestLocationOnce();
-    }
-  });
 
-  // HUD collapse / expand
-  (function initHudCollapse() {
-    const hud = document.getElementById("hud");
-    const btn = document.getElementById("hudToggle");
-    if (!hud || !btn) return;
+    const sheetOrder = ["me", "info", "community", "quest"];
 
-    function setCollapsed(collapsed) {
-      hud.classList.toggle("is-collapsed", collapsed);
-      btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
-      btn.textContent = collapsed ? "▸" : "▾";
+    function getOpenSheetName() {
+      for (const [name, el] of Object.entries(sheets)) {
+        if (el.classList.contains("is-open")) return name;
+      }
+      return null;
     }
 
-    btn.addEventListener("click", () => {
-      setCollapsed(!hud.classList.contains("is-collapsed"));
+    function openAdjacentSheet(direction) {
+      const current = getOpenSheetName();
+      if (!current) return;
+
+      const idx = sheetOrder.indexOf(current);
+      if (idx === -1) return;
+
+      const nextIdx = idx + direction;
+      if (nextIdx < 0 || nextIdx >= sheetOrder.length) return;
+
+      openSheet(sheetOrder[nextIdx]);
+    }
+
+    let sheetTouchStartX = null;
+    let sheetTouchStartY = null;
+
+    function handleSheetTouchStart(e) {
+      const t = e.changedTouches?.[0];
+      if (!t) return;
+
+      sheetTouchStartX = t.clientX;
+      sheetTouchStartY = t.clientY;
+    }
+
+    function handleSheetTouchEnd(e) {
+      const t = e.changedTouches?.[0];
+      if (!t || sheetTouchStartX == null || sheetTouchStartY == null) return;
+
+      const dx = t.clientX - sheetTouchStartX;
+      const dy = t.clientY - sheetTouchStartY;
+
+      sheetTouchStartX = null;
+      sheetTouchStartY = null;
+
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      // --------------------------------------------------
+      // Swipe down closes the current sheet
+      // --------------------------------------------------
+      if (dy > 200 && absDy > absDx) {
+        closeAllSheets();
+        return;
+      }
+
+      // --------------------------------------------------
+      // Horizontal swipe switches sheets
+      // --------------------------------------------------
+      if (absDx < 50) return;
+      if (absDx < absDy) return;
+
+      if (dx < 0) {
+        openAdjacentSheet(1);   // swipe left -> next sheet
+      } else {
+        openAdjacentSheet(-1);  // swipe right -> previous sheet
+      }
+    }
+
+    document.querySelectorAll(".gw-sheet-card").forEach(card => {
+      card.addEventListener("touchstart", handleSheetTouchStart, { passive: true });
+      card.addEventListener("touchend", handleSheetTouchEnd, { passive: true });
     });
 
-    // Default to collapsed on phones / touch devices
-    const mobileLike = window.matchMedia("(max-width: 700px), (pointer: coarse)").matches;
-    setCollapsed(mobileLike);
-  })();
 
-  requestLocationOnce();
-  const watchId = startWatchingLocation();
-</script>
+    document.querySelectorAll("[data-close-sheet]").forEach(btn => {
+      btn.addEventListener("click", closeAllSheets);
+    });
+
+    gwBackdrop.addEventListener("click", closeAllSheets);
+
+    function toggleSheet(name) {
+      const currentlyOpen = getOpenSheetName();
+
+      if (currentlyOpen === name) {
+        closeAllSheets();
+        return;
+      }
+
+        openSheet(name);
+      }
+
+      document.getElementById("btnMe")
+        .addEventListener("click", () => toggleSheet("me"));
+
+      document.getElementById("btnInfo")
+        .addEventListener("click", () => toggleSheet("info"));
+
+      document.getElementById("btnCommunity")
+        .addEventListener("click", () => toggleSheet("community"));
+
+      document.getElementById("btnQuest")
+        .addEventListener("click", () => toggleSheet("quest"));
+
+      document.getElementById("legendPill")
+      .addEventListener("click", () => toggleSheet("legend"));  
+
+    // --------------------------------------------------------------------
+    // Camera placeholder
+    // --------------------------------------------------------------------
+    const btnCamera = document.getElementById("btnCamera");
+    const cameraInput = document.getElementById("cameraInput");
+
+    btnCamera.addEventListener("click", () => {
+      cameraInput.click();
+    });
+
+    cameraInput.addEventListener("change", () => {
+      if (cameraInput.files && cameraInput.files.length > 0) {
+        alert("Captured image ready. Next step: wire this into iNaturalist create-observation flow.");
+      }
+    });
+
+    // --------------------------------------------------------------------
+    // Recenter
+    // --------------------------------------------------------------------
+    const recenterFab = document.getElementById("recenterFab");
+
+  recenterFab?.addEventListener("click", () => {
+    if (typeof window.enableLocationLock === "function") {
+      window.enableLocationLock({
+        zoom: 19,
+        recenterNow: true,
+        force: true
+      });
+    } else if (typeof requestLocationOnce === "function") {
+      requestLocationOnce();
+    }
+
+    if (typeof window.refreshGridWildMobileInfo === "function") {
+      window.refreshGridWildMobileInfo();
+    }
+  });
+    // --------------------------------------------------------------------
+    // Init
+    // --------------------------------------------------------------------
+    (function initGridWildMobileShell() {
+      setTimeout(() => {
+        if (typeof window.initGridWildMobilePanels === "function") {
+          window.initGridWildMobilePanels();
+        }
+      }, 50);
+
+      requestLocationOnce();
+      const watchId = startWatchingLocation();
+      window.__gwWatchId = watchId;
+
+      if (typeof window.setLockButtonVisual === "function") {
+        window.setLockButtonVisual();
+      }
+    })();
+  </script>
 </body>
 </html>

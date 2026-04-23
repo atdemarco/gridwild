@@ -2,30 +2,162 @@
   "super_ix": -44021,
   "super_iy": 24131,
   "superchunk_size": 32,
-  "n_squares": 3,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 5,
   "squares": {
     "sq_m1408663_p772196": {
       "ix": -1.408663E+6,
       "iy": 772196,
       "genera": {
+        "iconic_taxon_name": "Fungi",
+        "order_name": "Hymenochaetales",
+        "family_name": "Hymenochaetaceae",
         "genus_name": "Pseudoinonotus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 462980,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1408658_p772223": {
+      "ix": -1.408658E+6,
+      "iy": 772223,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Bignoniaceae",
+        "genus_name": "Catalpa",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.236939E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1408656_p772220": {
+      "ix": -1.408656E+6,
+      "iy": 772220,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Ranunculales",
+        "family_name": "Berberidaceae",
+        "genus_name": "Nandina",
+        "count": 1,
+        "month_counts": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.510524E+6,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408648_p772193": {
       "ix": -1.408648E+6,
       "iy": 772193,
       "genera": {
+        "iconic_taxon_name": "Animalia",
+        "order_name": "Polydesmida",
+        "family_name": "Polydesmidae",
         "genus_name": "Polydesmus",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 324885,
+        "count": 1,
+        "species": 1
       }
     },
     "sq_m1408645_p772200": {
       "ix": -1.408645E+6,
       "iy": 772200,
       "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Poales",
+        "family_name": "Poaceae",
         "genus_name": "Schizachyrium",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.510524E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }

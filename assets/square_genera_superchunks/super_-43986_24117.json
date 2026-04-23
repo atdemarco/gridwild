@@ -2,14 +2,132 @@
   "super_ix": -43986,
   "super_iy": 24117,
   "superchunk_size": 32,
-  "n_squares": 1,
+  "taxonomy_levels": [
+    "iconic_taxon_name",
+    "order_name",
+    "family_name",
+    "genus_name"
+  ],
+  "n_squares": 4,
   "squares": {
     "sq_m1407551_p771757": {
       "ix": -1.407551E+6,
       "iy": 771757,
       "genera": {
+        "iconic_taxon_name": "Mollusca",
+        "order_name": "Unionida",
+        "family_name": "Unionidae",
         "genus_name": "Atlanticoncha",
-        "count": 1
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 77600,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407549_p771774": {
+      "ix": -1.407549E+6,
+      "iy": 771774,
+      "genera": {
+        "iconic_taxon_name": "Unknown",
+        "order_name": "Unknown",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 1.0311978E+7,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407548_p771751": {
+      "ix": -1.407548E+6,
+      "iy": 771751,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fagales",
+        "family_name": "Fagaceae",
+        "genus_name": "Fagus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 2.948841E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1407534_p771746": {
+      "ix": -1.407534E+6,
+      "iy": 771746,
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Fabales",
+        "family_name": "Fabaceae",
+        "genus_name": "Cladrastis",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "top_observers": {
+        "observer_id": 5.408526E+6,
+        "count": 1,
+        "species": 1
       }
     }
   }
