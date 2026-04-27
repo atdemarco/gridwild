@@ -23,7 +23,6 @@
 
   // add state:
   function syncStateFromUI() {
-
     
   window.__gwFilters = window.__gwFilters || {};
   window.__gwState = window.__gwState || {};
@@ -37,6 +36,7 @@
   window.__gwState.showPoints = $("togglePoints")?.checked ?? true;
   window.__gwState.dynamicINatEnabled = $("toggleDynamicINat")?.checked ?? false;
   window.__gwState.showFog = $("toggleFog")?.checked ?? true;
+  window.__gwState.godsEyeEnabled = $("toggleGodsEye")?.checked ?? false;
   window.__gwState.lockToLocation = $("toggleLockLocation")?.checked ?? true;
 
   updateLegendText();
@@ -127,6 +127,7 @@
   "toggleHeat",
   "toggleDynamicINat",
   "toggleFog",
+  "toggleGodsEye",
   "toggleLockLocation"
 ].forEach(id => {
   $(id)?.addEventListener("change", () => {
@@ -198,6 +199,7 @@ function saveUIState() {
     showHeat: byId("toggleHeat")?.checked ?? true,
     dynamicINatEnabled: byId("toggleDynamicINat")?.checked ?? false,
     showFog: byId("toggleFog")?.checked ?? true,
+    godsEyeEnabled: byId("toggleGodsEye")?.checked ?? false,
     lockToLocation: byId("toggleLockLocation")?.checked ?? true,
     heatMetric: getSelectedHeatMetric()
     };
@@ -213,6 +215,7 @@ function applySavedUIState() {
   if (byId("toggleHeat"))         byId("toggleHeat").checked = s.showHeat ?? true;
   if (byId("toggleDynamicINat"))  byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
   if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? true;
+  if (byId("toggleGodsEye")) byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
 
   const metric = s.heatMetric ?? "count";

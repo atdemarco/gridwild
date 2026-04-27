@@ -1,4 +1,3 @@
-// js/mobilepanels.js
 // Mobile bottom-sheet content + lightweight wiring for GridWild
 
 window.__gwUser = window.__gwUser || {
@@ -36,6 +35,46 @@ window.__gwUser = window.__gwUser || {
         </div>
       </div>
 
+        <div class="gw-card">
+        <div class="gw-card-title">Exploration Map</div>
+        <div id="gwFogProgressBody">
+          Loading exploration progress...
+        </div>
+      </div>
+
+      <div class="gw-card">
+        <div class="gw-card-title">Recent Observations</div>
+
+        <button class="gw-mini-btn" id="gwRefreshRecentINatBtn">
+          Refresh Recent Observations
+        </button>
+
+        <div id="gwRecentINatProgress" style="display:none;margin-top:12px;">
+          <div class="gw-muted" id="gwRecentINatProgressText" style="font-size:12px;margin-bottom:6px;">
+            Preparing download...
+          </div>
+
+          <div style="
+            height:12px;
+            border-radius:999px;
+            overflow:hidden;
+            background:rgba(255,255,255,0.08);
+            border:1px solid rgba(215,183,116,0.16);
+          ">
+            <div id="gwRecentINatProgressBar" style="
+              width:0%;
+              height:100%;
+              background:linear-gradient(90deg, rgba(140,110,54,0.95), rgba(240,209,138,0.98));
+              transition:width 160ms ease;
+            "></div>
+          </div>
+        </div>
+
+        <div id="gwRecentINatList" style="margin-top:12px;">
+          <div class="gw-muted">No recent observations loaded yet.</div>
+        </div>
+      </div>
+
       <div class="gw-card">
         <div class="gw-card-title">Field Progress</div>
         <div id="gwUserProgressBody">
@@ -49,8 +88,224 @@ window.__gwUser = window.__gwUser || {
           Loading collection stats...
         </div>
       </div>
+
+      <div id="gwUserProfileBody">
+        Loading explorer profile...
+      </div>
+    </div>
+
+    ${window.GridWildOutfitter ? window.GridWildOutfitter.renderButtonHtml() : ""}
     `;
   }
+
+
+function getRecentObsGenus(o) {
+  if (o?.genus_name) return o.genus_name;
+
+  const sci = String(o?.scientific_name || "").trim();
+  const m = sci.match(/^([A-Z][a-zA-Z-]+)(?:\s|$)/);
+  if (m) return m[1];
+
+  return "";
+}
+
+function renderRecentINatList() {
+  const el = document.getElementById("gwRecentINatList");
+  if (!el) return;
+
+  const obs = window.GridWildRecentINat?.getRecentObservations?.() || [];
+
+  if (!obs.length) {
+    el.innerHTML = `<div class="gw-muted">No recent observations loaded yet.</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="gw-list">
+      ${obs.slice(0, 30).map(o => {
+        const genus = getRecentObsGenus(o);
+        const displayName = o.taxon || o.common_name || o.scientific_name || "Unknown taxon";
+        const sci = o.scientific_name || "";
+
+        return `
+          <div
+            class="gw-rowline gw-genus-open-row"
+            data-genus="${escapeHtmlLocal(genus)}"
+            style="cursor:${genus ? "pointer" : "default"};"
+          >
+            <span style="min-width:0;">
+              <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                ${escapeHtmlLocal(displayName)}
+              </span>
+
+              <span class="gw-muted" style="font-size:11px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                ${escapeHtmlLocal(sci || "no scientific name")} · ${escapeHtmlLocal(o.observed_on || "unknown date")} · ±${Math.round(o.accuracy)}m
+              </span>
+            </span>
+
+            <span
+              class="gw-codex-link"
+              title="${genus ? "Open genus codex" : "No genus available"}"
+            >
+              ${genus ? `<span>${escapeHtmlLocal(genus)}</span><span class="gw-codex-chevron">›</span>` : "—"}
+            </span>
+          </div>
+        `;
+      }).join("")}
+    </div>
+
+    ${obs.length > 30 ? `
+      <div class="gw-muted" style="font-size:11px;margin-top:8px;">
+        Showing 30 of ${formatNum(obs.length)} cached recent observations.
+      </div>
+    ` : ""}
+  `;
+
+  el.querySelectorAll(".gw-genus-open-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const genus = row.dataset.genus || "";
+      if (!genus) return;
+      window.GridWildGenusCodex?.open?.(genus);
+    });
+  });
+}
+
+function bindRecentINatButton() {
+  const btn = document.getElementById("gwRefreshRecentINatBtn");
+  if (!btn) return;
+
+  btn.onclick = async () => {
+    if (!window.GridWildRecentINat) {
+      alert("Recent iNaturalist sync is not loaded.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Downloading...";
+
+    try {
+      await window.GridWildRecentINat.refreshRecentObservations(
+        window.__gwUser?.username || "andrew2285"
+      );
+
+      renderFogProgress();
+      renderRecentINatList();
+    } catch (err) {
+      console.warn("Recent iNat refresh failed:", err);
+      alert(`Could not refresh recent observations: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Refresh Recent Observations";
+    }
+  };
+}
+
+function updateRecentINatProgressUI(detail) {
+  const wrap = document.getElementById("gwRecentINatProgress");
+  const bar = document.getElementById("gwRecentINatProgressBar");
+  const text = document.getElementById("gwRecentINatProgressText");
+
+  if (!wrap || !bar || !text) return;
+
+  wrap.style.display = detail.status === "done" ? "none" : "block";
+
+  const pct = Number.isFinite(Number(detail.pct))
+    ? Math.max(0, Math.min(100, Number(detail.pct)))
+    : Math.min(95, (Number(detail.page || 0) / 10) * 100);
+
+  bar.style.width = `${pct}%`;
+
+  text.textContent =
+    `Page ${detail.page || 0} · accepted ${detail.accepted || 0} · rejected ${detail.rejected || 0}`;
+}
+
+function escapeHtmlLocal(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function clearExploredSquaresCache() {
+  if (!window.GridWildFog?.clearAllFogProgress) {
+    alert("Exploration cache is not available yet.");
+    return;
+  }
+
+  const stats = window.GridWildFog.getStats?.();
+  const n = Number(stats?.storedCells || 0);
+
+  const ok = confirm(
+    `Clear explored-square cache? This will forget ${n.toLocaleString()} explored cells on this device.`
+  );
+  if (!ok) return;
+
+  window.GridWildFog.clearMovementExploration();
+
+  // Reset God’s Eye movement debounce so it can immediately repaint from the current center.
+  if (window.__gwState) {
+    window.__gwState.lastGodsEyeCenterKey = null;
+  }
+
+  if (typeof window.updateGrid === "function") {
+    window.updateGrid();
+  }
+
+  if (window.GridWildFogCanvas) {
+    window.GridWildFogCanvas.scheduleRender();
+  }
+
+  if (typeof renderFogProgress === "function") {
+    renderFogProgress();
+  }
+
+  if (typeof window.refreshGridWildMobileInfo === "function") {
+    window.refreshGridWildMobileInfo();
+  }
+}
+
+function renderFogProgress() {
+  const el = document.getElementById("gwFogProgressBody");
+  if (!el) return;
+
+  if (!window.GridWildFog) {
+    el.innerHTML = `<div class="gw-muted">Exploration map not available yet.</div>`;
+    return;
+  }
+
+  const stats = window.GridWildFog.getStats();
+
+  el.innerHTML = `
+    <div class="gw-list">
+      <div class="gw-rowline">
+        <span>Surveyed cells</span>
+        <span class="gw-muted">${formatNum(stats.surveyed)}</span>
+      </div>
+
+      <div class="gw-rowline">
+        <span>Documented cells</span>
+        <span class="gw-muted">${formatNum(stats.documented)}</span>
+      </div>
+
+      <div class="gw-rowline">
+        <span>Fading cells</span>
+        <span class="gw-muted">${formatNum(stats.expired)}</span>
+      </div>
+
+      <div class="gw-rowline">
+        <span>Total explored memory</span>
+        <span class="gw-muted">${formatNum(stats.storedCells)}</span>
+      </div>
+    </div>
+
+    <div class="gw-muted" style="font-size:11px;line-height:1.35;margin-top:10px;">
+      Walking into a cell surveys it temporarily. Making an observation documents it permanently.
+    </div>
+  `;
+}
+
 
 function renderInfoContent() {
   return `
@@ -105,26 +360,65 @@ function renderInfoContent() {
     `;
   }
 
+
   function renderQuestContent() {
-    return `
-      <div class="gw-card">
-        <div class="gw-card-title">Today’s quests</div>
-        <div class="gw-list">
-          <div class="gw-rowline"><span>Find a yellow flower</span><span class="gw-muted">+10 XP</span></div>
-          <div class="gw-rowline"><span>Observe a fly species</span><span class="gw-muted">+15 XP</span></div>
-          <div class="gw-rowline"><span>New taxon in this square</span><span class="gw-muted">+40 XP</span></div>
-        </div>
+  const dailyHtml = window.GridWildQuests
+    ? window.GridWildQuests.renderDailyQuestsHtml()
+    : `<div class="gw-muted">Daily quests loading...</div>`;
+
+  const questListHtml = window.GridWildQuests
+    ? window.GridWildQuests.renderQuestListHtml()
+    : `<div class="gw-muted">Quest system loading...</div>`;
+
+  return `
+    <div class="gw-card">
+      <div class="gw-card-title">Quest Generator</div>
+
+      <div class="gw-muted" style="font-size:12px;line-height:1.35;margin-bottom:10px;">
+        Generate a field quest from recipe ingredients: target location, taxon flavor,
+        objective, difficulty, timeframe, evidence, and optional campaign.
       </div>
 
-      <div class="gw-card">
-        <div class="gw-card-title">Streak</div>
-        <div class="gw-rowline"><span>Observe today</span><span class="gw-muted">9-day streak</span></div>
+      <button class="gw-mini-btn" id="gwGenerateQuestBtn">
+        Generate Quest
+      </button>
+
+      <button class="gw-mini-btn" id="gwExploreCampaignsBtn" style="margin-left:8px;">
+        Explore Campaigns
+      </button>
+    </div>
+
+    <div class="gw-card">
+      <div class="gw-card-title">Today's Quests</div>
+      <div id="gwDailyQuestListBody">
+        ${dailyHtml}
       </div>
-    `;
-  }
+    </div>
+
+    <div class="gw-card">
+      <div class="gw-card-title">Current and Prior Quests</div>
+      <div id="gwQuestListBody">
+        ${questListHtml}
+      </div>
+    </div>
+  `;
+}
 
   function renderLegendContent() {
     return `
+      
+      <div class="gw-card">
+        <div class="gw-card-title">Help</div>
+
+        <button class="gw-help-row" id="gwReplayWelcomeBtn">
+          🌎 Welcome tutorial
+        </button>
+
+        <button class="gw-help-row" id="gwReplayTourBtn">
+          🧭 Control tour
+        </button>
+      </div>
+
       <div class="gw-card">
         <div class="gw-legend-title">How to read the overlay</div>
         <div class="gw-legend-subtitle">
@@ -182,6 +476,17 @@ function renderInfoContent() {
             <input type="checkbox" id="toggleFog_clone" checked />
             <span>Fog of war</span>
           </label>
+
+          <div class="gw-toggleline gw-godseye-row">
+            <label class="gw-toggleline gw-godseye-label">
+              <input type="checkbox" id="toggleGodsEye_clone" />
+              <span>God’s Eye</span>
+            </label>
+
+            <button class="gw-mini-btn gw-clear-fog-btn" id="gwClearFogCacheBtn" type="button">
+              clear cache
+            </button>
+          </div>
 
           <label class="gw-toggleline">
             <input type="checkbox" id="toggleLockLocation_clone" checked />
@@ -603,10 +908,14 @@ function renderInfoContent() {
   }
 }
 
-  window.refreshGridWildMePanel = function refreshGridWildMePanel() {
-    bindUserSettingsButton();
-    loadINatUserProfileIntoPanel();
-  };
+window.refreshGridWildMePanel = function refreshGridWildMePanel() {
+  bindUserSettingsButton();
+  loadINatUserProfileIntoPanel();
+  renderFogProgress();
+  bindRecentINatButton();
+  renderRecentINatList();
+  window.GridWildOutfitter?.bind?.(document);
+};
 
   // --------------------------------------------------------------------------
   // Clone-control mirroring
@@ -701,6 +1010,7 @@ function renderInfoContent() {
       ["toggleHeat", "toggleHeat_clone"],
       ["toggleDynamicINat", "toggleDynamicINat_clone"],
       ["toggleFog", "toggleFog_clone"],
+      ["toggleGodsEye", "toggleGodsEye_clone"],
       ["toggleLockLocation", "toggleLockLocation_clone"]
     ].forEach(([realId, cloneId]) => {
       const real = $(realId);
@@ -728,19 +1038,59 @@ function renderInfoContent() {
     if (meBody) meBody.innerHTML = renderMeContent();
     if (infoBody) infoBody.innerHTML = renderInfoContent();
     if (communityBody) communityBody.innerHTML = renderCommunityContent();
-    if (questBody) questBody.innerHTML = renderQuestContent();
+    if (questBody) {
+      questBody.innerHTML = renderQuestContent();
+    }
+
+    if (questBody && window.GridWildQuests) {
+      window.GridWildQuests.bindQuestSheetControls(questBody);
+    }
+
     if (legendBody) legendBody.innerHTML = renderLegendContent();
 
     mirrorCheckbox("togglePoints", "togglePoints_clone");
     mirrorCheckbox("toggleHeat", "toggleHeat_clone");
     mirrorCheckbox("toggleDynamicINat", "toggleDynamicINat_clone");
     mirrorCheckbox("toggleFog", "toggleFog_clone");
+    mirrorCheckbox("toggleGodsEye", "toggleGodsEye_clone");
     mirrorCheckbox("toggleLockLocation", "toggleLockLocation_clone");
     mirrorHeatMetricRadios();
 
     setTimeout(() => {
+      if (window.GridWildQuests && questBody) {
+        window.GridWildQuests.bindQuestSheetControls(questBody);
+      }
       bindUserSettingsButton();
       loadINatUserProfileIntoPanel();
+
+      bindRecentINatButton();
+      renderRecentINatList();
+
+      
+      window.addEventListener("gwRecentINatProgress", (e) => {
+        updateRecentINatProgressUI(e.detail || {});
+      });
+
+      renderFogProgress();
+
+      const tut1 = document.getElementById("gwReplayWelcomeBtn");
+      if (tut1) {
+        tut1.onclick = () => {
+          if (window.GridWildOnboarding) {
+            window.GridWildOnboarding.reset();
+          }
+        };
+      }
+
+      const tut2 = document.getElementById("gwReplayTourBtn");
+      if (tut2) {
+        tut2.onclick = () => {
+          if (window.GridWildOnboarding) {
+            window.GridWildOnboarding.launchTour();
+          }
+        };
+      }
+
       buildTaxaCloneChecklist();
       syncCloneControlsFromReal();
   
@@ -760,6 +1110,13 @@ function renderInfoContent() {
         window.updateHudCladogram();
       }
 
+      window.GridWildOutfitter?.bind?.(document);
+
+      const clearFogBtn = document.getElementById("gwClearFogCacheBtn");
+      if (clearFogBtn) {
+        clearFogBtn.onclick = clearExploredSquaresCache;
+      }
+      
     }, 50);
   };
 

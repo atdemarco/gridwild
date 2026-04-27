@@ -28,7 +28,9 @@ window.__gwState = {
   stickyZoomEnabled: false,
   stickyZoomTolerance: 0.2,      // snap if released near target
   outsideViewZoomOffset: -1.25,   // optional "bigger view" when not stuck
-  stickyZoomAnimating: false
+  stickyZoomAnimating: false,
+  godsEyeEnabled: false,
+  lastGodsEyeCenterKey: null,
 
 
 };

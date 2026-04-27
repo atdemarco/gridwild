@@ -44,13 +44,32 @@
       pointer-events: none !important;
     }
 
-    
+        
     .gw-topbtn.is-locked {
-      color: #0f6a57;
-      border-color: rgba(15,106,87,0.34);
+      color: #0b7a5d;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), transparent 28%),
+        linear-gradient(180deg, rgba(27,74,57,0.96), rgba(12,48,36,0.98));
+      border-color: rgba(80,220,170,0.45);
+
       box-shadow:
-        0 0 0 2px rgba(15,106,87,0.10),
-        0 6px 18px rgba(0,0,0,0.12);
+        0 0 0 2px rgba(30,220,160,0.14),
+        0 8px 22px rgba(0,0,0,0.24),
+        inset 0 1px 0 rgba(255,255,255,0.08);
+
+      color: #d8fff2;
+    }
+
+    .gw-topbtn.is-locked::after {
+      content: "🔒";
+      position: absolute;
+      right: -4px;
+      bottom: -4px;
+      font-size: 11px;
+      line-height: 1;
+      background: #10251d;
+      border-radius: 999px;
+      padding: 2px;
     }
 
     .gw-topbtn svg {
@@ -60,6 +79,40 @@
       stroke-linecap: round;
       stroke-linejoin: round;
     }
+
+
+    .gw-codex-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+
+      font-style: italic;
+      font-weight: 900;
+      font-size: 12px;
+
+      color: rgba(240,209,138,0.98) !important;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.65);
+
+      padding: 4px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(240,209,138,0.28);
+      background: rgba(240,209,138,0.08);
+    }
+
+    .gw-codex-chevron {
+      font-style: normal;
+      font-size: 16px;
+      line-height: 1;
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .gw-genus-open-row:active .gw-codex-link {
+      background: rgba(240,209,138,0.18);
+      transform: translateY(1px);
+    }
+
 
     /* ------------------------------------------------------------------ */
     /* Top utility buttons                                                */
@@ -119,6 +172,48 @@
     .gw-topbtn:active {
       transform: translateY(1px) scale(0.98);
     }
+
+    .gw-topbtn {
+      position: relative;
+    }
+
+    .gps-health {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+
+      font-size: 12px;
+      font-weight: 900;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      border: 2px solid rgba(20,17,15,0.98);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      line-height: 1;
+      z-index: 3;
+    }
+
+        .gps-good {
+      background: #1f9d55;
+      color: white;
+    }
+
+    .gps-bad {
+      background: #d97706;
+      color: white;
+    }
+
+    .gps-unknown {
+      background: #6b7280;
+      color: white;
+    }
+
 
     /* ------------------------------------------------------------------ */
     /* Bottom nav                                                         */
@@ -429,6 +524,142 @@
       font-weight: 700;
       cursor: pointer;
     }
+
+.gw-shop-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.gw-shop-product {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(215,183,116,0.18);
+  background: linear-gradient(180deg, rgba(57,48,39,0.92), rgba(34,28,23,0.94));
+  box-shadow: 0 6px 18px rgba(0,0,0,0.20);
+}
+
+.gw-shop-img {
+  width: 92px;
+  height: 92px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(215,183,116,0.20);
+  background: rgba(0,0,0,0.18);
+}
+
+.gw-shop-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gw-shop-placeholder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.7px;
+  color: rgba(240,209,138,0.62);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.05), rgba(0,0,0,0.10)),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(240,209,138,0.06),
+      rgba(240,209,138,0.06) 6px,
+      transparent 6px,
+      transparent 12px
+    );
+}
+
+.gw-shop-name {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--gw-jrpg-ink);
+  line-height: 1.15;
+}
+
+.gw-shop-campaign {
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: rgba(240,209,138,0.82);
+}
+
+.gw-shop-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--gw-jrpg-muted);
+}
+
+.gw-shop-buyrow {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gw-shop-price,
+.gw-shop-total {
+  font-weight: 900;
+  color: #f4e8cf;
+}
+
+.gw-shop-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.gw-shop-stepper .gw-mini-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.gw-shop-qty {
+  min-width: 18px;
+  text-align: center;
+  font-weight: 900;
+}
+
+.gw-shop-checkout {
+  width: 100%;
+  margin-top: 12px;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.gw-godseye-row {
+  justify-content: space-between;
+}
+
+.gw-godseye-label {
+  margin: 0;
+}
+
+.gw-clear-fog-btn {
+  padding: 5px 8px;
+  font-size: 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+@media (min-width: 700px) {
+  .gw-shop-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
 
     .gw-togglegrid {
       display: grid;
@@ -905,6 +1136,18 @@
     radial-gradient(circle at 78% 84%, rgba(255,255,255,0.018) 0, transparent 20%);
 }
 
+  .gw-help-row{
+    width:100%;
+    margin-top:10px;
+    padding:14px 16px;
+    border-radius:16px;
+    border:1px solid rgba(240,207,132,.45);
+    background:rgba(36,52,36,.92);
+    color:#ffe7a3;
+    font-weight:800;
+    font-size:15px;
+    text-align:left;
+  }
   </style>
 </head>
 <body>
@@ -950,6 +1193,11 @@
       </label>
 
       <label class="gw-row">
+        <input type="checkbox" id="toggleGodsEye" />
+        <span>God’s Eye</span>
+      </label>
+
+      <label class="gw-row">
         <input type="checkbox" id="toggleLockLocation" checked />
         <span>Lock to current location</span>
       </label>
@@ -985,6 +1233,7 @@
           <path d="M12 3v3M12 18v3M3 12h3M18 12h3"></path>
           <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>
         </svg>
+        <span id="gpsHealthIcon" class="gps-health gps-unknown">?</span>
       </button>
     </div>
   </div>
@@ -1123,19 +1372,28 @@
   </script>
 
   <script src="js/mapinit.js"></script>
+  <script src="js/gw-overview-map.js"></script>
   <script src="js/initgrid.js"></script>
+  <script src="js/gw-fog.js"></script>
+  <script src="js/gw-fog-canvas.js"></script>
+  <script src="js/gw-inat-recent.js"></script>
+
   <script src="js/inatscatter.js"></script>
   <!-- <script src="js/osmoverlay.js"></script> -->
   <script src="js/location.js"></script>
   <script src="js/sidebar.js"></script>
+  <script src="js/gw-outfitter.js"></script>
   <script src="js/mobilepanels.js"></script>
+  <script src="js/gw-quests.js"></script>
+  <script src="js/gw-quest-layer.js"></script>
+  <script src="js/gw-onboarding.js"></script>
+  <script src="js/gw-genus-codex.js"></script>
 
   <script>
     // --------------------------------------------------------------------
     // Bottom sheets
     // --------------------------------------------------------------------
     const gwBackdrop = document.getElementById("gwBackdrop");
-
     
     const sheets = {
       me: document.getElementById("sheetMe"),
@@ -1164,26 +1422,42 @@
     dot.hidden = !visible;
   }
 
-    setQuestBadge(true); // demo...
+function refreshQuestBadge() {
+  const hasActiveQuest = !!window.__gwState?.activeQuestId;
+  setQuestBadge(hasActiveQuest);
+}
+
+setQuestBadge(false);
+window.refreshQuestBadge = refreshQuestBadge;
    
   function openSheet(name) {
-      closeAllSheets();
-      const sheet = sheets[name];
-      if (!sheet) return;
+    closeAllSheets();
+    const sheet = sheets[name];
+    if (!sheet) return;
 
-      sheet.classList.add("is-open");
-      gwBackdrop.classList.add("is-open");
+    sheet.classList.add("is-open");
+    gwBackdrop.classList.add("is-open");
 
-      if (navButtons[name]) {
-        navButtons[name].classList.add("is-active");
-      }
+    if (navButtons[name]) {
+      navButtons[name].classList.add("is-active");
+    }
 
-      if (name === "info" || name === "legend") {
-        if (typeof window.refreshGridWildMobileInfo === "function") {
-          window.refreshGridWildMobileInfo();
-        }
+    if (name === "info" || name === "legend") {
+      if (typeof window.refreshGridWildMobileInfo === "function") {
+        window.refreshGridWildMobileInfo();
       }
     }
+
+    if (name === "quest" && window.GridWildQuests) {
+      window.GridWildQuests.renderQuestListIntoPage();
+
+      const questBody = document.getElementById("sheetQuestBody");
+      if (questBody) {
+        window.GridWildQuests.bindQuestSheetControls(questBody);
+      }
+    }
+
+  }
 
 
     const sheetOrder = ["me", "info", "community", "quest"];
@@ -1301,11 +1575,32 @@
       cameraInput.click();
     });
 
-    cameraInput.addEventListener("change", () => {
-      if (cameraInput.files && cameraInput.files.length > 0) {
-        alert("Captured image ready. Next step: wire this into iNaturalist create-observation flow.");
-      }
+cameraInput.addEventListener("change", () => {
+  if (!cameraInput.files || cameraInput.files.length === 0) return;
+
+  if (typeof lastFix === "undefined" || !lastFix) {
+    alert("Captured image ready, but no GPS fix is available yet.");
+    return;
+  }
+
+  const key = window.getCellKeyForLatLng(
+    lastFix.latitude,
+    lastFix.longitude
+  );
+
+  if (window.GridWildFog) {
+    window.GridWildFog.markObserved(key, {
+      obsCountIncrement: 1,
+      speciesCountIncrement: 0
     });
+  }
+
+  if (typeof window.updateGrid === "function") {
+    window.updateGrid();
+  }
+
+  alert("Observation logged for this GridWild cell. Tile documented!");
+});
 
     // --------------------------------------------------------------------
     // Recenter

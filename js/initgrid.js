@@ -221,6 +221,65 @@ function getCenterMacroCellKeys() {
   return keys;
 }
 
+const GODS_EYE_TRANSIENT_RADIUS_CELLS = 5;
+
+function isGodsEyeTransientVisibleCell(key) {
+  if (!window.__gwState?.godsEyeEnabled) return false;
+
+  const parts = String(key).split(",");
+  if (parts.length !== 2) return false;
+
+  const ix = Number(parts[0]);
+  const iy = Number(parts[1]);
+  if (!Number.isFinite(ix) || !Number.isFinite(iy)) return false;
+
+  const center = getCenterFineCell();
+
+  const dx = ix - center.ix;
+  const dy = iy - center.iy;
+
+  return Math.sqrt(dx * dx + dy * dy) <= GODS_EYE_TRANSIENT_RADIUS_CELLS;
+}
+
+window.isGodsEyeTransientVisibleCell = isGodsEyeTransientVisibleCell;
+
+
+function markCenterMacroVisitedByGodsEye(force = false) {
+  const state = window.__gwState || {};
+  if (!state.godsEyeEnabled) return;
+  if (!window.GridWildFog || typeof window.GridWildFog.markVisited !== "function") return;
+
+  const center = getCenterFineCell();
+  const centerKey = `${center.ix},${center.iy}`;
+
+  if (!force && state.lastGodsEyeCenterKey === centerKey) return;
+
+  state.lastGodsEyeCenterKey = centerKey;
+
+  const timestamp = Date.now();
+  const keys = getCenterMacroCellKeys();
+
+
+
+  keys.forEach(key => {
+    window.GridWildFog.markVisited(key, timestamp);
+  });
+
+  if (window.GridWildFogCanvas) {
+    window.GridWildFogCanvas.scheduleRender();
+  }
+
+  if (typeof window.updateGrid === "function") {
+  window.updateGrid();
+  }
+
+  if (typeof window.refreshGridWildMobileInfo === "function") {
+    window.refreshGridWildMobileInfo();
+  }
+}
+
+window.markCenterMacroVisitedByGodsEye = markCenterMacroVisitedByGodsEye;
+
 function summarizeCenterMacroSquare() {
 
   const counts = window.__staticGridCounts;
@@ -286,6 +345,19 @@ function summarizeCenterMacroSquare() {
   };
 }
 
+
+function getCellKeyForLatLng(lat, lng) {
+  const p = map.options.crs.project(L.latLng(lat, lng));
+  const ix = Math.floor(p.x / GRID_SIZE_M);
+  const iy = Math.floor(p.y / GRID_SIZE_M);
+  return `${ix},${iy}`;
+}
+
+window.getCellKeyForLatLng = getCellKeyForLatLng;
+
+
+
+
 function getCenterSquareLabel() {
   const n = CENTER_MACRO_SIZE_CELLS;
   const widthFeet = Math.round((n * GRID_SIZE_M) / 0.3048);
@@ -343,22 +415,57 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
   if (!el) return;
 
   try {
-    const { ix, iy } = getCenterFineCell();
-    const squareRec = await getSquareGeneraRecord(ix, iy);
     const observerDict = await loadObserverDictionary();
+    const keys = getCenterMacroCellKeys();
 
-    const top = Array.isArray(squareRec?.top_observers)
-      ? squareRec.top_observers
-      : [];
+    const squareRecords = await Promise.all(
+      keys.map((key) => {
+        const [ixStr, iyStr] = key.split(",");
+        return getSquareGeneraRecord(Number(ixStr), Number(iyStr));
+      })
+    );
 
-    if (!top.length) {
-      el.innerHTML = `<div class="gw-muted">No observer leaderboard for this square.</div>`;
+    const agg = new Map();
+
+    for (const rec of squareRecords) {
+      const top = Array.isArray(rec?.top_observers) ? rec.top_observers : [];
+
+      for (const row of top) {
+        const observerId = Number(row.observer_id);
+        if (!Number.isFinite(observerId)) continue;
+
+        if (!agg.has(observerId)) {
+          agg.set(observerId, {
+            observer_id: observerId,
+            count: 0,
+            species: 0
+          });
+        }
+
+        const dest = agg.get(observerId);
+        dest.count += Number(row.count || 0);
+
+        // approximate union would need raw taxon IDs, so for now keep max
+        dest.species = Math.max(dest.species, Number(row.species || 0));
+      }
+    }
+
+    const mergedTop = Array.from(agg.values())
+      .sort((a, b) =>
+        (b.count - a.count) ||
+        (b.species - a.species) ||
+        (a.observer_id - b.observer_id)
+      )
+      .slice(0, 5);
+
+    if (!mergedTop.length) {
+      el.innerHTML = `<div class="gw-muted">No observer leaderboard for this center 3×3 square.</div>`;
       return;
     }
 
     el.innerHTML = `
       <div class="gw-list">
-        ${top.slice(0, 5).map((row, idx) => {
+        ${mergedTop.map((row, idx) => {
           const meta = getObserverMeta(observerDict, row.observer_id) || {};
           const login = meta.login || `user ${row.observer_id}`;
           const name = meta.name || "";
@@ -409,7 +516,6 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
     el.innerHTML = `<div class="gw-muted">Could not load top observers.</div>`;
   }
 };
-
 
 function mergeSquareGeneraRecords(squareRecords) {
   const genusMap = new Map();
@@ -1005,7 +1111,14 @@ function bindCladogramInteractions() {
 
     const nextNode = findNodeByPath(state.fullTree, nodePath);
     if (!nextNode) return;
-    if (!nextNode.children || nextNode.children.length === 0) return;
+ 
+    if (!nextNode.children || nextNode.children.length === 0) {
+    const genusName = nextNode.name || nextNode.label || nextNode.genus_name || "";
+    if (genusName && window.GridWildGenusCodex) {
+      window.GridWildGenusCodex.open(genusName);
+    }
+    return;
+   }
 
     state.pathStack = state.pathStack || [];
     state.pathStack.push(state.currentNodePath || "root");
@@ -1363,9 +1476,7 @@ function updateGridHeat(results) {
 
       const key = `${ix},${iy}`;
       const metrics = counts.get(key) || null;
-//      const value = getHeatValueForCell(metrics);
-//      const style = countToFill(value);
-const style = metricsToFill(metrics);
+      const style = metricsToFill(metrics);
 
       if (!style) continue; // 0 obs => transparent => skip drawing
 
@@ -1406,10 +1517,15 @@ function updateGridLines() {
 
 // this now renders the static assets
 function updateGrid() {
+  markCenterMacroVisitedByGodsEye();
   updateGridLines();
   updateStaticGridHeat();
     if (typeof window.updateHudCenterSummary === "function") {
     window.updateHudCenterSummary();
+  }
+
+  if (typeof window.updateTopObserversPanel === "function") {
+    window.updateTopObserversPanel();
   }
 
   if (typeof window.updateHudCladogram === "function") {
@@ -1870,7 +1986,6 @@ function updateStaticGridHeat() {
   gridShimmerLayer.clearLayers();
 
   const fogOn = window.__gwState?.showFog ?? true;
-  const centerCell = getCurrentUserCellIndices();
 
   const counts = window.__staticGridCounts;
   if (!(counts instanceof Map) || counts.size === 0) return;
@@ -1881,21 +1996,63 @@ function updateStaticGridHeat() {
     for (let y = startY; y < endY; y += GRID_SIZE_M) {
       const ix = Math.floor(x / GRID_SIZE_M);
       const iy = Math.floor(y / GRID_SIZE_M);
+      const key = `${ix},${iy}`;
 
-      if (fogOn && centerCell) {
-        if (!isWithinFogRadius(ix, iy, centerCell.ix, centerCell.iy, FOG_RADIUS_CELLS)) {
+      const metrics = counts.get(key) || null;
+      const baseStyle = metricsToFill(metrics);
+
+      const sw = map.options.crs.unproject(L.point(x, y));
+      const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
+
+      // ------------------------------------------------------------------
+      // Three-layer fog logic
+      // ------------------------------------------------------------------
+      let fogState = null;
+
+      const godsEyeTransientVisible =
+      typeof window.isGodsEyeTransientVisibleCell === "function" &&
+      window.isGodsEyeTransientVisibleCell(key);
+
+      if (fogOn && window.GridWildFog) {
+        fogState = window.GridWildFog.getCellFogState(key);
+
+        // Unknown / expired cells stay hidden unless temporarily visible through God’s Eye.
+        if (
+          !godsEyeTransientVisible &&
+          (fogState.state === "unknown" || fogState.state === "expired")
+        ) {
           continue;
         }
       }
 
-      const key = `${ix},${iy}`;
-      const metrics = counts.get(key) || null;
+      // If no biodiversity heat exists, skip unless fog is doing something
+      if (!baseStyle) continue;
 
-      const style = metricsToFill(metrics);
-      if (!style) continue;
+      let style = { ...baseStyle };
 
-      const sw = map.options.crs.unproject(L.point(x, y));
-      const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
+      // Add eye of god?
+      if (godsEyeTransientVisible && fogState?.state !== "documented") {
+        style.fillOpacity = Math.max(
+          Number(baseStyle.fillOpacity || 0.25),
+          0.28
+        );
+      }
+
+      // Surveyed cells are visible but slightly misted/faded over time
+      if (fogOn && fogState?.state === "surveyed") {
+        style.fillOpacity = Math.max(
+          0.08,
+          Number(baseStyle.fillOpacity || 0.25) * fogState.reveal
+        );
+      }
+
+      // Documented cells get a stronger permanent “known land” treatment
+      if (fogOn && fogState?.state === "documented") {
+        style.fillOpacity = Math.min(
+          0.92,
+          Number(baseStyle.fillOpacity || 0.35) + 0.12
+        );
+      }
 
       L.rectangle([sw, ne], {
         ...HEAT_TILE_STYLE_BASE,
@@ -1903,9 +2060,49 @@ function updateStaticGridHeat() {
       }).addTo(gridHeatLayer);
 
       drawShimmerOverlayForCell(sw, ne, metrics);
+
+      // Optional gold outline for documented cells
+      if (fogOn && fogState?.state === "documented") {
+        L.rectangle([sw, ne], {
+          pane: "gridHeatPane",
+          interactive: false,
+          fill: false,
+          color: "rgba(240, 209, 138, 0.72)",
+          weight: 1.2,
+          opacity: 0.8
+        }).addTo(gridHeatLayer);
+      }
     }
   }
-} 
+
+  if (window.GridWildFogCanvas) {
+    window.GridWildFogCanvas.scheduleRender();
+  }
+}
+
+
+window.testDocumentCurrentCell = function () {
+  if (typeof lastFix === "undefined" || !lastFix) {
+    console.warn("No GPS fix yet.");
+    return;
+  }
+
+  const key = window.getCellKeyForLatLng(lastFix.latitude, lastFix.longitude);
+
+  if (window.GridWildFog) {
+    window.GridWildFog.markObserved(key, {
+      obsCountIncrement: 1,
+      speciesCountIncrement: 1
+    });
+  }
+
+  if (typeof window.updateGrid === "function") {
+    window.updateGrid();
+  }
+
+  console.log("Documented current cell:", key);
+};
+
 
 function latLngToDisplayCellKey(lat, lng) {
   const p = map.options.crs.project(L.latLng(lat, lng));
@@ -1942,6 +2139,14 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
   const enteredNewCell = force || (cellKey !== state.lastUserCellKey);
   state.lastUserCellKey = cellKey;
 
+  if (enteredNewCell && window.GridWildFog) {
+    window.GridWildFog.markVisited(cellKey);
+  }
+
+  if (enteredNewCell && window.GridWildFogCanvas) {
+    window.GridWildFogCanvas.scheduleRender();
+  }
+
   if (autoCenterAllowed) {
     const targetZoom = state.lockZoom ?? 19;
     const currentZoom = map.getZoom();
@@ -1966,7 +2171,10 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
     if (typeof window.updateHudCenterSummary === "function") {
       window.updateHudCenterSummary();
     }
-
+    
+    if (typeof window.updateTopObserversPanel === "function") {
+      window.updateTopObserversPanel();
+    }
     if (typeof window.updateHudCladogram === "function") {
       window.updateHudCladogram();
     }

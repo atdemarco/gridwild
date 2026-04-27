@@ -25,6 +25,7 @@ function updateUserMarkerHeading(headingDeg = 0) {
 }
 
 function setUserLocation(lat, lng, accuracyMeters) {
+      updateGpsHealthBadge(accuracyMeters);
       const latlng = [lat, lng];
 
       if (!userMarker) {
@@ -45,36 +46,66 @@ function setUserLocation(lat, lng, accuracyMeters) {
         accuracyCircle.setRadius(Math.max(accuracyMeters || 0, 5));
       }
 
+
+
      // const zoom = map.getZoom();
-//const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
+      //const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
 
-const zoom = map.getZoom();
-const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
+      const zoom = map.getZoom();
+      const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
 
-const metersPerPixel = getMapResolution();
-const cellMeters = 20 * 0.3048; // same constant used in grid code
-const cellPixels = (cellMeters / metersPerPixel).toFixed(0);
+      const metersPerPixel = getMapResolution();
+      const cellMeters = 20 * 0.3048; // same constant used in grid code
+      const cellPixels = (cellMeters / metersPerPixel).toFixed(0);
 
-hud.innerHTML =
-  `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m)
-   <span style="opacity:.65"> <br>Zoom ×${zoomMultiplier}
-   • ${metersPerPixel.toFixed(2)} m/px
-   • cell ≈ ${cellPixels}px
-   </span>`;
+      hud.innerHTML =
+        `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m)
+        <span style="opacity:.65"> <br>Zoom ×${zoomMultiplier}
+        • ${metersPerPixel.toFixed(2)} m/px
+        • cell ≈ ${cellPixels}px
+        </span>`;
 
-
-//hud.textContent =
- // `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m) • Zoom ×${zoomMultiplier}`;
-
-// original hud text :)  
-//      hud.textContent =
- //       `Lat: ${Math.round(lat.toFixed(6),4)}, Lng: ${Math.round(lng.toFixed(6),4)} (±${Math.round(accuracyMeters)} m)`;
+        if (window.GridWildOverviewMap) {
+          window.GridWildOverviewMap.updateUserLocation(lat, lng, accuracyMeters);
+        }
     }
 
 // Geolocation
 let lastFix = null;
 let lastHeading = null;   // degrees, 0 = north
 
+const GPS_GOOD_THRESHOLD_M = 20;
+
+function updateGpsHealthBadge(accuracyMeters) {
+  const badge = document.getElementById("gpsHealthIcon");
+  if (!badge) return;
+
+  badge.classList.remove("gps-good", "gps-bad", "gps-unknown");
+
+  const n = Number(accuracyMeters);
+
+  if (!Number.isFinite(n)) {
+    badge.classList.add("gps-unknown");
+    badge.textContent = "?";
+    badge.title = "GPS accuracy unknown";
+    window.__gwGpsHealthy = false;
+    return;
+  }
+
+  if (n <= GPS_GOOD_THRESHOLD_M) {
+    badge.classList.add("gps-good");
+    badge.textContent = "✓";
+    badge.title = `GPS healthy: ±${Math.round(n)} m`;
+    window.__gwGpsHealthy = true;
+  } else {
+    badge.classList.add("gps-bad");
+    badge.textContent = "!";
+    badge.title = `GPS weak: ±${Math.round(n)} m. Too imprecise for reliable grid-square credit.`;
+    window.__gwGpsHealthy = false;
+  }
+
+  window.__gwLastGpsAccuracy = n;
+}
 
 function requestLocationOnce() {
   if (!("geolocation" in navigator)) {
