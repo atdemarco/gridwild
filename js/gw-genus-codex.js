@@ -764,6 +764,6 @@
   };
 
     // Intentionally lazy-loaded. The Codex JSON batches are large, so defer them
-  // until the user actually opens a Codex view.
+    // until the user actually opens a Codex view.
 
 })();

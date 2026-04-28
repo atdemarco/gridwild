@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <link rel="icon" href="favicon.ico">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>GridWild</title>
 
@@ -1377,14 +1378,21 @@
   <script src="js/gw-fog.js"></script>
   <script src="js/gw-fog-canvas.js"></script>
   <script src="js/gw-inat-recent.js"></script>
+  
+  <script src="js/gw-quest-evidence.js"></script>
 
   <script src="js/inatscatter.js"></script>
   <!-- <script src="js/osmoverlay.js"></script> -->
   <script src="js/location.js"></script>
   <script src="js/sidebar.js"></script>
+  
+  <script src="js/gw-draft-observations.js"></script>
+  <script src="js/gw-observation-editor.js"></script>
+
   <script src="js/gw-outfitter.js"></script>
   <script src="js/mobilepanels.js"></script>
   <script src="js/gw-quests.js"></script>
+  <script src="js/gw-campaign-designer.js"></script>
   <script src="js/gw-quest-layer.js"></script>
   <script src="js/gw-onboarding.js"></script>
   <script src="js/gw-genus-codex.js"></script>
@@ -1565,42 +1573,33 @@ window.refreshQuestBadge = refreshQuestBadge;
       document.getElementById("legendPill")
       .addEventListener("click", () => toggleSheet("legend"));  
 
-    // --------------------------------------------------------------------
-    // Camera placeholder
-    // --------------------------------------------------------------------
-    const btnCamera = document.getElementById("btnCamera");
-    const cameraInput = document.getElementById("cameraInput");
+      // --------------------------------------------------------------------
+      // Camera → Draft Observation workflow
+      // --------------------------------------------------------------------
+      const btnCamera = document.getElementById("btnCamera");
+      const cameraInput = document.getElementById("cameraInput");
 
-    btnCamera.addEventListener("click", () => {
-      cameraInput.click();
-    });
+      btnCamera.addEventListener("click", () => {
+        window.GridWildDraftObservations?.startCaptureForNewObservation?.();
+      });
 
-cameraInput.addEventListener("change", () => {
-  if (!cameraInput.files || cameraInput.files.length === 0) return;
+      cameraInput.addEventListener("change", async () => {
+        if (!cameraInput.files || cameraInput.files.length === 0) return;
 
-  if (typeof lastFix === "undefined" || !lastFix) {
-    alert("Captured image ready, but no GPS fix is available yet.");
-    return;
-  }
+        try {
+          await window.GridWildDraftObservations.addFilesToActiveDraft(cameraInput.files);
+          cameraInput.value = "";
 
-  const key = window.getCellKeyForLatLng(
-    lastFix.latitude,
-    lastFix.longitude
-  );
+          if (typeof window.initGridWildMobilePanels === "function") {
+            window.initGridWildMobilePanels();
+          }
 
-  if (window.GridWildFog) {
-    window.GridWildFog.markObserved(key, {
-      obsCountIncrement: 1,
-      speciesCountIncrement: 0
-    });
-  }
-
-  if (typeof window.updateGrid === "function") {
-    window.updateGrid();
-  }
-
-  alert("Observation logged for this GridWild cell. Tile documented!");
-});
+          window.GridWildObservationEditor?.openActiveDraft?.();
+        } catch (err) {
+          console.warn("Draft photo capture failed:", err);
+          alert(`Could not add photo: ${err.message}`);
+        }
+      });
 
     // --------------------------------------------------------------------
     // Recenter

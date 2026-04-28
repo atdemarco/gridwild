@@ -343,6 +343,7 @@ function embarkQuest(questId) {
 
   saveQuests(quests);
   renderQuestListIntoPage();
+  window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
   window.refreshQuestBadge?.();
 
   if (activeQuest && window.GridWildQuestLayer) {
@@ -377,6 +378,7 @@ function archiveQuest(questId) {
   saveQuests(quests);
   renderQuestListIntoPage();
   window.refreshQuestBadge?.();
+  window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
 }
 
 function openQuestArchive() {
@@ -849,6 +851,11 @@ function startQuestFromRecipe(recipe, options = {}) {
   }
 
   function openQuestStatus(questId) {
+
+    document
+      .querySelectorAll(".gw-quest-modal-backdrop")
+      .forEach(el => el.remove());
+
     injectStyles();
 
     const quest = loadQuests().find(q => q.id === questId);
@@ -905,10 +912,14 @@ function startQuestFromRecipe(recipe, options = {}) {
           </div>
         </div>
 
-        <div class="gw-quest-modal-subtitle" style="margin-top:14px;">
-          Placeholder mechanics: later this can validate against iNaturalist observations,
-          fog cells, top-observer territory, dark-diversity targets, and local rarity.
-        </div>
+        ${window.GridWildQuestEvidence
+          ? window.GridWildQuestEvidence.renderQuestEvidencePanel(quest)
+          : `
+            <div class="gw-quest-modal-subtitle" style="margin-top:14px;">
+              Evidence matching is not loaded yet.
+            </div>
+          `
+        }
 
         <div class="gw-quest-actions three">
         <button class="gw-quest-btn secondary" id="gwQuestCloseBtn">Close</button>
@@ -919,12 +930,17 @@ function startQuestFromRecipe(recipe, options = {}) {
     `;
 
     document.body.appendChild(root);
+    window.GridWildQuestEvidence?.bindQuestEvidencePanel?.(root, quest);
 
     root.addEventListener("click", evt => {
       if (evt.target === root) closeModal(root);
     });
 
-    root.querySelector("#gwQuestCloseBtn").onclick = () => closeModal(root);
+    root.querySelector("#gwQuestCloseBtn").onclick = () => {
+      document
+        .querySelectorAll(".gw-quest-modal-backdrop")
+        .forEach(el => el.remove());
+    };
 
     root.querySelector("#gwQuestEmbarkBtn").onclick = () => {
     embarkQuest(quest.id);
@@ -944,6 +960,8 @@ function startQuestFromRecipe(recipe, options = {}) {
     closeModal(root);
     renderQuestListIntoPage();
 
+    window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged")); // ????? RIGHT PLACE?
+
     if (window.GridWildQuestLayer) {
         window.GridWildQuestLayer.completeQuest(q || quest);
     }
@@ -952,6 +970,35 @@ function startQuestFromRecipe(recipe, options = {}) {
 
   function openQuestRecipeCreator() {
     injectStyles();
+
+    const savedCampaigns = window.GridWildCampaignDesigner?.loadCampaigns?.() || [];
+
+const allCampaignOptions = [
+  ...Object.values(CAMPAIGNS),
+  ...savedCampaigns
+];
+
+const campaignRadiosHtml = allCampaignOptions.map(c => `
+  <div class="gw-rowline">
+    <label style="display:flex;align-items:center;gap:8px;margin:0;">
+      <input
+        type="radio"
+        name="gwQuestCampaign"
+        value="${esc(c.id)}"
+        ${c.id === "none" ? "checked" : ""}
+      >
+      <span>${esc(c.name || "Untitled Campaign")}</span>
+    </label>
+
+    <button
+      class="gw-mini-btn gwCampaignInfoBtn"
+      data-campaign-id="${esc(c.id)}"
+      type="button"
+    >
+      Info
+    </button>
+  </div>
+`).join("");
 
     const root = document.createElement("div");
     root.className = "gw-quest-modal-backdrop";
@@ -1039,15 +1086,7 @@ function startQuestFromRecipe(recipe, options = {}) {
         <div class="gw-quest-field">
         <label>Campaign</label>
         <div id="gwQuestCampaignRadios">
-            ${Object.values(CAMPAIGNS).map(c => `
-            <div class="gw-rowline">
-                <label style="display:flex;align-items:center;gap:8px;margin:0;">
-                <input type="radio" name="gwQuestCampaign" value="${esc(c.id)}" ${c.id === "none" ? "checked" : ""}>
-                <span>${esc(c.name)}</span>
-                </label>
-                <button class="gw-mini-btn gwCampaignInfoBtn" data-campaign-id="${esc(c.id)}" type="button">Info</button>
-            </div>
-            `).join("")}
+            ${campaignRadiosHtml}
         </div>
         </div>
 
@@ -1279,8 +1318,16 @@ function openCampaignInfo(campaignId) {
 function openCampaignExplorer() {
   injectStyles();
 
+  const savedCampaigns = window.GridWildCampaignDesigner?.loadCampaigns?.() || [];
+  const fallbackCampaigns = Object.values(CAMPAIGNS).filter(c => c.id !== "none");
+
+  const campaignRows = savedCampaigns.length
+    ? savedCampaigns
+    : fallbackCampaigns;
+
   const root = document.createElement("div");
   root.className = "gw-quest-modal-backdrop";
+
   root.innerHTML = `
     <div class="gw-quest-modal">
       <div class="gw-quest-modal-title">Campaign Explorer</div>
@@ -1289,13 +1336,22 @@ function openCampaignExplorer() {
       </div>
 
       <div class="gw-list">
-        ${Object.values(CAMPAIGNS).filter(c => c.id !== "none").map(c => `
+        ${campaignRows.map(c => `
           <div class="gw-rowline gwCampaignExplorerRow" data-campaign-id="${esc(c.id)}" style="cursor:pointer;">
-            <span>
-              <span>${esc(c.name)}</span>
-              <span class="gw-muted" style="display:block;font-size:11px;">${esc(c.description)}</span>
+            <span style="min-width:0;">
+              <span>${esc(c.name || "Untitled Campaign")}</span>
+              <span class="gw-muted" style="display:block;font-size:11px;overflow:hidden;text-overflow:ellipsis;">
+                ${esc(c.description || "No description yet.")}
+              </span>
             </span>
-            <span class="gw-quest-pill">View</span>
+
+            <span style="display:flex;gap:6px;align-items:center;">
+              ${savedCampaigns.some(x => x.id === c.id)
+                ? `<button class="gw-mini-btn gwShowCampaignMapBtn" data-campaign-id="${esc(c.id)}" type="button">Map</button>`
+                : ""
+              }
+              <span class="gw-quest-pill">View</span>
+            </span>
           </div>
         `).join("")}
       </div>
@@ -1309,16 +1365,41 @@ function openCampaignExplorer() {
 
   document.body.appendChild(root);
 
-  root.onclick = evt => { if (evt.target === root) root.remove(); };
+  root.onclick = evt => {
+    if (evt.target === root) root.remove();
+  };
+
   root.querySelector("#gwCampaignExplorerClose").onclick = () => root.remove();
-  root.querySelector("#gwNewCampaignBtn").onclick = () => openNewCampaignConfigurator();
+
+  root.querySelector("#gwNewCampaignBtn").onclick = () => {
+    root.remove();
+    openNewCampaignConfigurator();
+  };
 
   root.querySelectorAll(".gwCampaignExplorerRow").forEach(row => {
     row.onclick = () => openCampaignInfo(row.dataset.campaignId);
   });
+
+  root.querySelectorAll(".gwShowCampaignMapBtn").forEach(btn => {
+    btn.onclick = evt => {
+      evt.stopPropagation();
+      window.GridWildCampaignDesigner?.showCampaignOnMap?.(btn.dataset.campaignId);
+      root.remove();
+    };
+  });
 }
 
+// OPEN FULL INTERFACE
 function openNewCampaignConfigurator() {
+  if (window.GridWildCampaignDesigner?.open) {
+    window.GridWildCampaignDesigner.open();
+    return;
+  }
+
+  alert("Campaign Designer module is not loaded. Check js/gw-campaign-designer.js in index.html.");
+}
+
+function openNewCampaignConfiguratorOLD() {
   injectStyles();
 
   const root = document.createElement("div");
