@@ -39,6 +39,12 @@
       body: "GridWild turns your neighborhood into a living map of biodiversity. Every square around you contains nature waiting to be observed."
     },
     {
+      type: "character",
+      emoji: "🧭",
+      title: "Create your field identity",
+      body: "Choose how other GridWild explorers will see you: your name, explorer type, icon, and field style."
+    },
+    {
       emoji: "📷",
       title: "Anything alive counts",
       body: "A blade of grass, a flower, a beetle, a tree, moss on a wall, a pigeon on a roof — all of it helps reveal the life around you."
@@ -265,8 +271,87 @@
     root.appendChild(card);
     document.body.appendChild(root);
 
+
+function renderCharacterCard() {
+  const c = splashCards[idx];
+  const character = window.GridWildCharacter?.load?.() || {
+    displayName: "New Wanderer",
+    archetype: "naturalist",
+    icon: "🌿",
+    color: "fern"
+  };
+
+  card.innerHTML = `
+    <div class="gw-splash-emoji">${c.emoji}</div>
+    <h1 class="gw-splash-title">${c.title}</h1>
+    <p class="gw-splash-body">${c.body}</p>
+
+    <div style="
+      margin:22px auto 10px;
+      width:100%;
+      max-width:320px;
+      border-radius:20px;
+      border:1px solid rgba(240,207,132,0.34);
+      background:rgba(0,0,0,0.16);
+      padding:14px;
+      box-sizing:border-box;
+      text-align:left;
+    ">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="
+          width:58px;height:58px;border-radius:18px;
+          display:flex;align-items:center;justify-content:center;
+          font-size:32px;
+          background:rgba(240,209,138,0.12);
+          border:1px solid rgba(240,209,138,0.26);
+        ">
+          ${character.icon || "🌿"}
+        </div>
+
+        <div>
+          <div style="font-size:18px;font-weight:950;color:#ffe7a3;">
+            ${character.displayName || "New Wanderer"}
+          </div>
+          <div style="font-size:12px;color:rgba(255,247,223,0.70);margin-top:3px;">
+            ${character.archetype || "naturalist"} · ${character.color || "fern"}
+          </div>
+        </div>
+      </div>
+
+      <button class="gw-onboard-btn secondary" id="gwOnboardEditCharacter" style="width:100%;margin-top:14px;">
+        Edit character
+      </button>
+    </div>
+
+    <div class="gw-splash-dots">
+      ${splashCards.map((_, i) => `<div class="gw-splash-dot ${i === idx ? "active" : ""}"></div>`).join("")}
+    </div>
+
+    <div class="gw-onboard-actions">
+      <button class="gw-onboard-btn secondary" id="gwOnboardSkip">Skip</button>
+      <button class="gw-onboard-btn primary" id="gwOnboardNext">Looks good</button>
+    </div>
+  `;
+
+  document.getElementById("gwOnboardEditCharacter").onclick = () => {
+    window.GridWildCharacter?.openEditor?.();
+  };
+
+  document.getElementById("gwOnboardSkip").onclick = finishAll;
+
+  document.getElementById("gwOnboardNext").onclick = () => {
+    idx++;
+    render();
+  };
+}
+
+
     function render() {
       const c = splashCards[idx];
+      if (c.type === "character") {
+        renderCharacterCard();
+        return;
+      }
 
       card.innerHTML = `
         <div class="gw-splash-emoji">${c.emoji}</div>

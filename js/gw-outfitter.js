@@ -7,7 +7,7 @@
     {
       id: "gw-backpack-ask",
       name: "GridWild Field Backpack",
-      campaign: "GridWild Core",
+      survey: "GridWild Core",
       price: 68,
       image: "",
       description: `Durable field backpack with rear text: “ASK ME WHAT I'M LOOKING FOR”.`
@@ -15,7 +15,7 @@
     {
       id: "gw-hat-core",
       name: "GridWild Survey Cap",
-      campaign: "GridWild Core",
+      survey: "GridWild Core",
       price: 28,
       image: "",
       description: "Low-profile field cap for walks, surveys, and casual ecological lurking."
@@ -23,15 +23,15 @@
     {
       id: "gw-patch-georgetown-ark",
       name: "Georgetown Ark Project Patch",
-      campaign: "Georgetown Ark Project",
+      survey: "Georgetown Ark Project",
       price: 9,
       image: "",
-      description: "Campaign patch for repping urban biodiversity and campus-scale conservation."
+      description: "Survey patch for repping urban biodiversity and campus-scale conservation."
     },
     {
       id: "gw-shirt-fog",
       name: "Fog of War Cleared Tee",
-      campaign: "GridWild Core",
+      survey: "GridWild Core",
       price: 34,
       image: "",
       description: "Soft field shirt for people who know every unmapped square is a dare."
@@ -39,10 +39,10 @@
     {
       id: "gw-bottle-wildsumaco",
       name: "WildSumaco Expedition Bottle",
-      campaign: "WildSumaco Research Station",
+      survey: "WildSumaco Research Station",
       price: 32,
       image: "",
-      description: "Campaign-branded water bottle for cloud forest walks and field days."
+      description: "Survey-branded water bottle for cloud forest walks and field days."
     }
   ];
 
@@ -83,7 +83,7 @@
 
         <div class="gw-shop-info">
           <div class="gw-shop-name">${escapeHtml(p.name)}</div>
-          <div class="gw-shop-campaign">${escapeHtml(p.campaign)}</div>
+          <div class="gw-shop-survey">${escapeHtml(p.survey)}</div>
           <div class="gw-shop-desc">${escapeHtml(p.description)}</div>
 
           <div class="gw-shop-buyrow">
@@ -134,7 +134,7 @@
       <div class="gw-card">
         <div class="gw-card-title">Outfitter</div>
         <div class="gw-muted" style="font-size:12px;line-height:1.4;">
-          Field gear and campaign merch for repping GridWild in the real world.
+          Field gear and survey merch for repping GridWild in the real world.
         </div>
       </div>
 
@@ -179,7 +179,7 @@
         <div class="gw-card">
           <div class="gw-card-title">Outfitter</div>
           <div class="gw-muted" style="font-size:12px;line-height:1.35;margin-bottom:10px;">
-            Physical GridWild gear, campaign patches, and field merch.
+            Physical GridWild gear, survey patches, and field merch.
           </div>
           <button class="gw-mini-btn" id="gwOpenOutfitterBtn">
             Open Outfitter

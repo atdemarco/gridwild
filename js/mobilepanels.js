@@ -25,21 +25,35 @@ window.__gwUser = window.__gwUser || {
       <div class="gw-card">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
           <div class="gw-card-title">Explorer Card</div>
-          <button class="gw-mini-btn" id="gwUserSettingsBtn" title="Change iNaturalist username">
-            ⚙ Account
-          </button>
-        </div>
+            <button class="gw-mini-btn" id="gwUserSettingsBtn" title="Change iNaturalist username">
+              ⚙ Account
+            </button>
+          </div>
 
         <div id="gwUserProfileBody">
           Loading explorer profile...
         </div>
+      </div>  
+
+      <div class="gw-card">
+      <div class="gw-card-title">GridWild Identity</div>
+      <div id="gwCharacterSummaryBody">
+        Loading character...
       </div>
 
-        <div class="gw-card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+        <button class="gw-mini-btn" id="gwOpenProfileBtn">Profile</button>
+        <button class="gw-mini-btn" id="gwOpenStoreBtn">Store</button>
+        <button class="gw-mini-btn" id="gwOpenInventoryBtn">Inventory</button>
+        <button class="gw-mini-btn" id="gwEditCharacterBtn">Edit Character</button>
+      </div>
+    </div>
+
+      <div class="gw-card">
         <div class="gw-card-title">Exploration Map</div>
-        <div id="gwFogProgressBody">
-          Loading exploration progress...
-        </div>
+          <div id="gwFogProgressBody">
+            Loading exploration progress...
+          </div>
       </div>
 
       <div class="gw-card">
@@ -96,11 +110,113 @@ window.__gwUser = window.__gwUser || {
         </div>
       </div>
 
-    </div>
-
-    ${window.GridWildOutfitter ? window.GridWildOutfitter.renderButtonHtml() : ""}
+    ${window.GridWildAchievements ? window.GridWildAchievements.renderButtonHtml() : ""}
     `;
   }
+ //  ${window.GridWildOutfitter ? window.GridWildOutfitter.renderButtonHtml() : ""}
+ 
+  function injectINatAccountStyles() {
+    if (document.getElementById("gwINatAccountStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "gwINatAccountStyles";
+    style.textContent = `
+      .gw-obs-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 99997;
+        background: rgba(8,12,10,0.72);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 14px;
+        box-sizing: border-box;
+      }
+
+      .gw-obs-editor {
+        width: min(520px, 96vw);
+        max-height: 92vh;
+        overflow: auto;
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(47,40,33,0.99), rgba(20,17,15,0.99));
+        color: #efe6d3;
+        border: 2px solid rgba(215,183,116,0.58);
+        box-shadow: 0 24px 80px rgba(0,0,0,0.55);
+        padding: 14px;
+        box-sizing: border-box;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function openINatAccountModal() {
+    injectINatAccountStyles();
+
+    const connected = window.GridWildINatAuth?.isConnected?.();
+    const username = window.GridWildINatAuth?.getUseopenINatAccountModalrname?.() || "";
+
+    const modal = document.createElement("div");
+    modal.className = "gw-obs-backdrop";
+    modal.innerHTML = `
+    <div class="gw-obs-editor" style="max-width:520px;">
+      <div class="gw-obs-title">iNaturalist Account</div>
+      <div class="gw-obs-sub">
+        Connect iNaturalist so GridWild can upload draft observations.
+      </div>
+
+      <div class="gw-obs-panel">
+        <label class="gw-obs-label">iNaturalist username</label>
+        <input id="gwINatUsernameInput" value="${escapeHtmlLocal(username)}">
+      </div>
+
+      <div class="gw-obs-panel">
+        <label class="gw-obs-label">API token / JWT</label>
+        <textarea id="gwINatTokenInput" rows="5" placeholder="Paste token here"></textarea>
+        <div class="gw-muted" style="font-size:11px;margin-top:6px;">
+          Prototype only. For production, use OAuth through a backend instead of storing tokens in localStorage.
+        </div>
+      </div>
+
+      <div class="gw-obs-actions">
+        <button class="gw-obs-btn" id="gwINatCancelBtn">Cancel</button>
+        <button class="gw-obs-btn" id="gwINatDisconnectBtn">${connected ? "Disconnect" : "Clear"}</button>
+        <button class="gw-obs-btn primary" id="gwINatSaveBtn">Save</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector("#gwINatCancelBtn").onclick = () => modal.remove();
+
+  modal.querySelector("#gwINatDisconnectBtn").onclick = () => {
+    window.GridWildINatAuth?.disconnect?.();
+    modal.remove();
+    window.initGridWildMobilePanels?.();
+  };
+
+  modal.querySelector("#gwINatSaveBtn").onclick = async () => {
+    const u = modal.querySelector("#gwINatUsernameInput").value;
+    const t = modal.querySelector("#gwINatTokenInput").value;
+
+    window.GridWildINatAuth?.setUsername?.(u);
+    if (t.trim()) window.GridWildINatAuth?.setToken?.(t);
+
+    try {
+      await window.GridWildINatAuth?.testToken?.();
+      alert("iNaturalist connection works.");
+    } catch (err) {
+      alert(`Saved, but token test failed: ${err.message}`);
+    }
+
+    modal.remove();
+    window.initGridWildMobilePanels?.();
+  };
+
+  modal.addEventListener("click", e => {
+    if (e.target === modal) modal.remove();
+  });
+}
 
 function formatDraftObservedAt(d) {
   const raw = d?.observedAt || d?.createdAt || d?.updatedAt;
@@ -439,7 +555,20 @@ function renderInfoContent() {
     `;
 }
 
-  function renderCommunityContent() {
+function renderCommunityContent() {
+  if (window.GridWildParty?.renderSheetHtml) {
+    return window.GridWildParty.renderSheetHtml();
+  }
+
+  return `
+    <div class="gw-card">
+      <div class="gw-card-title">Party</div>
+      <div class="gw-muted">Party system loading...</div>
+    </div>
+  `;
+}
+
+  function renderCommunityContentOLD() {
     return `
       <div class="gw-card">
         <div class="gw-card-title">Guild Territory</div>
@@ -477,15 +606,15 @@ function renderInfoContent() {
 
       <div class="gw-muted" style="font-size:12px;line-height:1.35;margin-bottom:10px;">
         Generate a field quest from recipe ingredients: target location, taxon flavor,
-        objective, difficulty, timeframe, evidence, and optional campaign.
+        objective, difficulty, timeframe, evidence, and optional survey.
       </div>
 
       <button class="gw-mini-btn" id="gwGenerateQuestBtn">
         Generate Quest
       </button>
 
-      <button class="gw-mini-btn" id="gwExploreCampaignsBtn" style="margin-left:8px;">
-        Explore Campaigns
+      <button class="gw-mini-btn" id="gwExploreSurveysBtn" style="margin-left:8px;">
+        Explore Surveys
       </button>
     </div>
 
@@ -554,9 +683,37 @@ function renderInfoContent() {
           </div>
         </div>
       </div>
+      
+      <div class="gw-card">
+        <div class="gw-card-title">Jump to GPS</div>
+
+        <input
+          id="gwJumpGpsInput"
+          type="text"
+          placeholder="38.8895,-77.0353"
+          style="
+            width:100%;
+            box-sizing:border-box;
+            margin-bottom:8px;
+            padding:8px;
+            border-radius:10px;
+            border:1px solid rgba(255,255,255,.15);
+            background:rgba(255,255,255,.05);
+            color:inherit;
+          "
+        >
+
+        <button id="gwJumpToGpsBtn" class="gw-mini-btn" style="width:100%;">
+          Jump
+        </button>
+
+        <div id="gwJumpGpsStatus" class="gw-muted" style="font-size:11px;margin-top:6px;"></div>
+      </div>
 
       <div class="gw-card">
         <div class="gw-card-title">Layer controls</div>
+
+        
         <div class="gw-togglegrid">
           <label class="gw-toggleline">
             <input type="checkbox" id="togglePoints_clone" />
@@ -572,10 +729,18 @@ function renderInfoContent() {
             <input type="checkbox" id="toggleDynamicINat_clone" />
             <span>Live iNat</span>
           </label>
-
+          <label class="gw-toggleline">
+            <input type="checkbox" id="toggleShimmer_clone" />
+            <span>Captive shimmer</span>
+          </label>
           <label class="gw-toggleline">
             <input type="checkbox" id="toggleFog_clone" checked />
             <span>Fog of war</span>
+          </label>
+
+          <label class="gw-toggleline">
+            <input type="checkbox" id="toggleFogSmoothing_clone" checked />
+            <span>Fog smoothing</span>
           </label>
 
           <div class="gw-toggleline gw-godseye-row">
@@ -927,22 +1092,18 @@ function renderInfoContent() {
     const btn = document.getElementById("gwUserSettingsBtn");
     if (!btn) return;
 
-    btn.addEventListener("click", async () => {
-      const current = window.__gwUser?.username || "";
-      const next = prompt("Enter iNaturalist username", current);
-
-      if (!next) return;
-
-      const cleaned = next.trim().replace(/^@+/, "");
-      if (!cleaned) return;
-
-      window.__gwUser.username = cleaned;
-      localStorage.setItem("gw_inat_username", cleaned);
-
-      await loadINatUserProfileIntoPanel();
-    });
+    btn.onclick = (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      openINatAccountModal();
+    };
   }
 
+  function bindINatOAuthButton() {
+    document.getElementById("gw-connect-inat-btn")?.addEventListener("click", () => {
+      window.location.href = "/.netlify/functions/inat-oauth-start";
+    });
+  }
 
   async function loadINatUserProfile() {
 
@@ -1011,13 +1172,30 @@ function renderInfoContent() {
 
 window.refreshGridWildMePanel = function refreshGridWildMePanel() {
   bindUserSettingsButton();
+  bindINatOAuthButton();
   loadINatUserProfileIntoPanel();
   renderFogProgress();
   bindRecentINatButton();
   renderRecentINatList();
   renderDraftObservationsList();
 
-  window.GridWildOutfitter?.bind?.(document);
+  window.GridWildAchievements?.bindButtons?.(document);
+  window.GridWildAchievements?.refreshAchievementSummary?.();
+
+  window.GridWildCharacter?.renderSummary?.();
+  window.GridWildCharacter?.bindButtons?.(document);
+
+  window.GridWildStore?.bindButtons?.(document);
+  window.GridWildInventory?.bindButtons?.(document);
+  window.GridWildProfile?.bindButtons?.(document);
+
+  window.GridWildParty?.bindSheetControls?.(document);
+  window.GridWildParty?.refreshMapBeacon?.();
+  window.GridWildParty?.handleJoinFromUrl?.();
+
+  window.GridWildEconomy?.refreshHud?.();
+
+  // window.GridWildOutfitter?.bind?.(document);
 };
 
   // --------------------------------------------------------------------------
@@ -1112,7 +1290,9 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       ["togglePoints", "togglePoints_clone"],
       ["toggleHeat", "toggleHeat_clone"],
       ["toggleDynamicINat", "toggleDynamicINat_clone"],
+      ["toggleShimmer", "toggleShimmer_clone"],
       ["toggleFog", "toggleFog_clone"],
+      ["toggleFogSmoothing", "toggleFogSmoothing_clone"],
       ["toggleGodsEye", "toggleGodsEye_clone"],
       ["toggleLockLocation", "toggleLockLocation_clone"]
     ].forEach(([realId, cloneId]) => {
@@ -1150,7 +1330,9 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     mirrorCheckbox("togglePoints", "togglePoints_clone");
     mirrorCheckbox("toggleHeat", "toggleHeat_clone");
     mirrorCheckbox("toggleDynamicINat", "toggleDynamicINat_clone");
+    mirrorCheckbox("toggleShimmer", "toggleShimmer_clone");
     mirrorCheckbox("toggleFog", "toggleFog_clone");
+    mirrorCheckbox("toggleFogSmoothing", "toggleFogSmoothing_clone");
     mirrorCheckbox("toggleGodsEye", "toggleGodsEye_clone");
     mirrorCheckbox("toggleLockLocation", "toggleLockLocation_clone");
     mirrorHeatMetricRadios();
@@ -1160,16 +1342,13 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
         window.GridWildQuests.bindQuestSheetControls(questBody);
       }
       bindUserSettingsButton();
+      bindINatOAuthButton();
       loadINatUserProfileIntoPanel();
 
       bindRecentINatButton();
       renderRecentINatList();
       renderDraftObservationsList();
       
-      window.addEventListener("gwRecentINatProgress", (e) => {
-        updateRecentINatProgressUI(e.detail || {});
-      });
-
       renderFogProgress();
 
       const tut1 = document.getElementById("gwReplayWelcomeBtn");
@@ -1209,15 +1388,38 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
         window.updateHudCladogram();
       }
 
-      window.GridWildOutfitter?.bind?.(document);
+      window.GridWildAchievements?.bindButtons?.(document);
+      window.GridWildAchievements?.refreshAchievementSummary?.();
+
+      window.GridWildCharacter?.renderSummary?.();
+      window.GridWildCharacter?.bindButtons?.(document);
+
+      window.GridWildStore?.bindButtons?.(document);
+      window.GridWildInventory?.bindButtons?.(document);
+      window.GridWildProfile?.bindButtons?.(document);
+
+      window.GridWildParty?.bindSheetControls?.(document);
+      window.GridWildParty?.refreshMapBeacon?.();
+      window.GridWildParty?.handleJoinFromUrl?.();
+
+      window.GridWildEconomy?.refreshHud?.();
+      // window.GridWildOutfitter?.bind?.(document);
 
       const clearFogBtn = document.getElementById("gwClearFogCacheBtn");
       if (clearFogBtn) {
         clearFogBtn.onclick = clearExploredSquaresCache;
       }
+
+      if (typeof window.initJumpToGpsControl === "function") {
+       window.initJumpToGpsControl();
+      }
       
     }, 50);
   };
+
+  window.addEventListener("gwRecentINatProgress", (e) => {
+        updateRecentINatProgressUI(e.detail || {});
+      });
 
   window.refreshGridWildMobileInfo = function refreshGridWildMobileInfo() {
     if (typeof window.paintLegendFromHeatFunction === "function") {

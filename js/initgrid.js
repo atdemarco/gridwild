@@ -34,7 +34,7 @@ map.getPane("gridHeatPane").style.pointerEvents = "none";
 
 // Grid lines pane (above heat tiles)
 map.createPane("gridPane");
-map.getPane("gridPane").style.zIndex = 420;
+map.getPane("gridPane").style.zIndex = 650;
 map.getPane("gridPane").style.pointerEvents = "none";
 
 // Shimmer overlay pane: above heat fill, below bold grid outline
@@ -47,10 +47,68 @@ const gridHeatLayer = L.layerGroup([], { pane: "gridHeatPane" }).addTo(map);
 const gridLineLayer = L.layerGroup([], { pane: "gridPane" }).addTo(map);
 const gridShimmerLayer = L.layerGroup([], { pane: "gridShimmerPane" }).addTo(map);
 
+let gridHeatCanvas = null;
+let gridHeatCtx = null;
+let gridHeatRaf = null;
+
+function ensureGridHeatCanvas() {
+  if (gridHeatCanvas) return gridHeatCanvas;
+
+  gridHeatCanvas = document.createElement("canvas");
+  gridHeatCanvas.id = "gwGridHeatCanvas";
+
+  gridHeatCanvas.style.position = "absolute";
+  gridHeatCanvas.style.left = "0px";
+  gridHeatCanvas.style.top = "0px";
+  gridHeatCanvas.style.width = "100%";
+  gridHeatCanvas.style.height = "100%";
+  gridHeatCanvas.style.pointerEvents = "none";
+  gridHeatCanvas.style.zIndex = "410";
+  gridHeatCanvas.style.transform = "none";
+
+//  const heatPane = map.getPane("gridHeatPane");
+//  heatPane.appendChild(gridHeatCanvas);
+  const mainMapEl = document.getElementById("map");
+  mainMapEl.appendChild(gridHeatCanvas);
+
+  gridHeatCtx = gridHeatCanvas.getContext("2d", { alpha: true });
+
+  return gridHeatCanvas;
+}
+
+function resizeGridHeatCanvas() {
+  ensureGridHeatCanvas();
+
+  const size = map.getSize();
+  const dpr = window.devicePixelRatio || 1;
+
+  const wantW = Math.round(size.x * dpr);
+  const wantH = Math.round(size.y * dpr);
+
+  if (gridHeatCanvas.width !== wantW || gridHeatCanvas.height !== wantH) {
+    gridHeatCanvas.width = wantW;
+    gridHeatCanvas.height = wantH;
+    gridHeatCanvas.style.width = `${size.x}px`;
+    gridHeatCanvas.style.height = `${size.y}px`;
+  }
+
+  gridHeatCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
 window.setShimmerVisible = function(show = true) {
+  window.__gwState = window.__gwState || {};
+  window.__gwState.showShimmer = !!show;
+
   const pane = map.getPane("gridShimmerPane");
-  if (!pane) return;
-  pane.style.display = show ? "block" : "none";
+  if (pane) pane.style.display = show ? "block" : "none";
+
+  if (!show) {
+    gridShimmerLayer.clearLayers();
+  }
+
+  if (typeof window.updateGrid === "function") {
+    window.updateGrid();
+  }
 };
 
 map.getPane("gridShimmerPane").style.display = "none";
@@ -493,8 +551,16 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
                 ` : ""}
                 <span style="min-width:0;display:flex;flex-direction:column;line-height:1.15;">
                   <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  <a
+                    href="https://www.inaturalist.org/people/${encodeURIComponent(login)}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="gw-inat-link"
+                    onclick="event.stopPropagation();"
+                  >
                     @${escapeHtml(login)}
-                  </span>
+                  </a>
+                </span>
                   ${name ? `
                     <span class="gw-muted" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                       ${escapeHtml(name)}
@@ -1534,9 +1600,9 @@ function updateGrid() {
 
 }
 
+map.on("move zoom resize viewreset", scheduleGridHeatCanvasRender);
 map.on("zoomend resize moveend", updateGrid);
 updateGrid();
-
 
 loadStaticHeatmapCsv("assets/dc_heat.csv");
 
@@ -1548,6 +1614,7 @@ map.doubleClickZoom.disable();
 (function injectRPGPopupCSS() {
   if (document.getElementById("rpg-popup-css")) return;
   const css = `
+
   .rpg-popup .leaflet-popup-content-wrapper{
     border-radius: 16px;
     padding: 0;
@@ -1853,27 +1920,60 @@ async function __onGridDblClick(e) {
     genusSummary
   });
 
-  L.popup({
-    className: "rpg-popup",
-    closeButton: true,
-    autoPan: true,
-    maxWidth: 320
-  })
-    .setLatLng(e.latlng)
-    .setContent(html)
-    .openOn(map);
+  showGridWildTopPopup(e.latlng, html);
 }
 
 // Enable by default
 window.enableGridRPGPopup();
 
+function showGridWildTopPopup(latlng, html) {
+  document.getElementById("gwTopPopup")?.remove();
+
+  const p = map.latLngToContainerPoint(latlng);
+
+  const el = document.createElement("div");
+  el.id = "gwTopPopup";
+  el.className = "gw-top-popup";
+  el.innerHTML = `
+    <button class="gw-top-popup-close" type="button">&times;</button>
+    ${html}
+  `;
+
+  el.style.left = `${p.x}px`;
+  el.style.top = `${p.y}px`;
+
+  map.getContainer().appendChild(el);
+
+  el.querySelector(".gw-top-popup-close").onclick = () => el.remove();
+
+  function reposition() {
+    if (!document.body.contains(el)) {
+      map.off("move zoom resize", reposition);
+      return;
+    }
+
+    const p2 = map.latLngToContainerPoint(latlng);
+    el.style.left = `${p2.x}px`;
+    el.style.top = `${p2.y}px`;
+  }
+
+  map.on("move zoom resize", reposition);
+}
+
 // Allow UI SIDEBAR to toggle the heat overlay
 window.setHeatVisible = function (visible) {
-  if (visible) {
-    if (!map.hasLayer(gridHeatLayer)) gridHeatLayer.addTo(map);
-  } else {
-    if (map.hasLayer(gridHeatLayer)) map.removeLayer(gridHeatLayer);
+  window.__gwFilters = window.__gwFilters || {};
+  window.__gwFilters.showHeat = !!visible;
+
+  ensureGridHeatCanvas();
+  gridHeatCanvas.style.display = visible ? "block" : "none";
+
+  if (!visible && gridHeatCtx) {
+    const size = map.getSize();
+    gridHeatCtx.clearRect(0, 0, size.x, size.y);
   }
+
+  scheduleGridHeatCanvasRender();
 };
 // End allow  UI to toggle the heat overlay
 
@@ -1957,8 +2057,6 @@ async function loadStaticHeatmapCsv(url) {
     if (typeof window.updateHudCladogram === "function") {
       window.updateHudCladogram();
     }
-
-  
   } catch (err) {
     console.error("Failed to load static heat CSV:", err);
   }
@@ -1981,9 +2079,26 @@ function getHeatValueForCell(cellMetrics) {
   return cellMetrics.count || 0;
 }
 
+
 function updateStaticGridHeat() {
+  scheduleGridHeatCanvasRender();
+
+  updateImportantGridLines();
+
+  if (window.GridWildFogCanvas) {
+    window.GridWildFogCanvas.scheduleRender();
+  }
+}
+
+function updateStaticGridHeatOLD() {
   gridHeatLayer.clearLayers();
-  gridShimmerLayer.clearLayers();
+
+  const shimmerOn = window.__gwState?.showShimmer ?? false;
+  if (shimmerOn) {
+    gridShimmerLayer.clearLayers();
+  } else {
+    if (gridShimmerLayer.getLayers().length) gridShimmerLayer.clearLayers();
+  }
 
   const fogOn = window.__gwState?.showFog ?? true;
 
@@ -1998,8 +2113,14 @@ function updateStaticGridHeat() {
       const iy = Math.floor(y / GRID_SIZE_M);
       const key = `${ix},${iy}`;
 
-      const metrics = counts.get(key) || null;
+      const metrics = counts.get(key);
+      if (!metrics) continue;
+
+      const heatValue = getHeatValueForCell(metrics);
+      if (heatValue <= 0) continue;
+
       const baseStyle = metricsToFill(metrics);
+      if (!baseStyle) continue;
 
       const sw = map.options.crs.unproject(L.point(x, y));
       const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
@@ -2059,7 +2180,9 @@ function updateStaticGridHeat() {
         ...style
       }).addTo(gridHeatLayer);
 
-      drawShimmerOverlayForCell(sw, ne, metrics);
+      if (shimmerOn) {
+        drawShimmerOverlayForCell(sw, ne, metrics);
+      }
 
       // Optional gold outline for documented cells
       if (fogOn && fogState?.state === "documented") {
@@ -2080,6 +2203,40 @@ function updateStaticGridHeat() {
   }
 }
 
+function updateImportantGridLines() {
+  gridLineLayer.clearLayers();
+
+  const center = getCenterFineCell();
+
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const ix = center.ix + dx;
+      const iy = center.iy + dy;
+
+      const { sw, ne } = fineCellBoundsLL(ix, iy);
+
+      L.rectangle([sw, ne], {
+        pane: "gridPane",
+        interactive: false,
+        fill: false,
+        color: "rgba(240, 209, 138, 0.70)",
+        weight: 1.2,
+        opacity: 0.85
+      }).addTo(gridLineLayer);
+    }
+  }
+
+  const { sw, ne } = macroCellBoundsLL(center.ix - 1, center.iy - 1);
+
+  L.rectangle([sw, ne], {
+    pane: "gridPane",
+    interactive: false,
+    fill: false,
+    color: "rgba(255, 224, 130, 0.98)",
+    weight: 2.4,
+    opacity: 0.95
+  }).addTo(gridLineLayer);
+}
 
 window.testDocumentCurrentCell = function () {
   if (typeof lastFix === "undefined" || !lastFix) {
@@ -2103,6 +2260,101 @@ window.testDocumentCurrentCell = function () {
   console.log("Documented current cell:", key);
 };
 
+function scheduleGridHeatCanvasRender() {
+  if (gridHeatRaf) return;
+  gridHeatRaf = requestAnimationFrame(renderGridHeatCanvas);
+}
+
+function renderGridHeatCanvas() {
+  gridHeatRaf = null;
+
+  ensureGridHeatCanvas();
+  resizeGridHeatCanvas();
+
+  const size = map.getSize();
+  gridHeatCtx.clearRect(0, 0, size.x, size.y);
+
+  const heatOn = window.__gwFilters?.showHeat ?? true;
+  if (!heatOn) return;
+
+  const counts = window.__staticGridCounts;
+  if (!(counts instanceof Map) || counts.size === 0) return;
+
+  const fogOn = window.__gwState?.showFog ?? true;
+  const { startX, endX, startY, endY } = getPaddedBoundsMeters();
+
+  for (let x = startX; x < endX; x += GRID_SIZE_M) {
+    for (let y = startY; y < endY; y += GRID_SIZE_M) {
+      const ix = Math.floor(x / GRID_SIZE_M);
+      const iy = Math.floor(y / GRID_SIZE_M);
+      const key = `${ix},${iy}`;
+
+      const metrics = counts.get(key);
+      if (!metrics) continue;
+
+      const heatValue = getHeatValueForCell(metrics);
+      if (heatValue <= 0) continue;
+
+      const baseStyle = metricsToFill(metrics);
+      if (!baseStyle) continue;
+
+      let fogState = null;
+
+      const godsEyeTransientVisible =
+        typeof window.isGodsEyeTransientVisibleCell === "function" &&
+        window.isGodsEyeTransientVisibleCell(key);
+
+      if (fogOn && window.GridWildFog) {
+        fogState = window.GridWildFog.getCellFogState(key);
+
+        if (
+          !godsEyeTransientVisible &&
+          (fogState.state === "unknown" || fogState.state === "expired")
+        ) {
+          continue;
+        }
+      }
+
+      let fillOpacity = Number(baseStyle.fillOpacity || 0.25);
+
+      if (godsEyeTransientVisible && fogState?.state !== "documented") {
+        fillOpacity = Math.max(fillOpacity, 0.28);
+      }
+
+      if (fogOn && fogState?.state === "surveyed") {
+        fillOpacity = Math.max(0.08, fillOpacity * fogState.reveal);
+      }
+
+      if (fogOn && fogState?.state === "documented") {
+        fillOpacity = Math.min(0.92, fillOpacity + 0.12);
+      }
+
+      const sw = map.options.crs.unproject(L.point(x, y));
+      const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
+
+      const nwPx = map.latLngToContainerPoint(L.latLng(ne.lat, sw.lng));
+      const sePx = map.latLngToContainerPoint(L.latLng(sw.lat, ne.lng));
+
+      const pxX = Math.floor(nwPx.x);
+      const pxY = Math.floor(nwPx.y);
+      const pxW = Math.ceil(sePx.x - nwPx.x);
+      const pxH = Math.ceil(sePx.y - nwPx.y);
+
+      gridHeatCtx.globalAlpha = fillOpacity;
+      gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
+      gridHeatCtx.fillRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
+
+      if (fogOn && fogState?.state === "documented") {
+        gridHeatCtx.globalAlpha = 0.8;
+        gridHeatCtx.strokeStyle = "rgba(240, 209, 138, 0.72)";
+        gridHeatCtx.lineWidth = 1.2;
+        gridHeatCtx.strokeRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
+      }
+    }
+  }
+
+  gridHeatCtx.globalAlpha = 1;
+}
 
 function latLngToDisplayCellKey(lat, lng) {
   const p = map.options.crs.project(L.latLng(lat, lng));

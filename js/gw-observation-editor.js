@@ -220,6 +220,46 @@
           grid-template-columns: 1fr;
         }
       }
+
+      .gw-obs-party-chip {
+        margin: 8px 0 12px 0;
+        padding: 10px 12px;
+        border-radius: 16px;
+        border: 1px solid rgba(215,183,116,0.22);
+        background: rgba(255,255,255,0.06);
+      }
+
+      .gw-obs-party-chip-title {
+        font-size: 12px;
+        font-weight: 950;
+        color: #fff2c8;
+      }
+
+      .gw-obs-party-chip-sub {
+        margin-top: 4px;
+        font-size: 11px;
+        line-height: 1.35;
+        color: rgba(239,230,211,0.68);
+      }
+
+      .gw-obs-party-chip.counted {
+        border-color: rgba(100,220,150,0.38);
+        background: rgba(80,220,140,0.10);
+      }
+
+      .gw-obs-party-chip.will-count {
+        border-color: rgba(240,209,138,0.48);
+        background: rgba(240,209,138,0.10);
+      }
+
+      .gw-obs-party-chip.blocked {
+        border-color: rgba(255,170,90,0.38);
+        background: rgba(255,150,80,0.09);
+      }
+
+      .gw-obs-party-chip.muted {
+        opacity: 0.74;
+      }
     `;
 
     document.head.appendChild(style);
@@ -261,6 +301,14 @@
     if (id) open(id);
   }
 
+  function renderPartyChipForDraft(draft) {
+    if (window.GridWildParty?.renderDraftPartyChipHtml) {
+      return window.GridWildParty.renderDraftPartyChipHtml(draft);
+    }
+
+    return "";
+  }
+
   function render(root = document) {
     const draft = getDraft();
     if (!draft) return;
@@ -275,6 +323,8 @@
         One draft observation · ${draft.photos.length} photo${draft.photos.length === 1 ? "" : "s"} ·
         ${esc(draft.location?.cellKey || "no cell")}
       </div>
+
+      ${renderPartyChipForDraft(draft)}
 
       <div class="gw-obs-grid">
         <div>
@@ -365,7 +415,7 @@
             <button class="gw-obs-btn" id="gwObsSaveCopyBtn">Save Edit Copy</button>
             <button class="gw-obs-btn danger" id="gwObsDeletePhotoBtn">Delete Photo</button>
             <button class="gw-obs-btn" id="gwObsCloseBtn">Close</button>
-            <button class="gw-obs-btn primary" id="gwObsSendBtn">Send to iNaturalist</button>
+            <button class="gw-obs-btn primary" id="gwObsSendBtn">Prepare for iNaturalist</button>
           </div>
         </div>
       </div>
@@ -389,6 +439,63 @@
     img.style.filter = `brightness(${100 + exposure}%)`;
     }
 
+
+function openINaturalistHandoffModal(fieldPacket, draft) {
+  const text = JSON.stringify(fieldPacket, null, 2);
+
+  const modal = document.createElement("div");
+  modal.className = "gw-obs-backdrop";
+  modal.innerHTML = `
+    <div class="gw-obs-editor" style="max-width:720px;">
+      <div class="gw-obs-title">Prepare for iNaturalist</div>
+      <div class="gw-obs-sub">
+        Phase 1 manual handoff. Nothing has been uploaded yet.
+      </div>
+
+      <div class="gw-obs-panel">
+        <div class="gw-obs-label">Copy these fields into iNaturalist</div>
+        <textarea id="gwINatHandoffText" rows="14" readonly>${esc(text)}</textarea>
+      </div>
+
+      <div class="gw-obs-panel">
+        <div class="gw-obs-label">Photos</div>
+        <div>${draft.photos.length} photo${draft.photos.length === 1 ? "" : "s"} attached in GridWild.</div>
+        <div class="gw-obs-sub" style="margin-top:6px;">
+          For now, manually add the saved/captured photos to iNaturalist.
+        </div>
+      </div>
+
+      <div class="gw-obs-actions">
+        <button class="gw-obs-btn" id="gwINatCopyBtn">Copy Fields</button>
+        <button class="gw-obs-btn" id="gwINatOpenBtn">Open iNaturalist</button>
+        <button class="gw-obs-btn primary" id="gwINatDoneBtn">Done</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector("#gwINatCopyBtn").onclick = async () => {
+    await navigator.clipboard.writeText(text);
+    alert("Copied iNaturalist handoff fields.");
+  };
+
+  modal.querySelector("#gwINatOpenBtn").onclick = () => {
+    window.open("https://www.inaturalist.org/observations/upload", "_blank", "noopener,noreferrer");
+  };
+
+    modal.querySelector("#gwINatDoneBtn").onclick = () => {
+    window.GridWildEconomy?.rewardObservationHandoff?.(draft.id);
+
+    modal.remove();
+    render();
+    window.initGridWildMobilePanels?.();
+  };
+
+  modal.addEventListener("click", evt => {
+    if (evt.target === modal) modal.remove();
+  });
+}
 
   function bind(card) {
 
@@ -437,14 +544,22 @@
       window.initGridWildMobilePanels?.();
     };
 
-    card.querySelector("#gwObsSendBtn").onclick = () => {
+    card.querySelector("#gwObsSendBtn").onclick = async () => {
       saveFields();
 
       try {
-        const result = window.GridWildDraftObservations.mockSendToINaturalist(currentDraftId);
-        alert(result.message);
-        document.querySelector(".gw-obs-backdrop")?.remove();
-        window.initGridWildMobilePanels?.();
+        if (window.GridWildINatAuth?.isConnected?.()) {
+          await window.GridWildDraftObservations.uploadToINaturalist(currentDraftId);
+          alert("Uploaded to iNaturalist.");
+          render();
+          window.initGridWildMobilePanels?.();
+          return;
+        }
+
+        const result =
+          window.GridWildDraftObservations.prepareINaturalistHandoff(currentDraftId);
+
+        openINaturalistHandoffModal(result.fieldPacket, result.draft);
       } catch (err) {
         alert(err.message);
       }

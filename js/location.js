@@ -46,11 +46,6 @@ function setUserLocation(lat, lng, accuracyMeters) {
         accuracyCircle.setRadius(Math.max(accuracyMeters || 0, 5));
       }
 
-
-
-     // const zoom = map.getZoom();
-      //const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
-
       const zoom = map.getZoom();
       const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
 
@@ -67,6 +62,10 @@ function setUserLocation(lat, lng, accuracyMeters) {
 
         if (window.GridWildOverviewMap) {
           window.GridWildOverviewMap.updateUserLocation(lat, lng, accuracyMeters);
+        }
+
+        if (window.GridWildParty?.recordPartyPosition) {
+          window.GridWildParty.recordPartyPosition(lat, lng, accuracyMeters);
         }
     }
 
@@ -107,13 +106,21 @@ function updateGpsHealthBadge(accuracyMeters) {
   window.__gwLastGpsAccuracy = n;
 }
 
-function requestLocationOnce() {
+function requestLocationOnce(options = {}) {
+  const {
+    toastOnSuccess = false,
+    zoom = 19,
+    force = true
+  } = options;
+
   if (!("geolocation" in navigator)) {
     hud.textContent = "Geolocation not supported in this browser.";
+    showGridWildToast("Location not supported");
     return;
   }
 
   hud.textContent = "Requesting location permission…";
+
 
 navigator.geolocation.getCurrentPosition(
   (pos) => {
@@ -125,7 +132,12 @@ navigator.geolocation.getCurrentPosition(
 
     // Let the central logic decide whether auto-centering is allowed
     if (typeof window.handleUserPositionUpdate === "function") {
-      window.handleUserPositionUpdate(latitude, longitude, true);
+      window.handleUserPositionUpdate(latitude, longitude, force);
+    }
+
+        if (toastOnSuccess && window.__gwState?.lockToLocation) {
+      showGridWildToast("Follow lock enabled");
+      map.setView([latitude, longitude], zoom, { animate: true });
     }
 
     map.once("moveend", () => {
@@ -137,6 +149,7 @@ navigator.geolocation.getCurrentPosition(
     (err) => {
       // Common causes: permission denied, not https, no GPS, timeout
       hud.textContent = `Location error: ${err.message}`;
+     showGridWildToast("Could not find location");
     },
     {
       enableHighAccuracy: true,
@@ -166,9 +179,20 @@ function enableLocationLock(options = {}) {
   window.__gwState = window.__gwState || {};
   const state = window.__gwState;
 
+  const wasLocked = !!state.lockToLocation;
+  const hadFix = !!lastFix;
+
   state.lockToLocation = true;
   state.suspendAutoCenterUntil = 0;
   state.lockZoom = zoom;
+
+  if (!wasLocked) {
+    if (hadFix) {
+      showGridWildToast("Follow lock enabled");
+    } else {
+      showGridWildToast("Finding location…");
+    }
+  }
 
   const cb = document.getElementById("toggleLockLocation");
   if (cb && !cb.checked) {
@@ -185,8 +209,54 @@ function enableLocationLock(options = {}) {
       window.handleUserPositionUpdate(lastFix.latitude, lastFix.longitude, force);
     }
   } else if (recenterNow && typeof requestLocationOnce === "function") {
-    requestLocationOnce();
+    requestLocationOnce({
+      toastOnSuccess: !hadFix,
+      zoom,
+      force
+    });
   }
+}
+function showGridWildToast(message = "") {
+  let toast = document.getElementById("gwToast");
+
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "gwToast";
+
+    Object.assign(toast.style, {
+      position: "absolute",
+      left: "50%",
+      bottom: "118px",
+      transform: "translateX(-50%) translateY(10px)",
+      zIndex: "999999",
+      padding: "10px 14px",
+      borderRadius: "999px",
+      fontSize: "13px",
+      fontWeight: "800",
+      letterSpacing: "0.3px",
+      color: "#efe6d3",
+      background: "rgba(20,17,15,0.94)",
+      border: "1px solid rgba(215,183,116,0.34)",
+      boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
+      opacity: "0",
+      transition: "opacity 180ms ease, transform 180ms ease",
+      pointerEvents: "none"
+    });
+
+    document.body.appendChild(toast);
+  }
+
+  toast.textContent = message;
+
+  toast.style.opacity = "1";
+  toast.style.transform = "translateX(-50%) translateY(0px)";
+
+  clearTimeout(toast._timer);
+
+  toast._timer = setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(-50%) translateY(10px)";
+  }, 1800);
 }
 
 function disableLocationLock() {
@@ -194,6 +264,7 @@ function disableLocationLock() {
   if (!window.__gwState.lockToLocation) return;
 
   window.__gwState.lockToLocation = false;
+  showGridWildToast("Follow lock disabled");
   window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
 
   const cb = document.getElementById("toggleLockLocation");
@@ -214,8 +285,61 @@ function disableAutoCenterFromUserGesture(e) {
   }
 }
 
-map.on("dragstart", disableAutoCenterFromUserGesture);
+//map.on("dragstart", disableAutoCenterFromUserGesture);
+//map.on("zoomstart", disableAutoCenterFromUserGesture);
+let gwLockTouchStart = null;
+let gwLockBrokenThisTouch = false;
+
+map.getContainer().addEventListener("touchstart", (e) => {
+  const t = e.touches?.[0];
+  if (!t) return;
+
+  gwLockTouchStart = {
+    x: t.clientX,
+    y: t.clientY
+  };
+
+  gwLockBrokenThisTouch = false;
+}, { passive: true });
+
+map.getContainer().addEventListener("touchmove", (e) => {
+  if (!window.__gwState?.lockToLocation) return;
+  if (!gwLockTouchStart) return;
+  if (gwLockBrokenThisTouch) return;
+
+  const t = e.touches?.[0];
+  if (!t) return;
+
+  const dx = t.clientX - gwLockTouchStart.x;
+  const dy = t.clientY - gwLockTouchStart.y;
+
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  if (dist > 45) {   // swipe threshold in pixels
+    disableLocationLock();
+    gwLockBrokenThisTouch = true;
+  }
+}, { passive: true });
+
+map.getContainer().addEventListener("touchend", () => {
+  gwLockTouchStart = null;
+  gwLockBrokenThisTouch = false;
+}, { passive: true });
+
+// Desktop / mouse pan unlock.
+// Mobile touch pan is handled above by the 45px swipe threshold.
+map.on("dragstart", (e) => {
+  const oe = e?.originalEvent;
+
+  // Ignore touch-originated Leaflet drags so mobile does not become too sensitive.
+  if (oe?.type && oe.type.startsWith("touch")) return;
+  if (oe?.pointerType === "touch") return;
+
+  disableAutoCenterFromUserGesture(e);
+});
+
 map.on("zoomstart", disableAutoCenterFromUserGesture);
+
 
 
 

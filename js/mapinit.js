@@ -11,6 +11,7 @@ window.__gwState = {
   showPoints: false, // off by default...
   showHeat: true,
   showFog: true,
+  showShimmer: false,
   dynamicINatEnabled: false,   // OFF by default
   dynamicOSMEnabled: false,    // OFF by default
   logHeat: true,
@@ -32,7 +33,11 @@ window.__gwState = {
   godsEyeEnabled: false,
   lastGodsEyeCenterKey: null,
 
-
+  showOsmFeatures: true,
+  showOsmTrails: true,
+  showOsmParks: true,
+  showOsmBuildings: true,
+  showOsmWater: true,
 };
 
   L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {

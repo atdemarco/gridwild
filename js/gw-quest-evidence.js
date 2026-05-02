@@ -54,7 +54,7 @@
   function getChannelForQuest(quest) {
     const r = quest?.recipe || {};
     if (quest?.source === "today") return "daily";
-    if (r.campaignId && r.campaignId !== "none") return "campaign";
+    if (r.surveyId && r.surveyId !== "none") return "survey";
     return "codex";
   }
 

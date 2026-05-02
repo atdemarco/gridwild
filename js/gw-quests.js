@@ -68,20 +68,20 @@ const CAMPAIGNS = {
   none: {
     id: "none",
     name: "None",
-    description: "No campaign association. This is a standalone quest.",
-    anatomy: ["Standalone quest", "No campaign scoring", "No shared campaign boundary"]
+    description: "No survey association. This is a standalone quest.",
+    anatomy: ["Standalone quest", "No survey scoring", "No shared survey boundary"]
   },
   front_yard: {
     id: "front_yard",
     name: "My Front Yard",
     description: "A tiny personal biodiversity atlas for the immediate home territory.",
-    anatomy: ["Permanent home campaign", "Small location radius", "Good for daily phenology"]
+    anatomy: ["Permanent home survey", "Small location radius", "Good for daily phenology"]
   },
   georgetown_ark: {
     id: "georgetown_ark",
     name: "Georgetown Ark Project",
-    description: "A campus-scale biodiversity rescue and discovery campaign.",
-    anatomy: ["Urban campus campaign", "Student-friendly quests", "Restoration / stewardship framing"]
+    description: "A campus-scale biodiversity rescue and discovery survey.",
+    anatomy: ["Urban campus survey", "Student-friendly quests", "Restoration / stewardship framing"]
   },
   wildsumaco: {
     id: "wildsumaco",
@@ -92,8 +92,8 @@ const CAMPAIGNS = {
   weekend_bioblitz: {
     id: "weekend_bioblitz",
     name: "Weekend Bioblitz",
-    description: "Short, time-boxed burst campaign for rapid local biodiversity discovery.",
-    anatomy: ["Temporary campaign", "High activity window", "Good for group events"]
+    description: "Short, time-boxed burst survey for rapid local biodiversity discovery.",
+    anatomy: ["Temporary survey", "High activity window", "Good for group events"]
   }
 };
 
@@ -161,7 +161,7 @@ function makeTodayQuestSeed(title, recipe, forcedTargetLocation) {
       difficulty: Number(recipe.difficulty || 1),
       timeframe: "today",
       evidence: "photo_gps20",
-      campaignId: recipe.campaignId || "none",
+      surveyId: recipe.surveyId || "none",
       targetLocation,
       target: makeLanierTarget(targetLocation)
     }
@@ -209,23 +209,23 @@ let DAILY_QUESTS = generateDailyQuests();
 const DAILY_QUESTS_ORIGINAL = [
   {
     title: "Photograph one plant in the current area",
-    recipe: { iconicTaxon: "Plantae", objectiveType: "any_observation", difficulty: 1, targetLocation: "area_3x3", timeframe: "today", campaignId: "none" }
+    recipe: { iconicTaxon: "Plantae", objectiveType: "any_observation", difficulty: 1, targetLocation: "area_3x3", timeframe: "today", surveyId: "none" }
   },
   {
     title: "Find an insect or spider near you",
-    recipe: { iconicTaxon: "Insecta", objectiveType: "underobserved", difficulty: 2, targetLocation: "area_3x3", timeframe: "today", campaignId: "none" }
+    recipe: { iconicTaxon: "Insecta", objectiveType: "underobserved", difficulty: 2, targetLocation: "area_3x3", timeframe: "today", surveyId: "none" }
   },
   {
     title: "Refresh one fading fog cell",
-    recipe: { iconicTaxon: "Any", objectiveType: "revisit_fading", difficulty: 2, targetLocation: "specific_square", timeframe: "today", campaignId: "none" }
+    recipe: { iconicTaxon: "Any", objectiveType: "revisit_fading", difficulty: 2, targetLocation: "specific_square", timeframe: "today", surveyId: "none" }
   },
   {
     title: "Look for fungi, lichens, or decomposers",
-    recipe: { iconicTaxon: "Fungi", objectiveType: "underobserved", difficulty: 3, targetLocation: "area_20x20", timeframe: "today", campaignId: "none" }
+    recipe: { iconicTaxon: "Fungi", objectiveType: "underobserved", difficulty: 3, targetLocation: "area_20x20", timeframe: "today", surveyId: "none" }
   },
   {
     title: "Add one new taxon to this neighborhood",
-    recipe: { iconicTaxon: "Any", objectiveType: "new_square_taxon", difficulty: 4, targetLocation: "area_20x20", timeframe: "today", campaignId: "none" }
+    recipe: { iconicTaxon: "Any", objectiveType: "new_square_taxon", difficulty: 4, targetLocation: "area_20x20", timeframe: "today", surveyId: "none" }
   }
 ];
 
@@ -452,7 +452,7 @@ function openQuestArchive() {
     evidence: recipe.evidence || "photo_gps20",
     targetLocation: recipe.targetLocation || "area_3x3",
     target: recipe.target || null,
-    campaignId: recipe.campaignId || "none"
+    surveyId: recipe.surveyId || "none"
     };
 
     return {
@@ -518,6 +518,13 @@ function startQuestFromRecipe(recipe, options = {}) {
     const style = document.createElement("style");
     style.id = "gwQuestStyles";
     style.textContent = `
+
+     .gw-quest-btn.danger {
+        background: rgba(170,55,45,0.30);
+        color: #ffd8d2;
+        border: 1px solid rgba(255,130,110,0.30);
+      }
+
       .gw-quest-row {
         cursor: pointer;
       }
@@ -787,6 +794,15 @@ function startQuestFromRecipe(recipe, options = {}) {
     grid-template-columns: 1fr 1.15fr 1fr;
     }
 
+    .gw-quest-actions-four {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .gw-quest-actions-four .gw-quest-btn {
+      font-size: 12px;
+      padding: 11px 10px;
+    }
+
     .gw-quest-btn.primary#gwQuestEmbarkBtn {
     background: linear-gradient(180deg, #ffe082, #d7b774);
     color: #1f271d;
@@ -921,11 +937,11 @@ function startQuestFromRecipe(recipe, options = {}) {
           `
         }
 
-        <div class="gw-quest-actions three">
-        <button class="gw-quest-btn secondary" id="gwQuestCloseBtn">Close</button>
-        <button class="gw-quest-btn primary" id="gwQuestEmbarkBtn">Embark!</button>
-        <button class="gw-quest-btn secondary" id="gwQuestCompleteBtn">Mark Complete</button>
-        </div>
+      <div class="gw-quest-actions gw-quest-actions-four">
+      <button class="gw-quest-btn secondary" id="gwQuestCloseBtn">Close</button>
+      <button class="gw-quest-btn primary" id="gwQuestEmbarkBtn">Embark!</button>
+      <button class="gw-quest-btn secondary" id="gwQuestPartyBtn">Start Party</button>
+      <button class="gw-quest-btn secondary" id="gwQuestCompleteBtn">Mark Complete</button>
       </div>
     `;
 
@@ -947,14 +963,38 @@ function startQuestFromRecipe(recipe, options = {}) {
     closeModal(root);
     };
 
+    root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", () => {
+      if (!window.GridWildParty?.createPartyFromQuest) {
+        alert("Party system is not loaded.");
+        return;
+      }
+
+      embarkQuest(quest.id);
+
+      const freshQuest = loadQuests().find(q => q.id === quest.id) || quest;
+      window.GridWildParty.createPartyFromQuest(freshQuest);
+
+      closeModal(root);
+      renderQuestListIntoPage();
+    });
+
     root.querySelector("#gwQuestCompleteBtn").onclick = () => {
     const quests = loadQuests();
     const q = quests.find(x => x.id === quest.id);
 
     if (q) {
-        q.status = "completed";
-        q.completedAt = nowISO();
-        saveQuests(quests);
+      q.status = "completed";
+      q.completedAt = nowISO();
+
+      if (!q.rewardedAt) {
+        window.GridWildEconomy?.addWildPoints?.(
+          q.pointValue || 50,
+          "quest_completed"
+        );
+        q.rewardedAt = nowISO();
+      }
+
+      saveQuests(quests);
     }
 
     closeModal(root);
@@ -971,28 +1011,28 @@ function startQuestFromRecipe(recipe, options = {}) {
   function openQuestRecipeCreator() {
     injectStyles();
 
-    const savedCampaigns = window.GridWildCampaignDesigner?.loadCampaigns?.() || [];
+    const savedSurveys = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
 
-const allCampaignOptions = [
+const allSurveyOptions = [
   ...Object.values(CAMPAIGNS),
-  ...savedCampaigns
+  ...savedSurveys
 ];
 
-const campaignRadiosHtml = allCampaignOptions.map(c => `
+const surveyRadiosHtml = allSurveyOptions.map(c => `
   <div class="gw-rowline">
     <label style="display:flex;align-items:center;gap:8px;margin:0;">
       <input
         type="radio"
-        name="gwQuestCampaign"
+        name="gwQuestSurvey"
         value="${esc(c.id)}"
         ${c.id === "none" ? "checked" : ""}
       >
-      <span>${esc(c.name || "Untitled Campaign")}</span>
+      <span>${esc(c.name || "Untitled Survey")}</span>
     </label>
 
     <button
-      class="gw-mini-btn gwCampaignInfoBtn"
-      data-campaign-id="${esc(c.id)}"
+      class="gw-mini-btn gwSurveyInfoBtn"
+      data-survey-id="${esc(c.id)}"
       type="button"
     >
       Info
@@ -1084,9 +1124,9 @@ const campaignRadiosHtml = allCampaignOptions.map(c => `
         </div>
 
         <div class="gw-quest-field">
-        <label>Campaign</label>
-        <div id="gwQuestCampaignRadios">
-            ${campaignRadiosHtml}
+        <label>Survey</label>
+        <div id="gwQuestSurveyRadios">
+            ${surveyRadiosHtml}
         </div>
         </div>
 
@@ -1115,7 +1155,7 @@ const campaignRadiosHtml = allCampaignOptions.map(c => `
     root.querySelector("#gwQuestCreateBtn").onclick = () => {
         const recipe = {
         targetLocation: root.querySelector("#gwQuestTargetLocation").value,
-        campaignId: root.querySelector('input[name="gwQuestCampaign"]:checked')?.value || "none",
+        surveyId: root.querySelector('input[name="gwQuestSurvey"]:checked')?.value || "none",
         iconicTaxon: root.querySelector("#gwQuestTaxon").value,
         objectiveType: root.querySelector("#gwQuestObjective").value,
         difficulty: Number(root.querySelector("#gwQuestDifficulty").value),
@@ -1204,9 +1244,9 @@ const campaignRadiosHtml = allCampaignOptions.map(c => `
       return;
     }
 
-    const campaignsBtn = evt.target.closest("#gwExploreCampaignsBtn");
-    if (campaignsBtn && root.contains(campaignsBtn)) {
-      openCampaignExplorer();
+    const surveysBtn = evt.target.closest("#gwExploreSurveysBtn");
+    if (surveysBtn && root.contains(surveysBtn)) {
+      openSurveyExplorer();
       return;
     }
 
@@ -1284,81 +1324,59 @@ function renderDailyQuestsHtml() {
   `;
 }
 
-function openCampaignInfo(campaignId) {
+function getSurveyById(surveyId) {
+  const saved = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
+  return saved.find(c => c.id === surveyId) || CAMPAIGNS[surveyId] || null;
+}
+
+function isSavedSurvey(surveyId) {
+  const saved = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
+  return saved.some(c => c.id === surveyId);
+}
+
+function openSurveyInfo(surveyId) {
   injectStyles();
-  const c = CAMPAIGNS[campaignId] || CAMPAIGNS.none;
+
+  const c = getSurveyById(surveyId);
+  if (!c) return;
+
+  const saved = isSavedSurvey(surveyId);
+  const g = c.geometries || {};
+
+  const anatomy = Array.isArray(c.anatomy) && c.anatomy.length
+    ? c.anatomy
+    : [
+        `Boundary: ${g.boundary?.length ? "yes" : "none"}`,
+        `Paths: ${(g.paths || []).length}`,
+        `Exclusions: ${(g.exclusions || []).length}`,
+        `Dense zones: ${(g.denseZones || []).length}`,
+        `Assets: ${(g.assets || []).length}`
+      ];
 
   const root = document.createElement("div");
   root.className = "gw-quest-modal-backdrop";
+
   root.innerHTML = `
     <div class="gw-quest-modal">
-      <div class="gw-quest-modal-title">${esc(c.name)}</div>
-      <div class="gw-quest-modal-subtitle">${esc(c.description)}</div>
+      <div class="gw-quest-modal-title">${esc(c.name || "Untitled Survey")}</div>
+      <div class="gw-quest-modal-subtitle">${esc(c.description || "No description yet.")}</div>
 
       <div class="gw-quest-status-grid">
-        ${c.anatomy.map(x => `
+        ${anatomy.map(x => `
           <div class="gw-quest-status-line">
-            <span>Campaign anatomy</span>
+            <span>Survey anatomy</span>
             <span>${esc(x)}</span>
           </div>
         `).join("")}
       </div>
 
-      <div class="gw-quest-actions">
-        <button class="gw-quest-btn primary" id="gwCampaignInfoClose">Close</button>
-      </div>
-    </div>
-  `;
+      <div class="gw-quest-actions ${saved ? "three" : ""}">
+        <button class="gw-quest-btn secondary" id="gwSurveyInfoClose">Close</button>
 
-  document.body.appendChild(root);
-  root.onclick = evt => { if (evt.target === root) root.remove(); };
-  root.querySelector("#gwCampaignInfoClose").onclick = () => root.remove();
-}
-
-function openCampaignExplorer() {
-  injectStyles();
-
-  const savedCampaigns = window.GridWildCampaignDesigner?.loadCampaigns?.() || [];
-  const fallbackCampaigns = Object.values(CAMPAIGNS).filter(c => c.id !== "none");
-
-  const campaignRows = savedCampaigns.length
-    ? savedCampaigns
-    : fallbackCampaigns;
-
-  const root = document.createElement("div");
-  root.className = "gw-quest-modal-backdrop";
-
-  root.innerHTML = `
-    <div class="gw-quest-modal">
-      <div class="gw-quest-modal-title">Campaign Explorer</div>
-      <div class="gw-quest-modal-subtitle">
-        Campaigns define a named biodiversity effort: location, timeframe, participants, and quest logic.
-      </div>
-
-      <div class="gw-list">
-        ${campaignRows.map(c => `
-          <div class="gw-rowline gwCampaignExplorerRow" data-campaign-id="${esc(c.id)}" style="cursor:pointer;">
-            <span style="min-width:0;">
-              <span>${esc(c.name || "Untitled Campaign")}</span>
-              <span class="gw-muted" style="display:block;font-size:11px;overflow:hidden;text-overflow:ellipsis;">
-                ${esc(c.description || "No description yet.")}
-              </span>
-            </span>
-
-            <span style="display:flex;gap:6px;align-items:center;">
-              ${savedCampaigns.some(x => x.id === c.id)
-                ? `<button class="gw-mini-btn gwShowCampaignMapBtn" data-campaign-id="${esc(c.id)}" type="button">Map</button>`
-                : ""
-              }
-              <span class="gw-quest-pill">View</span>
-            </span>
-          </div>
-        `).join("")}
-      </div>
-
-      <div class="gw-quest-actions">
-        <button class="gw-quest-btn secondary" id="gwCampaignExplorerClose">Close</button>
-        <button class="gw-quest-btn primary" id="gwNewCampaignBtn">New Campaign</button>
+        ${saved ? `
+          <button class="gw-quest-btn danger" id="gwSurveyInfoDelete">Delete</button>
+          <button class="gw-quest-btn primary" id="gwSurveyInfoEdit">Edit</button>
+        ` : ""}
       </div>
     </div>
   `;
@@ -1369,53 +1387,253 @@ function openCampaignExplorer() {
     if (evt.target === root) root.remove();
   };
 
-  root.querySelector("#gwCampaignExplorerClose").onclick = () => root.remove();
+  root.querySelector("#gwSurveyInfoClose").onclick = () => root.remove();
 
-  root.querySelector("#gwNewCampaignBtn").onclick = () => {
-    root.remove();
-    openNewCampaignConfigurator();
-  };
+  root.querySelector("#gwSurveyInfoEdit")?.addEventListener("click", () => {
+    document
+      .querySelectorAll(".gw-quest-modal-backdrop")
+      .forEach(el => el.remove());
 
-  root.querySelectorAll(".gwCampaignExplorerRow").forEach(row => {
-    row.onclick = () => openCampaignInfo(row.dataset.campaignId);
+    window.GridWildSurveyDesigner?.openExisting?.(surveyId);
   });
 
-  root.querySelectorAll(".gwShowCampaignMapBtn").forEach(btn => {
+  root.querySelector("#gwSurveyInfoDelete")?.addEventListener("click", () => {
+    const ok = confirm(`Delete survey "${c.name || "Untitled Survey"}"? This cannot be undone.`);
+    if (!ok) return;
+
+    window.GridWildSurveyDesigner?.deleteSurvey?.(surveyId);
+    root.remove();
+
+    if (typeof openSurveyExplorer === "function") {
+      openSurveyExplorer();
+    }
+  });
+}
+
+function openSurveyExplorer() {
+  injectStyles();
+
+  const savedSurveys = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
+  const fallbackSurveys = Object.values(CAMPAIGNS).filter(c => c.id !== "none");
+
+  const surveyRows = savedSurveys.length
+    ? savedSurveys
+    : fallbackSurveys;
+
+  const root = document.createElement("div");
+  root.className = "gw-quest-modal-backdrop";
+
+  root.innerHTML = `
+    <div class="gw-quest-modal">
+      <div class="gw-quest-modal-title">Survey Explorer</div>
+      <div class="gw-quest-modal-subtitle">
+        Join surveys to enable their field geometry on the HUD map. Only joined surveys can be shown.
+      </div>
+
+      <div class="gw-list">
+        ${surveyRows.map(c => {
+          const joined = window.GridWildSurveyLayer?.isJoined?.(c.id) || false;
+          const visible = window.GridWildSurveyLayer?.isVisible?.(c.id) || false;
+          const hasSavedGeometry = savedSurveys.some(x => x.id === c.id);
+
+          return `
+            <div class="gw-rowline gwSurveyExplorerRow" data-survey-id="${esc(c.id)}" style="cursor:pointer;">
+              <span style="min-width:0;">
+                <span>${esc(c.name || "Untitled Survey")}</span>
+                <span class="gw-muted" style="display:block;font-size:11px;overflow:hidden;text-overflow:ellipsis;">
+                  ${esc(c.description || "No description yet.")}
+                </span>
+              </span>
+
+              <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+                <button
+                  class="gw-mini-btn gwSurveyJoinBtn"
+                  data-survey-id="${esc(c.id)}"
+                  type="button"
+                >
+                  ${joined ? "Leave" : "Join"}
+                </button>
+
+                <button
+                  class="gw-mini-btn gwSurveyVisibilityBtn"
+                  data-survey-id="${esc(c.id)}"
+                  type="button"
+                  ${joined && hasSavedGeometry ? "" : "disabled"}
+                  title="${joined ? "Show or hide this survey on the HUD map" : "Join survey first"}"
+                >
+                  ${visible ? "Hide" : "Show"}
+                </button>
+
+                <span class="gw-quest-pill">View</span>
+              </span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+
+      <div class="gw-quest-actions">
+        <button class="gw-quest-btn secondary" id="gwSurveyExplorerClose">Close</button>
+        <button class="gw-quest-btn primary" id="gwNewSurveyBtn">New Survey</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(root);
+
+  root.onclick = evt => {
+    if (evt.target === root) root.remove();
+  };
+
+  root.querySelector("#gwSurveyExplorerClose").onclick = () => root.remove();
+
+  root.querySelector("#gwNewSurveyBtn").onclick = () => {
+    root.remove();
+    openNewSurveyConfigurator();
+  };
+
+  root.querySelectorAll(".gwSurveyExplorerRow").forEach(row => {
+    row.onclick = () => {
+      root.remove();
+      openSurveyInfo(row.dataset.surveyId);
+    };
+  });
+
+  root.querySelectorAll(".gwSurveyJoinBtn").forEach(btn => {
+    btn.onclick = evt => {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      const id = btn.dataset.surveyId;
+      if (window.GridWildSurveyLayer?.isJoined?.(id)) {
+        window.GridWildSurveyLayer.leave(id);
+      } else {
+        window.GridWildSurveyLayer?.join?.(id);
+      }
+
+      root.remove();
+      openSurveyExplorer();
+    };
+  });
+
+  root.querySelectorAll(".gwSurveyVisibilityBtn").forEach(btn => {
+    btn.onclick = evt => {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      const id = btn.dataset.surveyId;
+      if (window.GridWildSurveyLayer?.isVisible?.(id)) {
+        window.GridWildSurveyLayer.hide(id);
+      } else {
+        window.GridWildSurveyLayer?.show?.(id);
+      }
+
+      root.remove();
+      openSurveyExplorer();
+    };
+  });
+}
+
+function openSurveyExplorerOLD() {
+  injectStyles();
+
+  const savedSurveys = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
+  const fallbackSurveys = Object.values(CAMPAIGNS).filter(c => c.id !== "none");
+
+  const surveyRows = savedSurveys.length
+    ? savedSurveys
+    : fallbackSurveys;
+
+  const root = document.createElement("div");
+  root.className = "gw-quest-modal-backdrop";
+
+  root.innerHTML = `
+    <div class="gw-quest-modal">
+      <div class="gw-quest-modal-title">Survey Explorer</div>
+      <div class="gw-quest-modal-subtitle">
+        Surveys define a named biodiversity effort: location, timeframe, participants, and quest logic.
+      </div>
+
+      <div class="gw-list">
+        ${surveyRows.map(c => `
+          <div class="gw-rowline gwSurveyExplorerRow" data-survey-id="${esc(c.id)}" style="cursor:pointer;">
+            <span style="min-width:0;">
+              <span>${esc(c.name || "Untitled Survey")}</span>
+              <span class="gw-muted" style="display:block;font-size:11px;overflow:hidden;text-overflow:ellipsis;">
+                ${esc(c.description || "No description yet.")}
+              </span>
+            </span>
+
+            <span style="display:flex;gap:6px;align-items:center;">
+              ${savedSurveys.some(x => x.id === c.id)
+                ? `<button class="gw-mini-btn gwShowSurveyMapBtn" data-survey-id="${esc(c.id)}" type="button">Map</button>`
+                : ""
+              }
+              <span class="gw-quest-pill">View</span>
+            </span>
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="gw-quest-actions">
+        <button class="gw-quest-btn secondary" id="gwSurveyExplorerClose">Close</button>
+        <button class="gw-quest-btn primary" id="gwNewSurveyBtn">New Survey</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(root);
+
+  root.onclick = evt => {
+    if (evt.target === root) root.remove();
+  };
+
+  root.querySelector("#gwSurveyExplorerClose").onclick = () => root.remove();
+
+  root.querySelector("#gwNewSurveyBtn").onclick = () => {
+    root.remove();
+    openNewSurveyConfigurator();
+  };
+
+  root.querySelectorAll(".gwSurveyExplorerRow").forEach(row => {
+    row.onclick = () => openSurveyInfo(row.dataset.surveyId);
+  });
+
+  root.querySelectorAll(".gwShowSurveyMapBtn").forEach(btn => {
     btn.onclick = evt => {
       evt.stopPropagation();
-      window.GridWildCampaignDesigner?.showCampaignOnMap?.(btn.dataset.campaignId);
+      window.GridWildSurveyDesigner?.showSurveyOnMap?.(btn.dataset.surveyId);
       root.remove();
     };
   });
 }
 
 // OPEN FULL INTERFACE
-function openNewCampaignConfigurator() {
-  if (window.GridWildCampaignDesigner?.open) {
-    window.GridWildCampaignDesigner.open();
+function openNewSurveyConfigurator() {
+  if (window.GridWildSurveyDesigner?.open) {
+    window.GridWildSurveyDesigner.open();
     return;
   }
 
-  alert("Campaign Designer module is not loaded. Check js/gw-campaign-designer.js in index.html.");
+  alert("Survey Designer module is not loaded. Check js/gw-survey-designer.js in index.html.");
 }
 
-function openNewCampaignConfiguratorOLD() {
+function openNewSurveyConfiguratorOLD() {
   injectStyles();
 
   const root = document.createElement("div");
   root.className = "gw-quest-modal-backdrop";
   root.innerHTML = `
     <div class="gw-quest-modal">
-      <div class="gw-quest-modal-title">New Campaign</div>
+      <div class="gw-quest-modal-title">New Survey</div>
       <div class="gw-quest-modal-subtitle">
         Placeholder configurator. Future version: upload KML, draw station outline, or select grid cells directly.
       </div>
 
       <div class="gw-quest-form">
         <div class="gw-quest-field">
-          <label>Campaign name</label>
-          <select id="gwCampaignNamePreset">
-            <option>My New Campaign</option>
+          <label>Survey name</label>
+          <select id="gwSurveyNamePreset">
+            <option>My New Survey</option>
             <option>Station Biomarathon</option>
             <option>Neighborhood Bioblitz</option>
             <option>Campus Ark</option>
@@ -1424,7 +1642,7 @@ function openNewCampaignConfiguratorOLD() {
 
         <div class="gw-quest-field">
           <label>Time range</label>
-          <select id="gwCampaignTimeRange">
+          <select id="gwSurveyTimeRange">
             <option value="permanent">Permanent</option>
             <option value="today">Today</option>
             <option value="weekend">Weekend</option>
@@ -1434,7 +1652,7 @@ function openNewCampaignConfiguratorOLD() {
 
         <div class="gw-quest-field">
           <label>Location scope</label>
-          <select id="gwCampaignLocationScope">
+          <select id="gwSurveyLocationScope">
             <option value="specific_square">Specific square</option>
             <option value="area_3x3">Area range: 3×3 squares</option>
             <option value="area_20x20">Area range: 20×20 squares</option>
@@ -1444,17 +1662,17 @@ function openNewCampaignConfiguratorOLD() {
       </div>
 
       <div class="gw-quest-actions">
-        <button class="gw-quest-btn secondary" id="gwNewCampaignCancel">Cancel</button>
-        <button class="gw-quest-btn primary" id="gwNewCampaignSave">Save Placeholder</button>
+        <button class="gw-quest-btn secondary" id="gwNewSurveyCancel">Cancel</button>
+        <button class="gw-quest-btn primary" id="gwNewSurveySave">Save Placeholder</button>
       </div>
     </div>
   `;
 
   document.body.appendChild(root);
   root.onclick = evt => { if (evt.target === root) root.remove(); };
-  root.querySelector("#gwNewCampaignCancel").onclick = () => root.remove();
-  root.querySelector("#gwNewCampaignSave").onclick = () => {
-    alert("Placeholder campaign saved later — not persisted yet.");
+  root.querySelector("#gwNewSurveyCancel").onclick = () => root.remove();
+  root.querySelector("#gwNewSurveySave").onclick = () => {
+    alert("Placeholder survey saved later — not persisted yet.");
     root.remove();
   };
 }
@@ -1467,9 +1685,9 @@ function openNewCampaignConfiguratorOLD() {
     renderDailyQuestsHtml,
     startQuestFromRecipe,
     generateDailyQuests,
-    openCampaignExplorer,
-    openCampaignInfo,
-    openNewCampaignConfigurator,
+    openSurveyExplorer,
+    openSurveyInfo,
+    openNewSurveyConfigurator,
     bindQuestSheetControls,
     openQuestStatus,
     openQuestRecipeCreator,

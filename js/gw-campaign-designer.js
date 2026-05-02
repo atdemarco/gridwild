@@ -1,16 +1,16 @@
 // -----------------------------------------------------------------------------
-// GridWild Campaign Designer
-// Fullscreen desktop-first campaign creation / planning UI
+// GridWild Survey Designer
+// Fullscreen desktop-first survey creation / planning UI
 // -----------------------------------------------------------------------------
 
 (function () {
-  const STORAGE_KEY = "gw_campaigns_v1";
+  const STORAGE_KEY = "gw_surveys_v1";
 
   let designerRoot = null;
   let activeTool = "select";
   let selectedLayer = null;
 
-  let draft = makeEmptyCampaign();
+  let draft = makeEmptySurvey();
 
   let layers = {
     boundary: null,
@@ -48,7 +48,7 @@ function restoreDraft(snapshot) {
   draft = cloneDraft(snapshot);
   drawingPoints = [];
   selectedLayer = null;
-  redrawCampaignDraft();
+  redrawSurveyDraft();
   refreshFormFromDraft();
   refreshRightPanel();
   updateUndoRedoButtons();
@@ -86,10 +86,10 @@ function refreshFormFromDraft() {
   setVal("gwCdPublicMode", draft.publicMode);
 }
 
-  function makeEmptyCampaign() {
+  function makeEmptySurvey() {
     return {
-      id: `campaign_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      name: "New Campaign",
+      id: `survey_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      name: "New Survey",
       description: "",
       timeRange: "permanent",
       targetTaxon: "Any",
@@ -116,18 +116,55 @@ function refreshFormFromDraft() {
   }
 
   function injectStyles() {
-    if (document.getElementById("gwCampaignDesignerStyles")) return;
+    if (document.getElementById("gwSurveyDesignerStyles")) return;
 
     const style = document.createElement("style");
-    style.id = "gwCampaignDesignerStyles";
+    style.id = "gwSurveyDesignerStyles";
     style.textContent = `
+        .gw-cd-field input[type="color"] {
+          height: 42px;
+          padding: 4px;
+          cursor: pointer;
+        }
 
+        .gw-cd-field input[type="color"]::-webkit-color-swatch-wrapper {
+          padding: 0;
+        }
+
+        .gw-cd-field input[type="color"]::-webkit-color-swatch {
+          border: 0;
+          border-radius: 9px;
+        }
+
+        .gw-cd-field input[type="color"]::-moz-color-swatch {
+          border: 0;
+          border-radius: 9px;
+        }
+
+        .gw-cd-modal-backdrop {
+          position: absolute;
+          inset: 0;
+          z-index: 99999;
+          display: grid;
+          place-items: center;
+          background: rgba(0,0,0,0.35);
+        }
+
+        .gw-cd-asset-modal {
+          width: min(420px, calc(100vw - 32px));
+          border-radius: 22px;
+          padding: 18px;
+          background: linear-gradient(180deg, rgba(47,40,33,0.98), rgba(23,19,16,0.99));
+          border: 1px solid rgba(215,183,116,0.48);
+          box-shadow: 0 24px 80px rgba(0,0,0,0.55);
+        }
+          
         .gw-cd-btn:disabled {
         opacity: 0.42;
         cursor: not-allowed;
         }
 
-       .gw-campaign-designer {
+       .gw-survey-designer {
         position: fixed;
         inset: 0;
         z-index: 99995;
@@ -166,7 +203,7 @@ function refreshFormFromDraft() {
         overflow: hidden;
         }
 
-        #gwCampaignDesignerMap {
+        #gwSurveyDesignerMap {
         position: absolute;
         inset: 0;
         z-index: 1;
@@ -316,12 +353,12 @@ function refreshFormFromDraft() {
         font-size: 12px;
       }
 
-        #gwCampaignDesignerMap.gw-cd-tool-select { cursor: default; }
-#gwCampaignDesignerMap.gw-cd-tool-boundary { cursor: crosshair; }
-#gwCampaignDesignerMap.gw-cd-tool-path { cursor: cell; }
-#gwCampaignDesignerMap.gw-cd-tool-exclusion { cursor: not-allowed; }
-#gwCampaignDesignerMap.gw-cd-tool-dense { cursor: copy; }
-#gwCampaignDesignerMap.gw-cd-tool-asset { cursor: grab; }
+        #gwSurveyDesignerMap.gw-cd-tool-select { cursor: default; }
+#gwSurveyDesignerMap.gw-cd-tool-boundary { cursor: crosshair; }
+#gwSurveyDesignerMap.gw-cd-tool-path { cursor: cell; }
+#gwSurveyDesignerMap.gw-cd-tool-exclusion { cursor: not-allowed; }
+#gwSurveyDesignerMap.gw-cd-tool-dense { cursor: copy; }
+#gwSurveyDesignerMap.gw-cd-tool-asset { cursor: grab; }
 
 .gw-cd-context-menu {
   position: absolute;
@@ -344,7 +381,7 @@ function refreshFormFromDraft() {
 }
 
       @media (max-width: 900px) {
-        .gw-campaign-designer {
+        .gw-survey-designer {
           grid-template-columns: 1fr;
         }
         .gw-cd-map,
@@ -360,14 +397,14 @@ function refreshFormFromDraft() {
   function ensureLayers() {
     if (!window.map || !window.L) return;
 
-    if (!map.getPane("gwCampaignDesignerPane")) {
-      map.createPane("gwCampaignDesignerPane");
-      map.getPane("gwCampaignDesignerPane").style.zIndex = 790;
+    if (!map.getPane("gwSurveyDesignerPane")) {
+      map.createPane("gwSurveyDesignerPane");
+      map.getPane("gwSurveyDesignerPane").style.zIndex = 790;
     }
 
     for (const key of Object.keys(layers)) {
       if (!layers[key]) {
-        layers[key] = L.layerGroup([], { pane: "gwCampaignDesignerPane" }).addTo(map);
+        layers[key] = L.layerGroup([], { pane: "gwSurveyDesignerPane" }).addTo(map);
       }
     }
   }
@@ -377,6 +414,68 @@ function clearLayers() {
   Object.values(designerMapLayers || {}).forEach(layer => layer?.clearLayers?.());
   clearVertexHandles();
   selectedLayer = null;
+}
+
+function ensureGeometryStyles() {
+  draft.geometries.styles = draft.geometries.styles || {};
+  draft.geometries.styles.boundary = draft.geometries.styles.boundary || {};
+  draft.geometries.styles.paths = draft.geometries.styles.paths || [];
+  draft.geometries.styles.exclusions = draft.geometries.styles.exclusions || [];
+  draft.geometries.styles.denseZones = draft.geometries.styles.denseZones || [];
+}
+
+function defaultGeometryStyle(kind) {
+  const c = colorForKind(kind);
+  return {
+    fillColor: c,
+    lineColor: c,
+    lineWeight: kind === "path" ? 5 : kind === "boundary" ? 3 : 2,
+    fillOpacity: kind === "path" ? 0 : kind === "boundary" ? 0.10 : kind === "exclusion" ? 0.20 : 0.22
+  };
+}
+
+function getGeometryStyle(kind, index = 0) {
+  ensureGeometryStyles();
+
+  if (kind === "boundary") {
+    return { ...defaultGeometryStyle(kind), ...draft.geometries.styles.boundary };
+  }
+
+  const key =
+    kind === "path" ? "paths" :
+    kind === "exclusion" ? "exclusions" :
+    "denseZones";
+
+  return { ...defaultGeometryStyle(kind), ...(draft.geometries.styles[key][index] || {}) };
+}
+
+function setGeometryStyle(kind, index, style) {
+  ensureGeometryStyles();
+
+  if (kind === "boundary") {
+    draft.geometries.styles.boundary = style;
+    return;
+  }
+
+  const key =
+    kind === "path" ? "paths" :
+    kind === "exclusion" ? "exclusions" :
+    "denseZones";
+
+  draft.geometries.styles[key][index] = style;
+}
+
+function getDraftPointsForEditable(kind, draftArray, index) {
+  if (kind === "boundary") return draft.geometries.boundary;
+  return draftArray?.[index];
+}
+
+function applyGeometryLatLngs(layer, kind, pts) {
+  if (kind === "path") {
+    layer.setLatLngs(draftPointsToLatLngs(pts));
+  } else {
+    layer.setLatLngs([draftPointsToLatLngs(pts)]);
+  }
 }
 
   function colorForKind(kind) {
@@ -421,21 +520,19 @@ function selectEditableLayer(layer, kind, draftArray, index) {
 
   if (kind === "asset") return;
 
-  const pts = draftArray[index];
+  const pts = getDraftPointsForEditable(kind, draftArray, index);
   if (!Array.isArray(pts)) return;
 
   pts.forEach((p, vertexIndex) => {
     const h = L.circleMarker([p.lat, p.lng], {
-      radius: 6,
+      radius: 7,
       color: "#ffffff",
       fillColor: colorForKind(kind),
       fillOpacity: 1,
       weight: 2,
-      interactive: true,
-      draggable: true
+      interactive: true
     }).addTo(getDesignLayers().assets);
 
-    // Leaflet CircleMarker is not natively draggable, so implement pointer drag.
     h.on("mousedown", evt => {
       L.DomEvent.stop(evt);
       const dm = getDesignMap();
@@ -445,13 +542,7 @@ function selectEditableLayer(layer, kind, draftArray, index) {
         const ll = moveEvt.latlng;
         pts[vertexIndex] = { lat: ll.lat, lng: ll.lng };
         h.setLatLng(ll);
-
-        if (kind === "path") {
-          layer.setLatLngs(draftPointsToLatLngs(pts));
-        } else {
-          layer.setLatLngs([draftPointsToLatLngs(pts)]);
-        }
-
+        applyGeometryLatLngs(layer, kind, pts);
         refreshRightPanel();
       }
 
@@ -459,10 +550,32 @@ function selectEditableLayer(layer, kind, draftArray, index) {
         dm.off("mousemove", onMove);
         dm.off("mouseup", onUp);
         dm.dragging.enable();
+        refreshRightPanel();
       }
 
       dm.on("mousemove", onMove);
       dm.on("mouseup", onUp);
+    });
+
+    h.on("contextmenu", evt => {
+      L.DomEvent.stop(evt);
+
+      showSurveyContextMenu(evt.containerPoint, {
+        labelDelete: "Delete vertex",
+        onDelete: () => {
+          const minPts = kind === "path" ? 2 : 3;
+          if (pts.length <= minPts) {
+            alert(`A ${kind} needs at least ${minPts} vertices.`);
+            return;
+          }
+
+          pushUndoState();
+          pts.splice(vertexIndex, 1);
+          applyGeometryLatLngs(layer, kind, pts);
+          selectEditableLayer(layer, kind, draftArray, index);
+          refreshRightPanel();
+        }
+      });
     });
 
     vertexHandles.push(h);
@@ -472,53 +585,266 @@ function selectEditableLayer(layer, kind, draftArray, index) {
 function bindEditableLayer(layer, kind, draftArray, index) {
   layer.on("click", evt => {
     L.DomEvent.stop(evt);
+  });
+
+  layer.on("dblclick", evt => {
+    L.DomEvent.stop(evt);
+    setTool("select");
     selectEditableLayer(layer, kind, draftArray, index);
   });
 
   layer.on("contextmenu", evt => {
     L.DomEvent.stop(evt);
 
-    showCampaignContextMenu(evt.containerPoint, () => {
-      pushUndoState();
+    showSurveyContextMenu(evt.containerPoint, {
+      onEdit: () => showGeometryEditModal(kind, index, layer, draftArray),
+      onDelete: () => {
+        pushUndoState();
 
-      if (kind === "boundary") {
-        draft.geometries.boundary = [];
-      } else if (Array.isArray(draftArray)) {
-        draftArray.splice(index, 1);
+        if (kind === "boundary") {
+          draft.geometries.boundary = [];
+          draft.geometries.styles.boundary = {};
+          draft.geometries.labels.boundary = "";
+        } else if (Array.isArray(draftArray)) {
+          draftArray.splice(index, 1);
+
+          const styleKey =
+            kind === "path" ? "paths" :
+            kind === "exclusion" ? "exclusions" :
+            "denseZones";
+
+          draft.geometries.styles?.[styleKey]?.splice?.(index, 1);
+          draft.geometries.labels?.[styleKey]?.splice?.(index, 1);
+        }
+
+        selectedLayer = null;
+        drawingPoints = [];
+        redrawSurveyDraft();
+        refreshRightPanel();
       }
-
-      selectedLayer = null;
-      drawingPoints = [];
-      redrawCampaignDraft();
-      refreshRightPanel();
     });
   });
 
   return layer;
 }
 
-function showCampaignContextMenu(containerPoint, onDelete) {
-  hideCampaignContextMenu();
+function showAssetEditModal(asset, index) {
+  document.getElementById("gwCdAssetModalBackdrop")?.remove();
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "gwCdAssetModalBackdrop";
+  backdrop.className = "gw-cd-modal-backdrop";
+
+  backdrop.innerHTML = `
+    <div class="gw-cd-asset-modal">
+      <div class="gw-cd-title">Edit Asset / Station</div>
+
+      <div class="gw-cd-field">
+        <label>Asset name</label>
+        <input id="gwAssetEditName" value="${esc(asset.name || "")}">
+      </div>
+
+      <div class="gw-cd-field">
+        <label>Asset type</label>
+        <select id="gwAssetEditType">
+          <option value="light_trap">Light trap</option>
+          <option value="feeder">Feeder</option>
+          <option value="watchpoint">Watchpoint</option>
+          <option value="stream_access">Stream access</option>
+          <option value="camera_trap">Camera trap</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="gw-cd-field">
+        <label>Access / use instructions</label>
+        <textarea id="gwAssetEditInstructions">${esc(asset.instructions || "")}</textarea>
+      </div>
+
+      <div class="gw-cd-field">
+        <label>Color</label>
+        <input id="gwAssetEditColor" type="color" value="${esc(asset.color || "#f0d18a")}">
+      </div>
+
+      <div class="gw-cd-field">
+        <label>Icon</label>
+        <select id="gwAssetEditIcon">
+          <option value="💡">💡 Light</option>
+          <option value="📷">📷 Camera</option>
+          <option value="🥾">🥾 Access point</option>
+          <option value="🐦">🐦 Watchpoint</option>
+          <option value="🌿">🌿 Plant station</option>
+          <option value="🪲">🪲 Insect station</option>
+          <option value="📍">📍 Marker</option>
+        </select>
+      </div>
+
+      <div class="gw-cd-top-actions">
+        <button class="gw-cd-btn" id="gwAssetEditCancel" type="button">Cancel</button>
+        <button class="gw-cd-btn primary" id="gwAssetEditSave" type="button">Save</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("gwSurveyDesignerMap").appendChild(backdrop);
+
+  L.DomEvent.disableClickPropagation(backdrop);
+  L.DomEvent.disableScrollPropagation(backdrop);
+
+  backdrop.querySelector("#gwAssetEditType").value = asset.type || "light_trap";
+  backdrop.querySelector("#gwAssetEditIcon").value = asset.icon || "📍";
+
+  backdrop.querySelector("#gwAssetEditCancel").onclick = evt => {
+    L.DomEvent.stop(evt);
+    backdrop.remove();
+  };
+
+  backdrop.querySelector("#gwAssetEditSave").onclick = evt => {
+    L.DomEvent.stop(evt);
+    evt.preventDefault();
+
+    pushUndoState();
+
+    asset.name = backdrop.querySelector("#gwAssetEditName").value || "Survey asset";
+    asset.type = backdrop.querySelector("#gwAssetEditType").value || "other";
+    asset.instructions = backdrop.querySelector("#gwAssetEditInstructions").value || "";
+    asset.color = backdrop.querySelector("#gwAssetEditColor").value || "#f0d18a";
+    asset.icon = backdrop.querySelector("#gwAssetEditIcon").value || "📍";
+
+    backdrop.remove();
+    redrawSurveyDraft();
+    refreshRightPanel();
+  };
+}
+
+function showGeometryEditModal(kind, index, layer, draftArray) {
+  document.getElementById("gwCdAssetModalBackdrop")?.remove();
+
+  const style = getGeometryStyle(kind, index);
+  const title =
+    kind === "boundary" ? "Edit Boundary" :
+    kind === "path" ? "Edit Path" :
+    kind === "exclusion" ? "Edit Exclusion Zone" :
+    "Edit Dense Zone";
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "gwCdAssetModalBackdrop";
+  backdrop.className = "gw-cd-modal-backdrop";
+
+  backdrop.innerHTML = `
+    <div class="gw-cd-asset-modal">
+      <div class="gw-cd-title">${esc(title)}</div>
+
+      <div class="gw-cd-field">
+        <label>Label / title</label>
+        <input id="gwGeomLabel" value="${esc(getGeometryLabel(kind, index))}">
+      </div>
+
+      <div class="gw-cd-field">
+        <label>Fill color</label>
+        <input id="gwGeomFillColor" type="color" value="${esc(style.fillColor || colorForKind(kind))}">
+      </div>
+
+      <div class="gw-cd-field">
+        <label>Line color</label>
+        <input id="gwGeomLineColor" type="color" value="${esc(style.lineColor || colorForKind(kind))}">
+      </div>
+
+      <div class="gw-cd-field">
+        <label>Line thickness</label>
+        <input id="gwGeomLineWeight" type="number" min="1" max="20" step="1" value="${Number(style.lineWeight || 2)}">
+      </div>
+
+      <div class="gw-cd-field">
+        <label>Fill opacity</label>
+        <input id="gwGeomFillOpacity" type="number" min="0" max="1" step="0.05" value="${Number(style.fillOpacity ?? 0.15)}">
+      </div>
+
+      <div class="gw-cd-top-actions">
+        <button class="gw-cd-btn" id="gwGeomEditCancel" type="button">Cancel</button>
+        <button class="gw-cd-btn primary" id="gwGeomEditSave" type="button">Save</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("gwSurveyDesignerMap").appendChild(backdrop);
+
+  L.DomEvent.disableClickPropagation(backdrop);
+  L.DomEvent.disableScrollPropagation(backdrop);
+
+  backdrop.querySelector("#gwGeomEditCancel").onclick = evt => {
+    L.DomEvent.stop(evt);
+    backdrop.remove();
+  };
+
+  backdrop.querySelector("#gwGeomEditSave").onclick = evt => {
+    L.DomEvent.stop(evt);
+    evt.preventDefault();
+
+    pushUndoState();
+
+    const nextStyle = {
+      fillColor: backdrop.querySelector("#gwGeomFillColor").value || colorForKind(kind),
+      lineColor: backdrop.querySelector("#gwGeomLineColor").value || colorForKind(kind),
+      lineWeight: Number(backdrop.querySelector("#gwGeomLineWeight").value) || 2,
+      fillOpacity: Number(backdrop.querySelector("#gwGeomFillOpacity").value)
+    };
+
+    if (!Number.isFinite(nextStyle.fillOpacity)) nextStyle.fillOpacity = 0.15;
+    nextStyle.fillOpacity = Math.max(0, Math.min(1, nextStyle.fillOpacity));
+
+    setGeometryLabel(
+      kind,
+      index,
+      backdrop.querySelector("#gwGeomLabel").value || getGeometryLabel(kind, index)
+    );
+
+    setGeometryStyle(kind, index, nextStyle);
+
+    backdrop.remove();
+    redrawSurveyDraft();
+    refreshRightPanel();
+  };
+}
+
+function showSurveyContextMenu(containerPoint, opts = {}) {
+  hideSurveyContextMenu();
 
   contextMenuEl = document.createElement("div");
   contextMenuEl.className = "gw-cd-context-menu";
   contextMenuEl.style.left = `${containerPoint.x}px`;
   contextMenuEl.style.top = `${containerPoint.y}px`;
-  contextMenuEl.innerHTML = `<button type="button">Delete object</button>`;
 
-  document.getElementById("gwCampaignDesignerMap").appendChild(contextMenuEl);
+  contextMenuEl.innerHTML = `
+    ${opts.onEdit ? `<button type="button" data-action="edit">Edit...</button>` : ""}
+    <button type="button" data-action="delete">${esc(opts.labelDelete || "Delete object")}</button>
+  `;
 
-  contextMenuEl.querySelector("button").onclick = () => {
-    onDelete();
-    hideCampaignContextMenu();
-  };
+  L.DomEvent.disableClickPropagation(contextMenuEl);
+  L.DomEvent.disableScrollPropagation(contextMenuEl);
+
+  document.getElementById("gwSurveyDesignerMap").appendChild(contextMenuEl);
+
+  contextMenuEl.querySelector('[data-action="edit"]')?.addEventListener("click", evt => {
+    L.DomEvent.stop(evt);
+    evt.preventDefault();
+    hideSurveyContextMenu();
+    opts.onEdit?.();
+  });
+
+  contextMenuEl.querySelector('[data-action="delete"]')?.addEventListener("click", evt => {
+    L.DomEvent.stop(evt);
+    evt.preventDefault();
+    opts.onDelete?.();
+    hideSurveyContextMenu();
+  });
 
   setTimeout(() => {
-    document.addEventListener("click", hideCampaignContextMenu, { once: true });
+    document.addEventListener("click", hideSurveyContextMenu, { once: true });
   }, 0);
 }
 
-function hideCampaignContextMenu() {
+function hideSurveyContextMenu() {
   contextMenuEl?.remove();
   contextMenuEl = null;
 }
@@ -535,6 +861,7 @@ function addCurrentViewBoundary() {
     b.getSouthWest()
   ];
 
+  ensureGeometryStyles();
   draft.geometries.boundary = latLngsToDraftPoints(coords);
 
   dl.boundary.clearLayers();
@@ -565,21 +892,7 @@ function addCurrentViewBoundary() {
     };
 
     draft.geometries.assets.push(asset);
-
-    const marker = L.circleMarker([asset.lat, asset.lng], {
-    radius: 9,
-    color: colorForKind("asset"),
-    fillColor: colorForKind("asset"),
-    fillOpacity: 0.88,
-    weight: 2,
-    interactive: true
-    }).bindPopup(`
-      <b>${esc(asset.name)}</b><br>
-      ${esc(asset.type)}<br>
-      <span>${esc(asset.instructions)}</span>
-    `);
-
-    marker.addTo(designerMapLayers?.assets || layers.assets);
+    redrawSurveyDraft();
     refreshRightPanel();
   }
 
@@ -624,13 +937,7 @@ function addDemoPath() {
 
     draft.geometries.exclusions.push(pts.map(([lat, lng]) => ({ lat, lng })));
 
-    L.polygon(pts, {
-      color: colorForKind("exclusion"),
-      weight: 2,
-      fillColor: colorForKind("exclusion"),
-      fillOpacity: 0.20
-    }).addTo(getDesignLayers().exclusions);
-
+    redrawSurveyDraft();
     refreshRightPanel();
   }
 
@@ -647,13 +954,7 @@ function addDemoPath() {
 
     draft.geometries.denseZones.push(pts.map(([lat, lng]) => ({ lat, lng })));
 
-    L.polygon(pts, {
-      color: colorForKind("dense"),
-      weight: 2,
-      fillColor: colorForKind("dense"),
-      fillOpacity: 0.22
-    }).addTo(getDesignLayers().denseZones);
-
+    redrawSurveyDraft();
     refreshRightPanel();
   }
 
@@ -681,8 +982,50 @@ function addDemoPath() {
     refreshRightPanel();
   }
 
+  function ensureGeometryLabels() {
+  draft.geometries.labels = draft.geometries.labels || {};
+  draft.geometries.labels.boundary = draft.geometries.labels.boundary || "";
+  draft.geometries.labels.paths = draft.geometries.labels.paths || [];
+  draft.geometries.labels.exclusions = draft.geometries.labels.exclusions || [];
+  draft.geometries.labels.denseZones = draft.geometries.labels.denseZones || [];
+}
+
+function getGeometryLabel(kind, index = 0) {
+  ensureGeometryLabels();
+
+  if (kind === "boundary") return draft.geometries.labels.boundary || "Survey boundary";
+
+  const key =
+    kind === "path" ? "paths" :
+    kind === "exclusion" ? "exclusions" :
+    "denseZones";
+
+  return draft.geometries.labels[key][index] || (
+    kind === "path" ? "Main path" :
+    kind === "exclusion" ? "Exclusion zone" :
+    "Dense zone"
+  );
+}
+
+function setGeometryLabel(kind, index, label) {
+  ensureGeometryLabels();
+
+  if (kind === "boundary") {
+    draft.geometries.labels.boundary = label;
+    return;
+  }
+
+  const key =
+    kind === "path" ? "paths" :
+    kind === "exclusion" ? "exclusions" :
+    "denseZones";
+
+  draft.geometries.labels[key][index] = label;
+}
+
+
   function syncDraftFromForm() {
-    draft.name = document.getElementById("gwCdName")?.value || "New Campaign";
+    draft.name = document.getElementById("gwCdName")?.value || "New Survey";
     draft.description = document.getElementById("gwCdDescription")?.value || "";
     draft.timeRange = document.getElementById("gwCdTimeRange")?.value || "permanent";
     draft.targetTaxon = document.getElementById("gwCdTargetTaxon")?.value || "Any";
@@ -690,7 +1033,7 @@ function addDemoPath() {
     draft.updatedAt = new Date().toISOString();
   }
 
-  function loadCampaigns() {
+  function loadSurveys() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
@@ -700,21 +1043,22 @@ function addDemoPath() {
     }
   }
 
-  function saveCampaigns(campaigns) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(campaigns || []));
+  function saveSurveys(surveys) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(surveys || []));
+    window.GridWildSurveyLayer?.render?.();
   }
 
   function saveDraft() {
     syncDraftFromForm();
 
-    const campaigns = loadCampaigns();
-    const idx = campaigns.findIndex(c => c.id === draft.id);
+    const surveys = loadSurveys();
+    const idx = surveys.findIndex(c => c.id === draft.id);
 
-    if (idx >= 0) campaigns[idx] = draft;
-    else campaigns.unshift(draft);
+    if (idx >= 0) surveys[idx] = draft;
+    else surveys.unshift(draft);
 
-    saveCampaigns(campaigns);
-    alert("Campaign saved locally.");
+    saveSurveys(surveys);
+    alert("Survey saved locally.");
     refreshRightPanel();
   }
 
@@ -727,7 +1071,7 @@ function addDemoPath() {
 
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${draft.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}_campaign.json`;
+    a.download = `${draft.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}_survey.json`;
     a.click();
 
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -760,7 +1104,7 @@ function addDemoPath() {
     ensureLayers();
 
     const layer = L.geoJSON(gj, {
-      pane: "gwCampaignDesignerPane",
+      pane: "gwSurveyDesignerPane",
       style: {
         color: colorForKind("boundary"),
         weight: 3,
@@ -824,7 +1168,7 @@ function drawPreviewPoint(latlng) {
 }
 
 function drawLivePreview() {
-  redrawCampaignDraft();
+  redrawSurveyDraft();
 
   if (drawingPoints.length < 2) return;
 
@@ -859,31 +1203,63 @@ function drawLivePreview() {
 function finishDrawing() {
   if (!drawingPoints.length) return;
 
-  pushUndoState();
-  
-
+  const finishedTool = activeTool;
   const pts = latLngsToDraftPoints(drawingPoints);
 
-  
-  if (activeTool === "path" && pts.length >= 2) {
+  if (finishedTool === "path" && pts.length < 2) return;
+  if (["boundary", "exclusion", "dense"].includes(finishedTool) && pts.length < 3) return;
+
+  pushUndoState();
+
+  let editKind = finishedTool;
+  let editArray = null;
+  let editIndex = 0;
+
+  if (finishedTool === "path") {
     draft.geometries.paths.push(pts);
+    editArray = draft.geometries.paths;
+    editIndex = draft.geometries.paths.length - 1;
   }
 
-  if (activeTool === "boundary" && pts.length >= 3) {
+  if (finishedTool === "boundary") {
     draft.geometries.boundary = pts;
+    editArray = draft.geometries.boundary;
+    editIndex = 0;
   }
 
-  if (activeTool === "exclusion" && pts.length >= 3) {
+  if (finishedTool === "exclusion") {
     draft.geometries.exclusions.push(pts);
+    editArray = draft.geometries.exclusions;
+    editIndex = draft.geometries.exclusions.length - 1;
   }
 
-  if (activeTool === "dense" && pts.length >= 3) {
+  if (finishedTool === "dense") {
     draft.geometries.denseZones.push(pts);
+    editArray = draft.geometries.denseZones;
+    editIndex = draft.geometries.denseZones.length - 1;
   }
 
   drawingPoints = [];
-  redrawCampaignDraft();
+  redrawSurveyDraft();
   refreshRightPanel();
+  setTool("select");
+
+  setTimeout(() => {
+    const dl = getDesignLayers();
+
+    const group =
+      editKind === "boundary" ? dl.boundary :
+      editKind === "path" ? dl.paths :
+      editKind === "exclusion" ? dl.exclusions :
+      editKind === "dense" ? dl.denseZones :
+      null;
+
+    const layer = group?.getLayers?.()[editIndex];
+
+    if (layer) {
+      selectEditableLayer(layer, editKind, editArray, editIndex);
+    }
+  }, 0);
 }
 
 function placeAssetAt(latlng) {
@@ -898,14 +1274,14 @@ function placeAssetAt(latlng) {
 
   pushUndoState();
   draft.geometries.assets.push(asset);
-  redrawCampaignDraft();
+  redrawSurveyDraft();
   refreshRightPanel();
 }
 
     function setTool(tool) {
     activeTool = tool;
     drawingPoints = [];
-    hideCampaignContextMenu();
+    hideSurveyContextMenu();
 
     if (designerMap) {
         const drawingMode = tool !== "select";
@@ -923,10 +1299,18 @@ function placeAssetAt(latlng) {
         btn.classList.toggle("active", btn.dataset.tool === tool);
     });
 
-    const host = document.getElementById("gwCampaignDesignerMap");
+    const host = document.getElementById("gwSurveyDesignerMap");
     if (host) {
-        host.className = "";
-        host.classList.add(`gw-cd-tool-${tool}`);
+      host.classList.remove(
+        "gw-cd-tool-select",
+        "gw-cd-tool-boundary",
+        "gw-cd-tool-path",
+        "gw-cd-tool-exclusion",
+        "gw-cd-tool-dense",
+        "gw-cd-tool-asset"
+      );
+
+      host.classList.add(`gw-cd-tool-${tool}`);
     }
 
     const note = document.getElementById("gwCdMapNote");
@@ -950,9 +1334,9 @@ function placeAssetAt(latlng) {
 
   function renderRightPanel() {
     return `
-      <div class="gw-cd-title">Campaign Status</div>
+      <div class="gw-cd-title">Survey Status</div>
       <div class="gw-cd-sub">
-        Draft campaign specification and planning layers.
+        Draft survey specification and planning layers.
       </div>
 
       <div class="gw-cd-top-actions" style="margin-bottom:14px;">
@@ -982,116 +1366,138 @@ function placeAssetAt(latlng) {
 
       <div class="gw-cd-section">
         <div class="gw-cd-section-title">Saved locally</div>
-        <div class="gw-cd-muted">${loadCampaigns().length} campaign(s) in localStorage.</div>
+        <div class="gw-cd-muted">${loadSurveys().length} survey(s) in localStorage.</div>
       </div>
     `;
   }
 
-function redrawCampaignDraft() {
-  const dl = getDesignLayers();
-  Object.values(dl).forEach(layer => layer?.clearLayers?.());
-  clearVertexHandles();
+  function redrawSurveyDraft() {
+    const dl = getDesignLayers();
+    Object.values(dl).forEach(layer => layer?.clearLayers?.());
+    clearVertexHandles();
 
-  if (draft.geometries.boundary?.length) {
-    const idxWrapper = { 0: draft.geometries.boundary };
-    const layer = L.polygon(draftPointsToLatLngs(draft.geometries.boundary), {
-      color: colorForKind("boundary"),
-      weight: 3,
-      fillColor: colorForKind("boundary"),
-      fillOpacity: 0.10,
-      interactive: true
-    }).addTo(dl.boundary);
+    ensureGeometryStyles();
+    ensureGeometryLabels();
 
-    bindEditableLayer(layer, "boundary", draft.geometries.boundary, 0);
-  }
+    if (draft.geometries.boundary?.length) {
+      const s = getGeometryStyle("boundary", 0);
 
-  (draft.geometries.paths || []).forEach((path, index) => {
-    const layer = L.polyline(draftPointsToLatLngs(path), {
-      color: colorForKind("path"),
-      weight: 5,
-      opacity: 0.95,
-      dashArray: "8 7",
-      interactive: true
-    }).addTo(dl.paths);
+      const layer = L.polygon(draftPointsToLatLngs(draft.geometries.boundary), {
+        color: s.lineColor,
+        weight: s.lineWeight,
+        fillColor: s.fillColor,
+        fillOpacity: s.fillOpacity,
+        interactive: true
+      }).addTo(dl.boundary);
 
-    bindEditableLayer(layer, "path", draft.geometries.paths, index);
-  });
+      bindEditableLayer(layer, "boundary", draft.geometries.boundary, 0);
+    }
 
-  (draft.geometries.exclusions || []).forEach((poly, index) => {
-    const layer = L.polygon(draftPointsToLatLngs(poly), {
-      color: colorForKind("exclusion"),
-      weight: 2,
-      fillColor: colorForKind("exclusion"),
-      fillOpacity: 0.20,
-      interactive: true
-    }).addTo(dl.exclusions);
+    (draft.geometries.paths || []).forEach((path, index) => {
+      const s = getGeometryStyle("path", index);
 
-    bindEditableLayer(layer, "exclusion", draft.geometries.exclusions, index);
-  });
+      const layer = L.polyline(draftPointsToLatLngs(path), {
+        color: s.lineColor,
+        weight: s.lineWeight,
+        opacity: 0.95,
+        dashArray: "8 7",
+        interactive: true
+      }).addTo(dl.paths);
 
-  (draft.geometries.denseZones || []).forEach((poly, index) => {
-    const layer = L.polygon(draftPointsToLatLngs(poly), {
-      color: colorForKind("dense"),
-      weight: 2,
-      fillColor: colorForKind("dense"),
-      fillOpacity: 0.22,
-      interactive: true
-    }).addTo(dl.denseZones);
-
-    bindEditableLayer(layer, "dense", draft.geometries.denseZones, index);
-  });
-
-  (draft.geometries.assets || []).forEach((asset, index) => {
-    const marker = L.circleMarker([asset.lat, asset.lng], {
-      radius: 9,
-      color: colorForKind("asset"),
-      fillColor: colorForKind("asset"),
-      fillOpacity: 0.88,
-      weight: 2,
-      interactive: true
-    }).bindPopup(`
-      <b>${esc(asset.name || "Campaign asset")}</b><br>
-      ${esc(asset.type || "")}<br>
-      <span>${esc(asset.instructions || "")}</span>
-    `).addTo(dl.assets);
-
-    marker.on("click", evt => {
-      L.DomEvent.stop(evt);
-      selectedLayer = { layer: marker, kind: "asset", draftArray: draft.geometries.assets, index };
+      bindEditableLayer(layer, "path", draft.geometries.paths, index);
     });
 
-    marker.on("contextmenu", evt => {
-      L.DomEvent.stop(evt);
-        showCampaignContextMenu(evt.containerPoint, () => {
-        pushUndoState();
-        draft.geometries.assets.splice(index, 1);
-        redrawCampaignDraft();
-        refreshRightPanel();
+    (draft.geometries.exclusions || []).forEach((poly, index) => {
+      const s = getGeometryStyle("exclusion", index);
+
+      const layer = L.polygon(draftPointsToLatLngs(poly), {
+        color: s.lineColor,
+        weight: s.lineWeight,
+        fillColor: s.fillColor,
+        fillOpacity: s.fillOpacity,
+        interactive: true
+      }).addTo(dl.exclusions);
+
+      bindEditableLayer(layer, "exclusion", draft.geometries.exclusions, index);
+    });
+
+    (draft.geometries.denseZones || []).forEach((poly, index) => {
+      const s = getGeometryStyle("dense", index);
+
+      const layer = L.polygon(draftPointsToLatLngs(poly), {
+        color: s.lineColor,
+        weight: s.lineWeight,
+        fillColor: s.fillColor,
+        fillOpacity: s.fillOpacity,
+        interactive: true
+      }).addTo(dl.denseZones);
+
+      bindEditableLayer(layer, "dense", draft.geometries.denseZones, index);
+    });
+
+    (draft.geometries.assets || []).forEach((asset, index) => {
+      const assetColor = asset.color || colorForKind("asset");
+      const assetIcon = asset.icon || "📍";
+
+      const marker = L.circleMarker([asset.lat, asset.lng], {
+        radius: 9,
+        color: assetColor,
+        fillColor: assetColor,
+        fillOpacity: 0.88,
+        weight: 2,
+        interactive: true
+      }).bindPopup(`
+        <b>${esc(assetIcon)} ${esc(asset.name || "Survey asset")}</b><br>
+        ${esc(asset.type || "")}<br>
+        <span>${esc(asset.instructions || "")}</span>
+      `).addTo(dl.assets);
+
+      marker.on("click", evt => {
+        L.DomEvent.stop(evt);
+        selectedLayer = {
+          layer: marker,
+          kind: "asset",
+          draftArray: draft.geometries.assets,
+          index
+        };
+      });
+
+      marker.on("contextmenu", evt => {
+        L.DomEvent.stop(evt);
+
+        showSurveyContextMenu(evt.containerPoint, {
+          onEdit: () => showAssetEditModal(asset, index),
+          onDelete: () => {
+            pushUndoState();
+            draft.geometries.assets.splice(index, 1);
+            redrawSurveyDraft();
+            refreshRightPanel();
+          }
+        });
+      });
+
+      marker.on("mousedown", evt => {
+        L.DomEvent.stop(evt);
+        designerMap.dragging.disable();
+
+        function onMove(moveEvt) {
+          marker.setLatLng(moveEvt.latlng);
+          asset.lat = moveEvt.latlng.lat;
+          asset.lng = moveEvt.latlng.lng;
+        }
+
+        function onUp() {
+          designerMap.off("mousemove", onMove);
+          designerMap.off("mouseup", onUp);
+          designerMap.dragging.enable();
+          refreshRightPanel();
+        }
+
+        designerMap.on("mousemove", onMove);
+        designerMap.on("mouseup", onUp);
       });
     });
-
-    marker.on("mousedown", evt => {
-      L.DomEvent.stop(evt);
-      designerMap.dragging.disable();
-
-      function onMove(moveEvt) {
-        marker.setLatLng(moveEvt.latlng);
-        asset.lat = moveEvt.latlng.lat;
-        asset.lng = moveEvt.latlng.lng;
-      }
-
-      function onUp() {
-        designerMap.off("mousemove", onMove);
-        designerMap.off("mouseup", onUp);
-        designerMap.dragging.enable();
-        refreshRightPanel();
-      }
-
-      designerMap.on("mousemove", onMove);
-      designerMap.on("mouseup", onUp);
-    });
-  });
-}
+  }
 
     function refreshRightPanel() {
     const el = document.getElementById("gwCdRight");
@@ -1120,7 +1526,7 @@ function redrawCampaignDraft() {
 
 
   function initDesignerMap() {
-  const host = document.getElementById("gwCampaignDesignerMap");
+  const host = document.getElementById("gwSurveyDesignerMap");
   if (!host || designerMap) return;
 
   const startCenter = window.map ? map.getCenter() : L.latLng(38.911325, -77.076678);
@@ -1159,24 +1565,101 @@ function redrawCampaignDraft() {
   setTimeout(() => designerMap.invalidateSize(), 80);
 }
 
-  function open() {
+function normalizeSurveyForEdit(survey) {
+  const fresh = makeEmptySurvey();
+
+  return {
+    ...fresh,
+    ...cloneDraft(survey),
+    geometries: {
+      boundary: [],
+      paths: [],
+      exclusions: [],
+      denseZones: [],
+      assets: [],
+      ...(cloneDraft(survey.geometries || {}))
+    }
+  };
+}
+
+function openExisting(surveyId) {
+  const surveys = loadSurveys();
+  const existing = surveys.find(c => c.id === surveyId);
+
+  if (!existing) {
+    alert("Could not find that saved survey.");
+    return;
+  }
+
+  open(normalizeSurveyForEdit(existing));
+}
+
+function deleteSurvey(surveyId) {
+  const surveys = loadSurveys();
+  const target = surveys.find(c => c.id === surveyId);
+
+  if (!target) return false;
+
+  const next = surveys.filter(c => c.id !== surveyId);
+  saveSurveys(next);
+
+  window.GridWildSurveyLayer?.hide?.(surveyId);
+  window.GridWildSurveyLayer?.render?.();
+
+  return true;
+}
+
+
+function getCurrentDraftBounds() {
+  const pts = [];
+
+  const g = draft.geometries || {};
+
+  if (Array.isArray(g.boundary) && g.boundary[0]?.lat != null) {
+    g.boundary.forEach(p => pts.push([p.lat, p.lng]));
+  }
+
+  (g.paths || []).forEach(path => {
+    (path || []).forEach(p => pts.push([p.lat, p.lng]));
+  });
+
+  (g.exclusions || []).forEach(poly => {
+    (poly || []).forEach(p => pts.push([p.lat, p.lng]));
+  });
+
+  (g.denseZones || []).forEach(poly => {
+    (poly || []).forEach(p => pts.push([p.lat, p.lng]));
+  });
+
+  (g.assets || []).forEach(a => {
+    if (Number.isFinite(Number(a.lat)) && Number.isFinite(Number(a.lng))) {
+      pts.push([Number(a.lat), Number(a.lng)]);
+    }
+  });
+
+  return pts.length ? L.latLngBounds(pts) : null;
+}
+
+  function open(existingDraft = null) {
     injectStyles();
     ensureLayers();
 
     if (designerRoot) designerRoot.remove();
 
-    draft = makeEmptyCampaign();
+    draft = existingDraft
+  ? normalizeSurveyForEdit(existingDraft)
+  : makeEmptySurvey();
 
     undoStack = [];
     redoStack = [];
 
     designerRoot = document.createElement("div");
-    designerRoot.className = "gw-campaign-designer";
+    designerRoot.className = "gw-survey-designer";
     designerRoot.innerHTML = `
       <aside class="gw-cd-panel gw-cd-left">
-        <div class="gw-cd-title">Campaign Designer</div>
+        <div class="gw-cd-title">Survey Designer</div>
         <div class="gw-cd-sub">
-          Fullscreen planning mode for campaign boundaries, paths, exclusion zones,
+          Fullscreen planning mode for survey boundaries, paths, exclusion zones,
           dense sampling zones, assets, and target taxa.
         </div>
 
@@ -1187,7 +1670,7 @@ function redrawCampaignDraft() {
 
         <div class="gw-cd-field">
           <label>Description</label>
-          <textarea id="gwCdDescription" placeholder="What is this campaign trying to sample?"></textarea>
+          <textarea id="gwCdDescription" placeholder="What is this survey trying to sample?"></textarea>
         </div>
 
         <div class="gw-cd-field">
@@ -1284,11 +1767,11 @@ function redrawCampaignDraft() {
       </aside>
 
         <main class="gw-cd-map">
-        <div id="gwCampaignDesignerMap"></div>
+        <div id="gwSurveyDesignerMap"></div>
 
         <div class="gw-cd-map-note" id="gwCdMapNote">
             <b>Designer map mode</b><br>
-            Use this embedded map to place campaign boundaries, paths, dense zones, exclusions, and assets.
+            Use this embedded map to place survey boundaries, paths, dense zones, exclusions, and assets.
         </div>
         </main>
 
@@ -1302,6 +1785,17 @@ function redrawCampaignDraft() {
     setTool("select");
 
     initDesignerMap();
+
+    refreshFormFromDraft();
+    redrawSurveyDraft();
+    refreshRightPanel();
+
+    const bounds = getCurrentDraftBounds();
+    if (bounds?.isValid?.()) {
+      setTimeout(() => designerMap?.fitBounds(bounds.pad(0.2)), 120);
+    }
+
+
     updateUndoRedoButtons();
   }
 
@@ -1356,9 +1850,9 @@ function redrawCampaignDraft() {
   }
 
 
-  function showCampaignOnMap(campaignId) {
-  const campaigns = loadCampaigns();
-  const c = campaigns.find(x => x.id === campaignId);
+  function showSurveyOnMap(surveyId) {
+  const surveys = loadSurveys();
+  const c = surveys.find(x => x.id === surveyId);
   if (!c) return;
 
   ensureLayers();
@@ -1369,7 +1863,7 @@ function redrawCampaignDraft() {
   if (Array.isArray(g.boundary)) {
     if (g.boundary.length && g.boundary[0]?.lat != null) {
       L.polygon(g.boundary.map(p => [p.lat, p.lng]), {
-        pane: "gwCampaignDesignerPane",
+        pane: "gwSurveyDesignerPane",
         color: colorForKind("boundary"),
         weight: 3,
         fillColor: colorForKind("boundary"),
@@ -1380,7 +1874,7 @@ function redrawCampaignDraft() {
     g.boundary.forEach(obj => {
       if (obj?.geojson) {
         L.geoJSON(obj.geojson, {
-          pane: "gwCampaignDesignerPane",
+          pane: "gwSurveyDesignerPane",
           style: {
             color: colorForKind("boundary"),
             weight: 3,
@@ -1393,7 +1887,7 @@ function redrawCampaignDraft() {
 
   (g.paths || []).forEach(path => {
     L.polyline(path.map(p => [p.lat, p.lng]), {
-      pane: "gwCampaignDesignerPane",
+      pane: "gwSurveyDesignerPane",
       color: colorForKind("path"),
       weight: 5,
       opacity: 0.95,
@@ -1403,7 +1897,7 @@ function redrawCampaignDraft() {
 
   (g.exclusions || []).forEach(poly => {
     L.polygon(poly.map(p => [p.lat, p.lng]), {
-      pane: "gwCampaignDesignerPane",
+      pane: "gwSurveyDesignerPane",
       color: colorForKind("exclusion"),
       weight: 2,
       fillColor: colorForKind("exclusion"),
@@ -1413,7 +1907,7 @@ function redrawCampaignDraft() {
 
   (g.denseZones || []).forEach(poly => {
     L.polygon(poly.map(p => [p.lat, p.lng]), {
-      pane: "gwCampaignDesignerPane",
+      pane: "gwSurveyDesignerPane",
       color: colorForKind("dense"),
       weight: 2,
       fillColor: colorForKind("dense"),
@@ -1425,25 +1919,28 @@ function redrawCampaignDraft() {
     if (!Number.isFinite(Number(a.lat)) || !Number.isFinite(Number(a.lng))) return;
 
     L.circleMarker([a.lat, a.lng], {
-      pane: "gwCampaignDesignerPane",
+      pane: "gwSurveyDesignerPane",
       radius: 9,
       color: colorForKind("asset"),
       fillColor: colorForKind("asset"),
       fillOpacity: 0.88,
       weight: 2
     }).bindPopup(`
-      <b>${esc(a.name || "Campaign asset")}</b><br>
+      <b>${esc(a.name || "Survey asset")}</b><br>
       ${esc(a.type || "")}<br>
       <span>${esc(a.instructions || "")}</span>
     `).addTo(layers.assets);
   });
 }
 
-  window.GridWildCampaignDesigner = {
+  window.GridWildSurveyDesigner = {
     open,
+    openExisting,
     close,
-    loadCampaigns,
-    saveCampaigns,
-    showCampaignOnMap
+    loadSurveys,
+    saveSurveys,
+    deleteSurvey,
+    showSurveyOnMap
   };
+  
 })();

@@ -163,10 +163,13 @@
     syncing = true;
 
     const center = map.getCenter();
-    const z = getOverviewZoom();
 
-    overviewMap.setView(center, z, { animate: false });
+    // Keep the inset map at a fixed broader field-of-view.
+    const fixedOverviewZoom = 13;
+    overviewMap.setView(center, fixedOverviewZoom, { animate: false });
 
+    // Still update the little rectangle from the main map bounds.
+    // As the main map zooms in, this rectangle gets smaller.
     if (viewportRect) {
       viewportRect.setBounds(map.getBounds());
     }
