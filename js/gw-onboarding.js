@@ -39,26 +39,66 @@
       body: "GridWild turns your neighborhood into a living map of biodiversity. Every square around you contains nature waiting to be observed."
     },
     {
+      emoji: "📷",
+      title: "Anything alive counts",
+      body: "A blade of grass, a flower, a beetle, a tree, moss on a wall, a pigeon on a roof — all of it helps reveal the life around you."
+    },
+    {
+      emoji: "🖼️",
+      title: "Tune your photos",
+      body: "After photographing a find, use the photo editor to lighten, crop, or zoom your image before handing it off to iNaturalist."
+    },
+    {
       type: "character",
       emoji: "🧭",
       title: "Create your field identity",
       body: "Choose how other GridWild explorers will see you: your name, explorer type, icon, and field style."
     },
     {
-      emoji: "📷",
-      title: "Anything alive counts",
-      body: "A blade of grass, a flower, a beetle, a tree, moss on a wall, a pigeon on a roof — all of it helps reveal the life around you."
+      emoji: "🧑‍🤝‍🧑",
+      title: "Explore as a party",
+      body: "Start a party to explore with friends in real time, or schedule a public or private place and time to gather and survey nature together."
     },
     {
-      emoji: "🏴",
-      title: "Claim territory",
-      body: "Make observations in nearby squares to rise on the local leaderboard. Keep your observations fresh to defend your top spot."
+      emoji: "📚",
+      title: "Publish Wildlists",
+      body: "Curate and publish playlist galleries of your observations. Build them manually, choose a whole party event, or auto-generate collections, then present your finds as shareable field stories."
+    },
+    {
+    emoji: "🏕️",
+    title: "Choose a home base",
+    body: "Pick a home base for your GridWild identity. From there, you can host Field Stations for other explorers to visit, gather around, and help survey nearby life."
+    },
+    {
+    emoji: "🗺️",
+    title: "Plan your path",
+    body: "Map out a route before you explore. Choose the squares, habitats, or survey stops you want to visit, then follow your path in the field."
+    },
+    {
+      emoji: "📋",
+      title: "Join field surveys",
+      body: "Create or join ongoing field surveys to track what lives in a place over time. Surveys can focus a group around a habitat, event, season, or shared discovery goal."
     },
     {
       emoji: "🎯",
       title: "Quests give direction",
-      body: "Earn points by completing nature quests of different difficulty: common species, overlooked taxa, seasonal finds, and hard discoveries."
+      body: "Earn points by completing nature quests of different difficulty: common species, overlooked taxa, seasonal finds, and hard discoveries. Quests help achieve survey goals"
     },
+  //    {
+  //     emoji: "🏴",
+    //    title: "Claim territory",
+    //    body: "Make observations in nearby squares to rise on the local leaderboard. Keep your observations fresh to defend your top spot."
+    // },
+  {
+    emoji: "🏅",
+    title: "Earn achievements",
+    body: "Unlock achievements by meeting observation criteria. Record 10 plants in a day, or become the local Night Bloom Archivist by finding flowers after sunset."
+  },
+  {
+    emoji: "🍃",
+    title: "Spend Wildpoints",
+    body: "Earn Wildpoints as you explore, then use them to customize your GridWild identity, gear, titles, field style, and other explorer details."
+  },
     {
       emoji: "🐦",
       title: "Powered by iNaturalist",

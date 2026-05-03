@@ -97,6 +97,20 @@ window.__gwUser = window.__gwUser || {
       </div>
 
       <div class="gw-card">
+        <div class="gw-card-title">Wildlists</div>
+        <div class="gw-muted" style="font-size:12px;line-height:1.35;margin-bottom:10px;">
+          Build shareable galleries from your observations.
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="gw-mini-btn" id="gwCreateWildlistBtn">Create</button>
+          <button class="gw-mini-btn" id="gwOpenWildlistsBtn">My Wildlists</button>
+        </div>
+
+        <div id="gwWildlistsSummary" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="gw-card">
         <div class="gw-card-title">Field Progress</div>
         <div id="gwUserProgressBody">
           Loading progression...
@@ -357,10 +371,20 @@ function renderRecentINatList() {
               </span>
             </span>
 
-            <span style="display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;">
-              ${questBadge}
-              <span
-                class="gw-codex-link"
+              <span style="display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;">
+                ${questBadge}
+
+                <button
+                  class="gw-mini-btn gw-add-wildlist-from-recent-btn"
+                  data-obs-id="${escapeHtmlLocal(o.id)}"
+                  title="Add to Wildlist"
+                  style="padding:5px 7px;font-size:10px;"
+                >
+                  + Wildlist
+                </button>
+
+                <span
+                  class="gw-codex-link"
                 title="${genus ? "Open genus codex" : "No genus available"}"
               >
                 ${genus ? `<span>${escapeHtmlLocal(genus)}</span><span class="gw-codex-chevron">›</span>` : "—"}
@@ -383,6 +407,15 @@ function renderRecentINatList() {
       const genus = row.dataset.genus || "";
       if (!genus) return;
       window.GridWildGenusCodex?.open?.(genus);
+    });
+  });
+
+    el.querySelectorAll(".gw-add-wildlist-from-recent-btn").forEach(btn => {
+    btn.addEventListener("click", evt => {
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      window.GridWildPlaylists?.addObservationToWildlist?.(btn.dataset.obsId);
     });
   });
 }
@@ -1198,6 +1231,10 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
   window.GridWildParty?.refreshMapBeacon?.();
   window.GridWildParty?.handleJoinFromUrl?.();
 
+  window.GridWildPlaylists?.bindButtons?.(document);
+  window.GridWildPlaylists?.renderSummary?.();
+  window.GridWildPlaylists?.handlePlaylistFromUrl?.();
+
   window.GridWildEconomy?.refreshHud?.();
 
   // window.GridWildOutfitter?.bind?.(document);
@@ -1408,6 +1445,10 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       window.GridWildParty?.bindSheetControls?.(document);
       window.GridWildParty?.refreshMapBeacon?.();
       window.GridWildParty?.handleJoinFromUrl?.();
+
+      window.GridWildPlaylists?.bindButtons?.(document);
+      window.GridWildPlaylists?.renderSummary?.();
+      window.GridWildPlaylists?.handlePlaylistFromUrl?.();
 
       window.GridWildEconomy?.refreshHud?.();
       // window.GridWildOutfitter?.bind?.(document);

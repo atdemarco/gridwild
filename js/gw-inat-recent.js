@@ -1,4 +1,3 @@
-// js/gw-inat-recent.js
 // -----------------------------------------------------------------------------
 // Recent iNaturalist observation sync for fog/documented cells.
 // Pulls only recent public/open observations with positional accuracy <= 20m.
@@ -80,6 +79,23 @@
     return m ? m[1] : "";
   }
 
+function getPhotoUrls(obs) {
+  const url = obs?.photos?.[0]?.url || "";
+
+  if (!url) {
+    return {
+      square: null,
+      medium: null
+    };
+  }
+
+  return {
+    square: url,
+    medium: url.replace(/square\./, "medium.")
+  };
+}
+
+
   function normalizeObs(obs) {
     const coords = getObservationCoords(obs);
     if (!coords) return null;
@@ -93,6 +109,8 @@
       commonName ||
       scientificName ||
       "Unknown taxon";
+
+    const photos = getPhotoUrls(obs);
 
     return {
       id: obs.id,
@@ -110,7 +128,18 @@
       genus_name: genusName,
 
       iconic_taxon_name: taxon.iconic_taxon_name || "Unknown",
-      uri: obs.uri || null
+      uri: obs.uri || null,
+
+      // Photo fields for Wildlists / gallery cards
+      photo_url: photos.square,
+      photo_square_url: photos.square,
+      photo_medium_url: photos.medium,
+
+      // Extra display / filtering fields
+      quality_grade: obs?.quality_grade || null,
+      description: obs?.description || "",
+      place_guess: obs?.place_guess || "",
+      created_at: obs?.created_at || null,
     };
   }
 

@@ -317,8 +317,8 @@ function applySavedUIState() {
   if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? true;
   if (byId("toggleGodsEye"))      byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
-  if (byId("toggleFogSmoothing")) byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? true;
-  if (byId("toggleOsmBuildings")) byId("toggleOsmBuildings").checked = s.showOsmBuildings ?? true;
+  if (byId("toggleFogSmoothing")) byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? false;
+  if (byId("toggleOsmBuildings")) byId("toggleOsmBuildings").checked = s.showOsmBuildings ?? false;
 
   const metric = s.heatMetric ?? "count";
   const radio = document.querySelector(`input[name="heatMetric"][value="${metric}"]`);
