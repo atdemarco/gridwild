@@ -724,6 +724,11 @@ function renderCommunityContent() {
             <input type="checkbox" id="toggleHeat_clone" checked />
             <span>Show heat</span>
           </label>
+  
+          <label class="gw-toggleline">
+          <input type="checkbox" id="toggleOsmBuildings_clone" checked />
+          <span>Buildings / Roofs</span>
+          </label>
 
           <label class="gw-toggleline">
             <input type="checkbox" id="toggleDynamicINat_clone" />
@@ -1294,7 +1299,8 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       ["toggleFog", "toggleFog_clone"],
       ["toggleFogSmoothing", "toggleFogSmoothing_clone"],
       ["toggleGodsEye", "toggleGodsEye_clone"],
-      ["toggleLockLocation", "toggleLockLocation_clone"]
+      ["toggleLockLocation", "toggleLockLocation_clone"],
+      ["toggleOsmBuildings", "toggleOsmBuildings_clone"]
     ].forEach(([realId, cloneId]) => {
       const real = $(realId);
       const clone = $(cloneId);
@@ -1335,6 +1341,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     mirrorCheckbox("toggleFogSmoothing", "toggleFogSmoothing_clone");
     mirrorCheckbox("toggleGodsEye", "toggleGodsEye_clone");
     mirrorCheckbox("toggleLockLocation", "toggleLockLocation_clone");
+    mirrorCheckbox("toggleOsmBuildings", "toggleOsmBuildings_clone");
     mirrorHeatMetricRadios();
 
     setTimeout(() => {

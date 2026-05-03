@@ -77,7 +77,44 @@
     ].join("|");
   }
 
+
   function buildOverpassQuery() {
+  const bbox = getBboxString();
+  const showBuildings = window.__gwState?.showOsmBuildings ?? true;
+
+  const buildingQuery = showBuildings ? `
+        way["building"](${bbox});
+        relation["building"](${bbox});
+  ` : "";
+
+  return `
+    [out:json][timeout:25];
+    (
+      ${buildingQuery}
+
+      way["highway"~"path|footway|cycleway|bridleway|track"](${bbox});
+
+      way["leisure"~"park|garden|nature_reserve"](${bbox});
+      relation["leisure"~"park|garden|nature_reserve"](${bbox});
+
+      way["natural"="wood"](${bbox});
+      relation["natural"="wood"](${bbox});
+
+      way["landuse"~"forest|grass|meadow|recreation_ground"](${bbox});
+      relation["landuse"~"forest|grass|meadow|recreation_ground"](${bbox});
+
+      way["natural"="water"](${bbox});
+      relation["natural"="water"](${bbox});
+
+      way["waterway"="riverbank"](${bbox});
+      relation["waterway"="riverbank"](${bbox});
+    );
+    out geom;
+  `;
+}
+
+
+  function buildOverpassQueryORIG() {
     const bbox = getBboxString();
 
     // Ways and relations tagged building=* inside current bbox.

@@ -428,19 +428,35 @@
     scheduleFetch,
 
     setVisible(show) {
-      window.__gwState = window.__gwState || {};
-      window.__gwState.showOsmFeatures = !!show;
+        window.__gwState = window.__gwState || {};
+        window.__gwState.showOsmFeatures = !!show;
+        window.__gwState.showOsmBuildings = !!show;
 
-      if (contextCanvas) {
-        contextCanvas.style.display = show ? "block" : "none";
-      }
+        clearTimeout(fetchTimer);
 
-      if (buildingCanvas) {
-        buildingCanvas.style.display = show ? "block" : "none";
-      }
+        if (!show) {
+            features = {
+            trails: [],
+            parks: [],
+            buildings: [],
+            water: []
+            };
 
-      if (show) scheduleFetch();
-      scheduleRender();
+            lastFetchKey = null;
+
+            if (contextCanvas) contextCanvas.style.display = "none";
+            if (buildingCanvas) buildingCanvas.style.display = "none";
+
+            scheduleRender();
+            return;
+        }
+
+        if (contextCanvas) contextCanvas.style.display = "block";
+        if (buildingCanvas) buildingCanvas.style.display = "block";
+
+        lastFetchKey = null;
+        scheduleFetch();
+        scheduleRender();
     },
 
     setFeatureVisible(kind, show) {

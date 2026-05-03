@@ -29,8 +29,11 @@
 
   window.__gwFilters.showPoints = $("togglePoints")?.checked ?? false;
   window.__gwFilters.showHeat = $("toggleHeat")?.checked ?? true;
-  window.__gwState.heatMetric = getSelectedHeatMetric();
+  
+  window.__gwState.showOsmFeatures = $("toggleOsmBuildings")?.checked ?? true;
+  window.__gwState.showOsmBuildings = window.__gwState.showOsmFeatures;
 
+  window.__gwState.heatMetric = getSelectedHeatMetric();
   window.__gwFilters.iconicTaxa = getSelectedIconicTaxa();
 
   window.__gwState.showPoints = $("togglePoints")?.checked ?? true;
@@ -137,7 +140,8 @@
   "toggleFog",
   "toggleFogSmoothing",
   "toggleGodsEye",
-  "toggleLockLocation"
+  "toggleLockLocation",
+  "toggleOsmBuildings"
 ].forEach(id => {
   $(id)?.addEventListener("change", () => {
     syncStateFromUI();
@@ -154,6 +158,13 @@
     }
   }
     applyLayerVisibility();
+
+  if (id === "toggleOsmBuildings") {
+    window.GridWildOsmFeaturesLayer?.setFeatureVisible?.(
+      "buildings",
+      window.__gwState.showOsmBuildings
+    );
+  }
 
     if (id === "toggleDynamicINat" && window.__gwState.dynamicINatEnabled) {
       if (typeof window.maybeRefreshDynamicINat === "function") {
@@ -288,7 +299,8 @@ function saveUIState() {
     fogSmoothingEnabled: byId("toggleFogSmoothing")?.checked ?? true,
     godsEyeEnabled: byId("toggleGodsEye")?.checked ?? false,
     lockToLocation: byId("toggleLockLocation")?.checked ?? true,
-    heatMetric: getSelectedHeatMetric()
+    heatMetric: getSelectedHeatMetric(),
+    showOsmBuildings: byId("toggleOsmBuildings")?.checked ?? true
     };
 
   localStorage.setItem("gw_ui_state", JSON.stringify(state));
@@ -306,6 +318,7 @@ function applySavedUIState() {
   if (byId("toggleGodsEye"))      byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
   if (byId("toggleFogSmoothing")) byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? true;
+  if (byId("toggleOsmBuildings")) byId("toggleOsmBuildings").checked = s.showOsmBuildings ?? true;
 
   const metric = s.heatMetric ?? "count";
   const radio = document.querySelector(`input[name="heatMetric"][value="${metric}"]`);
