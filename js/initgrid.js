@@ -50,6 +50,7 @@ const gridShimmerLayer = L.layerGroup([], { pane: "gridShimmerPane" }).addTo(map
 let gridHeatCanvas = null;
 let gridHeatCtx = null;
 let gridHeatRaf = null;
+let gridHeatCanvasTopLeft = L.point(0, 0);
 
 function ensureGridHeatCanvas() {
   if (gridHeatCanvas) return gridHeatCanvas;
@@ -63,21 +64,30 @@ function ensureGridHeatCanvas() {
   gridHeatCanvas.style.width = "100%";
   gridHeatCanvas.style.height = "100%";
   gridHeatCanvas.style.pointerEvents = "none";
-  gridHeatCanvas.style.zIndex = "410";
-  gridHeatCanvas.style.transform = "none";
+  gridHeatCanvas.style.zIndex = "";
 
-//  const heatPane = map.getPane("gridHeatPane");
-//  heatPane.appendChild(gridHeatCanvas);
-  const mainMapEl = document.getElementById("map");
-  mainMapEl.appendChild(gridHeatCanvas);
+  const heatPane = map.getPane("gridHeatPane");
+  heatPane.appendChild(gridHeatCanvas);
 
   gridHeatCtx = gridHeatCanvas.getContext("2d", { alpha: true });
 
   return gridHeatCanvas;
 }
 
+function positionGridHeatCanvas() {
+  ensureGridHeatCanvas();
+
+  gridHeatCanvasTopLeft = map.containerPointToLayerPoint([0, 0]);
+  L.DomUtil.setPosition(gridHeatCanvas, gridHeatCanvasTopLeft);
+}
+
+function gridHeatLayerPoint(latlng) {
+  return map.latLngToLayerPoint(latlng).subtract(gridHeatCanvasTopLeft);
+}
+
 function resizeGridHeatCanvas() {
   ensureGridHeatCanvas();
+  positionGridHeatCanvas();
 
   const size = map.getSize();
   const dpr = window.devicePixelRatio || 1;
@@ -1600,7 +1610,7 @@ function updateGrid() {
 
 }
 
-map.on("move zoom resize viewreset", scheduleGridHeatCanvasRender);
+map.on("move zoom resize viewreset zoomend moveend", scheduleGridHeatCanvasRender);
 map.on("zoomend resize moveend", updateGrid);
 updateGrid();
 
@@ -2332,8 +2342,8 @@ function renderGridHeatCanvas() {
       const sw = map.options.crs.unproject(L.point(x, y));
       const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
 
-      const nwPx = map.latLngToContainerPoint(L.latLng(ne.lat, sw.lng));
-      const sePx = map.latLngToContainerPoint(L.latLng(sw.lat, ne.lng));
+      const nwPx = gridHeatLayerPoint(L.latLng(ne.lat, sw.lng));
+      const sePx = gridHeatLayerPoint(L.latLng(sw.lat, ne.lng));
 
       const pxX = Math.floor(nwPx.x);
       const pxY = Math.floor(nwPx.y);

@@ -5,6 +5,7 @@
   let canvas = null;
   let ctx = null;
   let raf = null;
+  let canvasTopLeft = L.point(0, 0);
 
   //const FOG_UNKNOWN_OPACITY = 0.34;
   //  const FOG_COLOR_RGB = "38,46,42";
@@ -92,7 +93,7 @@
     canvas.style.width = "100%";
     canvas.style.height = "100%";
     canvas.style.pointerEvents = "none";
-    canvas.style.zIndex = "500";
+    canvas.style.zIndex = "";
 
     if (!map.getPane("gwFogPane")) {
       map.createPane("gwFogPane");
@@ -100,8 +101,8 @@
       map.getPane("gwFogPane").style.pointerEvents = "none";
     }
 
-    const mapEl = map.getContainer();
-    mapEl.appendChild(canvas);
+    const fogPane = map.getPane("gwFogPane");
+    fogPane.appendChild(canvas);
 
     ctx = canvas.getContext("2d", { alpha: true });
 
@@ -111,8 +112,20 @@
     return canvas;
   }
 
+  function positionCanvas() {
+    ensureCanvas();
+
+    canvasTopLeft = map.containerPointToLayerPoint([0, 0]);
+    L.DomUtil.setPosition(canvas, canvasTopLeft);
+  }
+
+  function layerPoint(latlng) {
+    return map.latLngToLayerPoint(latlng).subtract(canvasTopLeft);
+  }
+
   function resizeCanvas() {
     ensureCanvas();
+    positionCanvas();
 
     const size = map.getSize();
     const dpr = window.devicePixelRatio || 1;
@@ -206,8 +219,8 @@ function render() {
     const llA = map.options.crs.unproject(L.point(x0, y0));
     const llB = map.options.crs.unproject(L.point(x1, y1));
 
-    const pA = map.latLngToContainerPoint(llA);
-    const pB = map.latLngToContainerPoint(llB);
+    const pA = layerPoint(llA);
+    const pB = layerPoint(llB);
 
     const left = Math.min(pA.x, pB.x);
     const top = Math.min(pA.y, pB.y);
@@ -345,8 +358,8 @@ function renderROW() {
       const llA = map.options.crs.unproject(L.point(runStartX, y));
       const llB = map.options.crs.unproject(L.point(runEndX, y + GRID_SIZE_M));
 
-      const pA = map.latLngToContainerPoint(llA);
-      const pB = map.latLngToContainerPoint(llB);
+      const pA = layerPoint(llA);
+      const pB = layerPoint(llB);
 
       const left = Math.min(pA.x, pB.x);
       const top = Math.min(pA.y, pB.y);

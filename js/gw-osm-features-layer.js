@@ -19,6 +19,9 @@
   let buildingCanvas = null;
   let buildingCtx = null;
 
+  let contextTopLeft = L.point(0, 0);
+  let buildingTopLeft = L.point(0, 0);
+
   let raf = null;
   let fetchTimer = null;
   let lastFetchKey = null;
@@ -39,7 +42,16 @@
 
   let listenersBound = false;
 
-  function makeCanvas(id, zIndex) {
+  function ensurePane(name, zIndex) {
+    if (!map.getPane(name)) {
+      map.createPane(name);
+      map.getPane(name).style.zIndex = String(zIndex);
+      map.getPane(name).style.pointerEvents = "none";
+    }
+    return map.getPane(name);
+  }
+
+  function makeCanvas(id, paneName, zIndex) {
     const c = document.createElement("canvas");
     c.id = id;
 
@@ -50,21 +62,21 @@
       width: "100%",
       height: "100%",
       pointerEvents: "none",
-      zIndex: String(zIndex)
+      zIndex: ""
     });
 
-    map.getContainer().appendChild(c);
+    ensurePane(paneName, zIndex).appendChild(c);
     return c;
   }
 
   function ensureCanvas() {
     if (!contextCanvas) {
-      contextCanvas = makeCanvas("gwOsmContextCanvas", OSM_CONTEXT_Z);
+      contextCanvas = makeCanvas("gwOsmContextCanvas", "gwOsmContextPane", OSM_CONTEXT_Z);
       contextCtx = contextCanvas.getContext("2d", { alpha: true });
     }
 
     if (!buildingCanvas) {
-      buildingCanvas = makeCanvas("gwOsmBuildingCanvas", OSM_BUILDING_Z);
+      buildingCanvas = makeCanvas("gwOsmBuildingCanvas", "gwOsmBuildingPane", OSM_BUILDING_Z);
       buildingCtx = buildingCanvas.getContext("2d", { alpha: true });
     }
 
@@ -73,6 +85,16 @@
       map.on("move zoom resize viewreset zoomend moveend", scheduleRender);
       map.on("moveend zoomend", scheduleFetch);
     }
+  }
+
+  function positionCanvas(c) {
+    const topLeft = map.containerPointToLayerPoint([0, 0]);
+    L.DomUtil.setPosition(c, topLeft);
+    return topLeft;
+  }
+
+  function pointForCanvas(latlng, topLeft) {
+    return map.latLngToLayerPoint(latlng).subtract(topLeft);
   }
 
   function resizeOneCanvas(c, cctx) {
@@ -94,6 +116,8 @@
 
   function resizeCanvas() {
     ensureCanvas();
+    contextTopLeft = positionCanvas(contextCanvas);
+    buildingTopLeft = positionCanvas(buildingCanvas);
     resizeOneCanvas(contextCanvas, contextCtx);
     resizeOneCanvas(buildingCanvas, buildingCtx);
   }
@@ -274,11 +298,11 @@
     fetchTimer = setTimeout(fetchFeatures, FETCH_DEBOUNCE_MS);
   }
 
-  function beginPath(ctxLocal, points) {
+  function beginPath(ctxLocal, points, topLeft) {
     ctxLocal.beginPath();
 
     points.forEach((ll, i) => {
-      const p = map.latLngToContainerPoint(ll);
+      const p = pointForCanvas(ll, topLeft);
 
       if (i === 0) ctxLocal.moveTo(p.x, p.y);
       else ctxLocal.lineTo(p.x, p.y);
@@ -288,7 +312,7 @@
   function drawPolygon(ctxLocal, feature, style) {
     if (!feature.points || feature.points.length < 3) return;
 
-    beginPath(ctxLocal, feature.points);
+    beginPath(ctxLocal, feature.points, ctxLocal === buildingCtx ? buildingTopLeft : contextTopLeft);
     ctxLocal.closePath();
 
     ctxLocal.fillStyle = style.fill;
@@ -302,7 +326,7 @@
   function drawLine(ctxLocal, feature, style) {
     if (!feature.points || feature.points.length < 2) return;
 
-    beginPath(ctxLocal, feature.points);
+    beginPath(ctxLocal, feature.points, ctxLocal === buildingCtx ? buildingTopLeft : contextTopLeft);
 
     ctxLocal.strokeStyle = style.stroke;
     ctxLocal.lineWidth = style.lineWidth;
