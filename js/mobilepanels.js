@@ -371,10 +371,9 @@ function renderRecentINatList() {
               </span>
             </span>
 
-              <span
-                style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex:0 1 auto;min-width:0;"
-      
-              >
+                <span
+                  style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;min-width:max-content;"
+                >
 
                 ${questBadge}
 

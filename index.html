@@ -1293,6 +1293,26 @@
 
 
 
+/* Recent Observations: make metadata compress instead of widening the row */
+#gwRecentINatList .gw-genus-open-row {
+  min-width: 0;
+}
+
+#gwRecentINatList .gw-genus-open-row > span:first-child {
+  min-width: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+}
+
+#gwRecentINatList .gw-genus-open-row > span:first-child .gw-muted {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 
 /* ───────────────────────────────────────────── */
 /* Always-visible HUD contrast polish            */

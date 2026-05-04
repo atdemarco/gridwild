@@ -112,6 +112,11 @@
     const style = document.createElement("style");
     style.id = "gwOnboardingStyles";
     style.textContent = `
+
+      .gw-splash-card {
+          touch-action: pan-y;
+        }
+          
       .gw-onboard-hidden { display: none !important; }
 
       .gw-onboard-backdrop {
@@ -311,6 +316,60 @@
     root.appendChild(card);
     document.body.appendChild(root);
 
+    // ─────────────────────────────────────────────
+    // Swipe carousel support
+    // ─────────────────────────────────────────────
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+
+    function goNextFromSplash() {
+      if (idx < splashCards.length - 1) {
+        idx++;
+        render();
+      } else {
+        root.remove();
+        launchTour();
+      }
+    }
+
+    function goPrevFromSplash() {
+      if (idx > 0) {
+        idx--;
+        render();
+      }
+    }
+
+    card.addEventListener("touchstart", (e) => {
+      if (!e.touches || e.touches.length !== 1) return;
+
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }, { passive: true });
+
+    card.addEventListener("touchend", (e) => {
+      if (!e.changedTouches || e.changedTouches.length !== 1) return;
+
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const dt = Date.now() - touchStartTime;
+
+      const isHorizontalSwipe =
+        Math.abs(dx) > 55 &&
+        Math.abs(dx) > Math.abs(dy) * 1.4 &&
+        dt < 650;
+
+      if (!isHorizontalSwipe) return;
+
+      if (dx < 0) {
+        goNextFromSplash();   // swipe left = next
+      } else {
+        goPrevFromSplash();   // swipe right = previous
+      }
+    }, { passive: true });
+
+
 
 function renderCharacterCard() {
   const c = splashCards[idx];
@@ -379,10 +438,7 @@ function renderCharacterCard() {
 
   document.getElementById("gwOnboardSkip").onclick = finishAll;
 
-  document.getElementById("gwOnboardNext").onclick = () => {
-    idx++;
-    render();
-  };
+  document.getElementById("gwOnboardNext").onclick = goNextFromSplash;
 }
 
 
@@ -409,15 +465,7 @@ function renderCharacterCard() {
       `;
 
       document.getElementById("gwOnboardSkip").onclick = finishAll;
-      document.getElementById("gwOnboardNext").onclick = () => {
-        if (idx < splashCards.length - 1) {
-          idx++;
-          render();
-        } else {
-          root.remove();
-          launchTour();
-        }
-      };
+      document.getElementById("gwOnboardNext").onclick = goNextFromSplash;
     }
 
     function finishAll() {
