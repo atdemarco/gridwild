@@ -326,6 +326,34 @@ function applySavedUIState() {
 }
 
 function updateLegendText() {
+
+  const foot = document.getElementById("gwLegendFoot");
+  const subtitle = document.querySelector(".gw-legend-subtitle");
+
+  if (!foot || !subtitle) return;
+
+  const lens =
+    window.__gwState?.activeLens || "classic";
+
+  const copy =
+    window.GWLegendCopy?.[lens] ||
+    window.GWLegendCopy?.classic;
+
+  if (!copy) return;
+
+  subtitle.hidden = false;
+  foot.hidden = false;
+
+  subtitle.textContent =
+    copy.subtitle || "";
+
+  foot.innerHTML =
+    (copy.lines || [])
+      .map(line => `<div>${line}</div>`)
+      .join("");
+}
+
+function updateLegendTextOLD() {
   const foot = document.getElementById("gwLegendFoot");
   const subtitle = document.querySelector(".gw-legend-subtitle");
   if (!foot || !subtitle) return;

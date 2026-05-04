@@ -73,6 +73,46 @@
     return window.GridWildRecentINat?.getRecentObservations?.() || [];
   }
 
+  const WILDLIST_RECIPES = [
+  {
+    id: "custom",
+    title: "Custom Wildlist",
+    subtitle: "Choose observations manually.",
+    icon: "🧺"
+  },
+  {
+    id: "today",
+    title: "Today’s Observations",
+    subtitle: "Everything observed today.",
+    icon: "☀️"
+  },
+  {
+    id: "week",
+    title: "This Week’s Observations",
+    subtitle: "Recent field activity from the last 7 days.",
+    icon: "📅"
+  },
+  {
+    id: "mysteries",
+    title: "My Mysteries",
+    subtitle: "Unknowns and observations needing identity work.",
+    icon: "❓"
+  },
+  {
+    id: "leafhoppers",
+    title: "My Leafhoppers",
+    subtitle: "Leafhopper-ish observations from recent activity.",
+    icon: "🪲"
+  },
+  {
+    id: "party_recent",
+    title: "Recent Party",
+    subtitle: "Build from recent party effort, route, and contributors.",
+    icon: "👣",
+    placeholder: true
+  }
+];
+
   function compactObs(o) {
   return {
     id: o.id,
@@ -85,7 +125,11 @@
     photo_medium_url: o.photo_medium_url || o.photo_square_url || o.photo_url || null,
     iconic_taxon_name: o.iconic_taxon_name || "Unknown",
     genus_name: o.genus_name || "",
-    uri: o.uri || null
+    uri: o.uri || null,
+    lat: Number.isFinite(Number(o.lat)) ? Number(o.lat) : null,
+    lng: Number.isFinite(Number(o.lng)) ? Number(o.lng) : null,
+    accuracy: Number.isFinite(Number(o.accuracy)) ? Number(o.accuracy) : null,
+    place_guess: o.place_guess || "",
   };
 }
 
@@ -199,6 +243,95 @@
       snapshotObservations: selected.map(compactObs)
     });
   }
+
+
+  function applyRecipeFilters(selected, filters = {}) {
+  let out = Array.isArray(selected) ? selected.slice() : [];
+
+  const taxonFilter = String(filters.taxonFilter || "").trim().toLowerCase();
+  if (taxonFilter) {
+    out = out.filter(o => {
+      const hay = [
+        o.taxon,
+        o.common_name,
+        o.scientific_name,
+        o.iconic_taxon_name,
+        o.genus_name
+      ].join(" ").toLowerCase();
+
+      return hay.includes(taxonFilter);
+    });
+  }
+
+  if (filters.photosOnly) {
+    out = out.filter(o => o.photo_medium_url || o.photo_square_url || o.photo_url);
+  }
+
+  const maxObs = Number(filters.maxObs || 60);
+  if (Number.isFinite(maxObs) && maxObs > 0) {
+    out = out.slice(0, maxObs);
+  }
+
+  return out;
+}
+
+function buildTemplatePlaylistWithFilters(template, filters = {}) {
+  const obs = getRecentObs();
+
+  let title = "New Wildlist";
+  let selected = [];
+
+  if (template === "today") {
+    title = "Today’s Observations";
+    selected = filterToday(obs);
+  } else if (template === "week") {
+    title = "This Week’s Observations";
+    selected = filterThisWeek(obs);
+  } else if (template === "mysteries") {
+    title = "My Mysteries";
+    selected = filterMysteries(obs);
+  } else if (template === "leafhoppers") {
+    title = "My Leafhoppers";
+    selected = filterLeafhoppers(obs);
+  }
+
+  selected = applyRecipeFilters(selected, filters);
+
+  if (!selected.length) {
+    alert("No observations matched that recipe/filter combination.");
+  }
+
+  return savePlaylist({
+    title,
+    description: "",
+    mode: "template",
+    template,
+    observationIds: selected.map(o => o.id),
+    snapshotObservations: selected.map(compactObs)
+  });
+}
+
+function openPartyWildlistPlaceholder() {
+  const partyStore =
+    JSON.parse(localStorage.getItem("gw_party_sessions_v1") || "[]");
+
+  alert(
+    [
+      "Party Wildlists are the next integration point.",
+      "",
+      `Found ${Array.isArray(partyStore) ? partyStore.length : 0} locally stored party sessions.`,
+      "",
+      "Next version will snapshot:",
+      "• party title",
+      "• participants",
+      "• start/end time",
+      "• route/path polyline",
+      "• contributed observations",
+      "• effort stats"
+    ].join("\n")
+  );
+}
+
 
   function renderSummary() {
     const el = document.getElementById("gwWildlistsSummary");
@@ -449,39 +582,148 @@ function openCustomBuilderFromPlaylist(playlistId) {
   });
 }
 
-  function openCreateMenu() {
-    const obs = getRecentObs();
+function openCreateMenu() {
+  ensureStyles();
 
-    if (!obs.length) {
-      alert("Refresh Recent Observations first so GridWild has observations to build from.");
-      return;
-    }
+  const obs = getRecentObs();
 
-    const choice = prompt(
-      [
-        "Create Wildlist template:",
-        "",
-        "1 = Today's Observations",
-        "2 = This Week's Observations",
-        "3 = My Mysteries",
-        "4 = My Leafhoppers",
-        "5 = Custom Wildlist",
-      ].join("\n")
-    );
+  const modal = document.createElement("div");
+  modal.className = "gw-playlist-backdrop";
 
-    let playlist = null;
+  modal.innerHTML = `
+    <div class="gw-playlist-modal">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+        <div>
+          <div style="font-size:22px;font-weight:950;color:#f0d18a;">
+            Create Wildlist
+          </div>
+          <div class="gw-muted" style="font-size:12px;margin-top:3px;">
+            Choose a recipe, then optionally filter what goes into it.
+          </div>
+        </div>
 
-    if (choice === "1") playlist = buildTemplatePlaylist("today");
-    if (choice === "2") playlist = buildTemplatePlaylist("week");
-    if (choice === "3") playlist = buildTemplatePlaylist("mysteries");
-    if (choice === "4") playlist = buildTemplatePlaylist("leafhoppers");
-    if (choice === "5") return openCustomBuilder();
+        <button class="gw-mini-btn" id="gwRecipeCloseBtn">Close</button>
+      </div>
 
-    if (!playlist) return;
+      <div class="gw-card" style="margin-top:12px;">
+        <div class="gw-card-title">Basic filters</div>
 
-    renderSummary();
-    openViewer(playlist.id);
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <label class="gw-muted" style="font-size:11px;">
+            Taxon contains
+            <input id="gwRecipeTaxonFilter" placeholder="e.g. moss, bird, fern" style="
+              width:100%;
+              box-sizing:border-box;
+              margin-top:4px;
+              padding:8px;
+              border-radius:10px;
+              border:1px solid rgba(215,183,116,0.25);
+              background:rgba(255,255,255,0.06);
+              color:#efe6d3;
+            ">
+          </label>
+
+          <label class="gw-muted" style="font-size:11px;">
+            Max observations
+            <input id="gwRecipeMaxObs" type="number" value="60" min="1" max="200" style="
+              width:100%;
+              box-sizing:border-box;
+              margin-top:4px;
+              padding:8px;
+              border-radius:10px;
+              border:1px solid rgba(215,183,116,0.25);
+              background:rgba(255,255,255,0.06);
+              color:#efe6d3;
+            ">
+          </label>
+        </div>
+
+        <label class="gw-toggleline" style="margin-top:10px;">
+          <input type="checkbox" id="gwRecipePhotosOnly">
+          <span>Only include observations with photos</span>
+        </label>
+      </div>
+
+      <div style="
+        display:grid;
+        grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
+        gap:10px;
+        margin-top:12px;
+      ">
+        ${WILDLIST_RECIPES.map(r => `
+          <button
+            class="gw-card gw-recipe-btn"
+            data-recipe-id="${esc(r.id)}"
+            style="
+              margin:0;
+              text-align:left;
+              cursor:pointer;
+              min-height:118px;
+              ${r.placeholder ? "opacity:.72;" : ""}
+            "
+          >
+            <div style="font-size:26px;margin-bottom:8px;">${esc(r.icon)}</div>
+            <div style="font-weight:950;color:#f0d18a;font-size:14px;">
+              ${esc(r.title)}
+            </div>
+            <div class="gw-muted" style="font-size:11px;line-height:1.35;margin-top:5px;">
+              ${esc(r.subtitle)}
+            </div>
+            ${r.placeholder ? `
+              <div class="gw-muted" style="font-size:10px;margin-top:8px;">
+                placeholder
+              </div>
+            ` : ""}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector("#gwRecipeCloseBtn").onclick = () => modal.remove();
+
+  modal.querySelectorAll(".gw-recipe-btn").forEach(btn => {
+    btn.onclick = () => {
+      const recipeId = btn.dataset.recipeId;
+
+      const taxonFilter = modal.querySelector("#gwRecipeTaxonFilter")?.value?.trim() || "";
+      const photosOnly = !!modal.querySelector("#gwRecipePhotosOnly")?.checked;
+      const maxObs = Number(modal.querySelector("#gwRecipeMaxObs")?.value || 60);
+
+      modal.remove();
+
+      if (recipeId === "custom") {
+        return openCustomBuilder();
+      }
+
+      if (recipeId === "party_recent") {
+        return openPartyWildlistPlaceholder();
+      }
+
+      const playlist = buildTemplatePlaylistWithFilters(recipeId, {
+        taxonFilter,
+        photosOnly,
+        maxObs
+      });
+
+      renderSummary();
+      openViewer(playlist.id);
+    };
+  });
+
+  modal.onclick = evt => {
+    if (evt.target === modal) modal.remove();
+  };
+
+  if (!obs.length) {
+    // Allow modal to open, but warn once.
+    setTimeout(() => {
+      alert("Recent observations are empty. Refresh Recent Observations before using observation-based recipes.");
+    }, 100);
   }
+}
 
   function openLibrary() {
     const all = loadAll();
@@ -554,6 +796,88 @@ function getPlaylistStats(observations) {
     nTaxa: taxa.size,
     dateRange
   };
+}
+
+function initWildlistMiniMap(playlistId) {
+  const host = document.getElementById("gwWildlistMiniMap");
+  if (!host || !window.L) return;
+
+  const playlist = getById(playlistId);
+  const observations = playlist?.snapshotObservations || [];
+
+  const pts = observations
+    .filter(o => Number.isFinite(Number(o.lat)) && Number.isFinite(Number(o.lng)))
+    .map(o => ({
+      lat: Number(o.lat),
+      lng: Number(o.lng),
+      name: o.taxon || o.common_name || o.scientific_name || "Observation"
+    }));
+
+  if (!pts.length) {
+    host.innerHTML = `
+      <div class="gw-muted" style="padding:12px;font-size:12px;">
+        No mapped coordinates available for this Wildlist yet.
+      </div>
+    `;
+    return;
+  }
+
+  host.innerHTML = "";
+
+  const miniMap = L.map(host, {
+    zoomControl: false,
+    attributionControl: false,
+    dragging: true,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    boxZoom: false,
+    keyboard: false,
+    tap: true
+  });
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 20
+  }).addTo(miniMap);
+
+  const group = L.featureGroup();
+
+  pts.forEach(p => {
+    L.circleMarker([p.lat, p.lng], {
+      radius: 5,
+      stroke: true,
+      weight: 1,
+      fillOpacity: 0.85
+    })
+      .bindPopup(p.name)
+      .addTo(group);
+  });
+
+  group.addTo(miniMap);
+
+  const bounds = group.getBounds();
+  miniMap.fitBounds(bounds.pad(0.25), {
+    maxZoom: 18
+  });
+
+  // Draw approximate GridWild cells if helper exists
+  if (typeof window.getCellKeyForLatLng === "function") {
+    const seen = new Set();
+
+    pts.forEach(p => {
+      const key = window.getCellKeyForLatLng(p.lat, p.lng);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+
+      // Placeholder cell marker for now: circle around occupied grid cell.
+      L.circle([p.lat, p.lng], {
+        radius: 10,
+        weight: 1,
+        fillOpacity: 0.08
+      }).addTo(miniMap);
+    });
+  }
+
+  setTimeout(() => miniMap.invalidateSize(), 100);
 }
 
   function openViewer(playlistId) {
@@ -652,6 +976,26 @@ function getPlaylistStats(observations) {
     </div>
   </div>
 
+
+    <div class="gw-card" style="margin-bottom:12px;">
+    <div class="gw-card-title">Observation Map</div>
+
+    <div
+        id="gwWildlistMiniMap"
+        style="
+        height:220px;
+        border-radius:16px;
+        overflow:hidden;
+        border:1px solid rgba(215,183,116,0.18);
+        background:rgba(0,0,0,0.22);
+        "
+    ></div>
+
+    <div class="gw-muted" style="font-size:11px;margin-top:8px;">
+        Observation points and approximate occupied GridWild cells.
+    </div>
+    </div>
+
   <div class="gw-muted" style="font-size:12px;margin-top:10px;">
     ${esc(stats.dateRange)}
   </div>
@@ -681,6 +1025,10 @@ function getPlaylistStats(observations) {
     `;
 
     document.body.appendChild(modal);
+
+    setTimeout(() => {
+    initWildlistMiniMap(playlist.id);
+    }, 80);
 
     modal.querySelectorAll(".gw-wildlist-slide-tile").forEach(tile => {
     tile.onclick = evt => {
@@ -1008,6 +1356,8 @@ function renderObsTile(o, playlistId = "", index = 0) {
     openCustomBuilder,
     openCustomBuilderFromPlaylist,
     addObservationToWildlist,
-    openSlideshow
+    openSlideshow,
+    buildTemplatePlaylistWithFilters,
+    openPartyWildlistPlaceholder
   };
 })();

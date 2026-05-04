@@ -432,7 +432,111 @@ function getCenterSquareLabel() {
   return `Center square (${n}×${n} cells ≈ ${widthFeet} ft × ${widthFeet} ft)`;
 }
 
-window.updateHudCenterSummary = function updateHudCenterSummary() {
+
+window.updateHudCenterSummary = async function updateHudCenterSummary() {
+
+  const el = document.getElementById("gwSummaryBody");
+  if (!el) return;
+
+  const titleEl =
+    document.querySelector("#gwSummaryPane .gw-summary-title");
+
+  if (titleEl) {
+    titleEl.textContent = getCenterSquareLabel();
+  }
+
+  try {
+
+    const keys = getCenterMacroCellKeys();
+
+    const squareRecords = await Promise.all(
+      keys.map((key) => {
+        const [ixStr, iyStr] = key.split(",");
+        return getSquareGeneraRecord(
+          Number(ixStr),
+          Number(iyStr)
+        );
+      })
+    );
+
+    const merged =
+      mergeSquareGeneraRecords(
+        squareRecords.filter(Boolean)
+      );
+
+    const m = merged.__metrics;
+
+    if (!m) {
+      el.innerHTML =
+        `<div class="gw-muted">No center-square data.</div>`;
+      return;
+    }
+
+    const speciesDensity =
+      m.count > 0 ? (m.species / m.count) : 0;
+
+    const discoveryScore =
+      m.species / Math.max(1, m.count * 0.25);
+
+    const dominant =
+      m.dominant_iconic || "Unknown";
+
+    el.innerHTML = `
+      <div class="gw-summary-grid">
+
+        <div class="gw-summary-k">Discovery</div>
+        <div class="gw-summary-v">
+          ${discoveryScore.toFixed(2)}
+        </div>
+
+        <div class="gw-summary-k">Observations</div>
+        <div class="gw-summary-v">
+          ${m.count}
+        </div>
+
+        <div class="gw-summary-k">Genera</div>
+        <div class="gw-summary-v">
+          ${m.genera}
+        </div>
+
+        <div class="gw-summary-k">Species density</div>
+        <div class="gw-summary-v">
+          ${speciesDensity.toFixed(2)}
+        </div>
+
+        <div class="gw-summary-k">Active cells</div>
+        <div class="gw-summary-v">
+          ${m.nActiveSquares}/${m.nSquares}
+        </div>
+
+        <div class="gw-summary-k">Peak month</div>
+        <div class="gw-summary-v">
+          ${GWMetrics.monthName(m.peak_month)}
+        </div>
+
+        <div class="gw-summary-k">Seasonality</div>
+        <div class="gw-summary-v">
+          ${(100*m.seasonal_strength).toFixed(0)}%
+        </div>
+
+        <div class="gw-summary-k">Dominant life</div>
+        <div class="gw-summary-v">
+          ${dominant}
+        </div>
+
+      </div>
+    `;
+
+  } catch(err) {
+
+    console.warn("Center summary failed:", err);
+
+    el.innerHTML =
+      `<div class="gw-muted">Could not load center summary.</div>`;
+  }
+};
+
+window.updateHudCenterSummary = function updateHudCenterSummaryOLD() {
   const el = document.getElementById("gwSummaryBody");
   if (!el) return;
 
@@ -588,7 +692,7 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
       </div>
     `;
   } catch (err) {
-    console.warn("Failed to render top observers panel:", err);
+    console.warn("Failed to renderconst genusMap = new Map(); top observers panel:", err);
     el.innerHTML = `<div class="gw-muted">Could not load top observers.</div>`;
   }
 };
@@ -596,6 +700,11 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
 function mergeSquareGeneraRecords(squareRecords) {
   const genusMap = new Map();
 
+  const mergedMetrics =
+    window.GWMetrics?.mergeSquareMetrics
+      ? window.GWMetrics.mergeSquareMetrics(squareRecords)
+      : null;
+      
   for (const rec of squareRecords) {
     const genera = Array.isArray(rec?.genera) ? rec.genera : [];
 
@@ -628,7 +737,11 @@ function mergeSquareGeneraRecords(squareRecords) {
     }
   }
 
-  return { genera: Array.from(genusMap.values()) };
+  return {
+    genera: Array.from(genusMap.values()),
+    __metrics: mergedMetrics
+  };
+
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -636,6 +749,12 @@ function mergeSquareGeneraRecords(squareRecords) {
 // ─────────────────────────────────────────────────────────────
 window.__genusTaxonomyDict = window.__genusTaxonomyDict || null;
 window.__squareGeneraSuperchunkCache = window.__squareGeneraSuperchunkCache || new Map();
+
+// Caches for in-flight fetches to prevent duplicate requests for the same data
+window.__richGridMetrics = window.__richGridMetrics || new Map();
+window.__richGridMetricsPending = window.__richGridMetricsPending || new Map();
+window.__squareGeneraSuperchunkPending = window.__squareGeneraSuperchunkPending || new Map();
+
 
 const GENERA_SUPERCHUNK_SIZE = 32; // must match your MATLAB writer
 const GENERA_SUPERCHUNK_BASE = "assets/square_genera_superchunks";
@@ -670,6 +789,43 @@ async function loadGenusTaxonomyDictionary() {
   return data;
 }
 
+async function loadGeneraSuperchunk(ix, iy) {
+  const key = getGeneraSuperchunkKey(ix, iy);
+  const cache = window.__squareGeneraSuperchunkCache;
+  const pending = window.__squareGeneraSuperchunkPending;
+
+  if (cache.has(key)) {
+    return cache.get(key);
+  }
+
+  if (pending.has(key)) {
+    return pending.get(key);
+  }
+
+  const url = getGeneraSuperchunkUrl(ix, iy);
+
+  const job = fetch(url)
+    .then((resp) => {
+      if (!resp.ok) {
+        throw new Error(`Failed to load square genera superchunk: HTTP ${resp.status} for ${url}`);
+      }
+      return resp.json();
+    })
+    .then((data) => {
+      cache.set(key, data);
+      pending.delete(key);
+      return data;
+    })
+    .catch((err) => {
+      pending.delete(key);
+      throw err;
+    });
+
+  pending.set(key, job);
+  return job;
+}
+
+
 function getGeneraSuperchunkKey(ix, iy) {
   const super_ix = Math.floor(ix / GENERA_SUPERCHUNK_SIZE);
   const super_iy = Math.floor(iy / GENERA_SUPERCHUNK_SIZE);
@@ -683,7 +839,7 @@ function getGeneraSuperchunkUrl(ix, iy) {
   return url;
 }
 
-async function loadGeneraSuperchunk(ix, iy) {
+async function loadGeneraSuperchunkOLD(ix, iy) {
   const key = getGeneraSuperchunkKey(ix, iy);
   const cache = window.__squareGeneraSuperchunkCache;
 
@@ -727,6 +883,85 @@ async function getSquareGeneraRecord(ix, iy) {
     return null;
   }
 }
+
+async function warmRichMetricsForCell(ix, iy) {
+  const key = `${ix},${iy}`;
+  const richCache = window.__richGridMetrics;
+  const pending = window.__richGridMetricsPending;
+
+  if (richCache.has(key)) return richCache.get(key);
+  if (pending.has(key)) return pending.get(key);
+
+  const job = getSquareGeneraRecord(ix, iy).then((rec) => {
+    if (!rec || !window.GWMetrics?.buildSquareMetrics) return null;
+
+    const staticMetrics = window.__staticGridCounts?.get(key) || {};
+    const richMetrics = window.GWMetrics.buildSquareMetrics(rec);
+
+    const merged = {
+      ...staticMetrics,
+      ...richMetrics,
+      observers: Number(staticMetrics.observers) || 0,
+      n_captive: Number(staticMetrics.n_captive) || 0
+    };
+
+    richCache.set(key, merged);
+    return merged;
+  }).finally(() => {
+    pending.delete(key);
+  });
+
+  pending.set(key, job);
+  return job;
+}
+function warmRichMetricsForVisibleCells() {
+  const counts = window.__staticGridCounts;
+  if (!(counts instanceof Map) || counts.size === 0) return;
+
+  const lens = window.__gwState?.activeLens || "classic";
+  if (lens !== "dominantlife") return;
+
+  const { startX, endX, startY, endY } = getPaddedBoundsMeters();
+
+  for (let x = startX; x < endX; x += GRID_SIZE_M) {
+    for (let y = startY; y < endY; y += GRID_SIZE_M) {
+      const ix = Math.floor(x / GRID_SIZE_M);
+      const iy = Math.floor(y / GRID_SIZE_M);
+      const key = `${ix},${iy}`;
+
+      if (!counts.has(key)) continue;
+
+      warmRichMetricsForCell(ix, iy).then((m) => {
+        if (m) scheduleGridHeatCanvasRender();
+      });
+    }
+  }
+}
+
+window.warmRichMetricsAroundCenter = function warmRichMetricsAroundCenter(radius = 4) {
+  const counts = window.__staticGridCounts;
+  if (!(counts instanceof Map) || counts.size === 0) return;
+
+  const center = getCenterFineCell();
+
+  for (let dx = -radius; dx <= radius; dx++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      const ix = center.ix + dx;
+      const iy = center.iy + dy;
+      const key = `${ix},${iy}`;
+
+      if (!counts.has(key)) continue;
+
+      warmRichMetricsForCell(ix, iy).then((m) => {
+        if (m) scheduleGridHeatCanvasRender();
+      });
+    }
+  }
+};
+
+
+
+
 function escapeHtml(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -1429,8 +1664,13 @@ function countToFill(count) {
   return { fillColor, fillOpacity };
 }
 
+
+function metricsToFill(metrics){
+  return window.GWLenses.compose(metrics);
+}
+
 // BLENDED COLORMAP!!!!!
-function metricsToFill(metrics) {
+function metricsToFillOLD(metrics) {
   if (!metrics) return null;
 
   const obs = metrics.count || 0;
@@ -2091,6 +2331,7 @@ function getHeatValueForCell(cellMetrics) {
 
 
 function updateStaticGridHeat() {
+  warmRichMetricsForVisibleCells();
   scheduleGridHeatCanvasRender();
 
   updateImportantGridLines();
@@ -2123,7 +2364,10 @@ function updateStaticGridHeatOLD() {
       const iy = Math.floor(y / GRID_SIZE_M);
       const key = `${ix},${iy}`;
 
-      const metrics = counts.get(key);
+      const metrics =
+        window.__richGridMetrics?.get(key) ||
+        counts.get(key);
+        
       if (!metrics) continue;
 
       const heatValue = getHeatValueForCell(metrics);
@@ -2299,7 +2543,10 @@ function renderGridHeatCanvas() {
       const iy = Math.floor(y / GRID_SIZE_M);
       const key = `${ix},${iy}`;
 
-      const metrics = counts.get(key);
+      const metrics =
+        window.__richGridMetrics?.get(key) ||
+        counts.get(key);
+
       if (!metrics) continue;
 
       const heatValue = getHeatValueForCell(metrics);

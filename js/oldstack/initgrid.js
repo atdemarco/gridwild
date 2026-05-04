@@ -584,6 +584,116 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
 };
 
 function mergeSquareGeneraRecords(squareRecords) {
+
+  const genusMap = new Map();
+
+  // aggregated metrics
+  const mergedMetrics = {
+    count: 0,
+    species: 0,
+    genera: 0,
+
+    iconic_counts: {},
+    month_totals: Array(12).fill(0),
+
+    peak_month: 0,
+    seasonal_strength: 0,
+    month_entropy: 0,
+
+    nSquares: 0,
+    nActiveSquares: 0
+  };
+
+  const speciesSet = new Set();
+
+  for (const rec of squareRecords) {
+
+    if (!rec) continue;
+
+    mergedMetrics.nSquares++;
+
+    // NEW: pull square metrics if present
+    const sm = rec.__metrics || null;
+
+    if (sm) {
+
+      mergedMetrics.count += sm.count || 0;
+
+      if ((sm.count || 0) > 0) {
+        mergedMetrics.nActiveSquares++;
+      }
+
+      // merge iconic counts
+      for (const [k,v] of Object.entries(sm.iconic_counts || {})) {
+        mergedMetrics.iconic_counts[k] =
+          (mergedMetrics.iconic_counts[k] || 0) + (v || 0);
+      }
+
+      // merge months
+      (sm.month_totals || []).forEach((v,i)=>{
+        mergedMetrics.month_totals[i] += Number(v)||0;
+      });
+    }
+
+    // Existing genera merge
+    const genera = Array.isArray(rec.genera) ? rec.genera : [];
+
+    for (const g of genera) {
+
+      const iconic = g?.iconic_taxon_name || "Unknown";
+      const order  = g?.order_name || "Unknown";
+      const family = g?.family_name || "Unknown";
+      const genus  = g?.genus_name || "Unknown";
+
+      const key = [iconic, order, family, genus].join("||");
+
+      speciesSet.add(genus);
+
+      if (!genusMap.has(key)) {
+        genusMap.set(key, {
+          iconic_taxon_name: iconic,
+          order_name: order,
+          family_name: family,
+          genus_name: genus,
+          count: 0,
+          month_counts: Array(12).fill(0)
+        });
+      }
+
+      const dest = genusMap.get(key);
+
+      dest.count += Number(g?.count) || 0;
+
+      const srcMonths =
+        Array.isArray(g?.month_counts) ? g.month_counts : [];
+
+      for (let i=0;i<12;i++){
+        dest.month_counts[i] += Number(srcMonths[i]) || 0;
+      }
+    }
+  }
+
+  // finalize
+  mergedMetrics.species = speciesSet.size;
+  mergedMetrics.genera  = speciesSet.size;
+
+  const maxMonth = Math.max(...mergedMetrics.month_totals);
+  const totalMonths =
+    mergedMetrics.month_totals.reduce((a,b)=>a+b,0);
+
+  mergedMetrics.peak_month =
+    mergedMetrics.month_totals.indexOf(maxMonth) + 1;
+
+  mergedMetrics.seasonal_strength =
+    totalMonths ? maxMonth / totalMonths : 0;
+
+  return {
+    genera: Array.from(genusMap.values()),
+    __metrics: mergedMetrics
+  };
+}
+
+function mergeSquareGeneraRecordsOLD(squareRecords) {
   const genusMap = new Map();
 
   for (const rec of squareRecords) {
@@ -693,7 +803,12 @@ async function loadGeneraSuperchunk(ix, iy) {
   }
 
   const data = await resp.json();
-//  console.log("GENERA loaded keys sample", Object.keys(data?.squares || {}).slice(0, 20));
+
+   // Enrich superchunk squares with derived metrics
+  if (window.GWMetrics && typeof window.GWMetrics.enrichChunk === "function") {
+    window.GWMetrics.enrichChunk(data);
+  }
+
   cache.set(key, data);
   return data;
 }
@@ -2265,7 +2380,17 @@ function scheduleGridHeatCanvasRender() {
   gridHeatRaf = requestAnimationFrame(renderGridHeatCanvas);
 }
 
-function renderGridHeatCanvas() {
+function lensNeedsDeepMetrics(lens){
+  return [
+    "dominantlife",
+    "seasonalpulse",
+    "stability",
+    "breadth",
+    "treasure2"
+  ].includes(lens);
+}
+
+async function renderGridHeatCanvas() {
   gridHeatRaf = null;
 
   ensureGridHeatCanvas();
@@ -2289,13 +2414,36 @@ function renderGridHeatCanvas() {
       const iy = Math.floor(y / GRID_SIZE_M);
       const key = `${ix},${iy}`;
 
-      const metrics = counts.get(key);
+      
+      let metrics = counts.get(key);
       if (!metrics) continue;
 
       const heatValue = getHeatValueForCell(metrics);
       if (heatValue <= 0) continue;
 
+      const activeLens =
+        window.__gwState?.activeLens || "classic";
+
+      if (lensNeedsDeepMetrics(activeLens)) {
+
+        const rec = await getSquareGeneraRecord(ix, iy);
+
+        if (rec) {
+          const merged =
+            mergeSquareGeneraRecords([rec]);
+
+          if (merged?.__metrics) {
+            metrics = {
+              ...metrics,
+              ...merged.__metrics
+            };
+          }
+        }
+      }
+
       const baseStyle = metricsToFill(metrics);
+
+      
       if (!baseStyle) continue;
 
       let fogState = null;

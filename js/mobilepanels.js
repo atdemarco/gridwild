@@ -289,7 +289,7 @@ function renderDraftObservationsList() {
                 }
               </span>
 
-              <span style="min-width:0;">
+              <span style="min-width:0; flex:1 1 0;">
                 <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                   Draft observation
                 </span>
@@ -361,7 +361,7 @@ function renderRecentINatList() {
             data-genus="${escapeHtmlLocal(genus)}"
             style="cursor:${genus ? "pointer" : "default"};"
           >
-            <span style="min-width:0;">
+            <span style="min-width:0;flex:1 1 0;">
               <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                 ${escapeHtmlLocal(displayName)}
               </span>
@@ -371,7 +371,11 @@ function renderRecentINatList() {
               </span>
             </span>
 
-              <span style="display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;">
+              <span
+                style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex:0 1 auto;min-width:0;"
+      
+              >
+
                 ${questBadge}
 
                 <button

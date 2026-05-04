@@ -45,6 +45,14 @@
       pointer-events: none !important;
     }
 
+    #sheetLensBody > .gw-card{
+      margin-bottom:14px;
+    }
+
+    #sheetLensBody .gw-card .gw-card{
+      margin-top:8px;
+    }
+
         
     .gw-topbtn.is-locked {
       color: #0b7a5d;
@@ -137,6 +145,10 @@
       gap: 8px;
       pointer-events: auto;
     }
+  .gw-topbar-stack{
+    flex-direction: column;
+    align-items: flex-start;
+  }
 
     .gw-pill,
     .gw-topbtn {
@@ -810,6 +822,11 @@
         0 4px 14px rgba(0,0,0,0.08);
     }
 
+    #gwLegendFoot div{
+      line-height:1.25;
+      margin-top:2px;
+    }
+
     #gwCladoBody,
     .gw-clado-svg {
       width: 100%;
@@ -1160,6 +1177,20 @@
     text-align:left;
   }
 
+  .gw-lens-card{
+    cursor:pointer;
+    transition:transform 120ms ease, border-color 120ms ease;
+  }
+
+  .gw-lens-card:active{
+    transform:translateY(1px) scale(0.985);
+  }
+
+  .gw-lens-card.is-active{
+    border-color: rgba(240,209,138,0.72);
+    box-shadow: 0 0 0 1px rgba(240,209,138,0.28);
+  }
+
   /* ───────────────────────────────────────────── */
   /* Leaflet popup above GridWild overlays        */
   /* ───────────────────────────────────────────── */
@@ -1414,9 +1445,14 @@
 
   <!-- Top controls -->
   <div class="gw-topbar">
-    <div class="gw-topbar-left">
-      <button class="gw-pill" id="legendPill" type="button">🗺️ Legend</button>
-    </div>
+  <div class="gw-topbar-left gw-topbar-stack">
+    <button class="gw-pill" id="legendPill" type="button">
+      🗺️ Legend
+    </button>
+    <button class="gw-pill" id="lensPill" type="button">
+      👁 Lens
+    </button>
+  </div>
 
     <div class="gw-topbar-right">
       <button class="gw-pill" id="gwWildPointsPill" type="button">
@@ -1497,6 +1533,122 @@
     </div>
   </section>
 
+  <!-- LENS sheet -->
+<section class="gw-sheet" id="sheetLens">
+  <div class="gw-sheet-card">
+    <div class="gw-sheet-handle"></div>
+
+    <div class="gw-sheet-header">
+      <div class="gw-sheet-title">Ecological Lenses</div>
+      <button class="gw-sheet-close" data-close-sheet>&times;</button>
+    </div>
+
+<div class="gw-sheet-body" id="sheetLensBody">
+
+  <!-- CORE -->
+  <div class="gw-card">
+    <div class="gw-card-title">Core Lenses</div>
+
+    <div class="gw-card gw-lens-card" data-lens="classic">
+      <div class="gw-card-title">Explorer</div>
+      Balanced biodiversity overview.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="richness">
+      <div class="gw-card-title">Biodiversity</div>
+      Species-rich hotspots.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="rare">
+      <div class="gw-card-title">Rare Finds</div>
+      Unusual richness relative to traffic.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="underexplored">
+      <div class="gw-card-title">Frontier</div>
+      Neglected but promising squares.
+    </div>
+  </div>
+
+
+  <!-- HUMAN -->
+  <div class="gw-card">
+    <div class="gw-card-title">Human Landscape</div>
+
+    <div class="gw-card gw-lens-card" data-lens="observers">
+      <div class="gw-card-title">Busy World</div>
+      Human observer activity.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="cultivated">
+      <div class="gw-card-title">Gardenworld</div>
+      Cultivated and planted life.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="wildbalance">
+      <div class="gw-card-title">Wild Balance</div>
+      Wild versus cultivated tension.
+    </div>
+  </div>
+
+
+  <!-- STYLE -->
+  <div class="gw-card">
+    <div class="gw-card-title">Style Modes</div>
+
+    <div class="gw-card gw-lens-card" data-lens="night">
+      <div class="gw-card-title">Night Gold</div>
+      Warm nocturnal scanner.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="emerald">
+      <div class="gw-card-title">Emerald</div>
+      Vivid green richness mode.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="treasure">
+      <div class="gw-card-title">Treasure</div>
+      Hidden biodiversity reward zones.
+    </div>
+  </div>
+
+
+  <!-- ANALYTICS -->
+  <div class="gw-card">
+    <div class="gw-card-title">Analytics Lenses</div>
+
+    <div class="gw-card gw-lens-card" data-lens="dominantlife">
+      <div class="gw-card-title">Dominant Life</div>
+      Color by leading lifeform.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="seasonalpulse">
+      <div class="gw-card-title">Season Pulse</div>
+      Peak month and seasonal force.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="stability">
+      <div class="gw-card-title">Stability</div>
+      Steady versus bursty squares.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="breadth">
+      <div class="gw-card-title">Breadth</div>
+      Multi-group biodiversity depth.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="treasure2">
+      <div class="gw-card-title">Hidden Treasure</div>
+      Quiet squares with strong diversity.
+    </div>
+
+  </div>
+
+</div>
+
+  </div>
+</section>
+
   <!-- Bottom nav -->
   <nav class="gw-bottomnav" aria-label="GridWild mobile navigation">
       <button class="gw-navbtn" id="btnMe" type="button">
@@ -1576,11 +1728,13 @@
 
   <script src="js/gw-inat-recent.js"></script>
   <script src="js/gw-playlists.js"></script>
-  
+
   <script src="js/gw-quest-evidence.js"></script>
 
   <script src="js/inatscatter.js"></script>
   <!-- <script src="js/osmoverlay.js"></script> -->
+  <script src="js/gw-metrics.js"></script>
+  <script src="js/gw-lenses.js"></script>
   <script src="js/location.js"></script>
   <script src="js/sidebar.js"></script>
   
@@ -1618,7 +1772,8 @@
       info: document.getElementById("sheetInfo"),
       community: document.getElementById("sheetCommunity"),
       quest: document.getElementById("sheetQuest"),
-      legend: document.getElementById("sheetLegend")
+      legend: document.getElementById("sheetLegend"),
+      lens: document.getElementById("sheetLens")
     };
 
     const navButtons = {
@@ -1768,6 +1923,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         openSheet(name);
       }
 
+
       document.getElementById("btnMe")
         .addEventListener("click", () => toggleSheet("me"));
 
@@ -1783,6 +1939,76 @@ window.refreshQuestBadge = refreshQuestBadge;
       document.getElementById("legendPill")
       .addEventListener("click", () => toggleSheet("legend"));  
 
+      document.getElementById("lensPill")
+      .addEventListener("click", () => toggleSheet("lens"));
+
+
+
+    const lensLabels = {
+      classic: "Explorer",
+      richness: "Biodiversity",
+      rare: "Rare Finds",
+      underexplored: "Frontier",
+      observers: "Busy World",
+      night: "Night Gold",
+      emerald: "Emerald",
+      treasure: "Treasure",
+      cultivated: "Gardenworld",
+      wildbalance: "Wild Balance",
+      dominantlife: "Dominant Life",
+      seasonalpulse: "Season Pulse",
+      stability: "Stability",
+      breadth: "Breadth",
+      treasure2: "Hidden Treasure",
+    };
+
+    function refreshLensPill(){
+
+  const btn = document.getElementById("lensPill");
+  if (!btn) return;
+
+  const lens = window.__gwState?.activeLens || "classic";
+  const label = lensLabels[lens] || "Lens";
+
+  btn.innerHTML = `👁 ${label}`;
+}
+
+  function bindLensCards(){
+
+    document.querySelectorAll(".gw-lens-card").forEach(card => {
+
+      card.onclick = () => {
+
+        const lens = card.dataset.lens;
+
+        updateLegendText();
+
+
+        window.__gwState.activeLens = lens;
+        localStorage.setItem("gwActiveLens", lens);
+        refreshLensPill();
+
+        if (typeof updateGrid === "function") {
+          updateGrid();
+        }
+
+        if (typeof paintLegendFromHeatFunction === "function") {
+          paintLegendFromHeatFunction();
+        }
+
+        document.querySelectorAll(".gw-lens-card")
+          .forEach(c => c.classList.remove("is-active"));
+
+        card.classList.add("is-active");
+
+        closeAllSheets();
+      };
+
+    });
+
+  }
+
+  bindLensCards();
       // --------------------------------------------------------------------
       // Camera → Draft Observation workflow
       // --------------------------------------------------------------------
@@ -1835,6 +2061,18 @@ window.refreshQuestBadge = refreshQuestBadge;
     // Init
     // --------------------------------------------------------------------
     (function initGridWildMobileShell() {
+
+      const savedLens = localStorage.getItem("gwActiveLens");
+      if (savedLens) {
+        window.__gwState.activeLens = savedLens;
+      }
+      if (typeof updateGrid === "function") updateGrid();
+      if (typeof paintLegendFromHeatFunction === "function") {
+        paintLegendFromHeatFunction();
+      }
+      refreshLensPill();
+
+
       setTimeout(() => {
         if (typeof window.initGridWildMobilePanels === "function") {
           window.initGridWildMobilePanels();

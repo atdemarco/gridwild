@@ -38,6 +38,7 @@ window.__gwState = {
   showOsmParks: true,
   showOsmBuildings: true,
   showOsmWater: true,
+  activeLens: "classic"
 };
 
   L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
