@@ -6,7 +6,7 @@
   const STORAGE_KEY = "gw_economy_v1";
 
   const DEFAULT_STATE = {
-    wildPoints: 5000,
+    wildPoints: 0,
     prestigeTokens: 0,
     ownedItems: [],
     equipped: {
@@ -21,7 +21,38 @@
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? { ...DEFAULT_STATE, ...JSON.parse(raw) } : { ...DEFAULT_STATE };
+      const local = raw
+  ? { ...DEFAULT_STATE, ...JSON.parse(raw) }
+  : { ...DEFAULT_STATE };
+
+const dbWildpoints =
+  window.__gwState?.player?.wildpoints;
+
+if (dbWildpoints !== undefined && dbWildpoints !== null) {
+  local.wildPoints = Number(dbWildpoints || 0);
+}
+
+
+const dbInventory = window.__gwState?.playerInventory;
+if (Array.isArray(dbInventory)) {
+  local.ownedItems = dbInventory
+    .map(x => x.item_id)
+    .filter(Boolean);
+}
+
+const dbEquipment = window.__gwState?.playerEquipment;
+if (dbEquipment) {
+  local.equipped = {
+    ...local.equipped,
+    title: dbEquipment.title || null,
+    frame: dbEquipment.frame || null,
+    trail: dbEquipment.trail || null,
+    companion: dbEquipment.companion || null,
+    hat: dbEquipment.hat || null
+  };
+}
+
+return local;
     } catch {
       return { ...DEFAULT_STATE };
     }
@@ -43,26 +74,53 @@
     return next;
   }
 
-  function addWildPoints(n, reason = "manual") {
-    const state = load();
-    state.wildPoints = Math.max(0, Number(state.wildPoints || 0) + Number(n || 0));
-    state.lastAward = {
-      amount: Number(n || 0),
-      reason,
-      at: new Date().toISOString()
-    };
+async function addWildPoints(n, reason = "manual") {
+  const amount = Number(n || 0);
 
-    showRewardToast(Number(n || 0), reason);
+  try {
+    const player = await window.GridWildAPI.addWildpoints(amount);
+
+    window.__gwState = window.__gwState || {};
+    window.__gwState.player = player;
+
+    showRewardToast(amount, reason);
+
+    refreshHud();
+
+    window.dispatchEvent(new CustomEvent("gwEconomyChanged", {
+      detail: player
+    }));
+
+    return player;
+  } catch (err) {
+    console.warn("Could not award wildpoints:", err);
+
+    // fallback to local
+    const state = load();
+
+    state.wildPoints =
+      Math.max(0, Number(state.wildPoints || 0) + amount);
+
+    showRewardToast(amount, reason);
 
     return save(state);
   }
+}
 
   function refreshHud() {
     const el = document.getElementById("gwWildPointsValue");
     if (!el) return;
 
+    const dbWildpoints = window.__gwState?.player?.wildpoints;
+
+    if (dbWildpoints !== undefined && dbWildpoints !== null) {
+      el.textContent = Number(dbWildpoints || 0).toLocaleString();
+      return;
+    }
+
     const state = load();
     el.textContent = Number(state.wildPoints || 0).toLocaleString();
+
   }
 
   function bindHud() {
@@ -74,7 +132,13 @@
   }
 
   function owns(itemId) {
-    return load().ownedItems.includes(itemId);
+  const dbInventory = window.__gwState?.playerInventory;
+
+  if (Array.isArray(dbInventory)) {
+    return dbInventory.some(x => x.item_id === itemId);
+  }
+
+  return load().ownedItems.includes(itemId);
   }
 
   function hasAchievement(id) {
@@ -106,14 +170,19 @@ function canBuy(item) {
   const state = load();
   const currency = item.currency || "wildPoints";
 
-  if (Number(state[currency] || 0) < Number(item.price || 0)) {
+  const balance =
+    currency === "wildPoints"
+      ? Number(window.__gwState?.player?.wildpoints || 0)
+      : Number(state[currency] || 0);
+
+  if (balance < Number(item.price || 0)) {
     return { ok: false, reason: "Not enough currency." };
   }
 
   return { ok: true, reason: "OK" };
 }
 
-function buyItem(itemId) {
+async function buyItem(itemId) {
   const item = getCatalogItem(itemId);
   const check = canBuy(item);
 
@@ -121,15 +190,40 @@ function buyItem(itemId) {
 
   const state = load();
   const currency = item.currency || "wildPoints";
+  const price = Number(item.price || 0);
 
-  state[currency] = Number(state[currency] || 0) - Number(item.price || 0);
-  state.ownedItems = Array.from(new Set([...(state.ownedItems || []), item.id]));
+  try {
+    if (currency === "wildPoints") {
+      const player = await window.GridWildAPI.addWildpoints(-price);
 
-  save(state);
+      window.__gwState = window.__gwState || {};
+      window.__gwState.player = player;
 
-  return { ok: true, item, state };
+      await window.GridWildAPI.addPlayerInventoryItem(item.id);
+
+      window.__gwState = window.__gwState || {};
+      window.__gwState.playerInventory = [
+        ...(window.__gwState.playerInventory || []).filter(x => x.item_id !== item.id),
+        { item_id: item.id }
+      ];
+
+      state.ownedItems = Array.from(new Set([...(state.ownedItems || []), item.id]));
+      save(state);
+      refreshHud();
+
+      return { ok: true, item, state };
+    }
+
+    state[currency] = Number(state[currency] || 0) - price;
+    state.ownedItems = Array.from(new Set([...(state.ownedItems || []), item.id]));
+    save(state);
+
+    return { ok: true, item, state };
+  } catch (err) {
+    console.warn("Could not buy item:", err);
+    return { ok: false, reason: "Purchase failed." };
+  }
 }
-
 function equipItem(itemId) {
   const item = getCatalogItem(itemId);
   if (!item) return { ok: false, reason: "Missing item." };
@@ -149,6 +243,16 @@ function equipItem(itemId) {
   };
 
   save(state);
+
+  window.GridWildAPI?.setPlayerEquipment?.(slot, itemId)
+    .then(result => {
+      window.__gwState = window.__gwState || {};
+      window.__gwState.playerEquipment = result.equipment;
+      window.GridWildCharacter?.renderSummary?.();
+    })
+    .catch(err => {
+      console.warn("Could not sync equipment:", err);
+    });
 
   return { ok: true, item, state };
 }

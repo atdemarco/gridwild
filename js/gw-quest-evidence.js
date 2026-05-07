@@ -155,23 +155,43 @@ function getAllEvidenceObservations() {
     return getAllEvidenceObservations().filter(o => qualifies(o, quest));
     }
 
-  function claimedQuestForObservationChannel(obs, channel) {
-    const links = loadLinks();
-    const id = obsId(obs);
+function claimedQuestForObservationChannel(obs, channel) {
+  const id = obsId(obs);
+  const evidence = window.__gwState?.questEvidence || [];
+  const quests = window.GridWildQuests?.getVisibleQuests?.() || [];
 
-    for (const link of Object.values(links)) {
-      if (String(link.obsId) === id && link.channel === channel && link.status === "claimed") {
-        return link.questId;
-      }
+  for (const e of evidence) {
+    if (String(e.obs_id) !== id || e.status !== "claimed") continue;
+
+    const q = quests.find(x =>
+      String(x.dbId || x.id) === String(e.quest_id)
+    );
+
+    if (!q) continue;
+
+    if (getChannelForQuest(q) === channel) {
+      return q.id;
     }
-
-    return null;
   }
 
+  return null;
+}
+
   function isObservationClaimedForQuest(obs, quest) {
-    const links = loadLinks();
-    const key = `${quest.id}::${obsId(obs)}`;
-    return links[key]?.status === "claimed";
+    const id = obsId(obs);
+
+    const dbEvidence = window.__gwState?.questEvidence || [];
+    const dbQuestId = quest.dbId || quest.id;
+
+    if (dbEvidence.some(e =>
+      String(e.quest_id) === String(dbQuestId) &&
+      String(e.obs_id) === String(id) &&
+      e.status === "claimed"
+    )) {
+      return true;
+    }
+
+    return false;
   }
 
   function claimObservationForQuest(obs, quest) {
@@ -188,19 +208,38 @@ function getAllEvidenceObservations() {
       };
     }
 
-    const links = loadLinks();
-    const key = `${quest.id}::${obsId(obs)}`;
+    const id = obsId(obs);
 
-    links[key] = {
-      questId: quest.id,
-      obsId: obsId(obs),
-      channel,
-      status: "claimed",
-      claimedAt: new Date().toISOString()
+    window.GridWildAPI?.claimQuestEvidence?.(
+      quest.dbId || quest.id,
+      id,
+      obs.source || "observation"
+    ).then(() => {
+      window.GridWildAPI?.getQuests?.()
+        .then(data => {
+          window.__gwState = window.__gwState || {};
+          window.__gwState.quests = data.quests || [];
+          window.GridWildQuests?.renderQuestListIntoPage?.();
+          window.refreshQuestBadge?.();
+        })
+        .catch(err => {
+          console.warn("Could not refresh quests after evidence claim:", err);
+        });
+    }).catch(err => {
+      console.warn("Could not sync quest evidence claim:", err);
+    });
+
+    return {
+      ok: true,
+      link: {
+        questId: quest.id,
+        obsId: id,
+        channel,
+        status: "claimed",
+        claimedAt: new Date().toISOString(),
+        dbBacked: true
+      }
     };
-
-    saveLinks(links);
-    return { ok: true, link: links[key] };
   }
 
   function autoClaimForQuest(quest) {
@@ -216,13 +255,17 @@ function getAllEvidenceObservations() {
   }
 
   function getClaimedForQuest(quest) {
-    const links = loadLinks();
+    const dbQuestId = quest.dbId || quest.id;
+    const evidence = window.__gwState?.questEvidence || [];
     const obs = getAllEvidenceObservations();
     const byId = new Map(obs.map(o => [obsId(o), o]));
 
-    return Object.values(links)
-      .filter(l => l.questId === quest.id && l.status === "claimed")
-      .map(l => byId.get(String(l.obsId)))
+    return evidence
+      .filter(e =>
+        String(e.quest_id) === String(dbQuestId) &&
+        e.status === "claimed"
+      )
+      .map(e => byId.get(String(e.obs_id)))
       .filter(Boolean);
   }
 
@@ -237,13 +280,13 @@ function getAllEvidenceObservations() {
 
   function renderRecentObservationBadge(obs) {
     const matches = getObservationQuestMatches(obs);
-    const links = loadLinks();
+
     const id = obsId(obs);
+    const evidence = window.__gwState?.questEvidence || [];
 
-    const claimed = Object.values(links).some(l =>
-      String(l.obsId) === id && l.status === "claimed"
+    const claimed = evidence.some(e =>
+      String(e.obs_id) === id && e.status === "claimed"
     );
-
     if (claimed) {
       return `<span class="gw-evidence-badge claimed" title="Already linked to a quest">🔗</span>`;
     }

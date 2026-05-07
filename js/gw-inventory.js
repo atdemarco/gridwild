@@ -32,14 +32,24 @@
     return catalog.filter(item => ownedIds.includes(item.id));
   }
 
-  function unequipSlot(slot) {
-    const state = window.GridWildEconomy?.load?.();
-    if (!state?.equipped) return;
+async function unequipSlot(slot) {
+  const state = window.GridWildEconomy?.load?.();
+  if (!state?.equipped) return;
 
-    state.equipped[slot] = null;
-    window.GridWildEconomy?.save?.(state);
-    window.GridWildCharacter?.renderSummary?.();
+  state.equipped[slot] = null;
+  window.GridWildEconomy?.save?.(state);
+
+  try {
+    const result = await window.GridWildAPI.setPlayerEquipment(slot, null);
+
+    window.__gwState = window.__gwState || {};
+    window.__gwState.playerEquipment = result.equipment;
+  } catch (err) {
+    console.warn("Could not sync unequip:", err);
   }
+
+  window.GridWildCharacter?.renderSummary?.();
+}
 
   function renderTabs() {
     return CATEGORIES.map(c => `
@@ -170,9 +180,14 @@
     });
 
     root.querySelectorAll("[data-inventory-unequip]").forEach(btn => {
-      btn.onclick = () => {
-        unequipSlot(btn.dataset.inventoryUnequip);
-        renderInto(root);
+      btn.onclick = async () => {
+        btn.disabled = true;
+        try {
+          await unequipSlot(btn.dataset.inventoryUnequip);
+          renderInto(root);
+        } finally {
+          btn.disabled = false;
+        }
       };
     });
 

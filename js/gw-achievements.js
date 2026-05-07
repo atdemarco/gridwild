@@ -37,21 +37,64 @@
     return new Date().toISOString();
   }
 
-  function loadStore() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
-      return parsed && typeof parsed === "object" ? parsed : {};
-    } catch {
-      return {};
-    }
+function loadStore() {
+  const dbRows = window.__gwState?.playerAchievements;
+
+  if (Array.isArray(dbRows)) {
+    const out = {};
+
+    dbRows.forEach(row => {
+      out[row.achievement_id] = {
+        unlocked: !!row.unlocked,
+        progress: Number(row.progress || 0),
+        target: Number(row.target || 1),
+        achieved_at: row.achieved_at || null,
+        achieved_where: row.achieved_where || null,
+        source: row.source || "db"
+      };
+    });
+
+    return out;
   }
 
-    function saveStore(store) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store || {}));
-    window.dispatchEvent(new CustomEvent("gwAchievementsChanged"));
-    refreshAchievementSummary();
-    }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveStore(store) {
+  const safeStore = store || {};
+
+  // Keep local fallback mirror for now.
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(safeStore));
+
+  const rows = Object.entries(safeStore).map(([achievementId, state]) => ({
+    achievement_id: achievementId,
+    unlocked: !!state?.unlocked,
+    progress: Number(state?.progress || 0),
+    target: Number(state?.target || 1),
+    achieved_at: state?.achieved_at || null,
+    achieved_where: state?.achieved_where || null,
+    source: state?.source || null
+  }));
+
+  window.GridWildAPI?.upsertPlayerAchievements?.(rows)
+    .then(result => {
+      window.__gwState = window.__gwState || {};
+      window.__gwState.playerAchievements = result.achievements || [];
+      window.dispatchEvent(new CustomEvent("gwAchievementsChanged"));
+      refreshAchievementSummary();
+    })
+    .catch(err => {
+      console.warn("Could not sync achievements:", err);
+      window.dispatchEvent(new CustomEvent("gwAchievementsChanged"));
+      refreshAchievementSummary();
+    });
+}
 
   function loadProfile() {
     try {

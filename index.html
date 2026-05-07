@@ -1739,6 +1739,9 @@
     window.GW_SHOW_MOBILE_SMALL_TEXT = false;
   </script>
 
+  <script src="js/gw-api.js"></script>
+  <script src="js/gw-player-ui.js"></script>
+
   <script src="js/mapinit.js"></script>
   <script src="js/gw-overview-map.js"></script>
   <script src="js/initgrid.js"></script>
@@ -1780,6 +1783,7 @@
   <script src="js/gw-onboarding.js"></script>
   <script src="js/gw-genus-codex.js"></script>
   <script src="js/gw-party.js"></script>
+  <script src="js/gw-party-live.js"></script>
   <script src="js/mobilepanels.js"></script>
   <script>
     // --------------------------------------------------------------------
@@ -1807,6 +1811,7 @@
       Object.values(sheets).forEach(el => el.classList.remove("is-open"));
       Object.values(navButtons).forEach(el => el.classList.remove("is-active"));
       gwBackdrop.classList.remove("is-open");
+      window.GridWildPartyLive?.stopPartyPolling?.();
     }
 
     function setQuestBadge(visible) {
@@ -1841,6 +1846,20 @@ window.refreshQuestBadge = refreshQuestBadge;
       }
     }
 
+        if (name === "community") {
+          setTimeout(async () => {
+            await window.GridWildPartyLive?.loadParty?.();
+            window.GridWildPartyLive?.refreshPartySheet?.();
+          }, 0);
+        }
+
+        setTimeout(async () => {
+          await window.GridWildPartyLive?.loadParty?.();
+          window.GridWildPartyLive?.refreshPartySheet?.();
+          window.GridWildPartyLive?.startPartyPolling?.();
+        }, 0);
+      }
+
     if (name === "quest" && window.GridWildQuests) {
       window.GridWildQuests.renderQuestListIntoPage();
 
@@ -1849,9 +1868,6 @@ window.refreshQuestBadge = refreshQuestBadge;
         window.GridWildQuests.bindQuestSheetControls(questBody);
       }
     }
-
-  }
-
 
     const sheetOrder = ["me", "info", "community", "quest"];
 
@@ -2080,8 +2096,60 @@ window.refreshQuestBadge = refreshQuestBadge;
     // --------------------------------------------------------------------
     // Init
     // --------------------------------------------------------------------
-    (function initGridWildMobileShell() {
+      (async function initGridWildMobileShell() {
 
+      try {
+        const data = await window.GridWildAPI.getBootstrap();
+
+        window.__gwState = window.__gwState || {};
+        window.__gwState.player = data.player;
+        window.__gwState.quests = data.quests || [];
+        window.__gwState.questEvidence = (data.quests || [])
+          .flatMap(q => q.quest_evidence || []);
+
+        window.__gwState.activeQuestId = data.state?.active_quest_id || null;
+        window.__gwState.activePartyId = data.state?.active_party_id || null;
+
+        window.__gwState.surveys = data.surveys || [];
+        window.__gwState.playerSurveys = data.player_surveys || [];
+
+        window.__gwState.playerInventory = data.player_inventory || [];
+        window.__gwState.playerEquipment = data.player_equipment || null;
+
+        window.__gwState.playerAchievements = data.player_achievements || [];
+
+        window.GridWildAPI.setPlayerId(data.player.id);
+        window.GridWildPlayerUI?.refreshPlayerUI?.();
+        
+        window.GridWildAchievements?.refreshAchievementSummary?.();
+
+        window.GridWildEconomy?.refreshHud?.();
+        window.GridWildCharacter?.renderSummary?.();
+
+        window.dispatchEvent(new CustomEvent("gwBootstrapReady", {
+          detail: { player: data.player }
+        }));
+
+        await window.GridWildPartyLive?.loadParty?.();
+        window.GridWildPartyLive?.refreshPartySheet?.();
+
+
+        setTimeout(() => {
+          const activeQuest = window.GridWildQuests?.getVisibleQuests?.()
+            ?.find(q =>
+              String(q.dbId || q.id) === String(window.__gwState.activeQuestId)
+            );
+
+          if (activeQuest && window.GridWildQuestLayer) {
+            window.GridWildQuestLayer.embark(activeQuest);
+          }
+          window.refreshQuestBadge?.();
+        }, 0);
+
+      } catch (err) {
+        console.error("Bootstrap failed:", err);
+      }
+      
       const savedLens = localStorage.getItem("gwActiveLens");
       if (savedLens) {
         window.__gwState.activeLens = savedLens;

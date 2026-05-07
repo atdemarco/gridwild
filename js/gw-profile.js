@@ -23,17 +23,13 @@
   }
 
   function getQuestStats() {
-    try {
-      const raw = localStorage.getItem("gw_quests_v1");
-      const quests = raw ? JSON.parse(raw) : [];
-      return {
-        total: quests.length,
-        completed: quests.filter(q => q.status === "completed" || q.status === "complete").length,
-        active: quests.filter(q => q.status === "active").length
-      };
-    } catch {
-      return { total: 0, completed: 0, active: 0 };
-    }
+    const quests = window.GridWildQuests?.getVisibleQuests?.() || [];
+
+    return {
+      total: quests.length,
+      completed: quests.filter(q => q.status === "completed" || q.status === "complete").length,
+      active: quests.filter(q => q.status === "active").length
+    };
   }
 
   function frameStyle(frame) {
@@ -96,7 +92,7 @@
 
               <div>
                 <div class="gw-store-name" style="font-size:22px;">
-                  ${esc(character.displayName || "New Wanderer")}
+                  ${esc(window.__gwState?.player?.display_name || character.displayName || "New Wanderer")}
                 </div>
                 <div class="gw-store-meta">
                   ${esc(equipped.title?.name?.replace(/^Title:\\s*/i, "") || character.archetype || "Naturalist")}
@@ -110,8 +106,12 @@
 
           <div class="gw-store-item">
             <div class="gw-store-name">Wallet</div>
-            <div class="gw-store-desc" style="font-size:24px;font-weight:950;color:#ffe082;">
-              🍃 ${Number(economy.wildPoints || 0).toLocaleString()}
+            <div
+              id="gwProfileWildpointsValue"
+              class="gw-store-desc"
+              style="font-size:24px;font-weight:950;color:#ffe082;"
+            >
+              🍃 ${Number(window.GridWildPlayerUI?.getWildpoints?.() || 0).toLocaleString()}
             </div>
             <div class="gw-store-meta">Wild Points</div>
           </div>

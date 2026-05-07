@@ -1033,23 +1033,56 @@ function setGeometryLabel(kind, index, label) {
     draft.updatedAt = new Date().toISOString();
   }
 
-  function loadSurveys() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
+function loadSurveys() {
+  const dbRows = window.__gwState?.surveys;
+
+  if (Array.isArray(dbRows)) {
+    return dbRows.map(row => {
+      const survey = row.survey_json || row;
+      if (!survey) return null;
+
+      return {
+        ...survey,
+        owner_player_id: row.owner_player_id || survey.owner_player_id || null,
+        public_mode: row.public_mode || survey.public_mode || survey.publicMode || "private",
+        updated_at: row.updated_at || survey.updated_at || survey.updatedAt || null,
+        _dbRow: row
+      };
+    }).filter(Boolean);
   }
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
   function saveSurveys(surveys) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(surveys || []));
     window.GridWildSurveyLayer?.render?.();
   }
 
-  function saveDraft() {
-    syncDraftFromForm();
+async function saveDraft() {
+  syncDraftFromForm();
+
+  try {
+    const result = await window.GridWildAPI.saveSurvey(draft);
+
+    window.__gwState = window.__gwState || {};
+    window.__gwState.surveys = [
+      result.survey,
+      ...(window.__gwState.surveys || []).filter(s => s.id !== result.survey.id)
+    ];
+
+    window.GridWildSurveyLayer?.render?.();
+
+    alert("Survey saved online.");
+    refreshRightPanel();
+  } catch (err) {
+    console.warn("Could not save survey online:", err);
 
     const surveys = loadSurveys();
     const idx = surveys.findIndex(c => c.id === draft.id);
@@ -1057,11 +1090,11 @@ function setGeometryLabel(kind, index, label) {
     if (idx >= 0) surveys[idx] = draft;
     else surveys.unshift(draft);
 
-    saveSurveys(surveys);
-    alert("Survey saved locally.");
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(surveys || []));
+    alert("Survey saved locally only.");
     refreshRightPanel();
   }
-
+}
   function exportDraftJson() {
     syncDraftFromForm();
 
@@ -1365,8 +1398,8 @@ function placeAssetAt(latlng) {
       </div>
 
       <div class="gw-cd-section">
-        <div class="gw-cd-section-title">Saved locally</div>
-        <div class="gw-cd-muted">${loadSurveys().length} survey(s) in localStorage.</div>
+        <div class="gw-cd-section-title">Saved surveys</div>
+        <div class="gw-cd-muted">${loadSurveys().length} survey(s) available.</div>
       </div>
     `;
   }
@@ -1567,17 +1600,23 @@ function placeAssetAt(latlng) {
 
 function normalizeSurveyForEdit(survey) {
   const fresh = makeEmptySurvey();
+  const editable = cloneDraft(survey);
+
+  delete editable._dbRow;
+  delete editable.owner_player_id;
+  delete editable.public_mode;
+  delete editable.updated_at;
 
   return {
     ...fresh,
-    ...cloneDraft(survey),
+    ...editable,
     geometries: {
       boundary: [],
       paths: [],
       exclusions: [],
       denseZones: [],
       assets: [],
-      ...(cloneDraft(survey.geometries || {}))
+      ...(cloneDraft(editable.geometries || {}))
     }
   };
 }
@@ -1594,21 +1633,32 @@ function openExisting(surveyId) {
   open(normalizeSurveyForEdit(existing));
 }
 
-function deleteSurvey(surveyId) {
+async function deleteSurvey(surveyId) {
   const surveys = loadSurveys();
   const target = surveys.find(c => c.id === surveyId);
 
   if (!target) return false;
 
-  const next = surveys.filter(c => c.id !== surveyId);
-  saveSurveys(next);
+  try {
+    await window.GridWildAPI.deleteSurvey(surveyId);
 
-  window.GridWildSurveyLayer?.hide?.(surveyId);
-  window.GridWildSurveyLayer?.render?.();
+    window.__gwState = window.__gwState || {};
+    window.__gwState.surveys = (window.__gwState.surveys || [])
+      .filter(row => row.id !== surveyId);
 
-  return true;
+    window.__gwState.playerSurveys = (window.__gwState.playerSurveys || [])
+      .filter(row => row.survey_id !== surveyId);
+
+    window.GridWildSurveyLayer?.hide?.(surveyId);
+    window.GridWildSurveyLayer?.render?.();
+
+    return true;
+  } catch (err) {
+    console.warn("Could not delete survey online:", err);
+    alert(`Could not delete survey: ${err.message}`);
+    return false;
+  }
 }
-
 
 function getCurrentDraftBounds() {
   const pts = [];

@@ -24,7 +24,19 @@
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? { ...DEFAULT_CHARACTER, ...JSON.parse(raw) } : { ...DEFAULT_CHARACTER };
+      const local = raw
+  ? { ...DEFAULT_CHARACTER, ...JSON.parse(raw) }
+  : { ...DEFAULT_CHARACTER };
+
+const player = window.__gwState?.player || {};
+
+return {
+  ...local,
+  displayName: player.display_name || local.displayName,
+  archetype: player.archetype || local.archetype,
+  icon: player.icon || local.icon,
+  color: player.color || local.color
+};
     } catch {
       return { ...DEFAULT_CHARACTER };
     }
@@ -68,7 +80,7 @@
 
         <div style="min-width:0;">
         <div style="font-size:18px;font-weight:950;line-height:1.1;">
-            ${esc(c.displayName)}
+            ${esc(window.__gwState?.player?.display_name || c.displayName)}
         </div>
 
         <div class="gw-muted" style="font-size:12px;margin-top:3px;">
@@ -133,7 +145,7 @@
         <div class="gw-quest-form">
           <div class="gw-quest-field">
             <label>Display name</label>
-            <input id="gwCharNameInput" value="${esc(c.displayName)}" style="
+            <input id="gwCharNameInput" value="${esc(window.__gwState?.player?.display_name || c.displayName)}" style="
               width:100%;box-sizing:border-box;border-radius:12px;padding:10px;
               border:1px solid rgba(215,183,116,0.30);
               background:rgba(20,17,15,0.88);color:#efe6d3;font-weight:750;
@@ -185,16 +197,37 @@
 
     root.querySelector("#gwCharCancelBtn").onclick = () => root.remove();
 
-    root.querySelector("#gwCharSaveBtn").onclick = () => {
+    root.querySelector("#gwCharSaveBtn").onclick = async () => {
       const archetype = root.querySelector("#gwCharTypeInput").value;
       const fallback = ARCHETYPES.find(a => a.id === archetype) || ARCHETYPES[0];
 
-      save({
-        displayName: root.querySelector("#gwCharNameInput").value.trim() || "New Wanderer",
+      const displayName =
+        root.querySelector("#gwCharNameInput").value.trim() || "New Wanderer";
+
+      const nextCharacter = save({
+        displayName,
         archetype,
         icon: root.querySelector("#gwCharIconInput").value || fallback.icon,
         color: root.querySelector("#gwCharColorInput").value || "fern"
       });
+
+      try {
+        const result = await window.GridWildAPI.updatePlayer({
+          display_name: displayName,
+          archetype,
+          icon: root.querySelector("#gwCharIconInput").value || fallback.icon,
+          color: root.querySelector("#gwCharColorInput").value || "fern"
+        });
+
+        window.__gwState = window.__gwState || {};
+        window.__gwState.player = result.player;
+      } catch (err) {
+        console.warn("Could not sync display name:", err);
+      }
+
+      root.remove();
+      renderSummary();
+      window.GridWildPlayerUI?.refreshPlayerUI?.();
 
       root.remove();
       renderSummary();

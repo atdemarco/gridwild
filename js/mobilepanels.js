@@ -591,39 +591,24 @@ function renderInfoContent() {
     `;
 }
 
-function renderCommunityContent() {
-  if (window.GridWildParty?.renderSheetHtml) {
-    return window.GridWildParty.renderSheetHtml();
-  }
-
-  return `
-    <div class="gw-card">
-      <div class="gw-card-title">Party</div>
-      <div class="gw-muted">Party system loading...</div>
-    </div>
-  `;
-}
-
-  function renderCommunityContentOLD() {
+  function renderCommunityContent() {
     return `
-      <div class="gw-card">
-        <div class="gw-card-title">Guild Territory</div>
-        <div class="gw-list">
-          <div class="gw-rowline"><span>Territory holder</span><span class="gw-muted">@BirdNerdDC</span></div>
-          <div class="gw-rowline"><span>Nearby specialist</span><span class="gw-muted">MossWizard</span></div>
-          <div class="gw-rowline"><span>Guild goal</span><span class="gw-muted">200 spring spp</span></div>
-        </div>
+  <div id="gwPartySheetBody">
+    <div class="gw-card">
+      <div class="gw-card-title">Online Party Sync</div>
+      <div id="gwPartyLiveStatus">
+        <div class="gw-muted">Loading shared party state...</div>
       </div>
+    </div>
 
+    <div id="gwLegacyPartyUI">
       <div class="gw-card">
-        <div class="gw-card-title">Nearby activity</div>
-        <div class="gw-list">
-          <div class="gw-rowline"><span>Warbler found 300m away</span><span class="gw-muted">today</span></div>
-          <div class="gw-rowline"><span>New bee species nearby</span><span class="gw-muted">today</span></div>
-          <div class="gw-rowline"><span>3 observers active here</span><span class="gw-muted">now</span></div>
-        </div>
+        <div class="gw-card-title">Party</div>
+        <div class="gw-muted">Loading parties...</div>
       </div>
-    `;
+    </div>
+  </div>
+`;
   }
 
 
@@ -1234,6 +1219,10 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
   window.GridWildParty?.refreshMapBeacon?.();
   window.GridWildParty?.handleJoinFromUrl?.();
 
+  window.GridWildPartyLive?.loadParty?.().then(() => {
+  window.GridWildPartyLive?.refreshPartySheet?.();
+  });
+
   window.GridWildPlaylists?.bindButtons?.(document);
   window.GridWildPlaylists?.renderSummary?.();
   window.GridWildPlaylists?.handlePlaylistFromUrl?.();
@@ -1364,14 +1353,11 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     const questBody = $("sheetQuestBody");
     const legendBody = $("sheetLegendBody");
 
-    if (meBody) meBody.innerHTML = renderMeContent();
-    if (infoBody) infoBody.innerHTML = renderInfoContent();
-    if (communityBody) communityBody.innerHTML = renderCommunityContent();
-    if (questBody) {
-      questBody.innerHTML = renderQuestContent();
-    }
-
-    if (legendBody) legendBody.innerHTML = renderLegendContent();
+    if (meBody)         meBody.innerHTML = renderMeContent();
+    if (infoBody)       infoBody.innerHTML = renderInfoContent();
+    if (communityBody)  communityBody.innerHTML = renderCommunityContent();
+    if (questBody)      questBody.innerHTML = renderQuestContent();
+    if (legendBody)     legendBody.innerHTML = renderLegendContent();
 
     mirrorCheckbox("togglePoints", "togglePoints_clone");
     mirrorCheckbox("toggleHeat", "toggleHeat_clone");
@@ -1448,6 +1434,10 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       window.GridWildParty?.bindSheetControls?.(document);
       window.GridWildParty?.refreshMapBeacon?.();
       window.GridWildParty?.handleJoinFromUrl?.();
+
+      window.GridWildPartyLive?.loadParty?.().then(() => {
+        window.GridWildPartyLive?.refreshPartySheet?.();
+      });
 
       window.GridWildPlaylists?.bindButtons?.(document);
       window.GridWildPlaylists?.renderSummary?.();

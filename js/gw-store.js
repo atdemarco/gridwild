@@ -45,7 +45,26 @@
   }
 
   function hasAchievement(id) {
-    return window.GridWildEconomy?.hasAchievement?.(id) ?? true;
+    if (!id) return true;
+
+    const dbRows = window.__gwState?.playerAchievements;
+
+    if (Array.isArray(dbRows)) {
+      return dbRows.some(row =>
+        row.achievement_id === id &&
+        row.unlocked === true
+      );
+    }
+
+    const storeRaw = localStorage.getItem("gw_user_achievements_v1");
+    if (!storeRaw) return false;
+
+    try {
+      const store = JSON.parse(storeRaw);
+      return !!store?.[id]?.unlocked;
+    } catch {
+      return false;
+    }
   }
 
   function isLocked(item) {
@@ -517,7 +536,7 @@
     bindInside(root);
   }
 
-  function buyOrEquip(itemId, root) {
+  async function buyOrEquip(itemId, root) {
     const item = getCatalog().find(x => x.id === itemId);
     if (!item) return;
 
@@ -537,7 +556,7 @@
       return;
     }
 
-    const result = window.GridWildEconomy?.buyItem?.(item.id);
+    const result = await window.GridWildEconomy?.buyItem?.(item.id);
 
     if (!result?.ok) {
       alert(result?.reason || "Could not buy item.");
@@ -547,6 +566,7 @@
     showToast("Purchased", item.name);
     renderInto(root);
     window.GridWildCharacter?.renderSummary?.();
+    window.GridWildEconomy?.refreshHud?.();
   }
 
   function bindInside(root) {
@@ -558,9 +578,14 @@
     });
 
     root.querySelectorAll("[data-store-buy]").forEach(btn => {
-      btn.onclick = () => {
-        buyOrEquip(btn.dataset.storeBuy, root);
-      };
+      btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        await buyOrEquip(btn.dataset.storeBuy, root);
+      } finally {
+        btn.disabled = false;
+      }
+    };
     });
 
     root.querySelector("#gwStoreCloseBtn")?.addEventListener("click", () => {

@@ -2632,6 +2632,13 @@ function staticChunkUrlFromKey(chunkKey) {
   return `assets/chunks/${chunkKey}.csv`;
 }
 
+function buzzOnNewSquare() {
+  if (!("vibrate" in navigator)) return;
+  // Short, subtle buzz. You can also use [20, 30, 20] for a double tap.
+  navigator.vibrate(35);
+}
+
+
 window.handleUserPositionUpdate = async function(lat, lng, force = false) {
   const cellKey = latLngToDisplayCellKey(lat, lng);
 
@@ -2673,6 +2680,20 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
     }
   }
 
+
+// Buzz when entering a new cell, even if auto-centering is off
+//  const previousCellKey = state.lastUserCellKey;
+ // const movedToNewCell = previousCellKey && cellKey !== previousCellKey;
+ // const enteredNewCell = force || (cellKey !== state.lastUserCellKey);
+ // state.lastUserCellKey = cellKey;
+
+//  if (movedToNewCell) {
+ //   buzzOnNewSquare();
+ // }
+
+
+  // Update grid and related UI if we entered a new cell
+
   if (enteredNewCell) {
     updateStaticGridHeat();
     updateGridLines();
@@ -2692,9 +2713,9 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
       window.maybeRefreshDynamicINat(false, cellKey);
     }
   }
+
 };
 
-// // //
 function getCenterMacroBoundsForCurrentLocation() {
   const { ix0, iy0 } = getCenterMacroAnchor();
   const { sw, ne } = macroCellBoundsLL(ix0, iy0);

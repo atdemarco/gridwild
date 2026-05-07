@@ -9,33 +9,81 @@
 
   let layer = null;
 
-  function loadState() {
-    try {
-      return JSON.parse(localStorage.getItem(STATE_KEY) || "{}") || {};
-    } catch {
-      return {};
-    }
+function loadState() {
+  const rows = window.__gwState?.playerSurveys;
+
+  if (Array.isArray(rows)) {
+    const out = {};
+
+    rows.forEach(row => {
+      out[row.survey_id] = {
+        joined: !!row.joined,
+        visible: !!row.visible
+      };
+    });
+
+    return out;
   }
 
-  function saveState(state) {
-    localStorage.setItem(STATE_KEY, JSON.stringify(state || {}));
-    window.dispatchEvent(new CustomEvent("gwSurveyStateChanged"));
+  try {
+    return JSON.parse(localStorage.getItem(STATE_KEY) || "{}") || {};
+  } catch {
+    return {};
   }
+}
+
+function saveState(state) {
+  localStorage.setItem(STATE_KEY, JSON.stringify(state || {}));
+  window.dispatchEvent(new CustomEvent("gwSurveyStateChanged"));
+}
 
   function getSurveyState(id) {
     const state = loadState();
     return state[id] || { joined: false, visible: false };
   }
 
-  function setSurveyState(id, patch) {
-    const state = loadState();
-    state[id] = { ...(state[id] || {}), ...patch };
+function setSurveyState(id, patch) {
+  const state = loadState();
 
-    if (!state[id].joined) state[id].visible = false;
+  state[id] = {
+    ...(state[id] || {}),
+    ...patch
+  };
 
-    saveState(state);
-    render();
+  if (!state[id].joined) {
+    state[id].visible = false;
   }
+
+  // Immediate local/runtime update.
+  window.__gwState = window.__gwState || {};
+  window.__gwState.playerSurveys = [
+    ...(window.__gwState.playerSurveys || []).filter(x => x.survey_id !== id),
+    {
+      survey_id: id,
+      joined: !!state[id].joined,
+      visible: !!state[id].visible
+    }
+  ];
+
+  saveState(state);
+  render();
+
+  // DB sync.
+  window.GridWildAPI?.setPlayerSurveyState?.(id, {
+    joined: !!state[id].joined,
+    visible: !!state[id].visible
+  }).then(result => {
+    window.__gwState = window.__gwState || {};
+    window.__gwState.playerSurveys = [
+      ...(window.__gwState.playerSurveys || []).filter(x => x.survey_id !== id),
+      result.player_survey
+    ];
+
+    window.dispatchEvent(new CustomEvent("gwSurveyStateChanged"));
+  }).catch(err => {
+    console.warn("Could not sync survey state:", err);
+  });
+}
 
   function isJoined(id) {
     return !!getSurveyState(id).joined;
@@ -279,17 +327,18 @@ function getSurveyGeometryStyle(survey, kind, index = 0) {
     });
   }
 
-  window.GridWildSurveyLayer = {
-    loadState,
-    getSurveyState,
-    isJoined,
-    isVisible,
-    join,
-    leave,
-    show,
-    hide,
-    render
-  };
+window.GridWildSurveyLayer = {
+  loadState,
+  getSurveyState,
+  setSurveyState,
+  isJoined,
+  isVisible,
+  join,
+  leave,
+  show,
+  hide,
+  render
+};
 
   document.addEventListener("DOMContentLoaded", () => {
     setTimeout(render, 100);
