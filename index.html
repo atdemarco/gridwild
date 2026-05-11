@@ -150,8 +150,13 @@
     align-items: flex-start;
   }
 
+    .gw-topbar-left {
+      --gw-hud-control-width: 106px;
+    }
+
     .gw-hud-legend {
-      width: 88px;
+      box-sizing: border-box;
+      width: var(--gw-hud-control-width);
       pointer-events: auto;
       background: linear-gradient(180deg, rgba(34,30,26,0.96), rgba(18,16,14,0.98));
       color: var(--gw-jrpg-ink, #efe6d3);
@@ -235,13 +240,14 @@
     }
 
     .gw-hud-taxa {
-      width: 118px;
+      box-sizing: border-box;
+      width: var(--gw-hud-control-width);
       pointer-events: auto;
       display: grid;
-      grid-template-columns: repeat(6, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 1px;
       padding: 3px;
-      border-radius: 999px;
+      border-radius: 14px;
       background: linear-gradient(180deg, rgba(34,30,26,0.96), rgba(18,16,14,0.98));
       border: 1px solid var(--gw-jrpg-border, rgba(180, 150, 94, 0.42));
       box-shadow: 0 14px 36px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.05);
@@ -298,6 +304,14 @@
       opacity: 0.86;
     }
 
+    .gw-hud-filter-placeholder {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.025);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.035);
+    }
+
     .gw-hud-fog-btn.is-on {
       color: #eefaff;
       background:
@@ -306,7 +320,8 @@
     }
 
     .gw-hud-coarse {
-      width: 88px;
+      box-sizing: border-box;
+      width: var(--gw-hud-control-width);
       pointer-events: auto;
       display: flex;
       align-items: center;
@@ -348,7 +363,8 @@
     }
 
     .gw-hud-zfilter {
-      width: 88px;
+      box-sizing: border-box;
+      width: var(--gw-hud-control-width);
       pointer-events: auto;
       display: grid;
       gap: 4px;
@@ -372,6 +388,10 @@
       min-width: 0;
     }
 
+    .gw-hud-zfilter-row span {
+      white-space: nowrap;
+    }
+
     .gw-hud-zfilter input[type="checkbox"] {
       width: 13px;
       height: 13px;
@@ -381,7 +401,7 @@
     }
 
     .gw-hud-zfilter-number {
-      width: 34px;
+      width: 36px;
       min-width: 0;
       margin-left: auto;
       box-sizing: border-box;
@@ -396,28 +416,39 @@
       text-align: center;
     }
 
+    .gw-hud-zfilter-number::-webkit-outer-spin-button,
+    .gw-hud-zfilter-number::-webkit-inner-spin-button {
+      margin: 0;
+      -webkit-appearance: none;
+    }
+
+    .gw-hud-zfilter-number {
+      -moz-appearance: textfield;
+    }
+
     .gw-hud-zfilter-slider {
       width: 100%;
       accent-color: #d7b774;
     }
 
     @media (max-width: 420px) {
+      .gw-topbar-left {
+        --gw-hud-control-width: 98px;
+      }
+
       .gw-hud-legend {
-        width: 82px;
         padding: 7px 6px;
       }
 
       .gw-hud-taxa {
-        width: 112px;
+        width: var(--gw-hud-control-width);
       }
 
       .gw-hud-coarse {
-        width: 82px;
         padding: 6px 7px;
       }
 
       .gw-hud-zfilter {
-        width: 82px;
         padding: 6px 7px;
       }
 
@@ -444,6 +475,23 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
+    }
+
+    .gw-location-pill {
+      box-sizing: border-box;
+      width: var(--gw-hud-control-width);
+      justify-content: flex-start;
+      gap: 6px;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1.1;
+      text-transform: uppercase;
+    }
+
+    .gw-location-pill svg {
+      width: 15px;
+      height: 15px;
+      flex: 0 0 auto;
     }
 
     .gw-topbtn {
@@ -1750,7 +1798,7 @@
     <button class="gw-pill" id="legendPill" type="button">
       🗺️ Legend
     </button>
-    <button class="gw-pill" id="gwLocationPickerBtn" type="button" title="Pick or save a location">
+    <button class="gw-pill gw-location-pill" id="gwLocationPickerBtn" type="button" title="Pick or save a location">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11z"></path>
         <circle cx="12" cy="10" r="2.2"></circle>
@@ -1791,6 +1839,10 @@
           <path d="M6.8 12.5A4.8 4.8 0 0 1 16 10.2a3.2 3.2 0 0 1 1.2 6.1"></path>
         </svg>
       </button>
+      <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
+      <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
+      <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
+      <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
     </div>
     <label class="gw-hud-coarse" title="Render the heat overlay as local median bins">
       <input type="checkbox" id="toggleSuperchunkHeat_hud" />
@@ -1800,7 +1852,7 @@
     <div class="gw-hud-zfilter" title="Skip heat cells below a z-score threshold">
       <label class="gw-hud-zfilter-row">
         <input type="checkbox" id="toggleHeatZThreshold" />
-        <span>Threshold Z:</span>
+        <span>Cutoff</span>
         <input class="gw-hud-zfilter-number" id="gwHeatZThresholdInput" type="number" min="-3" max="3" step="0.1" value="0" />
       </label>
       <input class="gw-hud-zfilter-slider" id="gwHeatZThresholdSlider" type="range" min="-3" max="3" step="0.1" value="0" />

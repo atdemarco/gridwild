@@ -4,6 +4,13 @@
 
 (function () {
 
+const PARTY_POLL_INTERVAL_MS = 15000;
+const PARTY_COVER_POLL_INTERVAL_MS = 15000;
+const NEARBY_PARTIES_REFRESH_MS = 30000;
+
+let loadPartyInFlight = null;
+let lastNearbyPartiesLoadedAt = 0;
+
 
     function getActivePartyId() {
     window.__gwState = window.__gwState || {};
@@ -36,10 +43,25 @@
         }));
         }
 
-async function loadParty() {
+async function loadParty(options = {}) {
+  if (loadPartyInFlight) return loadPartyInFlight;
+
+  loadPartyInFlight = loadPartyNow(options).finally(() => {
+    loadPartyInFlight = null;
+  });
+
+  return loadPartyInFlight;
+}
+
+async function loadPartyNow(options = {}) {
   try {
     const activeId = getActivePartyId();
     const data = await window.GridWildAPI.getParty(activeId || null);
+    const now = Date.now();
+    const shouldRefreshNearby =
+      options.forceNearby ||
+      !lastNearbyPartiesLoadedAt ||
+      now - lastNearbyPartiesLoadedAt >= NEARBY_PARTIES_REFRESH_MS;
 
     window.__gwState = window.__gwState || {};
     window.__gwState.party = data.party;
@@ -61,16 +83,20 @@ async function loadParty() {
       }
     }
 
-    if (data.party?.id) {
+    if (data.party?.id && data.party.id !== getActivePartyId()) {
       setActivePartyId(data.party.id);
     }
 
-    try {
-      const nearby = await window.GridWildAPI.getNearbyParties();
-      window.__gwState.nearbyParties = nearby.parties || [];
-    } catch (err) {
-      console.warn("Could not load nearby parties:", err);
-      window.__gwState.nearbyParties = [];
+    if (shouldRefreshNearby) {
+      try {
+        const nearby = await window.GridWildAPI.getNearbyParties();
+        window.__gwState.nearbyParties = nearby.parties || [];
+        lastNearbyPartiesLoadedAt = Date.now();
+      } catch (err) {
+        console.warn("Could not load nearby parties:", err);
+        window.__gwState.nearbyParties = [];
+        lastNearbyPartiesLoadedAt = Date.now();
+      }
     }
 
     return data;
@@ -264,7 +290,7 @@ function startPartyPolling() {
   partyPollTimer = setInterval(async () => {
     await loadParty();
     refreshPartySheet();
-  }, 5000);
+  }, PARTY_POLL_INTERVAL_MS);
 }
 
 function stopPartyPolling() {
@@ -280,7 +306,7 @@ function startCoverPolling(partyId) {
   window.__gwPartyCoverPollTimer = setInterval(async () => {
     await loadParty();
     window.GridWildParty?.refreshOpenCover?.(partyId);
-  }, 5000);
+  }, PARTY_COVER_POLL_INTERVAL_MS);
 }
 
 function stopCoverPolling() {
