@@ -13,6 +13,15 @@ exports.handler = async function (event) {
     if (!player_id) throw new Error("player_id is required");
     if (!quest_id) throw new Error("quest_id is required");
 
+    const { error: pauseError } = await supabase
+      .from("player_quests")
+      .update({ status: "paused" })
+      .eq("player_id", player_id)
+      .eq("status", "active")
+      .neq("quest_id", quest_id);
+
+    if (pauseError) throw pauseError;
+
     const { data, error } = await supabase
       .from("player_quests")
       .upsert(

@@ -8,17 +8,57 @@ const supabase = createClient(
 exports.handler = async function (event) {
   try {
     const body = JSON.parse(event.body || "{}");
-    const { player_id, name, quest_id } = body;
+    const {
+      player_id,
+      name,
+      quest_id,
+      mode = "live",
+      visibility = "public",
+      starts_at = null,
+      duration_minutes = 60,
+      target = 10,
+      location_mode = "anywhere",
+      location_user_id = null,
+      location_label = null,
+      location = null,
+      resolved_location = null,
+      lat = null,
+      lng = null
+    } = body;
 
     if (!player_id) throw new Error("player_id is required");
+
+    const safeLocationMode = ["anywhere", "user", "location"].includes(location_mode)
+      ? location_mode
+      : "anywhere";
+
+    const locationConfig = {
+      locationMode: safeLocationMode,
+      locationUserId: safeLocationMode === "user" ? (location_user_id || "self") : null,
+      location: safeLocationMode === "location" ? location : null,
+      resolvedLocation: resolved_location || null
+    };
 
     const { data: party, error: partyError } = await supabase
       .from("parties")
       .insert({
         name: name || "New Party",
         created_by: player_id,
-        visibility: "public",
-        status: "active"
+        visibility: visibility || "public",
+        status: mode === "scheduled" ? "scheduled" : "active",
+        starts_at: starts_at || null,
+        duration_minutes: Number(duration_minutes || 60),
+        target: Number(target || 10),
+        location_mode: safeLocationMode,
+        location_user_id: locationConfig.locationUserId,
+        location_label: location_label || (
+          safeLocationMode === "anywhere"
+            ? "Anywhere"
+            : location?.label || resolved_location?.label || null
+        ),
+        location_config: locationConfig,
+        lat: Number.isFinite(Number(lat)) ? Number(lat) : null,
+        lng: Number.isFinite(Number(lng)) ? Number(lng) : null
       })
       .select("*")
       .single();

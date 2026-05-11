@@ -62,7 +62,7 @@ exports.handler = async function (event) {
         accepted_at: pq?.accepted_at || null,
         completed_at: pq?.completed_at || null
     };
-    });
+    }).filter(q => q.status !== "abandoned");
 
     const stateResult = await supabase
       .from("player_state")

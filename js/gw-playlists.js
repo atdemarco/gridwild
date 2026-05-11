@@ -51,6 +51,164 @@
       padding: 14px;
       box-sizing: border-box;
     }
+
+    .gw-playlist-modal .gw-muted {
+      color: rgba(239,230,211,0.68);
+    }
+
+    .gw-playlist-empty-dialog {
+      width: min(420px, 94vw);
+      overflow: hidden;
+    }
+
+    .gw-playlist-empty-mark {
+      width: 54px;
+      height: 54px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 12px;
+      color: #f0d18a;
+      font-size: 27px;
+      font-weight: 950;
+      background:
+        radial-gradient(circle at 28% 22%, rgba(240,209,138,0.35), transparent 32px),
+        linear-gradient(135deg, rgba(79,116,67,0.78), rgba(37,55,35,0.96));
+      border: 1px solid rgba(240,209,138,0.42);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 34px rgba(0,0,0,0.28);
+    }
+
+    .gw-playlist-empty-title {
+      font-size: 22px;
+      font-weight: 950;
+      color: #f0d18a;
+      line-height: 1.1;
+    }
+
+    .gw-playlist-empty-copy {
+      margin-top: 8px;
+      color: rgba(239,230,211,0.78);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .gw-playlist-dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .gw-playlist-primary-btn {
+      border-color: rgba(240,209,138,0.42);
+      background: linear-gradient(180deg, #f0d18a, #b8893e);
+      color: #201510;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.20);
+    }
+
+    .gw-wildlist-library-modal {
+      width: min(760px, 96vw);
+    }
+
+    .gw-wildlist-library-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .gw-wildlist-library-title {
+      color: #f0d18a;
+      font-size: 22px;
+      font-weight: 950;
+      line-height: 1.1;
+    }
+
+    .gw-wildlist-library-sub {
+      margin-top: 4px;
+      color: rgba(239,230,211,0.68);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .gw-wildlist-library-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .gw-wildlist-library-item {
+      border: 1px solid rgba(215,183,116,0.20);
+      border-radius: 16px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.035)),
+        radial-gradient(circle at 12% 0%, rgba(119,161,87,0.16), transparent 38%);
+      padding: 10px;
+    }
+
+    .gw-wildlist-library-top {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .gw-wildlist-library-name {
+      color: #f4e8cf;
+      font-size: 14px;
+      font-weight: 950;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+
+    .gw-wildlist-library-meta {
+      margin-top: 3px;
+      color: rgba(239,230,211,0.62);
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    .gw-wildlist-library-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .gw-wildlist-library-actions .gw-mini-btn {
+      padding: 7px 9px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .gw-wildlist-library-status {
+      color: rgba(239,230,211,0.62);
+      font-size: 11px;
+      min-height: 14px;
+      margin-top: 5px;
+      text-align: right;
+    }
+
+    @media (max-width: 560px) {
+      .gw-wildlist-library-head {
+        align-items: stretch;
+      }
+
+      .gw-wildlist-library-top {
+        grid-template-columns: 1fr;
+      }
+
+      .gw-wildlist-library-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        justify-content: stretch;
+      }
+
+      .gw-wildlist-library-actions .gw-mini-btn {
+        width: 100%;
+      }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -167,9 +325,39 @@
     saveAll(loadAll().filter(p => p.id !== id));
   }
 
+  function localDateKey(date = new Date()) {
+    const d = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(d.getTime())) return "";
+
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function observationDateKey(obs) {
+    const raw = obs?.observed_on || obs?.time_observed_at || obs?.created_at || "";
+    if (!raw) return "";
+
+    const text = String(raw);
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+      return text.slice(0, 10);
+    }
+
+    return localDateKey(new Date(text));
+  }
+
+  function observationDate(obs) {
+    const key = observationDateKey(obs);
+    if (!key) return null;
+
+    const [year, month, day] = key.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+
   function filterToday(obs) {
-    const today = new Date().toISOString().slice(0, 10);
-    return obs.filter(o => String(o.observed_on || "").slice(0, 10) === today);
+    const today = localDateKey();
+    return obs.filter(o => observationDateKey(o) === today);
   }
 
   function filterThisWeek(obs) {
@@ -178,8 +366,8 @@
     cutoff.setDate(now.getDate() - 7);
 
     return obs.filter(o => {
-      const d = new Date(o.observed_on || o.created_at || 0);
-      return !Number.isNaN(d.getTime()) && d >= cutoff;
+      const d = observationDate(o);
+      return d && !Number.isNaN(d.getTime()) && d >= cutoff;
     });
   }
 
@@ -726,28 +914,175 @@ function openCreateMenu() {
 }
 
   function openLibrary() {
+    ensureStyles();
+
     const all = loadAll();
 
     if (!all.length) {
-      alert("No Wildlists yet. Create one first.");
+      openEmptyLibraryDialog();
       return;
     }
 
-    const labels = all.map((p, i) =>
-      `${i + 1}. ${p.title} (${(p.snapshotObservations || []).length} obs)`
-    );
+    const modal = document.createElement("div");
+    modal.className = "gw-playlist-backdrop";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "gwWildlistLibraryTitle");
 
-    const choice = prompt(["Open which Wildlist?", "", ...labels].join("\n"));
-    const idx = Number(choice) - 1;
+    modal.innerHTML = `
+      <div class="gw-playlist-modal gw-wildlist-library-modal">
+        <div class="gw-wildlist-library-head">
+          <div>
+            <div class="gw-wildlist-library-title" id="gwWildlistLibraryTitle">My Wildlists</div>
+            <div class="gw-wildlist-library-sub">
+              Open a field story or share a link.
+            </div>
+          </div>
+          <button class="gw-mini-btn" id="gwWildlistLibraryCloseBtn" type="button">Close</button>
+        </div>
 
-    if (!Number.isInteger(idx) || !all[idx]) return;
-    openViewer(all[idx].id);
+        <div class="gw-wildlist-library-list">
+          ${all.map(p => renderLibraryItem(p)).join("")}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+
+    modal.querySelector("#gwWildlistLibraryCloseBtn").onclick = close;
+
+    modal.querySelectorAll(".gw-wildlist-library-open").forEach(btn => {
+      btn.onclick = evt => {
+        evt.preventDefault();
+        const id = btn.dataset.playlistId;
+        close();
+        openViewer(id);
+      };
+    });
+
+    modal.querySelectorAll(".gw-wildlist-library-share").forEach(btn => {
+      btn.onclick = async evt => {
+        evt.preventDefault();
+        const id = btn.dataset.playlistId;
+        const status = getLibraryField(modal, "gw-wildlist-library-status", id);
+        await copyPlaylistShareLink(id, status);
+      };
+    });
+
+    modal.onclick = evt => {
+      if (evt.target === modal) close();
+    };
+
+    modal.addEventListener("keydown", evt => {
+      if (evt.key === "Escape") close();
+    });
+  }
+
+  function getLibraryField(root, className, playlistId) {
+    return Array.from(root.querySelectorAll(`.${className}`))
+      .find(el => String(el.dataset.playlistId) === String(playlistId)) || null;
+  }
+
+  function renderLibraryItem(playlist) {
+    const observations = playlist.snapshotObservations || [];
+    const stats = getPlaylistStats(observations);
+    const updated = playlist.updatedAt
+      ? new Date(playlist.updatedAt)
+      : null;
+    const updatedLabel = updated && !Number.isNaN(updated.getTime())
+      ? updated.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
+      : "unknown update";
+
+    return `
+      <section class="gw-wildlist-library-item" data-playlist-id="${esc(playlist.id)}">
+        <div class="gw-wildlist-library-top">
+          <div>
+            <div class="gw-wildlist-library-name">${esc(playlist.title || "Untitled Wildlist")}</div>
+            <div class="gw-wildlist-library-meta">
+              ${observations.length.toLocaleString()} observations · ${stats.nTaxa.toLocaleString()} taxa · updated ${esc(updatedLabel)}
+            </div>
+          </div>
+
+          <div class="gw-wildlist-library-actions">
+            <button class="gw-mini-btn gw-wildlist-library-open" type="button" data-playlist-id="${esc(playlist.id)}">Open</button>
+            <button class="gw-mini-btn gw-wildlist-library-share" type="button" data-playlist-id="${esc(playlist.id)}">Share</button>
+          </div>
+        </div>
+
+        <div class="gw-wildlist-library-status" data-playlist-id="${esc(playlist.id)}"></div>
+      </section>
+    `;
+  }
+
+  function openEmptyLibraryDialog() {
+    ensureStyles();
+
+    const modal = document.createElement("div");
+    modal.className = "gw-playlist-backdrop";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "gwEmptyWildlistsTitle");
+
+    modal.innerHTML = `
+      <div class="gw-playlist-modal gw-playlist-empty-dialog">
+        <div class="gw-playlist-empty-mark" aria-hidden="true">W</div>
+        <div class="gw-playlist-empty-title" id="gwEmptyWildlistsTitle">
+          No Wildlists yet
+        </div>
+        <div class="gw-playlist-empty-copy">
+          Create your first Wildlist to collect observations into a field story you can reopen and share.
+        </div>
+        <div class="gw-playlist-dialog-actions">
+          <button class="gw-mini-btn" id="gwEmptyWildlistsCloseBtn" type="button">Close</button>
+          <button class="gw-mini-btn gw-playlist-primary-btn" id="gwEmptyWildlistsCreateBtn" type="button">Create Wildlist</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+
+    modal.querySelector("#gwEmptyWildlistsCloseBtn").onclick = close;
+    modal.querySelector("#gwEmptyWildlistsCreateBtn").onclick = () => {
+      close();
+      openCreateMenu();
+    };
+
+    modal.onclick = evt => {
+      if (evt.target === modal) close();
+    };
+
+    modal.addEventListener("keydown", evt => {
+      if (evt.key === "Escape") close();
+    });
+
+    modal.querySelector("#gwEmptyWildlistsCreateBtn")?.focus();
   }
 
   function getShareUrl(playlistId) {
     const url = new URL(window.location.href);
     url.searchParams.set("gw_playlist", playlistId);
     return url.toString();
+  }
+
+  async function copyPlaylistShareLink(playlistId, statusEl = null) {
+    const link = getShareUrl(playlistId);
+    try {
+      await navigator.clipboard.writeText(link);
+      if (statusEl) {
+        statusEl.textContent = "Share link copied.";
+        setTimeout(() => {
+          if (statusEl.textContent === "Share link copied.") statusEl.textContent = "";
+        }, 2200);
+      } else {
+        alert("Wildlist link copied.");
+      }
+    } catch {
+      prompt("Copy this Wildlist link:", link);
+    }
   }
 
  function getPlaylistCoverObs(observations, playlist = {}) {
@@ -1059,13 +1394,7 @@ function initWildlistMiniMap(playlistId) {
     modal.querySelector("#gwWildlistCloseBtn").onclick = () => modal.remove();
 
     modal.querySelector("#gwWildlistCopyLinkBtn").onclick = async () => {
-      const link = getShareUrl(playlist.id);
-      try {
-        await navigator.clipboard.writeText(link);
-        alert("Wildlist link copied.");
-      } catch {
-        prompt("Copy this Wildlist link:", link);
-      }
+      await copyPlaylistShareLink(playlist.id);
     };
 
     modal.querySelector("#gwWildlistDeleteBtn").onclick = () => {
@@ -1336,6 +1665,35 @@ function renderObsTile(o, playlistId = "", index = 0) {
   alert(`Added to ${playlist.title}.`);
 }
 
+  function createFromObservations(observations, options = {}) {
+    const selected = Array.isArray(observations)
+      ? observations.filter(Boolean)
+      : [];
+
+    if (!selected.length) {
+      alert("No observations selected for this Wildlist.");
+      return null;
+    }
+
+    const playlist = savePlaylist({
+      title: options.title || "Activity Wildlist",
+      description: options.description || "",
+      mode: options.mode || "activity",
+      template: options.template || null,
+      observationIds: selected.map(o => o.id),
+      snapshotObservations: selected.map(compactObs),
+      coverObsId: options.coverObsId || selected.find(o => o.photo_medium_url || o.photo_square_url || o.photo_url)?.id || null
+    });
+
+    renderSummary();
+
+    if (options.open !== false) {
+      openViewer(playlist.id);
+    }
+
+    return playlist;
+  }
+
   function bindButtons(root = document) {
     root.querySelector("#gwCreateWildlistBtn")?.addEventListener("click", openCreateMenu);
     root.querySelector("#gwOpenWildlistsBtn")?.addEventListener("click", openLibrary);
@@ -1356,6 +1714,7 @@ function renderObsTile(o, playlistId = "", index = 0) {
     openCustomBuilder,
     openCustomBuilderFromPlaylist,
     addObservationToWildlist,
+    createFromObservations,
     openSlideshow,
     buildTemplatePlaylistWithFilters,
     openPartyWildlistPlaceholder

@@ -29,6 +29,19 @@
 
   window.__gwFilters.showPoints = $("togglePoints")?.checked ?? false;
   window.__gwFilters.showHeat = $("toggleHeat")?.checked ?? true;
+  window.__gwState.coarseHeatEnabled = $("toggleSuperchunkHeat")?.checked ?? false;
+  window.__gwState.coarseHeatBinSize = Math.max(
+    2,
+    Math.min(64, Math.round(Number(window.__gwState.coarseHeatBinSize) || 8))
+  );
+  window.__gwState.heatZThresholdEnabled =
+    document.getElementById("toggleHeatZThreshold")?.checked ??
+    window.__gwState.heatZThresholdEnabled ??
+    false;
+  window.__gwState.heatZThreshold = Math.max(
+    -3,
+    Math.min(3, Number(window.__gwState.heatZThreshold) || 0)
+  );
   
   window.__gwState.showOsmFeatures = $("toggleOsmBuildings")?.checked ?? true;
   window.__gwState.showOsmBuildings = window.__gwState.showOsmFeatures;
@@ -135,6 +148,7 @@
 [
   "togglePoints",
   "toggleHeat",
+  "toggleSuperchunkHeat",
   "toggleShimmer",
   "toggleDynamicINat",
   "toggleFog",
@@ -172,7 +186,7 @@
       }
     }
 
-    if (id === "toggleFog" && typeof window.updateGrid === "function") {
+    if ((id === "toggleFog" || id === "toggleSuperchunkHeat") && typeof window.updateGrid === "function") {
       window.updateGrid();
     }
 
@@ -195,6 +209,10 @@
   syncStateFromUI();
   applyLayerVisibility();
 
+  if (typeof window.updateGrid === "function") {
+    window.updateGrid();
+  }
+
   if (window.__gwState?.dynamicINatEnabled &&
       typeof window.maybeRefreshDynamicINat === "function") {
     window.maybeRefreshDynamicINat(true);
@@ -204,15 +222,7 @@
 })();
 
 
-window.initJumpToGpsControl = function initJumpToGpsControl() {
-  const input = document.getElementById("gwJumpGpsInput");
-  const btn = document.getElementById("gwJumpToGpsBtn");
-  const status = document.getElementById("gwJumpGpsStatus");
-
-  if (!input || !btn || btn.dataset.gwJumpBound === "1") return;
-  btn.dataset.gwJumpBound = "1";
-
-  function parseLatLng(text) {
+window.parseGridWildLatLng = window.parseGridWildLatLng || function parseGridWildLatLng(text) {
     const nums = String(text).trim().match(/-?\d+(?:\.\d+)?/g);
     if (!nums || nums.length < 2) return null;
 
@@ -223,14 +233,15 @@ window.initJumpToGpsControl = function initJumpToGpsControl() {
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
 
     return { lat, lng };
-  }
+  };
 
-  function jumpNow() {
-    const parsed = parseLatLng(input.value);
+window.jumpToGridWildGps = window.jumpToGridWildGps || function jumpToGridWildGps(lat, lng, options = {}) {
+  const parsed = window.parseGridWildLatLng(`${lat},${lng}`);
+  const status = options.statusEl || null;
 
     if (!parsed) {
       if (status) status.textContent = "Use format like 38.8895,-77.0353";
-      return;
+      return false;
     }
 
     map.setView([parsed.lat, parsed.lng], Math.max(map.getZoom(), 18), {
@@ -263,6 +274,21 @@ window.initJumpToGpsControl = function initJumpToGpsControl() {
     if (status) {
       status.textContent = `Jumped to ${parsed.lat.toFixed(5)}, ${parsed.lng.toFixed(5)}`;
     }
+
+    return true;
+  };
+
+window.initJumpToGpsControl = function initJumpToGpsControl() {
+  const input = document.getElementById("gwJumpGpsInput");
+  const btn = document.getElementById("gwJumpToGpsBtn");
+  const status = document.getElementById("gwJumpGpsStatus");
+
+  if (!input || !btn || btn.dataset.gwJumpBound === "1") return;
+  btn.dataset.gwJumpBound = "1";
+
+  function jumpNow() {
+    const parsed = window.parseGridWildLatLng(input.value);
+    window.jumpToGridWildGps(parsed?.lat, parsed?.lng, { statusEl: status });
   }
 
   btn.addEventListener("click", jumpNow);
@@ -293,6 +319,10 @@ function saveUIState() {
   const state = {
     showPoints: byId("togglePoints")?.checked ?? false,
     showHeat: byId("toggleHeat")?.checked ?? true,
+    coarseHeatEnabled: byId("toggleSuperchunkHeat")?.checked ?? false,
+    coarseHeatBinSize: window.__gwState?.coarseHeatBinSize ?? 8,
+    heatZThresholdEnabled: byId("toggleHeatZThreshold")?.checked ?? window.__gwState?.heatZThresholdEnabled ?? false,
+    heatZThreshold: window.__gwState?.heatZThreshold ?? 0,
     dynamicINatEnabled: byId("toggleDynamicINat")?.checked ?? false,
     showShimmer: byId("toggleShimmer")?.checked ?? false,
     showFog: byId("toggleFog")?.checked ?? true,
@@ -312,6 +342,21 @@ function applySavedUIState() {
 
   if (byId("togglePoints"))       byId("togglePoints").checked = s.showPoints ?? false;
   if (byId("toggleHeat"))         byId("toggleHeat").checked = s.showHeat ?? true;
+  if (byId("toggleSuperchunkHeat")) byId("toggleSuperchunkHeat").checked = s.coarseHeatEnabled ?? s.superchunkHeatEnabled ?? false;
+  window.__gwState = window.__gwState || {};
+  const savedCoarseBinSize = s.coarseHeatBinSize ?? localStorage.getItem("gwCoarseHeatBinSize");
+  window.__gwState.coarseHeatBinSize = Math.max(
+    2,
+    Math.min(64, Math.round(Number(savedCoarseBinSize) || 8))
+  );
+  window.__gwState.heatZThresholdEnabled = s.heatZThresholdEnabled ?? false;
+  window.__gwState.heatZThreshold = Math.max(
+    -3,
+    Math.min(3, Number(s.heatZThreshold) || 0)
+  );
+  if (byId("toggleHeatZThreshold")) byId("toggleHeatZThreshold").checked = window.__gwState.heatZThresholdEnabled;
+  if (byId("gwHeatZThresholdInput")) byId("gwHeatZThresholdInput").value = window.__gwState.heatZThreshold.toFixed(1);
+  if (byId("gwHeatZThresholdSlider")) byId("gwHeatZThresholdSlider").value = String(window.__gwState.heatZThreshold);
   if (byId("toggleDynamicINat"))  byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
   if (byId("toggleShimmer"))      byId("toggleShimmer").checked = s.showShimmer ?? false;
   if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? true;

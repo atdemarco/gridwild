@@ -7,6 +7,8 @@ window.__gwUser = window.__gwUser || {
 
 (function () {
 
+  const RECENT_OBS_LIST_LIMIT = 10;
+
     window.__gwUser = window.__gwUser || {
     username: localStorage.getItem("gw_inat_username") || "andrew2285",
     profile: null
@@ -22,11 +24,13 @@ window.__gwUser = window.__gwUser || {
 
     function renderMeContent() {
     return `
+      ${window.GridWildAccount ? window.GridWildAccount.renderAccountCardHtml() : ""}
+
       <div class="gw-card">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
           <div class="gw-card-title">Explorer Card</div>
-            <button class="gw-mini-btn" id="gwUserSettingsBtn" title="Change iNaturalist username">
-              ⚙ Account
+            <button class="gw-mini-btn" id="gwUserSettingsBtn" title="Open GridWild account">
+              Account
             </button>
           </div>
 
@@ -66,9 +70,14 @@ window.__gwUser = window.__gwUser || {
       <div class="gw-card">
         <div class="gw-card-title">Recent Observations</div>
 
-        <button class="gw-mini-btn" id="gwRefreshRecentINatBtn">
-          Refresh Recent Observations
-        </button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="gw-mini-btn" id="gwRefreshRecentINatBtn" type="button">
+            Refresh Recent Observations
+          </button>
+          <button class="gw-mini-btn" id="gwGetMoreRecentINatBtn" type="button">
+            Get more observations
+          </button>
+        </div>
 
         <div id="gwRecentINatProgress" style="display:none;margin-top:12px;">
           <div class="gw-muted" id="gwRecentINatProgressText" style="font-size:12px;margin-bottom:6px;">
@@ -158,6 +167,213 @@ window.__gwUser = window.__gwUser || {
         box-shadow: 0 24px 80px rgba(0,0,0,0.55);
         padding: 14px;
         box-sizing: border-box;
+      }
+
+      .gw-obs-title {
+        font-size: 20px;
+        font-weight: 950;
+        color: #f0d18a;
+        margin-bottom: 4px;
+      }
+
+      .gw-obs-sub {
+        font-size: 12px;
+        color: rgba(239,230,211,0.66);
+        margin-bottom: 12px;
+      }
+
+      .gw-obs-panel {
+        border-radius: 18px;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(215,183,116,0.18);
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+
+      .gw-obs-label {
+        display: block;
+        font-size: 10px;
+        font-weight: 950;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #d7b774;
+        margin-bottom: 5px;
+      }
+
+      .gw-obs-panel input,
+      .gw-obs-panel textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 12px;
+        border: 1px solid rgba(215,183,116,0.30);
+        background: rgba(20,17,15,0.88);
+        color: #efe6d3;
+        padding: 9px;
+      }
+
+      .gw-obs-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .gw-obs-btn {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 11px 12px;
+        font-weight: 900;
+        cursor: pointer;
+        background: rgba(255,255,255,0.12);
+        color: #efe6d3;
+      }
+
+      .gw-obs-btn.primary {
+        background: #ffe082;
+        color: #21301f;
+      }
+
+      .gw-observation-gallery-modal {
+        width: min(980px, 96vw);
+        position: relative;
+        padding-bottom: 74px;
+      }
+
+      .gw-observation-gallery-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+        margin-bottom: 14px;
+      }
+
+      .gw-observation-gallery-title {
+        color: #f0d18a;
+        font-size: 22px;
+        font-weight: 950;
+        line-height: 1.1;
+      }
+
+      .gw-observation-gallery-subtitle {
+        color: rgba(239,230,211,0.68);
+        font-size: 12px;
+        margin-top: 4px;
+      }
+
+      .gw-observation-gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+        gap: 10px;
+      }
+
+      .gw-observation-gallery-tile {
+        appearance: none;
+        display: block;
+        text-align: left;
+        cursor: pointer;
+        padding: 0;
+        overflow: hidden;
+        border-radius: 16px;
+        border: 1px solid rgba(215,183,116,0.22);
+        color: #efe6d3;
+        background: linear-gradient(180deg, rgba(57,48,39,0.92), rgba(34,28,23,0.96));
+        box-shadow: 0 8px 20px rgba(0,0,0,0.22);
+      }
+
+      .gw-observation-gallery-photo,
+      .gw-observation-gallery-placeholder {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, rgba(79,116,67,0.74), rgba(28,38,29,0.98));
+        color: #f0d18a;
+        font-size: 24px;
+        font-weight: 950;
+      }
+
+      .gw-observation-gallery-photo {
+        object-fit: cover;
+      }
+
+      .gw-observation-gallery-meta {
+        padding: 9px;
+      }
+
+      .gw-observation-gallery-name {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 900;
+        color: #f4e8cf;
+      }
+
+      .gw-observation-gallery-date {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-top: 3px;
+        font-size: 10px;
+        color: rgba(239,230,211,0.62);
+      }
+
+      .gw-observation-detail-photo {
+        width: 100%;
+        max-height: 320px;
+        object-fit: cover;
+        border-radius: 16px;
+        border: 1px solid rgba(215,183,116,0.18);
+        background: rgba(255,255,255,0.05);
+      }
+
+      .gw-observation-detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .gw-observation-detail-field {
+        padding: 10px;
+        border-radius: 14px;
+        border: 1px solid rgba(215,183,116,0.14);
+        background: rgba(255,255,255,0.05);
+      }
+
+      .gw-observation-detail-label {
+        color: rgba(239,230,211,0.58);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 3px;
+      }
+
+      .gw-observation-detail-value {
+        color: #f4e8cf;
+        font-size: 12px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+
+      .gw-observation-gallery-floating-close {
+        position: sticky;
+        bottom: 0;
+        display: block;
+        width: min(260px, 100%);
+        margin: 18px auto -54px;
+        border: 1px solid rgba(215,183,116,0.42);
+        box-shadow: 0 -8px 26px rgba(0,0,0,0.28), 0 8px 22px rgba(0,0,0,0.28);
+        background: linear-gradient(180deg, #f0d18a, #b8893e);
+        color: #201510;
+      }
+
+      @media (max-width: 560px) {
+        .gw-observation-detail-grid {
+          grid-template-columns: 1fr;
+        }
       }
     `;
     document.head.appendChild(style);
@@ -346,7 +562,7 @@ function renderRecentINatList() {
 
   el.innerHTML = `
     <div class="gw-list">
-      ${obs.slice(0, 30).map(o => {
+      ${obs.slice(0, RECENT_OBS_LIST_LIMIT).map(o => {
         const genus = getRecentObsGenus(o);
         const displayName = o.taxon || o.common_name || o.scientific_name || "Unknown taxon";
         const sci = o.scientific_name || "";
@@ -398,11 +614,20 @@ function renderRecentINatList() {
       }).join("")}
     </div>
 
-    ${obs.length > 30 ? `
+    ${obs.length > RECENT_OBS_LIST_LIMIT ? `
       <div class="gw-muted" style="font-size:11px;margin-top:8px;">
-        Showing 30 of ${formatNum(obs.length)} cached recent observations.
+        Showing ${RECENT_OBS_LIST_LIMIT} of ${formatNum(obs.length)} cached recent observations.
       </div>
     ` : ""}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      <button class="gw-mini-btn" id="gwAllPriorObservationsBtn" type="button">
+        All Prior Observations
+      </button>
+      <button class="gw-mini-btn" id="gwObservationActivityBtn" type="button">
+        Activity
+      </button>
+    </div>
   `;
 
   el.querySelectorAll(".gw-genus-open-row").forEach(row => {
@@ -421,20 +646,205 @@ function renderRecentINatList() {
       window.GridWildPlaylists?.addObservationToWildlist?.(btn.dataset.obsId);
     });
   });
+
+  el.querySelector("#gwAllPriorObservationsBtn")?.addEventListener("click", evt => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    openObservationGallery();
+  });
+
+  el.querySelector("#gwObservationActivityBtn")?.addEventListener("click", evt => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    window.GridWildObservationActivity?.open?.();
+  });
+}
+
+function getObservationDisplayName(obs) {
+  return obs?.taxon || obs?.common_name || obs?.scientific_name || "Unknown taxon";
+}
+
+function getObservationPhotoUrl(obs) {
+  return obs?.photo_medium_url || obs?.photo_square_url || obs?.photo_url || "";
+}
+
+function getObservationInitial(obs) {
+  return getObservationDisplayName(obs).trim().slice(0, 1).toUpperCase() || "?";
+}
+
+function openObservationGallery() {
+  injectINatAccountStyles();
+
+  const obs = window.GridWildRecentINat?.getRecentObservations?.() || [];
+
+  if (!obs.length) {
+    alert("No cached recent observations are available yet.");
+    return;
+  }
+
+  const modal = document.createElement("div");
+  modal.className = "gw-obs-backdrop";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "gwObservationGalleryTitle");
+
+  modal.innerHTML = `
+    <div class="gw-obs-editor gw-observation-gallery-modal">
+      <div class="gw-observation-gallery-head">
+        <div>
+          <div class="gw-observation-gallery-title" id="gwObservationGalleryTitle">
+            Observation Gallery
+          </div>
+          <div class="gw-observation-gallery-subtitle">
+            ${formatNum(obs.length)} cached observations from ${escapeHtmlLocal(window.__gwUser?.username || "this user")}.
+          </div>
+        </div>
+        <button class="gw-obs-btn" id="gwObservationGalleryCloseBtn" type="button">Close</button>
+      </div>
+
+      <div class="gw-observation-gallery-grid">
+        ${obs.map(o => {
+          const photo = getObservationPhotoUrl(o);
+          return `
+            <button class="gw-observation-gallery-tile" type="button" data-obs-id="${escapeHtmlLocal(o.id)}">
+              ${photo
+                ? `<img class="gw-observation-gallery-photo" src="${escapeHtmlLocal(photo)}" alt="">`
+                : `<span class="gw-observation-gallery-placeholder" aria-hidden="true">${escapeHtmlLocal(getObservationInitial(o))}</span>`
+              }
+              <span class="gw-observation-gallery-meta">
+                <span class="gw-observation-gallery-name">${escapeHtmlLocal(getObservationDisplayName(o))}</span>
+                <span class="gw-observation-gallery-date">${escapeHtmlLocal(o.observed_on || "unknown date")}</span>
+              </span>
+            </button>
+          `;
+        }).join("")}
+      </div>
+
+      <button class="gw-obs-btn gw-observation-gallery-floating-close" id="gwObservationGalleryFloatingCloseBtn" type="button">
+        Close
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const close = () => modal.remove();
+
+  modal.querySelector("#gwObservationGalleryCloseBtn").onclick = close;
+  modal.querySelector("#gwObservationGalleryFloatingCloseBtn").onclick = close;
+  modal.addEventListener("click", evt => {
+    if (evt.target === modal) close();
+  });
+
+  modal.addEventListener("keydown", evt => {
+    if (evt.key === "Escape") close();
+  });
+
+  modal.querySelectorAll(".gw-observation-gallery-tile").forEach(tile => {
+    tile.addEventListener("click", evt => {
+      evt.preventDefault();
+      const selected = obs.find(o => String(o.id) === String(tile.dataset.obsId));
+      if (selected) openObservationDetails(selected);
+    });
+  });
+}
+
+function openObservationDetails(obs) {
+  injectINatAccountStyles();
+
+  const photo = getObservationPhotoUrl(obs);
+  const modal = document.createElement("div");
+  modal.className = "gw-obs-backdrop";
+  modal.style.zIndex = "99999";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "gwObservationDetailsTitle");
+
+  modal.innerHTML = `
+    <div class="gw-obs-editor" style="max-width:640px;">
+      <div class="gw-observation-gallery-head">
+        <div>
+          <div class="gw-observation-gallery-title" id="gwObservationDetailsTitle">
+            Observation Details
+          </div>
+          <div class="gw-observation-gallery-subtitle">
+            ${escapeHtmlLocal(getObservationDisplayName(obs))}
+          </div>
+        </div>
+        <button class="gw-obs-btn" id="gwObservationDetailsCloseBtn" type="button">Close</button>
+      </div>
+
+      ${photo
+        ? `<img class="gw-observation-detail-photo" src="${escapeHtmlLocal(photo)}" alt="">`
+        : `<div class="gw-observation-gallery-placeholder" style="border-radius:16px;min-height:180px;" aria-hidden="true">${escapeHtmlLocal(getObservationInitial(obs))}</div>`
+      }
+
+      <div class="gw-observation-detail-grid">
+        ${renderObservationDetailField("Common name", obs.common_name || obs.taxon || "Unknown")}
+        ${renderObservationDetailField("Scientific name", obs.scientific_name || "Unknown")}
+        ${renderObservationDetailField("Observed", obs.observed_on || "Unknown date")}
+        ${renderObservationDetailField("Accuracy", Number.isFinite(Number(obs.accuracy)) ? `${Math.round(Number(obs.accuracy))} m` : "Unknown")}
+        ${renderObservationDetailField("Place", obs.place_guess || "Unknown")}
+        ${renderObservationDetailField("Quality", obs.quality_grade || "Unknown")}
+      </div>
+
+      <div class="gw-obs-actions" style="margin-top:14px;">
+        ${obs.uri ? `<a class="gw-obs-btn" href="${escapeHtmlLocal(obs.uri)}" target="_blank" rel="noopener" style="text-decoration:none;text-align:center;">Open iNaturalist</a>` : ""}
+        <button class="gw-obs-btn primary" id="gwObservationDetailsDoneBtn" type="button">Done</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const close = () => modal.remove();
+
+  modal.querySelector("#gwObservationDetailsCloseBtn").onclick = close;
+  modal.querySelector("#gwObservationDetailsDoneBtn").onclick = close;
+  modal.addEventListener("click", evt => {
+    if (evt.target === modal) close();
+  });
+
+  modal.addEventListener("keydown", evt => {
+    if (evt.key === "Escape") close();
+  });
+}
+
+function renderObservationDetailField(label, value) {
+  return `
+    <div class="gw-observation-detail-field">
+      <div class="gw-observation-detail-label">${escapeHtmlLocal(label)}</div>
+      <div class="gw-observation-detail-value">${escapeHtmlLocal(value)}</div>
+    </div>
+  `;
 }
 
 function bindRecentINatButton() {
   const btn = document.getElementById("gwRefreshRecentINatBtn");
-  if (!btn) return;
+  const moreBtn = document.getElementById("gwGetMoreRecentINatBtn");
+  if (!btn && !moreBtn) return;
 
-  btn.onclick = async () => {
+  const setBusy = (isBusy, activeBtn, activeText) => {
+    [btn, moreBtn].forEach(control => {
+      if (control) control.disabled = isBusy;
+    });
+
+    if (isBusy && activeBtn) {
+      activeBtn.textContent = activeText;
+      return;
+    }
+
+    if (btn) btn.textContent = "Refresh Recent Observations";
+    if (moreBtn) moreBtn.textContent = "Get more observations";
+  };
+
+  if (btn) btn.onclick = async () => {
     if (!window.GridWildRecentINat) {
       alert("Recent iNaturalist sync is not loaded.");
       return;
     }
 
-    btn.disabled = true;
-    btn.textContent = "Downloading...";
+    setBusy(true, btn, "Downloading...");
 
     try {
       await window.GridWildRecentINat.refreshRecentObservations(
@@ -447,10 +857,66 @@ function bindRecentINatButton() {
       console.warn("Recent iNat refresh failed:", err);
       alert(`Could not refresh recent observations: ${err.message}`);
     } finally {
-      btn.disabled = false;
-      btn.textContent = "Refresh Recent Observations";
+      setBusy(false);
     }
   };
+
+  if (moreBtn) moreBtn.onclick = async () => {
+    if (!window.GridWildRecentINat?.getMoreObservations) {
+      alert("Observation cache expansion is not loaded.");
+      return;
+    }
+
+    setBusy(true, moreBtn, "Downloading more...");
+
+    try {
+      const result = await window.GridWildRecentINat.getMoreObservations(
+        window.__gwUser?.username || "andrew2285"
+      );
+
+      renderFogProgress();
+      renderRecentINatList();
+      showObservationCacheToast(
+        `Cache updated: ${formatNum(result?.added || 0)} new observations added.`
+      );
+    } catch (err) {
+      console.warn("More iNat observations failed:", err);
+      alert(`Could not get more observations: ${err.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+}
+
+function showObservationCacheToast(message) {
+  if (typeof window.showGridWildToast === "function") {
+    window.showGridWildToast(message);
+    return;
+  }
+
+  document.querySelectorAll(".gw-observation-cache-toast").forEach(el => el.remove());
+
+  const toast = document.createElement("div");
+  toast.className = "gw-observation-cache-toast";
+  toast.textContent = message;
+  Object.assign(toast.style, {
+    position: "fixed",
+    left: "50%",
+    bottom: "calc(max(16px, env(safe-area-inset-bottom)) + 94px)",
+    transform: "translateX(-50%)",
+    zIndex: "100000",
+    padding: "10px 14px",
+    borderRadius: "999px",
+    border: "1px solid rgba(240,209,138,0.45)",
+    background: "rgba(20,17,15,0.94)",
+    color: "#f0d18a",
+    fontSize: "12px",
+    fontWeight: "900",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.35)"
+  });
+
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3400);
 }
 
 function updateRecentINatProgressUI(detail) {
@@ -468,8 +934,13 @@ function updateRecentINatProgressUI(detail) {
 
   bar.style.width = `${pct}%`;
 
+  const duplicateText = detail.duplicates
+    ? ` · cached ${detail.duplicates}`
+    : "";
+
   text.textContent =
     `Page ${detail.page || 0} · accepted ${detail.accepted || 0} · rejected ${detail.rejected || 0}`;
+  if (duplicateText) text.textContent += duplicateText;
 }
 
 function escapeHtmlLocal(s) {
@@ -706,32 +1177,6 @@ function renderInfoContent() {
       </div>
       
       <div class="gw-card">
-        <div class="gw-card-title">Jump to GPS</div>
-
-        <input
-          id="gwJumpGpsInput"
-          type="text"
-          placeholder="38.8895,-77.0353"
-          style="
-            width:100%;
-            box-sizing:border-box;
-            margin-bottom:8px;
-            padding:8px;
-            border-radius:10px;
-            border:1px solid rgba(255,255,255,.15);
-            background:rgba(255,255,255,.05);
-            color:inherit;
-          "
-        >
-
-        <button id="gwJumpToGpsBtn" class="gw-mini-btn" style="width:100%;">
-          Jump
-        </button>
-
-        <div id="gwJumpGpsStatus" class="gw-muted" style="font-size:11px;margin-top:6px;"></div>
-      </div>
-
-      <div class="gw-card">
         <div class="gw-card-title">Layer controls</div>
 
         
@@ -744,6 +1189,11 @@ function renderInfoContent() {
           <label class="gw-toggleline">
             <input type="checkbox" id="toggleHeat_clone" checked />
             <span>Show heat</span>
+          </label>
+
+          <label class="gw-toggleline">
+            <input type="checkbox" id="toggleSuperchunkHeat_clone" />
+            <span>Coarse median heat</span>
           </label>
   
           <label class="gw-toggleline">
@@ -1121,7 +1571,7 @@ function renderInfoContent() {
     btn.onclick = (evt) => {
       evt.preventDefault();
       evt.stopPropagation();
-      openINatAccountModal();
+      window.GridWildAccount?.openModal?.("signup");
     };
   }
 
@@ -1214,6 +1664,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
   window.GridWildStore?.bindButtons?.(document);
   window.GridWildInventory?.bindButtons?.(document);
   window.GridWildProfile?.bindButtons?.(document);
+  window.GridWildAccount?.bindButtons?.(document);
 
   window.GridWildParty?.bindSheetControls?.(document);
   window.GridWildParty?.refreshMapBeacon?.();
@@ -1323,6 +1774,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     [
       ["togglePoints", "togglePoints_clone"],
       ["toggleHeat", "toggleHeat_clone"],
+      ["toggleSuperchunkHeat", "toggleSuperchunkHeat_clone"],
       ["toggleDynamicINat", "toggleDynamicINat_clone"],
       ["toggleShimmer", "toggleShimmer_clone"],
       ["toggleFog", "toggleFog_clone"],
@@ -1361,6 +1813,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
 
     mirrorCheckbox("togglePoints", "togglePoints_clone");
     mirrorCheckbox("toggleHeat", "toggleHeat_clone");
+    mirrorCheckbox("toggleSuperchunkHeat", "toggleSuperchunkHeat_clone");
     mirrorCheckbox("toggleDynamicINat", "toggleDynamicINat_clone");
     mirrorCheckbox("toggleShimmer", "toggleShimmer_clone");
     mirrorCheckbox("toggleFog", "toggleFog_clone");
@@ -1430,6 +1883,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       window.GridWildStore?.bindButtons?.(document);
       window.GridWildInventory?.bindButtons?.(document);
       window.GridWildProfile?.bindButtons?.(document);
+      window.GridWildAccount?.bindButtons?.(document);
 
       window.GridWildParty?.bindSheetControls?.(document);
       window.GridWildParty?.refreshMapBeacon?.();

@@ -13,7 +13,7 @@ window.GridWildAPI = {
         return await res.json();
     },
 
-    async createParty(name = "New Party", questId = null) {
+    async createParty(name = "New Party", questId = null, options = {}) {
   const playerId = this.getPlayerId();
 
   const res = await fetch("/.netlify/functions/create-party", {
@@ -22,7 +22,8 @@ window.GridWildAPI = {
     body: JSON.stringify({
       player_id: playerId,
       name,
-      quest_id: questId
+      quest_id: questId,
+      ...options
     })
   });
 
@@ -71,6 +72,22 @@ async getParty(partyId = null) {
     body: JSON.stringify({
       player_id: playerId,
       party_id: partyId
+    })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
+
+async getPartyForQuest(questId) {
+  const playerId = this.getPlayerId();
+
+  const res = await fetch("/.netlify/functions/get-party-for-quest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      player_id: playerId,
+      quest_id: questId
     })
   });
 
@@ -288,6 +305,38 @@ async addPartyEvidence(evidence) {
     body: JSON.stringify({
       player_id: playerId,
       quest_id: questId
+        })
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+    },
+
+    async abandonQuest(questId) {
+    const playerId = this.getPlayerId();
+
+    const res = await fetch("/.netlify/functions/abandon-quest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+        player_id: playerId,
+        quest_id: questId
+        })
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+    },
+
+    async archiveQuest(questId) {
+    const playerId = this.getPlayerId();
+
+    const res = await fetch("/.netlify/functions/archive-quest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+        player_id: playerId,
+        quest_id: questId
         })
     });
 

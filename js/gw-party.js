@@ -140,11 +140,26 @@ function saveParties() {}
 function normalizeDbPartyForLegacy(p) {
   if (!p) return null;
 
+  const locationConfig = p.location_config || {};
+  const locationMode = p.location_mode || locationConfig.locationMode || "anywhere";
+  const mode = p.status === "ended"
+    ? "ended"
+    : p.status === "scheduled" || (p.starts_at && new Date(p.starts_at) > new Date())
+      ? "scheduled"
+      : "live";
+  const fallbackCenter = window.map?.getCenter?.();
+  const mapLatLng = getPartyMapLatLng({
+    ...p,
+    locationMode,
+    location: locationConfig.location
+  });
+
   return {
     id: p.id,
+    createdBy: p.created_by || null,
     title: p.name || "Field Party",
     host: "Online",
-    mode: p.status === "ended" ? "ended" : "live",
+    mode,
     status: p.status || "active",
     visibility: "public",
     goalType: "any",
@@ -153,10 +168,15 @@ function normalizeDbPartyForLegacy(p) {
     target: Number(p.target || 10),
     memberCount: Number(window.__gwState?.partyMembers?.length || 1),
     distanceLabel: "online",
-    startsAt: p.created_at || new Date().toISOString(),
-    locationLabel: "Current area",
-    lat: Number(p.lat || window.map?.getCenter?.()?.lat || 38.911325),
-    lng: Number(p.lng || window.map?.getCenter?.()?.lng || -77.076678),
+    startsAt: p.starts_at || p.created_at || new Date().toISOString(),
+    durationMinutes: Number(p.duration_minutes || 60),
+    locationMode,
+    locationUserId: p.location_user_id || locationConfig.locationUserId || null,
+    location: locationConfig.location || null,
+    resolvedLocation: locationConfig.resolvedLocation || null,
+    locationLabel: p.location_label || locationConfig.location?.label || partyLocationLabel({ ...p, locationMode }),
+    lat: Number(mapLatLng?.lat || fallbackCenter?.lat || 38.911325),
+    lng: Number(mapLatLng?.lng || fallbackCenter?.lng || -77.076678),
     createdAt: p.created_at || new Date().toISOString(),
     dbBacked: true
   };
@@ -216,6 +236,144 @@ function getAllParties() {
 
   function getCurrentUserName() {
   return window.__gwUser?.username || "You";
+}
+
+function getCurrentUserDisplayName() {
+  return window.__gwState?.player?.display_name ||
+    window.__gwUser?.username ||
+    "You";
+}
+
+function getLatestUserLocation() {
+  const loc = window.__gwLastUserLocation;
+  const lat = Number(loc?.lat);
+  const lng = Number(loc?.lng);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  return {
+    lat,
+    lng,
+    accuracyMeters: Number(loc?.accuracyMeters),
+    updatedAt: loc?.updatedAt || nowISO()
+  };
+}
+
+function normalizePartyLocationInput(form = {}) {
+  const mode = ["anywhere", "user", "location"].includes(form.locationMode)
+    ? form.locationMode
+    : "anywhere";
+
+  const selected = form.location && typeof form.location === "object"
+    ? {
+      label: String(form.location.label || "Selected location"),
+      lat: Number(form.location.lat),
+      lng: Number(form.location.lng)
+    }
+    : null;
+
+  return {
+    locationMode: mode,
+    locationUserId: mode === "user" ? (form.locationUserId || "self") : null,
+    location: mode === "location" &&
+      selected &&
+      Number.isFinite(selected.lat) &&
+      Number.isFinite(selected.lng)
+        ? selected
+        : null
+  };
+}
+
+function resolvePartyLocationForStart(form = {}) {
+  const locationConfig = normalizePartyLocationInput(form);
+
+  if (locationConfig.locationMode === "anywhere") {
+    return {
+      ok: true,
+      ...locationConfig,
+      resolvedLocation: null,
+      locationLabel: "Anywhere"
+    };
+  }
+
+  if (locationConfig.locationMode === "location") {
+    if (!locationConfig.location) {
+      return {
+        ok: false,
+        reason: "Choose a location for this party."
+      };
+    }
+
+    return {
+      ok: true,
+      ...locationConfig,
+      resolvedLocation: {
+        label: locationConfig.location.label,
+        lat: locationConfig.location.lat,
+        lng: locationConfig.location.lng,
+        source: "location"
+      },
+      locationLabel: locationConfig.location.label || "Selected location"
+    };
+  }
+
+  const userLocation = getLatestUserLocation();
+  if (!userLocation) {
+    return {
+      ok: false,
+      reason: "Need your location to start this party."
+    };
+  }
+
+  const label = `${getCurrentUserDisplayName()}'s location`;
+
+  return {
+    ok: true,
+    ...locationConfig,
+    resolvedLocation: {
+      label,
+      lat: userLocation.lat,
+      lng: userLocation.lng,
+      accuracyMeters: userLocation.accuracyMeters,
+      source: "user",
+      resolvedAt: nowISO()
+    },
+    locationLabel: label
+  };
+}
+
+function partyLocationLabel(p) {
+  const mode = p?.locationMode || p?.location_mode || "anywhere";
+  if (mode === "user") return p.locationLabel || p.location_label || `${getCurrentUserDisplayName()}'s location`;
+  if (mode === "location") return p.locationLabel || p.location_label || p.location?.label || "Selected location";
+  return p?.locationLabel || p?.location_label || "Anywhere";
+}
+
+function getPartyMapLatLng(p) {
+  const mode = p?.locationMode || p?.location_mode || "anywhere";
+
+  if (
+    mode === "user" &&
+    (
+      (!p?.createdBy && !p?.created_by) ||
+      String(p?.createdBy || p?.created_by) === String(window.GridWildAPI?.getPlayerId?.() || "")
+    )
+  ) {
+    const live = getLatestUserLocation();
+    if (live) return { lat: live.lat, lng: live.lng };
+  }
+
+  const lat = Number(p?.lat);
+  const lng = Number(p?.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+
+  const selectedLat = Number(p?.location?.lat || p?.location_config?.location?.lat);
+  const selectedLng = Number(p?.location?.lng || p?.location_config?.location?.lng);
+  if (Number.isFinite(selectedLat) && Number.isFinite(selectedLng)) {
+    return { lat: selectedLat, lng: selectedLng };
+  }
+
+  return null;
 }
 
 function loadPartyMembers() {
@@ -964,6 +1122,20 @@ function createPartyFromQuest(quest) {
 }
 
   function createParty(form) {
+    const locationResolution = resolvePartyLocationForStart(form);
+    if (!locationResolution.ok) {
+      toast(locationResolution.reason || "Choose a party location.");
+      return null;
+    }
+
+    form = {
+      ...form,
+      locationMode: locationResolution.locationMode,
+      locationUserId: locationResolution.locationUserId,
+      location: locationResolution.location,
+      resolvedLocation: locationResolution.resolvedLocation,
+      locationLabel: form.locationLabel || locationResolution.locationLabel
+    };
 
     if (window.GridWildPartyLive?.createDbPartyFromLegacyForm && !form.__localOnly) {
     window.GridWildPartyLive.createDbPartyFromLegacyForm(form)
@@ -983,6 +1155,7 @@ function createPartyFromQuest(quest) {
     }
 
     const center = window.map?.getCenter?.();
+    const mapLocation = locationResolution.resolvedLocation;
 
     const party = {
       id: makeId(),
@@ -1000,9 +1173,13 @@ function createPartyFromQuest(quest) {
         ? new Date(form.startsAt).toISOString()
         : nowISO(),
       durationMinutes: Number(form.durationMinutes || 60),
-      locationLabel: form.locationLabel || "Current area",
-      lat: Number(center?.lat || 38.911325),
-      lng: Number(center?.lng || -77.076678),
+      locationMode: form.locationMode || "anywhere",
+      locationUserId: form.locationUserId || null,
+      location: form.location || null,
+      resolvedLocation: form.resolvedLocation || null,
+      locationLabel: form.locationLabel || "Anywhere",
+      lat: Number(mapLocation?.lat || center?.lat || 38.911325),
+      lng: Number(mapLocation?.lng || center?.lng || -77.076678),
       createdAt: nowISO(),
       linkedQuestId: form.linkedQuestId || null,
       linkedQuestTitle: form.linkedQuestTitle || "",
@@ -1131,7 +1308,7 @@ function partyReportUrl(id) {
           </div>
 
           <div class="gw-party-meta">
-            ${esc(p.locationLabel || "Nearby")} · ${esc(p.distanceLabel || "nearby")} · ${Number(p.memberCount || 1)} joined
+            ${esc(partyLocationLabel(p))} · ${esc(p.distanceLabel || "nearby")} · ${Number(p.memberCount || 1)} joined
           </div>
 
           <div class="gw-party-goal">${esc(p.goalLabel || "Open field party")}</div>
@@ -1584,6 +1761,7 @@ function drawPartyRecapMap(id) {
 
     const defaultStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
     defaultStart.setMinutes(0, 0, 0);
+    let selectedPartyLocation = null;
 
     root.innerHTML = `
       <div class="gw-party-modal">
@@ -1630,6 +1808,46 @@ function drawPartyRecapMap(id) {
           <option value="private">Private / QR only</option>
         </select>
 
+        <label class="gw-party-label">Location</label>
+        <div class="gw-party-location-segment" role="radiogroup" aria-label="Party location">
+          <label class="gw-party-location-option is-active">
+            <input type="radio" name="gwPartyLocationMode" value="anywhere" checked>
+            <span>Anywhere</span>
+          </label>
+          <label class="gw-party-location-option">
+            <input type="radio" name="gwPartyLocationMode" value="user">
+            <span>Me</span>
+          </label>
+          <label class="gw-party-location-option">
+            <input type="radio" name="gwPartyLocationMode" value="location">
+            <span>Location</span>
+          </label>
+        </div>
+
+        <div class="gw-party-location-panel is-active" data-location-panel="anywhere">
+          <div class="gw-party-location-panel-title">No pinned place</div>
+          <div class="gw-party-location-panel-copy">
+            The party is not tied to a map point.
+          </div>
+        </div>
+
+        <div class="gw-party-location-panel" data-location-panel="user">
+          <div class="gw-party-location-panel-title">${esc(getCurrentUserDisplayName())}</div>
+          <div class="gw-party-location-panel-copy">
+            Uses your latest GridWild location. If your location is unavailable, starting the party is blocked.
+          </div>
+        </div>
+
+        <div class="gw-party-location-panel" data-location-panel="location">
+          <div class="gw-party-location-panel-title" id="gwPartyLocationSummary">No location chosen</div>
+          <div class="gw-party-location-panel-copy" id="gwPartyLocationCoords">
+            Pick a saved location or choose a new coordinate.
+          </div>
+          <button class="gw-mini-btn gw-party-location-pick" id="gwPartyPickLocationBtn" type="button">
+            Choose Location
+          </button>
+        </div>
+
         ${
           mode === "scheduled"
             ? `
@@ -1657,6 +1875,51 @@ function drawPartyRecapMap(id) {
     `;
 
     document.body.appendChild(root);
+
+    function setLocationMode(modeName) {
+      root.querySelectorAll(".gw-party-location-option").forEach(label => {
+        const input = label.querySelector("input");
+        const active = input?.value === modeName;
+        label.classList.toggle("is-active", active);
+        if (input) input.checked = active;
+      });
+
+      root.querySelectorAll(".gw-party-location-panel").forEach(panel => {
+        panel.classList.toggle("is-active", panel.dataset.locationPanel === modeName);
+      });
+    }
+
+    function setSelectedPartyLocation(location) {
+      selectedPartyLocation = location;
+      const titleEl = root.querySelector("#gwPartyLocationSummary");
+      const coordEl = root.querySelector("#gwPartyLocationCoords");
+      if (titleEl) titleEl.textContent = location?.label || "Selected location";
+      if (coordEl) {
+        coordEl.textContent = Number.isFinite(Number(location?.lat)) && Number.isFinite(Number(location?.lng))
+          ? `${Number(location.lat).toFixed(6)}, ${Number(location.lng).toFixed(6)}`
+          : "Pick a saved location or choose a new coordinate.";
+      }
+    }
+
+    root.querySelectorAll("input[name='gwPartyLocationMode']").forEach(input => {
+      input.addEventListener("change", () => setLocationMode(input.value));
+    });
+
+    root.querySelector("#gwPartyPickLocationBtn")?.addEventListener("click", () => {
+      if (!window.GridWildLocationPicker?.open) {
+        toast("Location picker is not available yet.");
+        return;
+      }
+
+      window.GridWildLocationPicker.open({
+        location: selectedPartyLocation,
+        selectButtonLabel: "Use for party",
+        onSelect(location) {
+          setSelectedPartyLocation(location);
+          setLocationMode("location");
+        }
+      });
+    });
 
     root.querySelectorAll(".gw-party-template-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -1688,16 +1951,28 @@ function drawPartyRecapMap(id) {
       const visibility = root.querySelector("#gwPartyVisibilityInput").value;
       const durationMinutes = root.querySelector("#gwPartyDurationInput").value;
       const startsAt = root.querySelector("#gwPartyStartInput")?.value;
+      const locationMode = root.querySelector("input[name='gwPartyLocationMode']:checked")?.value || "anywhere";
 
-    const p = createParty({
+    const form = {
     mode,
     title,
     goalType,
     target,
     visibility,
     durationMinutes,
-    startsAt
-    });
+    startsAt,
+    locationMode,
+    locationUserId: locationMode === "user" ? "self" : null,
+    location: locationMode === "location" ? selectedPartyLocation : null
+    };
+
+    const locationCheck = resolvePartyLocationForStart(form);
+    if (!locationCheck.ok) {
+      toast(locationCheck.reason || "Choose a party location.");
+      return;
+    }
+
+    const p = createParty(form);
 
     root.remove();
 
@@ -2133,7 +2408,9 @@ function drawStaticPartyReportMap(report) {
 function isPublicPartyVisibleOnMap(p) {
   if (!p) return false;
   if (p.visibility !== "public") return false;
-  if (!Number.isFinite(Number(p.lat)) || !Number.isFinite(Number(p.lng))) return false;
+  if ((p.locationMode || p.location_mode || "anywhere") === "anywhere") return false;
+  const mapLatLng = getPartyMapLatLng(p);
+  if (!mapLatLng) return false;
   if (p.status === "ended") return false;
 
   return p.mode === "live" || p.mode === "upcoming" || p.mode === "scheduled";
@@ -2168,7 +2445,10 @@ function addPublicPartyMarker(layer, p) {
     iconAnchor: [16, 16]
   });
 
-  const marker = L.marker([Number(p.lat), Number(p.lng)], {
+  const mapLatLng = getPartyMapLatLng(p);
+  if (!mapLatLng) return;
+
+  const marker = L.marker([mapLatLng.lat, mapLatLng.lng], {
     icon,
     pane: PANE,
     interactive: true
@@ -2296,8 +2576,9 @@ function addNearbyPublicPartyMarkers(layer) {
 
   if (routeLatLngs.length) {
     beaconLatLng = routeLatLngs[routeLatLngs.length - 1];
-  } else if (Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))) {
-    beaconLatLng = [Number(p.lat), Number(p.lng)];
+  } else if ((p.locationMode || p.location_mode || "anywhere") !== "anywhere") {
+    const mapLatLng = getPartyMapLatLng(p);
+    if (mapLatLng) beaconLatLng = [mapLatLng.lat, mapLatLng.lng];
   }
 
   if (!beaconLatLng) return;
@@ -2957,6 +3238,69 @@ function scheduleActivePartyHudRender() {
     border-color: rgba(240,209,138,0.72);
     background: rgba(240,209,138,0.14);
     color: #fff2c8;
+    }
+
+    .gw-party-location-segment {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    }
+
+    .gw-party-location-option {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-height: 38px;
+    border-radius: 12px;
+    border: 1px solid rgba(215,183,116,0.22);
+    background: rgba(255,255,255,0.055);
+    color: rgba(239,230,211,0.76);
+    font-size: 11px;
+    font-weight: 950;
+    cursor: pointer;
+    }
+
+    .gw-party-location-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    }
+
+    .gw-party-location-option.is-active {
+    border-color: rgba(240,209,138,0.72);
+    background: rgba(240,209,138,0.14);
+    color: #fff2c8;
+    }
+
+    .gw-party-location-panel {
+    display: none;
+    margin-top: 8px;
+    padding: 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(215,183,116,0.16);
+    background: rgba(255,255,255,0.045);
+    }
+
+    .gw-party-location-panel.is-active {
+    display: block;
+    }
+
+    .gw-party-location-panel-title {
+    color: #f4e8cf;
+    font-size: 12px;
+    font-weight: 950;
+    overflow-wrap: anywhere;
+    }
+
+    .gw-party-location-panel-copy {
+    margin-top: 3px;
+    color: rgba(239,230,211,0.62);
+    font-size: 11px;
+    line-height: 1.35;
+    }
+
+    .gw-party-location-pick {
+    margin-top: 8px;
     }
 
     .gw-party-public-marker {

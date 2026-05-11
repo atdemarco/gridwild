@@ -272,10 +272,13 @@ const DAILY_QUESTS_ORIGINAL = [
     const s = String(status || "paused").toLowerCase();
 
     if (s === "active") return "Active";
+    if (s === "available") return "Available";
     if (s === "paused" || s === "draft") return "Paused";
     if (s === "stale" || s === "expired") return "Stale";
     if (s === "unavailable") return "Unavailable";
     if (s === "completed" || s === "complete") return "Completed";
+    if (s === "archived") return "Archived";
+    if (s === "abandoned") return "Abandoned";
 
     return "Paused";
     }
@@ -315,10 +318,19 @@ const DAILY_QUESTS_ORIGINAL = [
   }
 
  function isArchivedQuest(q) {
-  return q?.archived === true || q?.archived === "true" || !!q?.archivedAt;
+  return q?.archived === true ||
+    q?.archived === "true" ||
+    !!q?.archivedAt ||
+    String(q?.status || "").toLowerCase() === "archived";
+}
+
+function isAbandonedQuest(q) {
+  return String(q?.status || "").toLowerCase() === "abandoned";
 }
 
 function normalizeDbQuest(q) {
+  const playerQuest = q.player_quests?.[0] || null;
+
   const recipe = {
     range: "anywhere",
     iconicTaxon: "Any",
@@ -337,11 +349,11 @@ function normalizeDbQuest(q) {
     source: "db",
     title: q.title || "Untitled Quest",
     createdAt: q.created_at || nowISO(),
-    status: q.player_quests?.[0]?.status || "available",
+    status: playerQuest?.status || q.status || "available",
     archived: false,
     archivedAt: null,
-    startedAt: q.player_quests?.[0]?.accepted_at || null,
-    completedAt: q.player_quests?.[0]?.completed_at || null,
+    startedAt: playerQuest?.accepted_at || q.accepted_at || null,
+    completedAt: playerQuest?.completed_at || q.completed_at || null,
     pointValue: q.reward_wildpoints || 0,
     description: q.description || "",
     recipe
@@ -353,12 +365,57 @@ function getDbQuests() {
   return Array.isArray(quests) ? quests.map(normalizeDbQuest) : [];
 }
 
+function isPlayerTrackedQuest(q) {
+  const status = String(q?.status || "").toLowerCase();
+  return !["", "available", "unavailable"].includes(status);
+}
+
+function updateRuntimeQuestPlayerState(questId, playerQuest, patch = {}) {
+  window.__gwState = window.__gwState || {};
+  const nextStatus = playerQuest?.status || patch.status || null;
+
+  window.__gwState.quests = (window.__gwState.quests || []).map(q => {
+    const isTarget = String(q.id) === String(questId);
+
+    if (!isTarget) {
+      const pq = q.player_quests?.[0] || null;
+      const currentStatus = pq?.status || q.status;
+
+      if (nextStatus === "active" && currentStatus === "active") {
+        return {
+          ...q,
+          status: "paused",
+          player_quests: pq
+            ? [{ ...pq, status: "paused" }]
+            : q.player_quests
+        };
+      }
+
+      return q;
+    }
+
+    return {
+      ...q,
+      status: nextStatus || q.status,
+      accepted_at: playerQuest?.accepted_at || patch.accepted_at || q.accepted_at || null,
+      completed_at: playerQuest?.completed_at || patch.completed_at || q.completed_at || null,
+      player_quests: playerQuest
+        ? [playerQuest]
+        : q.player_quests
+    };
+  });
+}
+
 function getVisibleQuests() {
-  return getDbQuests();
+  return getDbQuests()
+    .filter(q => isPlayerTrackedQuest(q) && !isArchivedQuest(q) && !isAbandonedQuest(q));
 }
 
 function getArchivedQuests() {
-  return loadQuests().filter(q => isArchivedQuest(q));
+  return [
+    ...getDbQuests().filter(q => isArchivedQuest(q)),
+    ...loadQuests().filter(q => isArchivedQuest(q))
+  ];
 }
 
 function embarkQuest(questId) {
@@ -389,10 +446,38 @@ function embarkQuest(questId) {
   return activeQuest;
 }
 
-function archiveQuest(questId) {
+async function archiveQuest(questId) {
+  const dbQuest = getDbQuests().find(q => String(q.id) === String(questId));
+
+  if (dbQuest?.source === "db" || dbQuest?.dbId) {
+    try {
+      const result = await window.GridWildAPI.archiveQuest(dbQuest.dbId || dbQuest.id);
+
+      updateRuntimeQuestPlayerState(dbQuest.dbId || dbQuest.id, result.player_quest, {
+        status: "archived"
+      });
+
+      if (String(window.__gwState?.activeQuestId || "") === String(dbQuest.dbId || dbQuest.id)) {
+        await window.GridWildAPI.setActiveQuest(null);
+        window.__gwState.activeQuestId = null;
+        window.GridWildQuestLayer?.clear?.();
+      }
+
+      renderQuestListIntoPage();
+      window.refreshQuestBadge?.();
+      window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
+
+      return true;
+    } catch (err) {
+      console.error("Archive quest failed:", err);
+      alert(`Could not archive quest: ${err.message}`);
+      return false;
+    }
+  }
+
   const quests = loadQuests();
   const q = quests.find(x => x.id === questId);
-  if (!q) return;
+  if (!q) return false;
 
   const wasActive = q.status === "active";
 
@@ -415,10 +500,146 @@ function archiveQuest(questId) {
   renderQuestListIntoPage();
   window.refreshQuestBadge?.();
   window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
+
+  return true;
+}
+
+async function abandonQuest(questId) {
+  const dbQuest = getDbQuests().find(q => String(q.id) === String(questId));
+
+  if (dbQuest?.source === "db" || dbQuest?.dbId) {
+    try {
+      const id = dbQuest.dbId || dbQuest.id;
+      const result = await window.GridWildAPI.abandonQuest(id);
+
+      updateRuntimeQuestPlayerState(id, result.player_quest, {
+        status: "abandoned"
+      });
+
+      if (result.deactivated_quest) {
+        window.__gwState.quests = (window.__gwState.quests || [])
+          .filter(q => String(q.id) !== String(id));
+      }
+
+      if (String(window.__gwState?.activeQuestId || "") === String(id)) {
+        window.__gwState.activeQuestId = null;
+        window.GridWildQuestLayer?.clear?.();
+      }
+
+      renderQuestListIntoPage();
+      window.refreshQuestBadge?.();
+      window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
+
+      return true;
+    } catch (err) {
+      console.error("Abandon quest failed:", err);
+      alert(`Could not abandon quest: ${err.message}`);
+      return false;
+    }
+  }
+
+  const quests = loadQuests();
+  const q = quests.find(x => x.id === questId);
+  if (!q) return false;
+
+  const next = quests.filter(x => x.id !== questId);
+  saveQuests(next);
+
+  if (window.__gwState?.activeQuestId === questId) {
+    window.__gwState.activeQuestId = null;
+    window.GridWildQuestLayer?.clear?.();
+  }
+
+  renderQuestListIntoPage();
+  window.refreshQuestBadge?.();
+  window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
+
+  return true;
+}
+
+function getRuntimePartyIdForQuest(questId) {
+  const id = String(questId || "");
+  if (!id) return null;
+
+  const activeParty = window.__gwState?.party;
+  const activeLinked = (window.__gwState?.partyEvents || [])
+    .some(e => String(e?.payload?.quest_id || "") === id);
+
+  if (activeParty?.id && activeLinked) return activeParty.id;
+
+  const parties = window.GridWildParty?.getAllParties?.() || [];
+  const party = parties.find(p => String(p.linkedQuestId || "") === id);
+
+  return party?.id || null;
+}
+
+async function hydratePartyForQuest(questId) {
+  const runtimePartyId = getRuntimePartyIdForQuest(questId);
+  if (runtimePartyId) return runtimePartyId;
+
+  const result = await window.GridWildAPI?.getPartyForQuest?.(questId);
+  if (!result?.party?.id) return null;
+
+  window.__gwState = window.__gwState || {};
+  window.__gwState.party = result.party;
+  window.__gwState.partyMembers = result.members || [];
+  window.__gwState.partyEvents = result.events || [];
+  window.__gwState.partyEvidence = result.evidence || [];
+  window.__gwState.partyProgress = result.progress || 0;
+
+  try {
+    const routeData = await window.GridWildAPI?.getPartyRoute?.(result.party.id);
+    window.__gwState.partyRoute = routeData?.route || [];
+  } catch (err) {
+    console.warn("Could not load quest party route:", err);
+    window.__gwState.partyRoute = [];
+  }
+
+  return result.party.id;
+}
+
+async function openQuestPartyRecap(questId) {
+  try {
+    const partyId = await hydratePartyForQuest(questId);
+
+    if (!partyId) {
+      alert("No party recap is linked to this quest yet.");
+      return;
+    }
+
+    document
+      .querySelectorAll(".gw-quest-modal-backdrop")
+      .forEach(el => el.remove());
+
+    window.GridWildParty?.openPartyRecap?.(partyId);
+  } catch (err) {
+    console.error("Could not open quest party recap:", err);
+    alert(`Could not open party recap: ${err.message}`);
+  }
+}
+
+async function updateCompletedQuestPartyButton(root, questId) {
+  const btn = root.querySelector("#gwQuestPartyBtn");
+  if (!btn) return;
+
+  try {
+    const partyId = await hydratePartyForQuest(questId);
+    if (!partyId || !document.body.contains(root)) return;
+
+    btn.disabled = false;
+    btn.textContent = "View Party";
+    btn.dataset.partyId = partyId;
+  } catch (err) {
+    console.warn("Could not find linked quest party:", err);
+  }
 }
 
 function openQuestArchive() {
   injectStyles();
+
+  document
+    .querySelectorAll(".gw-quest-modal-backdrop")
+    .forEach(el => el.remove());
 
   const archived = getArchivedQuests();
 
@@ -452,11 +673,7 @@ function openQuestArchive() {
                       </span>
                     </span>
 
-                    <span class="gw-quest-pill ${esc(statusClass(q.status))}">
-                      ${q.status === "completed" ? "Done" :
-                        q.status === "active" ? "Active" :
-                        "Available"}
-                    </span>
+                    <span class="gw-quest-pill archived">Archived</span>
                   </div>
                 `;
               }).join("")}
@@ -478,6 +695,14 @@ function openQuestArchive() {
   });
 
   root.querySelector("#gwQuestArchiveCloseBtn").onclick = () => closeModal(root);
+
+  root.querySelectorAll(".gw-rowline").forEach((row, idx) => {
+    row.style.cursor = "pointer";
+    row.addEventListener("click", () => {
+      const quest = archived[idx];
+      if (quest) openQuestStatus(quest.id);
+    });
+  });
 }
 
   function makeQuest(recipe) {
@@ -593,12 +818,14 @@ async function startQuestFromRecipe(recipe, options = {}) {
       }
 
       .gw-quest-icon {
-        width: 34px;
+        width: 44px;
         height: 34px;
         border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        white-space: nowrap;
+        line-height: 1;
         background: rgba(240,209,138,0.10);
         border: 1px solid rgba(240,209,138,0.20);
         flex: 0 0 auto;
@@ -620,7 +847,7 @@ async function startQuestFromRecipe(recipe, options = {}) {
 
       .gw-quest-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -635,9 +862,12 @@ async function startQuestFromRecipe(recipe, options = {}) {
 
 .gw-quest-row-text {
   min-width: 0;
+  margin-left: auto;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   line-height: 1.18;
+  text-align: right;
 }
 
 .gw-quest-row-title,
@@ -674,14 +904,14 @@ async function startQuestFromRecipe(recipe, options = {}) {
 
 @media (max-width: 420px) {
   .gw-quest-row {
-    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-columns: minmax(0, 1fr);
     gap: 4px;
     padding-top: 8px;
     padding-bottom: 8px;
   }
 
   .gw-quest-icon {
-    display: none;
+    width: 38px;
   }
 
   .gw-quest-row-main {
@@ -713,14 +943,6 @@ async function startQuestFromRecipe(recipe, options = {}) {
   .gw-quest-pill {
     font-size: 9px;
     padding: 3px 5px;
-  }
-
-  .gw-quest-difficulty {
-    display: none;
-  }
-
-  .gw-quest-icon {
-    display: none;
   }
 
   .gw-quest-pill {
@@ -910,11 +1132,38 @@ async function startQuestFromRecipe(recipe, options = {}) {
     border-color: rgba(80,220,140,0.26);
     }
 
+    .gw-quest-pill.archived {
+    color: #cfc7b6;
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.16);
+    }
+
     .gw-quest-archive-btn {
     font-size: 10px;
     padding: 6px 8px;
     border-radius: 999px;
     opacity: 0.82;
+    }
+
+    .gw-quest-confirm-backdrop {
+      z-index: 100000;
+      background: rgba(9, 12, 10, 0.82);
+    }
+
+    .gw-quest-confirm-modal {
+      width: min(430px, 94vw);
+    }
+
+    .gw-quest-confirm-name {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      color: #f4e8cf;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(215,183,116,0.14);
+      font-size: 13px;
+      font-weight: 850;
+      line-height: 1.35;
     }
     `;
 
@@ -923,6 +1172,55 @@ async function startQuestFromRecipe(recipe, options = {}) {
 
   function closeModal(root) {
     root?.remove();
+  }
+
+  function openQuestConfirmDialog({
+    title = "Confirm",
+    message = "",
+    subject = "",
+    confirmLabel = "Confirm",
+    cancelLabel = "Cancel",
+    danger = false
+  } = {}) {
+    injectStyles();
+
+    return new Promise(resolve => {
+      const root = document.createElement("div");
+      root.className = "gw-quest-modal-backdrop gw-quest-confirm-backdrop";
+      root.setAttribute("role", "dialog");
+      root.setAttribute("aria-modal", "true");
+      root.setAttribute("aria-labelledby", "gwQuestConfirmTitle");
+
+      root.innerHTML = `
+        <div class="gw-quest-modal gw-quest-confirm-modal">
+          <div class="gw-quest-modal-title" id="gwQuestConfirmTitle">${esc(title)}</div>
+          <div class="gw-quest-modal-subtitle">${esc(message)}</div>
+          ${subject ? `<div class="gw-quest-confirm-name">${esc(subject)}</div>` : ""}
+          <div class="gw-quest-actions">
+            <button class="gw-quest-btn secondary" id="gwQuestConfirmCancelBtn" type="button">${esc(cancelLabel)}</button>
+            <button class="gw-quest-btn ${danger ? "danger" : "primary"}" id="gwQuestConfirmOkBtn" type="button">${esc(confirmLabel)}</button>
+          </div>
+        </div>
+      `;
+
+      const finish = value => {
+        root.remove();
+        resolve(value);
+      };
+
+      document.body.appendChild(root);
+
+      root.querySelector("#gwQuestConfirmCancelBtn").onclick = () => finish(false);
+      root.querySelector("#gwQuestConfirmOkBtn").onclick = () => finish(true);
+      root.addEventListener("click", evt => {
+        if (evt.target === root) finish(false);
+      });
+      root.addEventListener("keydown", evt => {
+        if (evt.key === "Escape") finish(false);
+      });
+
+      root.querySelector("#gwQuestConfirmCancelBtn")?.focus();
+    });
   }
 
   function openQuestStatus(questId) {
@@ -935,6 +1233,8 @@ async function startQuestFromRecipe(recipe, options = {}) {
 
     const quest =
       getVisibleQuests().find(q => q.id === questId) ||
+      getDbQuests().find(q => q.id === questId) ||
+      getArchivedQuests().find(q => q.id === questId) ||
       loadQuests().find(q => q.id === questId);
 
     if (!quest) return;
@@ -942,6 +1242,9 @@ async function startQuestFromRecipe(recipe, options = {}) {
     const r = quest.recipe || {};
     const obj = OBJECTIVES[r.objectiveType] || OBJECTIVES.any_observation;
     const tax = TAXON_FLAVORS[r.iconicTaxon] || TAXON_FLAVORS.Any;
+    const isCompletedQuest = ["completed", "complete"].includes(String(quest.status || "").toLowerCase());
+    const isArchived = isArchivedQuest(quest);
+    const isActiveQuest = String(quest.status || "").toLowerCase() === "active";
 
     const root = document.createElement("div");
     root.className = "gw-quest-modal-backdrop";
@@ -1001,9 +1304,19 @@ async function startQuestFromRecipe(recipe, options = {}) {
 
       <div class="gw-quest-actions gw-quest-actions-four">
       <button class="gw-quest-btn secondary" id="gwQuestCloseBtn">Close</button>
-      <button class="gw-quest-btn primary" id="gwQuestEmbarkBtn">Embark!</button>
-      <button class="gw-quest-btn secondary" id="gwQuestPartyBtn">Start Party</button>
-      <button class="gw-quest-btn secondary" id="gwQuestCompleteBtn">Mark Complete</button>
+      ${isCompletedQuest ? `
+        <button class="gw-quest-btn primary" id="gwQuestArchiveBtn">Archive</button>
+      ` : isArchived ? `
+        <button class="gw-quest-btn secondary" type="button" disabled>Archived</button>
+      ` : isActiveQuest ? `
+        <button class="gw-quest-btn danger" id="gwQuestAbandonBtn">Abandon</button>
+      ` : `
+        <button class="gw-quest-btn primary" id="gwQuestEmbarkBtn">Embark!</button>
+      `}
+      <button class="gw-quest-btn secondary" id="gwQuestPartyBtn" ${isCompletedQuest || isArchived ? "disabled" : ""}>Start Party</button>
+      <button class="gw-quest-btn secondary" id="gwQuestCompleteBtn" ${isCompletedQuest || isArchived ? "disabled" : ""}>
+        ${isCompletedQuest ? "Completed" : isArchived ? "Archived" : "Mark Complete"}
+      </button>
       </div>
     `;
 
@@ -1020,16 +1333,49 @@ async function startQuestFromRecipe(recipe, options = {}) {
         .forEach(el => el.remove());
     };
 
- root.querySelector("#gwQuestEmbarkBtn").onclick = async () => {
+    if (isCompletedQuest) {
+      updateCompletedQuestPartyButton(root, quest.dbId || quest.id);
+    }
+
+ root.querySelector("#gwQuestArchiveBtn")?.addEventListener("click", async () => {
+  const ok = await archiveQuest(quest.dbId || quest.id);
+  if (ok) {
+    closeModal(root);
+    openQuestArchive();
+  }
+});
+
+ root.querySelector("#gwQuestAbandonBtn")?.addEventListener("click", async () => {
+  const ok = await openQuestConfirmDialog({
+    title: "Abandon Quest?",
+    message: "This quest will disappear from your quest list.",
+    subject: quest.title || "Untitled Quest",
+    confirmLabel: "Abandon",
+    cancelLabel: "Keep Quest",
+    danger: true
+  });
+  if (!ok) return;
+
+  const abandoned = await abandonQuest(quest.dbId || quest.id);
+  if (abandoned) closeModal(root);
+});
+
+ root.querySelector("#gwQuestEmbarkBtn")?.addEventListener("click", async () => {
   try {
     if (quest.source === "db" || quest.dbId) {
-      await window.GridWildAPI.acceptQuest(quest.dbId || quest.id);
-      await window.GridWildAPI.setActiveQuest(quest.dbId || quest.id);
+      const questId = quest.dbId || quest.id;
+      const accepted = await window.GridWildAPI.acceptQuest(questId);
+      await window.GridWildAPI.setActiveQuest(questId);
 
       quest.status = "active";
+      quest.startedAt = accepted.player_quest?.accepted_at || quest.startedAt || nowISO();
       
       window.__gwState = window.__gwState || {};
-      window.__gwState.activeQuestId = quest.id;
+      window.__gwState.activeQuestId = questId;
+      updateRuntimeQuestPlayerState(questId, accepted.player_quest, {
+        status: "active",
+        accepted_at: quest.startedAt
+      });
 
       window.refreshQuestBadge?.();
       closeModal(root);
@@ -1048,9 +1394,15 @@ async function startQuestFromRecipe(recipe, options = {}) {
     console.error("Accept quest failed:", err);
     alert(`Could not accept quest: ${err.message}`);
   }
-};
+});
 
-root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", async () => {
+root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", async evt => {
+  if (isCompletedQuest) {
+    evt.preventDefault();
+    await openQuestPartyRecap(quest.dbId || quest.id);
+    return;
+  }
+
   if (!window.GridWildParty?.createPartyFromQuest) {
     alert("Party system is not loaded.");
     return;
@@ -1058,15 +1410,20 @@ root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", async () => {
 
   try {
     if (quest.source === "db" || quest.dbId) {
-      await window.GridWildAPI.acceptQuest(quest.dbId || quest.id);
-      await window.GridWildAPI.setActiveQuest(quest.dbId || quest.id);
+      const questId = quest.dbId || quest.id;
+      const accepted = await window.GridWildAPI.acceptQuest(questId);
+      await window.GridWildAPI.setActiveQuest(questId);
 
       quest.status = "active";
 
-      quest.startedAt = quest.startedAt || nowISO();
+      quest.startedAt = accepted.player_quest?.accepted_at || quest.startedAt || nowISO();
 
       window.__gwState = window.__gwState || {};
-      window.__gwState.activeQuestId = quest.id;
+      window.__gwState.activeQuestId = questId;
+      updateRuntimeQuestPlayerState(questId, accepted.player_quest, {
+        status: "active",
+        accepted_at: quest.startedAt
+      });
 
       window.GridWildParty.createPartyFromQuest(quest);
 
@@ -1095,6 +1452,11 @@ root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", async () => {
 
           window.__gwState = window.__gwState || {};
           window.__gwState.player = result.player;
+          updateRuntimeQuestPlayerState(quest.dbId || quest.id, result.player_quest, {
+            status: "completed",
+            completed_at: result.player_quest?.completed_at || new Date().toISOString()
+          });
+
           window.GridWildPlayerUI?.refreshPlayerUI?.();
 
           quest.status = "completed";
@@ -1294,7 +1656,7 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
         return `
         <div class="gw-muted">None yet.</div>
         <button class="gw-mini-btn gw-quest-archive-open-btn" type="button" style="margin-top:10px;width:100%;">
-            Archive of Quests
+            View Archive
         </button>
         `;
     }
@@ -1307,8 +1669,25 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
 
             return `
               <div class="gw-rowline gw-quest-row ${q.status === "active" ? "is-active-quest" : ""} ${q.status === "completed" ? "is-completed-quest" : ""}"
+                data-quest-id="${esc(q.id)}">
                 <span class="gw-quest-row-main">
                     <span class="gw-quest-icon">${esc(getFlavorIcon(q))}</span>
+
+                    <span class="gw-quest-row-controls">
+                        <span class="gw-quest-status-stack">
+                        <span class="gw-quest-pill ${esc(sClass)}">${esc(statusLabel(q.status))}</span>
+                        <span class="gw-muted gw-quest-difficulty">${esc(difficultyLabel(r.difficulty))}</span>
+                        </span>
+                        ${["completed", "complete"].includes(String(q.status || "").toLowerCase()) ? `
+                          <button
+                            class="gw-mini-btn gw-quest-row-archive-btn"
+                            data-quest-id="${esc(q.id)}"
+                            type="button"
+                          >
+                            Archive
+                          </button>
+                        ` : ""}
+                    </span>
 
                     <span class="gw-quest-row-text">
                     <span class="gw-quest-row-title">${esc(q.title)}</span>
@@ -1321,17 +1700,13 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
                       </span>
                     </span>
                 </span>
-
-                <span class="gw-quest-row-controls">
-                    <span class="gw-quest-status-stack">
-                    <span class="gw-quest-pill ${esc(sClass)}">${esc(statusLabel(q.status))}</span>
-                    <span class="gw-muted gw-quest-difficulty">${esc(difficultyLabel(r.difficulty))}</span>
-                    </span>
-                </span>
                 </div>
             `;
         }).join("")}
         </div>
+        <button class="gw-mini-btn gw-quest-archive-open-btn" type="button" style="margin-top:10px;width:100%;">
+            View Archive
+        </button>
     `;
     }
 
@@ -1351,6 +1726,20 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
     const surveysBtn = evt.target.closest("#gwExploreSurveysBtn");
     if (surveysBtn && root.contains(surveysBtn)) {
       openSurveyExplorer();
+      return;
+    }
+
+    const rowArchiveBtn = evt.target.closest(".gw-quest-row-archive-btn");
+    if (rowArchiveBtn && root.contains(rowArchiveBtn)) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      archiveQuest(rowArchiveBtn.dataset.questId);
+      return;
+    }
+
+    const archiveOpenBtn = evt.target.closest(".gw-quest-archive-open-btn");
+    if (archiveOpenBtn && root.contains(archiveOpenBtn)) {
+      openQuestArchive();
       return;
     }
 
@@ -1755,6 +2144,7 @@ function openNewSurveyConfigurator() {
     openQuestRecipeCreator,
     embarkQuest,
     archiveQuest,
+    abandonQuest,
     openQuestArchive,
     getVisibleQuests,
     getArchivedQuests,

@@ -25,6 +25,13 @@ function updateUserMarkerHeading(headingDeg = 0) {
 }
 
 function setUserLocation(lat, lng, accuracyMeters) {
+      window.__gwLastUserLocation = {
+        lat: Number(lat),
+        lng: Number(lng),
+        accuracyMeters: Number(accuracyMeters),
+        updatedAt: new Date().toISOString()
+      };
+
       updateGpsHealthBadge(accuracyMeters);
       const latlng = [lat, lng];
 

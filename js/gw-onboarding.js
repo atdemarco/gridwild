@@ -7,28 +7,70 @@
 
   const tourTargets = [
     {
-      selector: "#recenter, #locateMeBtn, .gw-locate-btn",
-      title: "Find yourself",
-      body: "Tap here to lock GridWild onto your location. It works best while walking.",
+      selector: "#recenterFab",
+      title: "Recenter GPS",
+      body: "Tap this to jump back to your current position. The small badge shows GPS health while you explore.",
       arrow: "top-right"
+    },
+    {
+      selector: "#gwLocationPickerBtn",
+      title: "Choose a place",
+      body: "Use Location to jump to coordinates, pick a saved base, or explore somewhere away from your current GPS position.",
+      arrow: "top-left"
+    },
+    {
+      selector: "#legendPill",
+      title: "Map controls",
+      body: "Legend opens the full control sheet: layer toggles, heat metric, fog options, and the older iconic taxa checkboxes.",
+      arrow: "top-left"
+    },
+    {
+      selector: "#gwHudLegend",
+      title: "Change lens",
+      body: "This compact colormap shows the active ecological lens. Tap it to open the Lens picker and change how the overlay is colored.",
+      arrow: "top-left"
+    },
+    {
+      selector: "#gwHudTaxaFilter",
+      title: "Filter life groups",
+      body: "These quick toggles filter the overlay by major life group. They mirror the Iconic taxa controls in the Legend sheet.",
+      arrow: "top-left"
     },
     {
       selector: "#map",
       title: "Your living grid",
-      body: "Each square is a tiny patch of nature. Observe plants, insects, trees, fungi, birds — anything alive.",
+      body: "Each square is a patch of nearby nature. Move through the grid, reveal fog, and use observations to make places permanent.",
       arrow: "center"
     },
     {
-      selector: "#gwCameraBtn, .gw-camera-btn, [data-gw-nav='camera']",
-      title: "Scan nature",
-      body: "Use the camera to make an iNaturalist observation. Even grass, weeds, moss, and street trees matter.",
+      selector: "#btnInfo",
+      title: "Inspect the center",
+      body: "Scan opens details for the center square: summary stats, local observers, taxonomy structure, and recent activity.",
+      arrow: "bottom-left"
+    },
+    {
+      selector: "#btnCamera",
+      title: "Capture a find",
+      body: "Use the camera button to start a draft observation, edit the photo, and send it toward iNaturalist.",
       arrow: "bottom-center"
     },
     {
-      selector: "#gwQuestBtn, .gw-quest-btn, [data-gw-nav='quest']",
-      title: "Take quests",
-      body: "Quests give you focused challenges: find flowers, insects, fresh records, or reclaim fading territory.",
+      selector: "#btnCommunity",
+      title: "Explore together",
+      body: "Party opens shared exploration tools: live parties, routes, evidence, recaps, and group survey workflows.",
       arrow: "bottom-right"
+    },
+    {
+      selector: "#btnQuest",
+      title: "Take quests",
+      body: "Quest opens daily prompts, current quests, archives, and survey-linked challenges that give direction to a walk.",
+      arrow: "bottom-right"
+    },
+    {
+      selector: "#btnMe",
+      title: "Your explorer",
+      body: "Me holds your account, character, achievements, inventory, playlists, and progress across GridWild.",
+      arrow: "bottom-left"
     }
   ];
 
@@ -53,6 +95,12 @@
       emoji: "🧭",
       title: "Create your field identity",
       body: "Choose how other GridWild explorers will see you: your name, explorer type, icon, and field style."
+    },
+    {
+      type: "account",
+      emoji: "GW",
+      title: "Save your explorer",
+      body: "Create a GridWild account to keep quests, Wildpoints, inventory, parties, and your field identity across devices."
     },
     {
       emoji: "🧑‍🤝‍🧑",
@@ -441,11 +489,69 @@ function renderCharacterCard() {
   document.getElementById("gwOnboardNext").onclick = goNextFromSplash;
 }
 
+function renderAccountCard() {
+  const c = splashCards[idx];
+  const signedIn = window.GridWildAccount?.getAccount?.();
+
+  card.innerHTML = `
+    <div class="gw-splash-emoji">${c.emoji}</div>
+    <h1 class="gw-splash-title">${c.title}</h1>
+    <p class="gw-splash-body">${c.body}</p>
+
+    <div style="
+      margin:22px auto 10px;
+      width:100%;
+      max-width:320px;
+      border-radius:20px;
+      border:1px solid rgba(240,207,132,0.34);
+      background:rgba(0,0,0,0.16);
+      padding:14px;
+      box-sizing:border-box;
+      text-align:left;
+    ">
+      <div style="font-size:14px;line-height:1.4;color:rgba(255,247,223,0.82);">
+        ${signedIn?.username
+          ? `Signed in as <b>@${signedIn.username}</b>.`
+          : "Guest progress stays on this device. An account lets you come back anywhere."}
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
+        <button class="gw-onboard-btn secondary" id="gwOnboardLoginAccount">Log in</button>
+        <button class="gw-onboard-btn primary" id="gwOnboardCreateAccount">Create</button>
+      </div>
+    </div>
+
+    <div class="gw-splash-dots">
+      ${splashCards.map((_, i) => `<div class="gw-splash-dot ${i === idx ? "active" : ""}"></div>`).join("")}
+    </div>
+
+    <div class="gw-onboard-actions">
+      <button class="gw-onboard-btn secondary" id="gwOnboardSkip">Skip</button>
+      <button class="gw-onboard-btn primary" id="gwOnboardNext">Continue</button>
+    </div>
+  `;
+
+  document.getElementById("gwOnboardCreateAccount").onclick = () => {
+    window.GridWildAccount?.openModal?.("signup");
+  };
+
+  document.getElementById("gwOnboardLoginAccount").onclick = () => {
+    window.GridWildAccount?.openModal?.("login");
+  };
+
+  document.getElementById("gwOnboardSkip").onclick = finishAll;
+  document.getElementById("gwOnboardNext").onclick = goNextFromSplash;
+}
+
 
     function render() {
       const c = splashCards[idx];
       if (c.type === "character") {
         renderCharacterCard();
+        return;
+      }
+      if (c.type === "account") {
+        renderAccountCard();
         return;
       }
 
@@ -548,6 +654,8 @@ function renderCharacterCard() {
       const h = window.innerHeight;
 
       if (where === "top-right") return { x: w - 78, y: 16, w: 56, h: 56 };
+      if (where === "top-left") return { x: 16, y: 16, w: 88, h: 38 };
+      if (where === "bottom-left") return { x: 18, y: h - 88, w: 64, h: 64 };
       if (where === "bottom-center") return { x: w / 2 - 32, y: h - 88, w: 64, h: 64 };
       if (where === "bottom-right") return { x: w - 82, y: h - 88, w: 64, h: 64 };
 
@@ -564,7 +672,11 @@ function renderCharacterCard() {
         arrow.style.left = `${cx - 14}px`;
         arrow.style.top = `${rect.y + rect.h + 18}px`;
         arrow.textContent = "↑";
-      } else if (where === "bottom-center" || where === "bottom-right") {
+      } else if (where === "top-left") {
+        arrow.style.left = `${cx - 14}px`;
+        arrow.style.top = `${rect.y + rect.h + 18}px`;
+        arrow.textContent = "↑";
+      } else if (where === "bottom-center" || where === "bottom-right" || where === "bottom-left") {
         arrow.style.left = `${cx - 14}px`;
         arrow.style.top = `${rect.y - 52}px`;
         arrow.textContent = "↓";

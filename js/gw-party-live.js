@@ -223,7 +223,23 @@ async function createDbPartyFromLegacyForm(form = {}) {
 
   const result = await window.GridWildAPI.createParty(
     name,
-    form.linkedQuestId || null
+    form.linkedQuestId || null,
+    {
+      mode: form.mode || "live",
+      visibility: form.visibility || "public",
+      starts_at: form.mode === "scheduled" && form.startsAt
+        ? new Date(form.startsAt).toISOString()
+        : null,
+      duration_minutes: Number(form.durationMinutes || 60),
+      target: Number(form.target || 10),
+      location_mode: form.locationMode || "anywhere",
+      location_user_id: form.locationUserId || null,
+      location_label: form.locationLabel || null,
+      location: form.location || null,
+      resolved_location: form.resolvedLocation || null,
+      lat: form.resolvedLocation?.lat ?? null,
+      lng: form.resolvedLocation?.lng ?? null
+    }
   );
 
   const dbParty = result.party;

@@ -150,6 +150,282 @@
     align-items: flex-start;
   }
 
+    .gw-hud-legend {
+      width: 88px;
+      pointer-events: auto;
+      background: linear-gradient(180deg, rgba(34,30,26,0.96), rgba(18,16,14,0.98));
+      color: var(--gw-jrpg-ink, #efe6d3);
+      border: 1px solid var(--gw-jrpg-border, rgba(180, 150, 94, 0.42));
+      border-radius: 8px;
+      box-shadow: 0 14px 36px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.05);
+      padding: 8px 7px 7px;
+      backdrop-filter: blur(6px);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .gw-hud-legend-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: flex-start;
+      gap: 8px;
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      color: #d7b774;
+      line-height: 1.1;
+    }
+
+    .gw-hud-legend-subtitle {
+      margin-top: 4px;
+      color: rgba(239,230,211,0.66);
+      font-size: 9.5px;
+      line-height: 1.25;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .gw-hud-legend-scale {
+      margin-top: 8px;
+      display: grid;
+      gap: 5px;
+    }
+
+    .gw-hud-legend-bar {
+      height: 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(215,183,116,0.22);
+      background: rgba(255,255,255,0.12);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+    }
+
+    .gw-hud-legend-chips {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 5px;
+    }
+
+    .gw-hud-legend-chip {
+      height: 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(215,183,116,0.16);
+      background: rgba(255,255,255,0.12);
+    }
+
+    .gw-hud-legend-labels,
+    .gw-hud-legend-lines {
+      display: grid;
+      gap: 2px;
+      font-size: 9.5px;
+      line-height: 1.15;
+      color: rgba(239,230,211,0.62);
+    }
+
+    .gw-hud-legend-labels {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .gw-hud-legend-labels span:nth-child(2) { text-align: center; }
+    .gw-hud-legend-labels span:nth-child(3) { text-align: right; }
+
+    .gw-hud-legend-lines {
+      margin-top: 7px;
+    }
+
+    .gw-hud-taxa {
+      width: 118px;
+      pointer-events: auto;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 1px;
+      padding: 3px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(34,30,26,0.96), rgba(18,16,14,0.98));
+      border: 1px solid var(--gw-jrpg-border, rgba(180, 150, 94, 0.42));
+      box-shadow: 0 14px 36px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.05);
+      backdrop-filter: blur(6px);
+    }
+
+    .gw-hud-taxa-btn {
+      width: 100%;
+      aspect-ratio: 1;
+      min-width: 0;
+      border: 0;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      font-size: 11px;
+      line-height: 1;
+      color: rgba(239,230,211,0.52);
+      background: rgba(255,255,255,0.035);
+      cursor: pointer;
+      filter: grayscale(0.75);
+      opacity: 0.62;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .gw-hud-taxa-btn.is-on {
+      color: #fff2c7;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(255,230,154,0.34), rgba(215,183,116,0.10) 58%, rgba(255,255,255,0.04) 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,225,151,0.36), 0 0 8px rgba(240,209,138,0.18);
+      filter: none;
+      opacity: 1;
+    }
+
+    .gw-hud-taxa-btn:active {
+      transform: translateY(1px) scale(0.96);
+    }
+
+    .gw-hud-taxa-btn svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .gw-hud-fog-btn {
+      color: rgba(229, 241, 244, 0.72);
+      filter: none;
+      opacity: 0.86;
+    }
+
+    .gw-hud-fog-btn.is-on {
+      color: #eefaff;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(210,235,242,0.34), rgba(125,169,181,0.12) 58%, rgba(255,255,255,0.04) 100%);
+      box-shadow: inset 0 0 0 1px rgba(210,235,242,0.42), 0 0 8px rgba(190,225,235,0.18);
+    }
+
+    .gw-hud-coarse {
+      width: 88px;
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      color: rgba(239,230,211,0.78);
+      background: linear-gradient(180deg, rgba(34,30,26,0.96), rgba(18,16,14,0.98));
+      border: 1px solid var(--gw-jrpg-border, rgba(180, 150, 94, 0.42));
+      box-shadow: 0 14px 36px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.05);
+      backdrop-filter: blur(6px);
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1.15;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .gw-hud-coarse input {
+      width: 13px;
+      height: 13px;
+      margin: 0;
+      accent-color: #d7b774;
+      flex: 0 0 auto;
+    }
+
+    .gw-hud-coarse-bin {
+      margin-left: auto;
+      border: 1px solid rgba(215,183,116,0.32);
+      border-radius: 999px;
+      padding: 2px 6px;
+      color: #f0d18a;
+      background: rgba(255,255,255,0.06);
+      font: inherit;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .gw-hud-zfilter {
+      width: 88px;
+      pointer-events: auto;
+      display: grid;
+      gap: 4px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      color: rgba(239,230,211,0.78);
+      background: linear-gradient(180deg, rgba(34,30,26,0.96), rgba(18,16,14,0.98));
+      border: 1px solid var(--gw-jrpg-border, rgba(180, 150, 94, 0.42));
+      box-shadow: 0 14px 36px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.05);
+      backdrop-filter: blur(6px);
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1.15;
+      user-select: none;
+    }
+
+    .gw-hud-zfilter-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .gw-hud-zfilter input[type="checkbox"] {
+      width: 13px;
+      height: 13px;
+      margin: 0;
+      accent-color: #d7b774;
+      flex: 0 0 auto;
+    }
+
+    .gw-hud-zfilter-number {
+      width: 34px;
+      min-width: 0;
+      margin-left: auto;
+      box-sizing: border-box;
+      border: 1px solid rgba(215,183,116,0.32);
+      border-radius: 6px;
+      padding: 2px 3px;
+      color: #f0d18a;
+      background: rgba(255,255,255,0.06);
+      font: inherit;
+      font-size: 10px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .gw-hud-zfilter-slider {
+      width: 100%;
+      accent-color: #d7b774;
+    }
+
+    @media (max-width: 420px) {
+      .gw-hud-legend {
+        width: 82px;
+        padding: 7px 6px;
+      }
+
+      .gw-hud-taxa {
+        width: 112px;
+      }
+
+      .gw-hud-coarse {
+        width: 82px;
+        padding: 6px 7px;
+      }
+
+      .gw-hud-zfilter {
+        width: 82px;
+        padding: 6px 7px;
+      }
+
+      .gw-hud-legend-lines {
+        display: none;
+      }
+    }
+
     .gw-pill,
     .gw-topbtn {
       border: 1px solid rgba(0,0,0,0.10);
@@ -1393,6 +1669,11 @@
       </label>
 
       <label class="gw-row">
+        <input type="checkbox" id="toggleSuperchunkHeat" />
+        <span>Coarse median heat</span>
+      </label>
+
+      <label class="gw-row">
       <input type="checkbox" id="toggleOsmBuildings" />
       <span>Show OSM structures</span>
       </label>
@@ -1469,9 +1750,61 @@
     <button class="gw-pill" id="legendPill" type="button">
       🗺️ Legend
     </button>
-    <button class="gw-pill" id="lensPill" type="button">
-      👁 Lens
+    <button class="gw-pill" id="gwLocationPickerBtn" type="button" title="Pick or save a location">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11z"></path>
+        <circle cx="12" cy="10" r="2.2"></circle>
+      </svg>
+      Location
     </button>
+    <div class="gw-hud-legend" id="gwHudLegend" role="button" tabindex="0" aria-label="Open lens picker">
+      <div class="gw-hud-legend-title">
+        <span id="gwHudLegendTitle">Overlay</span>
+      </div>
+      <div class="gw-hud-legend-subtitle" id="gwHudLegendSubtitle">Loading lens...</div>
+      <div class="gw-hud-legend-scale">
+        <div class="gw-hud-legend-bar" id="gwHudLegendBar"></div>
+        <div class="gw-hud-legend-labels">
+          <span>low</span>
+          <span>mid</span>
+          <span>high</span>
+        </div>
+        <div class="gw-hud-legend-chips">
+          <span class="gw-hud-legend-chip" id="gwHudLegendChipLow"></span>
+          <span class="gw-hud-legend-chip" id="gwHudLegendChipMid"></span>
+          <span class="gw-hud-legend-chip" id="gwHudLegendChipHigh"></span>
+        </div>
+      </div>
+      <div class="gw-hud-legend-lines" id="gwHudLegendLines"></div>
+    </div>
+    <div class="gw-hud-taxa" id="gwHudTaxaFilter" aria-label="Filter overlay by iconic taxon">
+      <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Insecta" aria-label="Toggle insects" title="Insects">🐛</button>
+      <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Plantae" aria-label="Toggle plants" title="Plants">🌿</button>
+      <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Fungi" aria-label="Toggle fungi" title="Fungi">🍄</button>
+      <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Mammalia" aria-label="Toggle mammals" title="Mammals">🐾</button>
+      <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Aves" aria-label="Toggle birds" title="Birds">🐦</button>
+      <button class="gw-hud-taxa-btn gw-hud-fog-btn" id="gwHudFogToggle" type="button" data-gw-hud-fog aria-label="Toggle fog" title="Fog">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 15.5h16"></path>
+          <path d="M6 19h12"></path>
+          <path d="M9 22h6"></path>
+          <path d="M6.8 12.5A4.8 4.8 0 0 1 16 10.2a3.2 3.2 0 0 1 1.2 6.1"></path>
+        </svg>
+      </button>
+    </div>
+    <label class="gw-hud-coarse" title="Render the heat overlay as local median bins">
+      <input type="checkbox" id="toggleSuperchunkHeat_hud" />
+      <span>Coarse</span>
+      <button class="gw-hud-coarse-bin" id="gwCoarseHeatBinBtn" type="button" title="Set heat bin size">8</button>
+    </label>
+    <div class="gw-hud-zfilter" title="Skip heat cells below a z-score threshold">
+      <label class="gw-hud-zfilter-row">
+        <input type="checkbox" id="toggleHeatZThreshold" />
+        <span>Threshold Z:</span>
+        <input class="gw-hud-zfilter-number" id="gwHeatZThresholdInput" type="number" min="-3" max="3" step="0.1" value="0" />
+      </label>
+      <input class="gw-hud-zfilter-slider" id="gwHeatZThresholdSlider" type="range" min="-3" max="3" step="0.1" value="0" />
+    </div>
   </div>
 
     <div class="gw-topbar-right">
@@ -1750,6 +2083,7 @@
   <script src="js/gw-osm-features-layer.js"></script>
 
   <script src="js/gw-inat-recent.js"></script>
+  <script src="js/gw-observation-activity.js"></script>
   <script src="js/gw-playlists.js"></script>
 
   <script src="js/gw-quest-evidence.js"></script>
@@ -1759,6 +2093,7 @@
   <script src="js/gw-metrics.js"></script>
   <script src="js/gw-lenses.js"></script>
   <script src="js/location.js"></script>
+  <script src="js/gw-location-picker.js"></script>
   <script src="js/sidebar.js"></script>
   
   <script src="js/gw-inat-auth.js"></script>
@@ -1774,6 +2109,7 @@
   <script src="js/gw-store.js"></script>
   <script src="js/gw-inventory.js"></script>
   <script src="js/gw-profile.js"></script>
+  <script src="js/gw-account.js"></script>
 
   <script src="js/gw-quests.js"></script>
   
@@ -1858,14 +2194,14 @@ window.refreshQuestBadge = refreshQuestBadge;
           window.GridWildPartyLive?.refreshPartySheet?.();
           window.GridWildPartyLive?.startPartyPolling?.();
         }, 0);
-      }
 
-    if (name === "quest" && window.GridWildQuests) {
-      window.GridWildQuests.renderQuestListIntoPage();
+      if (name === "quest" && window.GridWildQuests) {
+        window.GridWildQuests.renderQuestListIntoPage();
 
-      const questBody = document.getElementById("sheetQuestBody");
-      if (questBody) {
-        window.GridWildQuests.bindQuestSheetControls(questBody);
+        const questBody = document.getElementById("sheetQuestBody");
+        if (questBody) {
+          window.GridWildQuests.bindQuestSheetControls(questBody);
+        }
       }
     }
 
@@ -1975,11 +2311,6 @@ window.refreshQuestBadge = refreshQuestBadge;
       document.getElementById("legendPill")
       .addEventListener("click", () => toggleSheet("legend"));  
 
-      document.getElementById("lensPill")
-      .addEventListener("click", () => toggleSheet("lens"));
-
-
-
     const lensLabels = {
       classic: "Explorer",
       richness: "Biodiversity",
@@ -1998,16 +2329,343 @@ window.refreshQuestBadge = refreshQuestBadge;
       treasure2: "Hidden Treasure",
     };
 
-    function refreshLensPill(){
+    // Compact HUD legend module. Remove #gwHudLegend plus this object to
+    // return the topbar to the previous Legend-sheet-only behavior.
+    window.GridWildHudLegend = (function () {
+      const defaultSamples = [
+        { count: 2, species: 2, observers: 1 },
+        { count: 10, species: 8, observers: 3 },
+        { count: 30, species: 18, observers: 6 }
+      ];
 
-  const btn = document.getElementById("lensPill");
-  if (!btn) return;
+      const sampleByLens = {
+        cultivated: [
+          { count: 8, species: 3, observers: 2, n_captive: 1 },
+          { count: 14, species: 8, observers: 3, n_captive: 7 },
+          { count: 24, species: 15, observers: 4, n_captive: 22 }
+        ],
+        wildbalance: [
+          { count: 18, species: 10, observers: 3, n_captive: 0 },
+          { count: 18, species: 10, observers: 3, n_captive: 9 },
+          { count: 18, species: 10, observers: 3, n_captive: 18 }
+        ],
+        dominantlife: [
+          { count: 18, species: 10, observers: 3, dominant_iconic: "Plantae" },
+          { count: 18, species: 10, observers: 3, dominant_iconic: "Aves" },
+          { count: 18, species: 10, observers: 3, dominant_iconic: "Insecta" }
+        ],
+        seasonalpulse: [
+          { count: 18, species: 10, observers: 3, peak_month: 1, seasonal_strength: 0.75 },
+          { count: 18, species: 10, observers: 3, peak_month: 6, seasonal_strength: 0.75 },
+          { count: 18, species: 10, observers: 3, peak_month: 11, seasonal_strength: 0.75 }
+        ],
+        stability: [
+          { count: 18, species: 10, observers: 3, month_entropy: 0.2 },
+          { count: 18, species: 10, observers: 3, month_entropy: 1.8 },
+          { count: 18, species: 10, observers: 3, month_entropy: 3.6 }
+        ],
+        breadth: [
+          { count: 12, species: 7, observers: 2, iconic_n: 1 },
+          { count: 18, species: 12, observers: 3, iconic_n: 3 },
+          { count: 28, species: 20, observers: 5, iconic_n: 6 }
+        ],
+        treasure2: [
+          { count: 8, species: 3, observers: 1, nActiveSquares: 9 },
+          { count: 12, species: 10, observers: 2, nActiveSquares: 5 },
+          { count: 18, species: 18, observers: 2, nActiveSquares: 1 }
+        ]
+      };
 
-  const lens = window.__gwState?.activeLens || "classic";
-  const label = lensLabels[lens] || "Lens";
+      function $(id) {
+        return document.getElementById(id);
+      }
 
-  btn.innerHTML = `👁 ${label}`;
-}
+      function sampleStyles(lens) {
+        if (typeof window.metricsToFill !== "function") return [];
+        return (sampleByLens[lens] || defaultSamples)
+          .map(metrics => window.metricsToFill(metrics))
+          .filter(Boolean);
+      }
+
+      function paintChip(el, style) {
+        if (!el || !style) return;
+        el.style.background = style.fillColor;
+        el.style.opacity = style.fillOpacity ?? 1;
+      }
+
+      function refresh() {
+        const root = $("gwHudLegend");
+        if (!root) return;
+
+        const lens = window.__gwState?.activeLens || "classic";
+        const copy = window.GWLegendCopy?.[lens] || window.GWLegendCopy?.classic || {};
+        const styles = sampleStyles(lens);
+
+        $("gwHudLegendTitle").textContent = copy.title || lensLabels[lens] || "Overlay";
+        $("gwHudLegendSubtitle").textContent = copy.subtitle || "Current overlay lens.";
+        const linesEl = $("gwHudLegendLines");
+        linesEl.replaceChildren(
+          ...(copy.lines || []).slice(0, 4).map(line => {
+            const el = document.createElement("div");
+            el.textContent = line;
+            return el;
+          })
+        );
+
+        if (styles.length >= 3) {
+          $("gwHudLegendBar").style.background = `linear-gradient(to right, ${styles[0].fillColor}, ${styles[1].fillColor}, ${styles[2].fillColor})`;
+          paintChip($("gwHudLegendChipLow"), styles[0]);
+          paintChip($("gwHudLegendChipMid"), styles[1]);
+          paintChip($("gwHudLegendChipHigh"), styles[2]);
+        }
+      }
+
+      function bind() {
+        const root = $("gwHudLegend");
+        if (!root || root.dataset.bound === "true") return;
+        root.dataset.bound = "true";
+        root.addEventListener("click", () => toggleSheet("lens"));
+        root.addEventListener("keydown", evt => {
+          if (evt.key === "Enter" || evt.key === " ") {
+            evt.preventDefault();
+            toggleSheet("lens");
+          }
+        });
+      }
+
+      return { bind, refresh };
+    })();
+    window.GridWildHudLegend.bind();
+
+    // Compact HUD taxa filter. It mirrors the existing Legend-pane checkboxes
+    // instead of replacing them, so removing #gwHudTaxaFilter plus this module
+    // restores the previous controls unchanged.
+    window.GridWildHudTaxaFilter = (function () {
+      function buttons() {
+        return Array.from(document.querySelectorAll("[data-gw-hud-iconic]"));
+      }
+
+      function realCheckbox(iconic) {
+        return document.querySelector(`input[data-iconic="${iconic}"]`);
+      }
+
+      function fogCheckbox() {
+        return document.getElementById("toggleFog");
+      }
+
+      function fogButton() {
+        return document.getElementById("gwHudFogToggle");
+      }
+
+      function sync() {
+        buttons().forEach(btn => {
+          const iconic = btn.dataset.gwHudIconic;
+          const checked = !!realCheckbox(iconic)?.checked;
+          btn.classList.toggle("is-on", checked);
+          btn.setAttribute("aria-pressed", checked ? "true" : "false");
+        });
+
+        const fog = fogButton();
+        const fogChecked = !!fogCheckbox()?.checked;
+        if (fog) {
+          fog.classList.toggle("is-on", fogChecked);
+          fog.setAttribute("aria-pressed", fogChecked ? "true" : "false");
+        }
+      }
+
+      function toggle(iconic) {
+        const real = realCheckbox(iconic);
+        if (!real) return;
+
+        real.checked = !real.checked;
+        real.dispatchEvent(new Event("change", { bubbles: true }));
+        sync();
+      }
+
+      function toggleFog() {
+        const real = fogCheckbox();
+        if (!real) return;
+
+        real.checked = !real.checked;
+        real.dispatchEvent(new Event("change", { bubbles: true }));
+        sync();
+      }
+
+      function bind() {
+        const root = document.getElementById("gwHudTaxaFilter");
+        if (!root || root.dataset.bound === "true") return;
+
+        root.dataset.bound = "true";
+        buttons().forEach(btn => {
+          btn.setAttribute("aria-pressed", "false");
+          btn.addEventListener("click", () => toggle(btn.dataset.gwHudIconic));
+        });
+        fogButton()?.addEventListener("click", toggleFog);
+
+        document.addEventListener("change", evt => {
+          if (evt.target?.matches?.('input[data-iconic]')) sync();
+          if (evt.target?.id === "toggleFog") sync();
+        });
+
+        window.addEventListener("DOMContentLoaded", () => setTimeout(sync, 0));
+        setTimeout(sync, 0);
+      }
+
+      return { bind, sync };
+    })();
+    window.GridWildHudTaxaFilter.bind();
+
+    // Compact HUD coarse-heat control. It mirrors the canonical hidden sidebar
+    // checkbox so this experiment can be removed without touching map state code.
+    window.GridWildHudCoarseHeatControl = (function () {
+      function realCheckbox() {
+        return document.getElementById("toggleSuperchunkHeat");
+      }
+
+      function hudCheckbox() {
+        return document.getElementById("toggleSuperchunkHeat_hud");
+      }
+
+      function binButton() {
+        return document.getElementById("gwCoarseHeatBinBtn");
+      }
+
+      function getBinSize() {
+        const raw = Number(window.__gwState?.coarseHeatBinSize);
+        if (!Number.isFinite(raw)) return 8;
+        return Math.max(2, Math.min(64, Math.round(raw)));
+      }
+
+      function setBinSize(value) {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.coarseHeatBinSize = Math.max(2, Math.min(64, Math.round(Number(value) || 8)));
+        localStorage.setItem("gwCoarseHeatBinSize", String(window.__gwState.coarseHeatBinSize));
+
+        try {
+          const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+          state.coarseHeatBinSize = window.__gwState.coarseHeatBinSize;
+          localStorage.setItem("gw_ui_state", JSON.stringify(state));
+        } catch {}
+
+        sync();
+        if (typeof window.updateGrid === "function") window.updateGrid();
+      }
+
+      function sync() {
+        const real = realCheckbox();
+        const hud = hudCheckbox();
+        const btn = binButton();
+        if (real && hud) hud.checked = real.checked;
+        if (btn) btn.textContent = String(getBinSize());
+      }
+
+      function promptForBinSize(evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+
+        const next = prompt("Coarse heat bin size in grid cells (2-64)", String(getBinSize()));
+        if (next == null) return;
+        setBinSize(next);
+      }
+
+      function bind() {
+        const hud = hudCheckbox();
+        if (!hud || hud.dataset.bound === "true") return;
+        hud.dataset.bound = "true";
+
+        hud.addEventListener("change", () => {
+          const real = realCheckbox();
+          if (!real) return;
+          real.checked = hud.checked;
+          real.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+
+        realCheckbox()?.addEventListener("change", sync);
+        binButton()?.addEventListener("click", promptForBinSize);
+        window.addEventListener("DOMContentLoaded", () => setTimeout(sync, 0));
+        setTimeout(sync, 0);
+      }
+
+      return { bind, sync, setBinSize };
+    })();
+    window.GridWildHudCoarseHeatControl.bind();
+
+    window.GridWildHudZThresholdControl = (function () {
+      function checkbox() {
+        return document.getElementById("toggleHeatZThreshold");
+      }
+
+      function numberInput() {
+        return document.getElementById("gwHeatZThresholdInput");
+      }
+
+      function slider() {
+        return document.getElementById("gwHeatZThresholdSlider");
+      }
+
+      function clampZ(value) {
+        const raw = Number(value);
+        if (!Number.isFinite(raw)) return 0;
+        return Math.max(-3, Math.min(3, raw));
+      }
+
+      function save() {
+        try {
+          const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+          state.heatZThresholdEnabled = window.__gwState?.heatZThresholdEnabled === true;
+          state.heatZThreshold = window.__gwState?.heatZThreshold ?? 0;
+          localStorage.setItem("gw_ui_state", JSON.stringify(state));
+        } catch {}
+      }
+
+      function sync() {
+        window.__gwState = window.__gwState || {};
+
+        const enabled = window.__gwState.heatZThresholdEnabled === true;
+        const z = clampZ(window.__gwState.heatZThreshold);
+        const cb = checkbox();
+        const num = numberInput();
+        const range = slider();
+
+        window.__gwState.heatZThreshold = z;
+        if (cb) cb.checked = enabled;
+        if (num) num.value = z.toFixed(1);
+        if (range) range.value = String(z);
+      }
+
+      function applyValue(value) {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.heatZThreshold = clampZ(value);
+        sync();
+        save();
+        if (typeof window.updateGrid === "function") window.updateGrid();
+      }
+
+      function applyEnabled(value) {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.heatZThresholdEnabled = value === true;
+        sync();
+        save();
+        if (typeof window.updateGrid === "function") window.updateGrid();
+      }
+
+      function bind() {
+        const cb = checkbox();
+        const num = numberInput();
+        const range = slider();
+        if (!cb || cb.dataset.bound === "true") return;
+
+        cb.dataset.bound = "true";
+        cb.addEventListener("change", () => applyEnabled(cb.checked));
+        num?.addEventListener("change", () => applyValue(num.value));
+        range?.addEventListener("input", () => applyValue(range.value));
+
+        setTimeout(sync, 0);
+      }
+
+      return { bind, sync };
+    })();
+    window.GridWildHudZThresholdControl.bind();
 
   function bindLensCards(){
 
@@ -2017,12 +2675,10 @@ window.refreshQuestBadge = refreshQuestBadge;
 
         const lens = card.dataset.lens;
 
-        updateLegendText();
-
-
         window.__gwState.activeLens = lens;
         localStorage.setItem("gwActiveLens", lens);
-        refreshLensPill();
+        updateLegendText();
+        window.GridWildHudLegend?.refresh?.();
 
         if (typeof updateGrid === "function") {
           updateGrid();
@@ -2158,7 +2814,7 @@ window.refreshQuestBadge = refreshQuestBadge;
       if (typeof paintLegendFromHeatFunction === "function") {
         paintLegendFromHeatFunction();
       }
-      refreshLensPill();
+      window.GridWildHudLegend?.refresh?.();
 
 
       setTimeout(() => {

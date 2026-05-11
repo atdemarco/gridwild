@@ -914,12 +914,99 @@ async function warmRichMetricsForCell(ix, iy) {
   pending.set(key, job);
   return job;
 }
+
+// Modular iconic-taxon overlay adapter. It leaves the base static metrics and
+// lens recipes intact, but swaps in filtered metrics right before painting.
+window.GridWildIconicOverlayFilter = window.GridWildIconicOverlayFilter || (function () {
+  let enabled = true;
+
+  function selectedTaxa() {
+    const taxa = window.__gwFilters?.iconicTaxa || [];
+    return Array.isArray(taxa) ? taxa.filter(Boolean) : [];
+  }
+
+  function isActive() {
+    return enabled && selectedTaxa().length > 0;
+  }
+
+  function getCachedSquareRecord(ix, iy) {
+    const cache = window.__squareGeneraSuperchunkCache;
+    if (!(cache instanceof Map)) return null;
+
+    const chunk = cache.get(getGeneraSuperchunkKey(ix, iy));
+    const squareId = encodeGeneraSquareId(ix, iy);
+    return chunk?.squares?.[squareId] || null;
+  }
+
+  function rowsForRecord(rec) {
+    if (!rec) return [];
+    if (Array.isArray(rec.genera)) return rec.genera;
+    if (rec.genera) return [rec.genera];
+    return [];
+  }
+
+  function requestRecord(ix, iy) {
+    warmRichMetricsForCell(ix, iy).then((metrics) => {
+      if (metrics) scheduleGridHeatCanvasRender();
+    });
+  }
+
+  function metricsForCell(ix, iy, baseMetrics = {}) {
+    if (!isActive()) return baseMetrics;
+    if (!window.GWMetrics?.buildSquareMetrics) return baseMetrics;
+
+    const rec = getCachedSquareRecord(ix, iy);
+    if (!rec) {
+      requestRecord(ix, iy);
+      return null;
+    }
+
+    const taxa = new Set(selectedTaxa());
+    const filteredRows = rowsForRecord(rec)
+      .filter(row => taxa.has(row?.iconic_taxon_name || "Unknown"));
+
+    if (!filteredRows.length) return null;
+
+    const filtered = window.GWMetrics.buildSquareMetrics({ genera: filteredRows });
+    if (!filtered || (filtered.count || 0) <= 0) return null;
+
+    const totalCount = Number(baseMetrics.count) || Number(rec.__metrics?.count) || filtered.count;
+    const ratio = totalCount > 0
+      ? Math.max(0, Math.min(1, filtered.count / totalCount))
+      : 1;
+
+    return {
+      ...baseMetrics,
+      ...filtered,
+      observers: Math.round((Number(baseMetrics.observers) || 0) * ratio),
+      n_captive: Math.round((Number(baseMetrics.n_captive) || 0) * ratio),
+      nActiveSquares: filtered.count > 0 ? 1 : 0
+    };
+  }
+
+  function setEnabled(value) {
+    enabled = value !== false;
+    scheduleGridHeatCanvasRender();
+  }
+
+  return {
+    isActive,
+    metricsForCell,
+    selectedTaxa,
+    setEnabled
+  };
+})();
+
 function warmRichMetricsForVisibleCells() {
   const counts = window.__staticGridCounts;
   if (!(counts instanceof Map) || counts.size === 0) return;
 
   const lens = window.__gwState?.activeLens || "classic";
-  if (lens !== "dominantlife") return;
+  const needsRichMetrics =
+    lens === "dominantlife" ||
+    window.GridWildIconicOverlayFilter?.isActive?.();
+
+  if (!needsRichMetrics) return;
 
   const { startX, endX, startY, endY } = getPaddedBoundsMeters();
 
@@ -1666,7 +1753,10 @@ function countToFill(count) {
 
 
 function metricsToFill(metrics){
-  return window.GWLenses.compose(metrics);
+  if (window.GWLenses?.compose) {
+    return window.GWLenses.compose(metrics);
+  }
+  return metricsToFillOLD(metrics);
 }
 
 // BLENDED COLORMAP!!!!!
@@ -2290,8 +2380,9 @@ async function loadStaticHeatmapCsv(url) {
     }
 
     window.__staticGridCounts = counts;
+    window.GridWildCoarseHeatCache?.invalidate?.();
 
-    console.log(`Loaded static heatmap cells: ${counts.size}`);
+//    console.log(`Loaded static heatmap cells: ${counts.size}`);
 
     // updating the static grid heat
     updateStaticGridHeat();
@@ -2327,6 +2418,241 @@ function getHeatValueForCell(cellMetrics) {
   if (metric === "observers") return cellMetrics.observers || 0;
 
   return cellMetrics.count || 0;
+}
+
+function isHeatZThresholdEnabled() {
+  return window.__gwState?.heatZThresholdEnabled === true;
+}
+
+function getHeatZThreshold() {
+  const raw = Number(window.__gwState?.heatZThreshold);
+  if (!Number.isFinite(raw)) return 0;
+  return Math.max(-3, Math.min(3, raw));
+}
+
+function buildZStats(values) {
+  const nums = values
+    .map(Number)
+    .filter(Number.isFinite);
+
+  if (!nums.length) return null;
+
+  const mean = nums.reduce((sum, value) => sum + value, 0) / nums.length;
+  const variance = nums.reduce((sum, value) => {
+    const d = value - mean;
+    return sum + d * d;
+  }, 0) / nums.length;
+
+  return {
+    mean,
+    sd: Math.sqrt(variance)
+  };
+}
+
+function passesHeatZThreshold(value, stats) {
+  if (!isHeatZThresholdEnabled() || !stats) return true;
+
+  const threshold = getHeatZThreshold();
+  const z = stats.sd > 0 ? ((Number(value) || 0) - stats.mean) / stats.sd : 0;
+  return z >= threshold;
+}
+
+function collectRegularHeatZStats(counts, startX, endX, startY, endY) {
+  const values = [];
+
+  for (let x = startX; x < endX; x += GRID_SIZE_M) {
+    for (let y = startY; y < endY; y += GRID_SIZE_M) {
+      const ix = Math.floor(x / GRID_SIZE_M);
+      const iy = Math.floor(y / GRID_SIZE_M);
+      const key = `${ix},${iy}`;
+
+      const metrics =
+        window.__richGridMetrics?.get(key) ||
+        counts.get(key);
+
+      if (!metrics) continue;
+
+      const displayMetrics =
+        window.GridWildIconicOverlayFilter?.metricsForCell?.(ix, iy, metrics) ||
+        null;
+
+      if (!displayMetrics) continue;
+
+      const heatValue = getHeatValueForCell(displayMetrics);
+      if (heatValue > 0) values.push(heatValue);
+    }
+  }
+
+  return buildZStats(values);
+}
+
+function isCoarseHeatEnabled() {
+  return window.__gwState?.coarseHeatEnabled === true;
+}
+
+function getCoarseHeatBinSize() {
+  const raw = Number(window.__gwState?.coarseHeatBinSize);
+  if (!Number.isFinite(raw)) return 8;
+  return Math.max(2, Math.min(64, Math.round(raw)));
+}
+
+// Coarse heat calculation cache. This is intentionally narrow and removable:
+// deleting this object plus the getCachedCoarseMedianMetrics call below returns
+// coarse rendering to direct runtime aggregation.
+window.GridWildCoarseHeatCache = window.GridWildCoarseHeatCache || (function () {
+  const MAX_ENTRIES = 5000;
+  let dataVersion = 0;
+  let cache = new Map();
+
+  function makeKey(anchorIx, anchorIy, binSize) {
+    return `${dataVersion}|${binSize}|${anchorIx}|${anchorIy}`;
+  }
+
+  function get(anchorIx, anchorIy, binSize, compute) {
+    const key = makeKey(anchorIx, anchorIy, binSize);
+    if (cache.has(key)) {
+      const value = cache.get(key);
+      cache.delete(key);
+      cache.set(key, value);
+      return value;
+    }
+
+    const value = compute();
+    cache.set(key, value);
+
+    if (cache.size > MAX_ENTRIES) {
+      const oldestKey = cache.keys().next().value;
+      cache.delete(oldestKey);
+    }
+
+    return value;
+  }
+
+  function invalidate() {
+    dataVersion++;
+    cache.clear();
+  }
+
+  return {
+    get,
+    invalidate,
+    size: () => cache.size
+  };
+})();
+
+function median(values) {
+  const nums = values
+    .map(Number)
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+
+  if (!nums.length) return 0;
+
+  const mid = Math.floor(nums.length / 2);
+  return nums.length % 2
+    ? nums[mid]
+    : (nums[mid - 1] + nums[mid]) / 2;
+}
+
+function getCachedCoarseMedianMetrics(anchorIx, anchorIy, binSize) {
+  return window.GridWildCoarseHeatCache?.get?.(
+    anchorIx,
+    anchorIy,
+    binSize,
+    () => getCoarseMedianMetrics(anchorIx, anchorIy, binSize)
+  ) ?? getCoarseMedianMetrics(anchorIx, anchorIy, binSize);
+}
+
+function getCoarseMedianMetrics(anchorIx, anchorIy, binSize) {
+  const counts = window.__staticGridCounts;
+  if (!(counts instanceof Map)) return null;
+
+  const centerIx = anchorIx + Math.floor(binSize / 2);
+  const centerIy = anchorIy + Math.floor(binSize / 2);
+  const radius = Math.max(1, Math.floor(binSize / 2));
+  const values = {
+    count: [],
+    species: [],
+    observers: [],
+    n_captive: []
+  };
+
+  let nActiveSquares = 0;
+
+  for (let ix = centerIx - radius; ix <= centerIx + radius; ix++) {
+    for (let iy = centerIy - radius; iy <= centerIy + radius; iy++) {
+      const m = counts.get(`${ix},${iy}`);
+      if (!m) continue;
+
+      const count = Number(m.count) || 0;
+      const species = Number(m.species) || 0;
+      const observers = Number(m.observers) || 0;
+      const nCaptive = Number(m.n_captive) || 0;
+
+      values.count.push(count);
+      values.species.push(species);
+      values.observers.push(observers);
+      values.n_captive.push(nCaptive);
+
+      if (count > 0) nActiveSquares++;
+    }
+  }
+
+  if (!values.count.length) {
+    return getNearestCoarseMetrics(centerIx, centerIy, binSize);
+  }
+
+  return {
+    count: median(values.count),
+    species: median(values.species),
+    observers: median(values.observers),
+    n_captive: median(values.n_captive),
+    nSquares: binSize * binSize,
+    nActiveSquares
+  };
+}
+
+function getNearestCoarseMetrics(centerIx, centerIy, binSize) {
+  const counts = window.__staticGridCounts;
+  if (!(counts instanceof Map)) return null;
+
+  let best = null;
+  let bestDist = Infinity;
+  const searchRadius = Math.max(binSize, 4);
+
+  for (let ix = centerIx - searchRadius; ix <= centerIx + searchRadius; ix++) {
+    for (let iy = centerIy - searchRadius; iy <= centerIy + searchRadius; iy++) {
+      const m = counts.get(`${ix},${iy}`);
+      if (!m) continue;
+
+      const d = Math.abs(ix - centerIx) + Math.abs(iy - centerIy);
+      if (d < bestDist) {
+        bestDist = d;
+        best = m;
+      }
+    }
+  }
+
+  if (!best) return null;
+
+  return {
+    count: Number(best.count) || 0,
+    species: Number(best.species) || 0,
+    observers: Number(best.observers) || 0,
+    n_captive: Number(best.n_captive) || 0,
+    nSquares: binSize * binSize,
+    nActiveSquares: 1
+  };
+}
+
+function coarseCellBoundsLL(anchorIx, anchorIy, binSize) {
+  const x0 = anchorIx * GRID_SIZE_M;
+  const y0 = anchorIy * GRID_SIZE_M;
+  const sizeM = binSize * GRID_SIZE_M;
+
+  const sw = map.options.crs.unproject(L.point(x0, y0));
+  const ne = map.options.crs.unproject(L.point(x0 + sizeM, y0 + sizeM));
+  return { sw, ne };
 }
 
 
@@ -2367,13 +2693,19 @@ function updateStaticGridHeatOLD() {
       const metrics =
         window.__richGridMetrics?.get(key) ||
         counts.get(key);
-        
+
       if (!metrics) continue;
 
-      const heatValue = getHeatValueForCell(metrics);
+      const displayMetrics =
+        window.GridWildIconicOverlayFilter?.metricsForCell?.(ix, iy, metrics) ||
+        null;
+
+      if (!displayMetrics) continue;
+
+      const heatValue = getHeatValueForCell(displayMetrics);
       if (heatValue <= 0) continue;
 
-      const baseStyle = metricsToFill(metrics);
+      const baseStyle = metricsToFill(displayMetrics);
       if (!baseStyle) continue;
 
       const sw = map.options.crs.unproject(L.point(x, y));
@@ -2435,7 +2767,7 @@ function updateStaticGridHeatOLD() {
       }).addTo(gridHeatLayer);
 
       if (shimmerOn) {
-        drawShimmerOverlayForCell(sw, ne, metrics);
+        drawShimmerOverlayForCell(sw, ne, displayMetrics);
       }
 
       // Optional gold outline for documented cells
@@ -2534,8 +2866,27 @@ function renderGridHeatCanvas() {
   const counts = window.__staticGridCounts;
   if (!(counts instanceof Map) || counts.size === 0) return;
 
+  if (isCoarseHeatEnabled()) {
+    const painted = renderCoarseMedianHeatCanvas();
+    if (painted > 0) {
+      return;
+    }
+
+    gridHeatCtx.clearRect(0, 0, size.x, size.y);
+    console.warn("Coarse median heat had no drawable bins; falling back to regular heat.");
+    window.__gwState.coarseHeatEnabled = false;
+
+    const coarseToggle = document.getElementById("toggleSuperchunkHeat");
+    const coarseHudToggle = document.getElementById("toggleSuperchunkHeat_hud");
+    if (coarseToggle) coarseToggle.checked = false;
+    if (coarseHudToggle) coarseHudToggle.checked = false;
+  }
+
   const fogOn = window.__gwState?.showFog ?? true;
   const { startX, endX, startY, endY } = getPaddedBoundsMeters();
+  const heatZStats = isHeatZThresholdEnabled()
+    ? collectRegularHeatZStats(counts, startX, endX, startY, endY)
+    : null;
 
   for (let x = startX; x < endX; x += GRID_SIZE_M) {
     for (let y = startY; y < endY; y += GRID_SIZE_M) {
@@ -2549,10 +2900,17 @@ function renderGridHeatCanvas() {
 
       if (!metrics) continue;
 
-      const heatValue = getHeatValueForCell(metrics);
-      if (heatValue <= 0) continue;
+      const displayMetrics =
+        window.GridWildIconicOverlayFilter?.metricsForCell?.(ix, iy, metrics) ||
+        null;
 
-      const baseStyle = metricsToFill(metrics);
+      if (!displayMetrics) continue;
+
+      const heatValue = getHeatValueForCell(displayMetrics);
+      if (heatValue <= 0) continue;
+      if (!passesHeatZThreshold(heatValue, heatZStats)) continue;
+
+      const baseStyle = metricsToFill(displayMetrics);
       if (!baseStyle) continue;
 
       let fogState = null;
@@ -2611,6 +2969,59 @@ function renderGridHeatCanvas() {
   }
 
   gridHeatCtx.globalAlpha = 1;
+}
+
+function renderCoarseMedianHeatCanvas() {
+  const { startX, endX, startY, endY } = getPaddedBoundsMeters();
+  const binSize = getCoarseHeatBinSize();
+  const binSizeM = binSize * GRID_SIZE_M;
+  const startAnchorX = Math.floor(startX / binSizeM) * binSize;
+  const endAnchorX = Math.floor((endX - GRID_SIZE_M) / binSizeM) * binSize;
+  const startAnchorY = Math.floor(startY / binSizeM) * binSize;
+  const endAnchorY = Math.floor((endY - GRID_SIZE_M) / binSizeM) * binSize;
+  let painted = 0;
+  const items = [];
+
+  for (let ix = startAnchorX; ix <= endAnchorX; ix += binSize) {
+    for (let iy = startAnchorY; iy <= endAnchorY; iy += binSize) {
+      const metrics = getCachedCoarseMedianMetrics(ix, iy, binSize);
+      if (!metrics) continue;
+
+      const heatValue = getHeatValueForCell(metrics);
+      if (heatValue <= 0) continue;
+
+      items.push({ ix, iy, metrics, heatValue });
+    }
+  }
+
+  const heatZStats = isHeatZThresholdEnabled()
+    ? buildZStats(items.map(item => item.heatValue))
+    : null;
+
+  for (const item of items) {
+      const { ix, iy, metrics, heatValue } = item;
+      if (!passesHeatZThreshold(heatValue, heatZStats)) continue;
+
+      const baseStyle = metricsToFill(metrics);
+      if (!baseStyle) continue;
+
+      const { sw, ne } = coarseCellBoundsLL(ix, iy, binSize);
+      const nwPx = gridHeatLayerPoint(L.latLng(ne.lat, sw.lng));
+      const sePx = gridHeatLayerPoint(L.latLng(sw.lat, ne.lng));
+
+      const pxX = Math.floor(nwPx.x);
+      const pxY = Math.floor(nwPx.y);
+      const pxW = Math.ceil(sePx.x - nwPx.x);
+      const pxH = Math.ceil(sePx.y - nwPx.y);
+
+      gridHeatCtx.globalAlpha = Math.min(0.82, Number(baseStyle.fillOpacity || 0.25));
+      gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
+      gridHeatCtx.fillRect(pxX - 1, pxY - 1, Math.max(1, pxW + 2), Math.max(1, pxH + 2));
+      painted++;
+  }
+
+  gridHeatCtx.globalAlpha = 1;
+  return painted;
 }
 
 function latLngToDisplayCellKey(lat, lng) {
