@@ -1,8 +1,8 @@
 {
   "ix": -1.406972E+6,
   "iy": 772184,
-  "last_observed": "2018-04-29",
-  "median_last10_observed": "2018-04-25",
+  "last_observed": "2023-12-05",
+  "median_last10_observed": "2018-04-29",
   "genera": [
     {
       "iconic_taxon_name": "Plantae",
@@ -28,6 +28,29 @@
       "median_last10_observed": "2018-04-29"
     },
     {
+      "iconic_taxon_name": "Aves",
+      "order_name": "Passeriformes",
+      "family_name": "Passeridae",
+      "genus_name": "Passer",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "last_observed": "2023-12-05",
+      "median_last10_observed": "2023-12-05"
+    },
+    {
       "iconic_taxon_name": "Plantae",
       "order_name": "Unknown",
       "family_name": "Unknown",
@@ -51,11 +74,18 @@
       "median_last10_observed": "2018-04-22"
     }
   ],
-  "top_observers": {
-    "observer_id": 838832,
-    "count": 2,
-    "species": 2
-  },
+  "top_observers": [
+    {
+      "observer_id": 838832,
+      "count": 2,
+      "species": 2
+    },
+    {
+      "observer_id": 7.346534E+6,
+      "count": 1,
+      "species": 1
+    }
+  ],
   "super_ix": -43968,
   "super_iy": 24130
 }

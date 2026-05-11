@@ -1,7 +1,7 @@
 {
   "ix": -1.407057E+6,
   "iy": 773098,
-  "last_observed": "2019-04-27",
+  "last_observed": "2024-04-26",
   "median_last10_observed": "2019-04-27",
   "genera": [
     {
@@ -54,6 +54,29 @@
       "iconic_taxon_name": "Plantae",
       "order_name": "Asterales",
       "family_name": "Asteraceae",
+      "genus_name": "Rudbeckia",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2024-04-26",
+      "median_last10_observed": "2024-04-26"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Asterales",
+      "family_name": "Asteraceae",
       "genus_name": "Taraxacum",
       "count": 1,
       "month_counts": [
@@ -74,11 +97,18 @@
       "median_last10_observed": "2019-04-27"
     }
   ],
-  "top_observers": {
-    "observer_id": 30753,
-    "count": 3,
-    "species": 3
-  },
+  "top_observers": [
+    {
+      "observer_id": 30753,
+      "count": 3,
+      "species": 3
+    },
+    {
+      "observer_id": 5.46653E+6,
+      "count": 1,
+      "species": 1
+    }
+  ],
   "super_ix": -43971,
   "super_iy": 24159
 }

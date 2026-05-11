@@ -137,6 +137,17 @@ function getCaptiveFrac(metrics) {
   return Math.max(0, Math.min(1, nCaptive / count));
 }
 
+function parseGridDateMs(value) {
+  if (!value) return 0;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function gridDateIsoFromMs(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
 function captiveFracToShimmerStyle(frac) {
   if (frac < 0.20) return null;
 
@@ -902,7 +913,11 @@ async function warmRichMetricsForCell(ix, iy) {
       ...staticMetrics,
       ...richMetrics,
       observers: Number(staticMetrics.observers) || 0,
-      n_captive: Number(staticMetrics.n_captive) || 0
+      n_captive: Number(staticMetrics.n_captive) || 0,
+      last_observed: richMetrics.last_observed || staticMetrics.last_observed || null,
+      median_last10_observed: richMetrics.median_last10_observed || staticMetrics.median_last10_observed || null,
+      last_observed_ms: Number(richMetrics.last_observed_ms) || Number(staticMetrics.last_observed_ms) || 0,
+      median_last10_observed_ms: Number(richMetrics.median_last10_observed_ms) || Number(staticMetrics.median_last10_observed_ms) || 0
     };
 
     richCache.set(key, merged);
@@ -980,6 +995,10 @@ window.GridWildIconicOverlayFilter = window.GridWildIconicOverlayFilter || (func
       ...filtered,
       observers: Math.round((Number(baseMetrics.observers) || 0) * ratio),
       n_captive: Math.round((Number(baseMetrics.n_captive) || 0) * ratio),
+      last_observed: baseMetrics.last_observed || filtered.last_observed || null,
+      median_last10_observed: baseMetrics.median_last10_observed || filtered.median_last10_observed || null,
+      last_observed_ms: Number(baseMetrics.last_observed_ms) || Number(filtered.last_observed_ms) || 0,
+      median_last10_observed_ms: Number(baseMetrics.median_last10_observed_ms) || Number(filtered.median_last10_observed_ms) || 0,
       nActiveSquares: filtered.count > 0 ? 1 : 0
     };
   }
@@ -2136,7 +2155,11 @@ function getStaticMetricsForCell(ix, iy) {
     count: Number(m?.count) || 0,
     species: Number(m?.species) || 0,
     observers: Number(m?.observers) || 0,
-    n_captive: Number(m?.n_captive) || 0
+    n_captive: Number(m?.n_captive) || 0,
+    last_observed: m?.last_observed || null,
+    median_last10_observed: m?.median_last10_observed || null,
+    last_observed_ms: Number(m?.last_observed_ms) || 0,
+    median_last10_observed_ms: Number(m?.median_last10_observed_ms) || 0
   };
 }
 
@@ -2340,12 +2363,31 @@ async function loadStaticHeatmapCsv(url) {
     const allowedHeaders = new Set([
       "ix,iy,count,species,observers,n_captive",
       "ix,iy,count,n_species,n_observers,n_captive",
-      "ix,iy,count,species,observers"
+      "ix,iy,count,species,observers",
+      "ix,iy,count,n_genera,n_observers,n_captive,last_observed,median_last10_observed"
     ]);
 
     if (!allowedHeaders.has(header)) {
       console.warn(`Unexpected CSV header: ${header}`);
     }
+
+    const columns = header.split(",").map(s => s.trim());
+    const col = (...names) => {
+      for (const name of names) {
+        const i = columns.indexOf(name);
+        if (i >= 0) return i;
+      }
+      return -1;
+    };
+
+    const ixCol = col("ix");
+    const iyCol = col("iy");
+    const countCol = col("count");
+    const speciesCol = col("species", "n_species", "n_genera");
+    const observersCol = col("observers", "n_observers");
+    const captiveCol = col("n_captive");
+    const lastObservedCol = col("last_observed");
+    const medianLast10Col = col("median_last10_observed");
 
     const counts = new Map();
 
@@ -2353,12 +2395,16 @@ async function loadStaticHeatmapCsv(url) {
       const parts = lines[i].split(",");
       if (parts.length < 5) continue;
 
-      const ix = Number(parts[0]);
-      const iy = Number(parts[1]);
-      const count = Number(parts[2]);
-      const species = Number(parts[3]);
-      const observers = Number(parts[4]);
-      const n_captive = Number(parts[5] ?? 0);
+      const ix = Number(parts[ixCol]);
+      const iy = Number(parts[iyCol]);
+      const count = Number(parts[countCol]);
+      const species = Number(parts[speciesCol]);
+      const observers = Number(parts[observersCol]);
+      const n_captive = captiveCol >= 0 ? Number(parts[captiveCol] ?? 0) : 0;
+      const last_observed = lastObservedCol >= 0 ? (parts[lastObservedCol] || null) : null;
+      const median_last10_observed = medianLast10Col >= 0 ? (parts[medianLast10Col] || null) : null;
+      const last_observed_ms = parseGridDateMs(last_observed);
+      const median_last10_observed_ms = parseGridDateMs(median_last10_observed);
 
       if (
         !Number.isFinite(ix) ||
@@ -2375,7 +2421,11 @@ async function loadStaticHeatmapCsv(url) {
         count,
         species,
         observers,
-        n_captive
+        n_captive,
+        last_observed,
+        median_last10_observed,
+        last_observed_ms,
+        median_last10_observed_ms
       });
     }
 
@@ -2574,10 +2624,12 @@ function getCoarseMedianMetrics(anchorIx, anchorIy, binSize) {
     count: [],
     species: [],
     observers: [],
-    n_captive: []
+    n_captive: [],
+    median_last10_observed_ms: []
   };
 
   let nActiveSquares = 0;
+  let latestLastObservedMs = 0;
 
   for (let ix = centerIx - radius; ix <= centerIx + radius; ix++) {
     for (let iy = centerIy - radius; iy <= centerIy + radius; iy++) {
@@ -2588,11 +2640,15 @@ function getCoarseMedianMetrics(anchorIx, anchorIy, binSize) {
       const species = Number(m.species) || 0;
       const observers = Number(m.observers) || 0;
       const nCaptive = Number(m.n_captive) || 0;
+      const lastObservedMs = Number(m.last_observed_ms) || parseGridDateMs(m.last_observed);
+      const medianLast10Ms = Number(m.median_last10_observed_ms) || parseGridDateMs(m.median_last10_observed);
 
       values.count.push(count);
       values.species.push(species);
       values.observers.push(observers);
       values.n_captive.push(nCaptive);
+      if (medianLast10Ms) values.median_last10_observed_ms.push(medianLast10Ms);
+      latestLastObservedMs = Math.max(latestLastObservedMs, lastObservedMs || 0);
 
       if (count > 0) nActiveSquares++;
     }
@@ -2607,6 +2663,10 @@ function getCoarseMedianMetrics(anchorIx, anchorIy, binSize) {
     species: median(values.species),
     observers: median(values.observers),
     n_captive: median(values.n_captive),
+    last_observed: gridDateIsoFromMs(latestLastObservedMs),
+    median_last10_observed: gridDateIsoFromMs(median(values.median_last10_observed_ms)),
+    last_observed_ms: latestLastObservedMs,
+    median_last10_observed_ms: median(values.median_last10_observed_ms),
     nSquares: binSize * binSize,
     nActiveSquares
   };
@@ -2640,6 +2700,10 @@ function getNearestCoarseMetrics(centerIx, centerIy, binSize) {
     species: Number(best.species) || 0,
     observers: Number(best.observers) || 0,
     n_captive: Number(best.n_captive) || 0,
+    last_observed: best.last_observed || null,
+    median_last10_observed: best.median_last10_observed || null,
+    last_observed_ms: Number(best.last_observed_ms) || parseGridDateMs(best.last_observed),
+    median_last10_observed_ms: Number(best.median_last10_observed_ms) || parseGridDateMs(best.median_last10_observed),
     nSquares: binSize * binSize,
     nActiveSquares: 1
   };

@@ -1,9 +1,32 @@
 {
   "ix": -1.407236E+6,
   "iy": 772033,
-  "last_observed": "2019-06-11",
-  "median_last10_observed": "2019-06-11",
+  "last_observed": "2025-05-18",
+  "median_last10_observed": "2023-12-21",
   "genera": [
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Rosales",
+      "family_name": "Moraceae",
+      "genus_name": "Morus",
+      "count": 2,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2025-05-18",
+      "median_last10_observed": "2024-05-16"
+    },
     {
       "iconic_taxon_name": "Arachnida",
       "order_name": "Opiliones",
@@ -26,6 +49,52 @@
       ],
       "last_observed": "2019-06-11",
       "median_last10_observed": "2019-06-11"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Dipsacales",
+      "family_name": "Caprifoliaceae",
+      "genus_name": "Lonicera",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2025-04-26",
+      "median_last10_observed": "2025-04-26"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Rosales",
+      "family_name": "Rosaceae",
+      "genus_name": "Rubus",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2024-07-28",
+      "median_last10_observed": "2024-07-28"
     },
     {
       "iconic_taxon_name": "Insecta",
@@ -51,11 +120,33 @@
       "median_last10_observed": "2019-06-11"
     }
   ],
-  "top_observers": {
-    "observer_id": 1.597686E+6,
-    "count": 2,
-    "species": 2
-  },
+  "top_observers": [
+    {
+      "observer_id": 1.597686E+6,
+      "count": 2,
+      "species": 2
+    },
+    {
+      "observer_id": 5.79912E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 2.959937E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 587922,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 410175,
+      "count": 1,
+      "species": 1
+    }
+  ],
   "super_ix": -43977,
   "super_iy": 24126
 }

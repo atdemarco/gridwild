@@ -1,9 +1,32 @@
 {
   "ix": -1.406579E+6,
   "iy": 771998,
-  "last_observed": "2019-05-14",
+  "last_observed": "2024-09-25",
   "median_last10_observed": "2019-05-14",
   "genera": [
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Asterales",
+      "family_name": "Asteraceae",
+      "genus_name": "Eurybia",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2024-09-25",
+      "median_last10_observed": "2024-09-25"
+    },
     {
       "iconic_taxon_name": "Insecta",
       "order_name": "Lepidoptera",
@@ -51,11 +74,18 @@
       "median_last10_observed": "2019-05-14"
     }
   ],
-  "top_observers": {
-    "observer_id": 16351,
-    "count": 2,
-    "species": 2
-  },
+  "top_observers": [
+    {
+      "observer_id": 16351,
+      "count": 2,
+      "species": 2
+    },
+    {
+      "observer_id": 8.51886E+6,
+      "count": 1,
+      "species": 1
+    }
+  ],
   "super_ix": -43956,
   "super_iy": 24124
 }

@@ -1,31 +1,56 @@
 {
   "ix": -1.406961E+6,
   "iy": 772180,
-  "last_observed": "2018-09-30",
-  "median_last10_observed": "2018-07-11",
-  "genera": {
-    "iconic_taxon_name": "Plantae",
-    "order_name": "Unknown",
-    "family_name": "Unknown",
-    "genus_name": "Unknown",
-    "count": 2,
-    "month_counts": [
-      0,
-      0,
-      0,
-      1,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-      0,
-      0
-    ],
-    "last_observed": "2018-09-30",
-    "median_last10_observed": "2018-07-11"
-  },
+  "last_observed": "2022-03-15",
+  "median_last10_observed": "2018-09-30",
+  "genera": [
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Unknown",
+      "family_name": "Unknown",
+      "genus_name": "Unknown",
+      "count": 2,
+      "month_counts": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2018-09-30",
+      "median_last10_observed": "2018-07-11"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Brassicales",
+      "family_name": "Brassicaceae",
+      "genus_name": "Brassica",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2022-03-15",
+      "median_last10_observed": "2022-03-15"
+    }
+  ],
   "top_observers": [
     {
       "observer_id": 838832,
@@ -34,6 +59,11 @@
     },
     {
       "observer_id": 1.246669E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 1.224069E+6,
       "count": 1,
       "species": 1
     }

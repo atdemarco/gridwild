@@ -1,34 +1,64 @@
 {
   "ix": -1.407586E+6,
   "iy": 772523,
-  "last_observed": "2016-05-20",
+  "last_observed": "2023-11-01",
   "median_last10_observed": "2016-05-20",
-  "genera": {
-    "iconic_taxon_name": "Plantae",
-    "order_name": "Celastrales",
-    "family_name": "Celastraceae",
-    "genus_name": "Celastrus",
-    "count": 2,
-    "month_counts": [
-      0,
-      0,
-      0,
-      0,
-      2,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0
-    ],
-    "last_observed": "2016-05-20",
-    "median_last10_observed": "2016-05-20"
-  },
+  "genera": [
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Celastrales",
+      "family_name": "Celastraceae",
+      "genus_name": "Celastrus",
+      "count": 2,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2016-05-20",
+      "median_last10_observed": "2016-05-20"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Polypodiales",
+      "family_name": "Dryopteridaceae",
+      "genus_name": "Dryopteris",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "last_observed": "2023-11-01",
+      "median_last10_observed": "2023-11-01"
+    }
+  ],
   "top_observers": [
     {
       "observer_id": 219065,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 7.545635E+6,
       "count": 1,
       "species": 1
     },

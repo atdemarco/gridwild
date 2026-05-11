@@ -1,8 +1,8 @@
 {
   "ix": -1.40721E+6,
   "iy": 772026,
-  "last_observed": "2017-04-23",
-  "median_last10_observed": "2017-04-23",
+  "last_observed": "2026-03-01",
+  "median_last10_observed": "2020-05-13",
   "genera": [
     {
       "iconic_taxon_name": "Aves",
@@ -29,6 +29,29 @@
     },
     {
       "iconic_taxon_name": "Aves",
+      "order_name": "Anseriformes",
+      "family_name": "Anatidae",
+      "genus_name": "Anas",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2026-03-01",
+      "median_last10_observed": "2026-03-01"
+    },
+    {
+      "iconic_taxon_name": "Aves",
       "order_name": "Pelecaniformes",
       "family_name": "Ardeidae",
       "genus_name": "Ardea",
@@ -49,6 +72,29 @@
       ],
       "last_observed": "2017-04-23",
       "median_last10_observed": "2017-04-23"
+    },
+    {
+      "iconic_taxon_name": "Reptilia",
+      "order_name": "Testudines",
+      "family_name": "Emydidae",
+      "genus_name": "Chrysemys",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2025-05-26",
+      "median_last10_observed": "2025-05-26"
     },
     {
       "iconic_taxon_name": "Plantae",
@@ -72,13 +118,81 @@
       ],
       "last_observed": "2017-04-23",
       "median_last10_observed": "2017-04-23"
+    },
+    {
+      "iconic_taxon_name": "Reptilia",
+      "order_name": "Testudines",
+      "family_name": "Emydidae",
+      "genus_name": "Unknown",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2020-05-13",
+      "median_last10_observed": "2020-05-13"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Dipsacales",
+      "family_name": "Viburnaceae",
+      "genus_name": "Viburnum",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2023-06-04",
+      "median_last10_observed": "2023-06-04"
     }
   ],
-  "top_observers": {
-    "observer_id": 267575,
-    "count": 3,
-    "species": 3
-  },
+  "top_observers": [
+    {
+      "observer_id": 267575,
+      "count": 3,
+      "species": 3
+    },
+    {
+      "observer_id": 5.79912E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 9.315113E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 22589,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 1.597686E+6,
+      "count": 1,
+      "species": 1
+    }
+  ],
   "super_ix": -43976,
   "super_iy": 24125
 }

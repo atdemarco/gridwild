@@ -1,31 +1,79 @@
 {
   "ix": -1.406975E+6,
   "iy": 772183,
-  "last_observed": "2018-09-30",
-  "median_last10_observed": "2018-07-16",
-  "genera": {
-    "iconic_taxon_name": "Plantae",
-    "order_name": "Cornales",
-    "family_name": "Cornaceae",
-    "genus_name": "Cornus",
-    "count": 2,
-    "month_counts": [
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-      0,
-      0,
-      1,
-      0,
-      0,
-      0
-    ],
-    "last_observed": "2018-09-30",
-    "median_last10_observed": "2018-07-16"
-  },
+  "last_observed": "2023-05-03",
+  "median_last10_observed": "2019-12-23",
+  "genera": [
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Cornales",
+      "family_name": "Cornaceae",
+      "genus_name": "Cornus",
+      "count": 2,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2018-09-30",
+      "median_last10_observed": "2018-07-16"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Fabales",
+      "family_name": "Fabaceae",
+      "genus_name": "Cercis",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2021-03-17",
+      "median_last10_observed": "2021-03-17"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Aquifoliales",
+      "family_name": "Aquifoliaceae",
+      "genus_name": "Ilex",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2023-05-03",
+      "median_last10_observed": "2023-05-03"
+    }
+  ],
   "top_observers": [
     {
       "observer_id": 1.24668E+6,
@@ -34,6 +82,16 @@
     },
     {
       "observer_id": 838832,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 4.063397E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 6.485278E+6,
       "count": 1,
       "species": 1
     }

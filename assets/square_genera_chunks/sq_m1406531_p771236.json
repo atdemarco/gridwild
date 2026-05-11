@@ -1,7 +1,7 @@
 {
   "ix": -1.406531E+6,
   "iy": 771236,
-  "last_observed": "2016-05-20",
+  "last_observed": "2023-12-23",
   "median_last10_observed": "2016-05-20",
   "genera": [
     {
@@ -28,6 +28,29 @@
       "median_last10_observed": "2016-05-20"
     },
     {
+      "iconic_taxon_name": "Fungi",
+      "order_name": "Lecanorales",
+      "family_name": "Lecanoraceae",
+      "genus_name": "Lecanora",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "last_observed": "2023-12-23",
+      "median_last10_observed": "2023-12-23"
+    },
+    {
       "iconic_taxon_name": "Plantae",
       "order_name": "Caryophyllales",
       "family_name": "Polygonaceae",
@@ -51,11 +74,18 @@
       "median_last10_observed": "2016-05-20"
     }
   ],
-  "top_observers": {
-    "observer_id": 175357,
-    "count": 2,
-    "species": 2
-  },
+  "top_observers": [
+    {
+      "observer_id": 175357,
+      "count": 2,
+      "species": 2
+    },
+    {
+      "observer_id": 5.79912E+6,
+      "count": 1,
+      "species": 1
+    }
+  ],
   "super_ix": -43955,
   "super_iy": 24101
 }

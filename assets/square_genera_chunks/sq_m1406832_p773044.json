@@ -1,9 +1,32 @@
 {
   "ix": -1.406832E+6,
   "iy": 773044,
-  "last_observed": "2019-04-28",
-  "median_last10_observed": "2019-04-28",
+  "last_observed": "2023-10-28",
+  "median_last10_observed": "2023-09-30",
   "genera": [
+    {
+      "iconic_taxon_name": "Fungi",
+      "order_name": "Agaricales",
+      "family_name": "Physalacriaceae",
+      "genus_name": "Armillaria",
+      "count": 2,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        0
+      ],
+      "last_observed": "2023-10-28",
+      "median_last10_observed": "2023-10-28"
+    },
     {
       "iconic_taxon_name": "Insecta",
       "order_name": "Coleoptera",
@@ -26,6 +49,29 @@
       ],
       "last_observed": "2019-04-28",
       "median_last10_observed": "2019-04-28"
+    },
+    {
+      "iconic_taxon_name": "Fungi",
+      "order_name": "Agaricales",
+      "family_name": "Mycenaceae",
+      "genus_name": "Mycena",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2023-09-30",
+      "median_last10_observed": "2023-09-30"
     },
     {
       "iconic_taxon_name": "Plantae",
@@ -53,12 +99,22 @@
   ],
   "top_observers": [
     {
+      "observer_id": 1.671159E+6,
+      "count": 2,
+      "species": 2
+    },
+    {
       "observer_id": 911801,
       "count": 1,
       "species": 1
     },
     {
       "observer_id": 1.692231E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 3.783337E+6,
       "count": 1,
       "species": 1
     }

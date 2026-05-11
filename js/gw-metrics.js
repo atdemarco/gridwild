@@ -2,6 +2,17 @@ window.GWMetrics = (() => {
 
 function num(x){ return Number(x)||0; }
 
+function parseDateMs(value){
+  if (!value) return null;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function dateIsoFromMs(ms){
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
 const MONTH_NAMES = [
   "Jan","Feb","Mar","Apr","May","Jun",
   "Jul","Aug","Sep","Oct","Nov","Dec"
@@ -45,6 +56,8 @@ function buildSquareMetrics(square){
   const genera = new Set();
 
   let count = 0;
+  let lastObservedMs = parseDateMs(square?.last_observed);
+  let medianLast10ObservedMs = parseDateMs(square?.median_last10_observed);
 
   for (const r of rows){
 
@@ -59,6 +72,17 @@ function buildSquareMetrics(square){
     (r.month_counts || []).forEach((v,i)=>{
       months[i] += num(v);
     });
+
+    const rowLast = parseDateMs(r.last_observed);
+    const rowMedian = parseDateMs(r.median_last10_observed);
+
+    if (rowLast && (!lastObservedMs || rowLast > lastObservedMs)) {
+      lastObservedMs = rowLast;
+    }
+
+    if (rowMedian && (!medianLast10ObservedMs || rowMedian > medianLast10ObservedMs)) {
+      medianLast10ObservedMs = rowMedian;
+    }
   }
 
   const peak = Math.max(...months);
@@ -81,6 +105,11 @@ function buildSquareMetrics(square){
     peak_month: months.indexOf(peak)+1,
     seasonal_strength: total ? peak/total : 0,
     month_entropy: entropy(months),
+
+    last_observed: square?.last_observed || dateIsoFromMs(lastObservedMs),
+    median_last10_observed: square?.median_last10_observed || dateIsoFromMs(medianLast10ObservedMs),
+    last_observed_ms: lastObservedMs || 0,
+    median_last10_observed_ms: medianLast10ObservedMs || 0,
 
     activity_score:
       Math.log1p(count) * (1 + genera.size*0.05)
@@ -118,7 +147,12 @@ function mergeSquareMetrics(records){
     month_totals: Array(12).fill(0),
 
     nSquares: 0,
-    nActiveSquares: 0
+    nActiveSquares: 0,
+
+    last_observed: null,
+    median_last10_observed: null,
+    last_observed_ms: 0,
+    median_last10_observed_ms: 0
   };
 
   const genusSet = new Set();
@@ -135,6 +169,19 @@ function mergeSquareMetrics(records){
 
     if ((m.count || 0) > 0) {
       merged.nActiveSquares++;
+    }
+
+    const lastMs = Number(m.last_observed_ms) || parseDateMs(m.last_observed) || 0;
+    const medianMs = Number(m.median_last10_observed_ms) || parseDateMs(m.median_last10_observed) || 0;
+
+    if (lastMs > merged.last_observed_ms) {
+      merged.last_observed_ms = lastMs;
+      merged.last_observed = dateIsoFromMs(lastMs);
+    }
+
+    if (medianMs > merged.median_last10_observed_ms) {
+      merged.median_last10_observed_ms = medianMs;
+      merged.median_last10_observed = dateIsoFromMs(medianMs);
     }
 
     // iconic counts

@@ -8,8 +8,67 @@
     "family_name",
     "genus_name"
   ],
-  "n_squares": 1,
+  "n_squares": 3,
   "squares": {
+    "sq_m1406080_p773246": {
+      "ix": -1.40608E+6,
+      "iy": 773246,
+      "last_observed": "2021-06-01",
+      "median_last10_observed": "2021-06-01",
+      "genera": [
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Rosales",
+          "family_name": "Moraceae",
+          "genus_name": "Morus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2021-06-01",
+          "median_last10_observed": "2021-06-01"
+        },
+        {
+          "iconic_taxon_name": "Mammalia",
+          "order_name": "Artiodactyla",
+          "family_name": "Cervidae",
+          "genus_name": "Odocoileus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2021-06-01",
+          "median_last10_observed": "2021-06-01"
+        }
+      ],
+      "top_observers": {
+        "observer_id": 4.187631E+6,
+        "count": 2,
+        "species": 2
+      }
+    },
     "sq_m1406080_p773247": {
       "ix": -1.40608E+6,
       "iy": 773247,
@@ -40,6 +99,40 @@
       },
       "top_observers": {
         "observer_id": 848878,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1406060_p773242": {
+      "ix": -1.40606E+6,
+      "iy": 773242,
+      "last_observed": "2021-08-10",
+      "median_last10_observed": "2021-08-10",
+      "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Sturnidae",
+        "genus_name": "Sturnus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        "last_observed": "2021-08-10",
+        "median_last10_observed": "2021-08-10"
+      },
+      "top_observers": {
+        "observer_id": 7580,
         "count": 1,
         "species": 1
       }

@@ -8,7 +8,7 @@
     "family_name",
     "genus_name"
   ],
-  "n_squares": 1,
+  "n_squares": 2,
   "squares": {
     "sq_m1405913_p770898": {
       "ix": -1.405913E+6,
@@ -42,6 +42,65 @@
         "observer_id": 1.065122E+6,
         "count": 1,
         "species": 1
+      }
+    },
+    "sq_m1405904_p770908": {
+      "ix": -1.405904E+6,
+      "iy": 770908,
+      "last_observed": "2024-04-25",
+      "median_last10_observed": "2024-04-25",
+      "genera": [
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Asterales",
+          "family_name": "Asteraceae",
+          "genus_name": "Leucanthemum",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2024-04-25",
+          "median_last10_observed": "2024-04-25"
+        },
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Malpighiales",
+          "family_name": "Linaceae",
+          "genus_name": "Linum",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2024-04-25",
+          "median_last10_observed": "2024-04-25"
+        }
+      ],
+      "top_observers": {
+        "observer_id": 454247,
+        "count": 2,
+        "species": 2
       }
     }
   }

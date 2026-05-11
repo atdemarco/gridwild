@@ -1,9 +1,32 @@
 {
   "ix": -1.406966E+6,
   "iy": 772183,
-  "last_observed": "2018-04-22",
+  "last_observed": "2025-04-16",
   "median_last10_observed": "2018-04-22",
   "genera": [
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Liliales",
+      "family_name": "Liliaceae",
+      "genus_name": "Tulipa",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2025-04-16",
+      "median_last10_observed": "2025-04-16"
+    },
     {
       "iconic_taxon_name": "Plantae",
       "order_name": "Asparagales",
@@ -51,11 +74,18 @@
       "median_last10_observed": "2018-04-22"
     }
   ],
-  "top_observers": {
-    "observer_id": 838832,
-    "count": 2,
-    "species": 2
-  },
+  "top_observers": [
+    {
+      "observer_id": 838832,
+      "count": 2,
+      "species": 2
+    },
+    {
+      "observer_id": 9.143718E+6,
+      "count": 1,
+      "species": 1
+    }
+  ],
   "super_ix": -43968,
   "super_iy": 24130
 }

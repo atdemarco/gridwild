@@ -1924,6 +1924,54 @@
   </div>
 
 
+  <!-- WILDTIME -->
+  <div class="gw-card">
+    <div class="gw-card-title">Wildtime</div>
+
+    <div class="gw-card gw-lens-card" data-lens="wildtime">
+      <div class="gw-card-title">Wildtime</div>
+      Depth of recent evidence across the last observed records.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="seasonalnow">
+      <div class="gw-card-title">Season Watch</div>
+      Squares supported in this part of the year.
+    </div>
+  </div>
+
+
+  <!-- FRESHNESS -->
+  <div class="gw-card">
+    <div class="gw-card-title">Freshness</div>
+
+    <div class="gw-card gw-lens-card" data-lens="freshness">
+      <div class="gw-card-title">Freshness</div>
+      Latest observation recency.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="timeconfidence">
+      <div class="gw-card-title">Recency Strength</div>
+      Durable freshness versus one-off recent updates.
+    </div>
+  </div>
+
+
+  <!-- FIELD PRIORITIES -->
+  <div class="gw-card">
+    <div class="gw-card-title">Field Priorities</div>
+
+    <div class="gw-card gw-lens-card" data-lens="revisit">
+      <div class="gw-card-title">Revisit</div>
+      Rich places whose evidence is getting old.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="reactivated">
+      <div class="gw-card-title">Reactivated</div>
+      Recent activity after a quiet stretch.
+    </div>
+  </div>
+
+
   <!-- HUMAN -->
   <div class="gw-card">
     <div class="gw-card-title">Human Landscape</div>
@@ -2327,6 +2375,12 @@ window.refreshQuestBadge = refreshQuestBadge;
       stability: "Stability",
       breadth: "Breadth",
       treasure2: "Hidden Treasure",
+      freshness: "Freshness",
+      wildtime: "Wildtime",
+      timeconfidence: "Recency Strength",
+      revisit: "Revisit",
+      reactivated: "Reactivated",
+      seasonalnow: "Season Watch",
     };
 
     // Compact HUD legend module. Remove #gwHudLegend plus this object to
@@ -2337,6 +2391,12 @@ window.refreshQuestBadge = refreshQuestBadge;
         { count: 10, species: 8, observers: 3 },
         { count: 30, species: 18, observers: 6 }
       ];
+
+      function daysAgo(days) {
+        return new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+      }
 
       const sampleByLens = {
         cultivated: [
@@ -2373,6 +2433,36 @@ window.refreshQuestBadge = refreshQuestBadge;
           { count: 8, species: 3, observers: 1, nActiveSquares: 9 },
           { count: 12, species: 10, observers: 2, nActiveSquares: 5 },
           { count: 18, species: 18, observers: 2, nActiveSquares: 1 }
+        ],
+        freshness: [
+          { count: 8, species: 6, observers: 2, last_observed: daysAgo(2400) },
+          { count: 14, species: 10, observers: 3, last_observed: daysAgo(900) },
+          { count: 24, species: 16, observers: 5, last_observed: daysAgo(30) }
+        ],
+        wildtime: [
+          { count: 10, species: 7, observers: 2, median_last10_observed: daysAgo(2600) },
+          { count: 18, species: 12, observers: 3, median_last10_observed: daysAgo(1000) },
+          { count: 28, species: 20, observers: 5, median_last10_observed: daysAgo(80) }
+        ],
+        timeconfidence: [
+          { count: 10, species: 7, observers: 2, last_observed: daysAgo(2400), median_last10_observed: daysAgo(2600) },
+          { count: 18, species: 12, observers: 3, last_observed: daysAgo(30), median_last10_observed: daysAgo(2300) },
+          { count: 28, species: 20, observers: 5, last_observed: daysAgo(25), median_last10_observed: daysAgo(90) }
+        ],
+        revisit: [
+          { count: 8, species: 4, observers: 2, last_observed: daysAgo(600) },
+          { count: 14, species: 12, observers: 3, last_observed: daysAgo(1600) },
+          { count: 24, species: 22, observers: 5, last_observed: daysAgo(2600) }
+        ],
+        reactivated: [
+          { count: 10, species: 7, observers: 2, last_observed: daysAgo(1800), median_last10_observed: daysAgo(2100) },
+          { count: 18, species: 12, observers: 3, last_observed: daysAgo(80), median_last10_observed: daysAgo(900) },
+          { count: 28, species: 20, observers: 5, last_observed: daysAgo(20), median_last10_observed: daysAgo(2400) }
+        ],
+        seasonalnow: [
+          { count: 10, species: 7, observers: 2, last_observed: daysAgo(180) },
+          { count: 18, species: 12, observers: 3, last_observed: daysAgo(90) },
+          { count: 28, species: 20, observers: 5, last_observed: daysAgo(12) }
         ]
       };
 

@@ -1,14 +1,37 @@
 {
   "ix": -1.406361E+6,
   "iy": 771927,
-  "last_observed": "2019-05-04",
-  "median_last10_observed": "2018-09-30",
+  "last_observed": "2024-06-24",
+  "median_last10_observed": "2023-07-01",
   "genera": [
     {
       "iconic_taxon_name": "Insecta",
       "order_name": "Hymenoptera",
       "family_name": "Apidae",
       "genus_name": "Bombus",
+      "count": 2,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2023-07-01",
+      "median_last10_observed": "2020-06-20"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Gentianales",
+      "family_name": "Apocynaceae",
+      "genus_name": "Asclepias",
       "count": 1,
       "month_counts": [
         0,
@@ -24,8 +47,8 @@
         0,
         0
       ],
-      "last_observed": "2017-06-11",
-      "median_last10_observed": "2017-06-11"
+      "last_observed": "2024-06-24",
+      "median_last10_observed": "2024-06-24"
     },
     {
       "iconic_taxon_name": "Insecta",
@@ -49,6 +72,52 @@
       ],
       "last_observed": "2018-09-30",
       "median_last10_observed": "2018-09-30"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Solanales",
+      "family_name": "Solanaceae",
+      "genus_name": "Solanum",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2023-09-28",
+      "median_last10_observed": "2023-09-28"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Asterales",
+      "family_name": "Asteraceae",
+      "genus_name": "Tagetes",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2024-06-24",
+      "median_last10_observed": "2024-06-24"
     },
     {
       "iconic_taxon_name": "Insecta",
@@ -76,7 +145,22 @@
   ],
   "top_observers": [
     {
+      "observer_id": 7.978122E+6,
+      "count": 2,
+      "species": 2
+    },
+    {
       "observer_id": 786045,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 6.198295E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 4.222355E+6,
       "count": 1,
       "species": 1
     },

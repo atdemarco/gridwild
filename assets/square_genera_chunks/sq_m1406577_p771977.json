@@ -1,31 +1,56 @@
 {
   "ix": -1.406577E+6,
   "iy": 771977,
-  "last_observed": "2019-03-22",
-  "median_last10_observed": "2019-03-15",
-  "genera": {
-    "iconic_taxon_name": "Aves",
-    "order_name": "Passeriformes",
-    "family_name": "Sturnidae",
-    "genus_name": "Sturnus",
-    "count": 2,
-    "month_counts": [
-      0,
-      0,
-      2,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0
-    ],
-    "last_observed": "2019-03-22",
-    "median_last10_observed": "2019-03-15"
-  },
+  "last_observed": "2021-07-02",
+  "median_last10_observed": "2019-03-22",
+  "genera": [
+    {
+      "iconic_taxon_name": "Aves",
+      "order_name": "Passeriformes",
+      "family_name": "Sturnidae",
+      "genus_name": "Sturnus",
+      "count": 2,
+      "month_counts": [
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2019-03-22",
+      "median_last10_observed": "2019-03-15"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Pinales",
+      "family_name": "Cupressaceae",
+      "genus_name": "Taxodium",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2021-07-02",
+      "median_last10_observed": "2021-07-02"
+    }
+  ],
   "top_observers": [
     {
       "observer_id": 7580,
@@ -34,6 +59,11 @@
     },
     {
       "observer_id": 887197,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 2.936665E+6,
       "count": 1,
       "species": 1
     }

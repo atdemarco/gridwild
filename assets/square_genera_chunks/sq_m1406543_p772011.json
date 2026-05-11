@@ -1,7 +1,7 @@
 {
   "ix": -1.406543E+6,
   "iy": 772011,
-  "last_observed": "2018-04-30",
+  "last_observed": "2024-07-26",
   "median_last10_observed": "2018-04-30",
   "genera": [
     {
@@ -28,6 +28,29 @@
       "median_last10_observed": "2018-04-30"
     },
     {
+      "iconic_taxon_name": "Mammalia",
+      "order_name": "Rodentia",
+      "family_name": "Sciuridae",
+      "genus_name": "Sciurus",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2024-07-26",
+      "median_last10_observed": "2024-07-26"
+    },
+    {
       "iconic_taxon_name": "Plantae",
       "order_name": "Malpighiales",
       "family_name": "Violaceae",
@@ -51,11 +74,18 @@
       "median_last10_observed": "2018-04-30"
     }
   ],
-  "top_observers": {
-    "observer_id": 452077,
-    "count": 2,
-    "species": 2
-  },
+  "top_observers": [
+    {
+      "observer_id": 452077,
+      "count": 2,
+      "species": 2
+    },
+    {
+      "observer_id": 8.362138E+6,
+      "count": 1,
+      "species": 1
+    }
+  ],
   "super_ix": -43955,
   "super_iy": 24125
 }

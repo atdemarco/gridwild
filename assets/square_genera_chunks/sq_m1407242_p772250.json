@@ -1,9 +1,32 @@
 {
   "ix": -1.407242E+6,
   "iy": 772250,
-  "last_observed": "2016-10-28",
-  "median_last10_observed": "2016-10-28",
+  "last_observed": "2024-10-18",
+  "median_last10_observed": "2023-10-15",
   "genera": [
+    {
+      "iconic_taxon_name": "Aves",
+      "order_name": "Charadriiformes",
+      "family_name": "Laridae",
+      "genus_name": "Larus",
+      "count": 2,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        0
+      ],
+      "last_observed": "2023-10-19",
+      "median_last10_observed": "2020-04-23"
+    },
     {
       "iconic_taxon_name": "Aves",
       "order_name": "Anseriformes",
@@ -29,9 +52,9 @@
     },
     {
       "iconic_taxon_name": "Aves",
-      "order_name": "Charadriiformes",
-      "family_name": "Laridae",
-      "genus_name": "Larus",
+      "order_name": "Passeriformes",
+      "family_name": "Passeridae",
+      "genus_name": "Passer",
       "count": 1,
       "month_counts": [
         0,
@@ -47,15 +70,55 @@
         0,
         0
       ],
-      "last_observed": "2016-10-28",
-      "median_last10_observed": "2016-10-28"
+      "last_observed": "2023-10-15",
+      "median_last10_observed": "2023-10-15"
+    },
+    {
+      "iconic_taxon_name": "Aves",
+      "order_name": "Passeriformes",
+      "family_name": "Sturnidae",
+      "genus_name": "Sturnus",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      "last_observed": "2024-10-18",
+      "median_last10_observed": "2024-10-18"
     }
   ],
-  "top_observers": {
-    "observer_id": 356634,
-    "count": 2,
-    "species": 2
-  },
+  "top_observers": [
+    {
+      "observer_id": 356634,
+      "count": 2,
+      "species": 2
+    },
+    {
+      "observer_id": 1.401742E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 8.319175E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 4.304505E+6,
+      "count": 1,
+      "species": 1
+    }
+  ],
   "super_ix": -43977,
   "super_iy": 24132
 }

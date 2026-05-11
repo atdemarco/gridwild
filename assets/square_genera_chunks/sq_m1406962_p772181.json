@@ -1,8 +1,8 @@
 {
   "ix": -1.406962E+6,
   "iy": 772181,
-  "last_observed": "2018-04-22",
-  "median_last10_observed": "2018-04-22",
+  "last_observed": "2023-05-03",
+  "median_last10_observed": "2019-10-18",
   "genera": [
     {
       "iconic_taxon_name": "Plantae",
@@ -32,6 +32,29 @@
       "order_name": "Unknown",
       "family_name": "Unknown",
       "genus_name": "Unknown",
+      "count": 2,
+      "month_counts": [
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2023-04-20",
+      "median_last10_observed": "2020-10-20"
+    },
+    {
+      "iconic_taxon_name": "Plantae",
+      "order_name": "Rosales",
+      "family_name": "Rosaceae",
+      "genus_name": "Prunus",
       "count": 1,
       "month_counts": [
         0,
@@ -47,15 +70,55 @@
         0,
         0
       ],
-      "last_observed": "2018-04-22",
-      "median_last10_observed": "2018-04-22"
+      "last_observed": "2021-04-15",
+      "median_last10_observed": "2021-04-15"
+    },
+    {
+      "iconic_taxon_name": "Insecta",
+      "order_name": "Hymenoptera",
+      "family_name": "Formicidae",
+      "genus_name": "Unknown",
+      "count": 1,
+      "month_counts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_observed": "2023-05-03",
+      "median_last10_observed": "2023-05-03"
     }
   ],
-  "top_observers": {
-    "observer_id": 838832,
-    "count": 3,
-    "species": 2
-  },
+  "top_observers": [
+    {
+      "observer_id": 838832,
+      "count": 3,
+      "species": 2
+    },
+    {
+      "observer_id": 4.059587E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 6.485278E+6,
+      "count": 1,
+      "species": 1
+    },
+    {
+      "observer_id": 6.71269E+6,
+      "count": 1,
+      "species": 1
+    }
+  ],
   "super_ix": -43968,
   "super_iy": 24130
 }

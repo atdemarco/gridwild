@@ -8,7 +8,7 @@
     "family_name",
     "genus_name"
   ],
-  "n_squares": 21,
+  "n_squares": 36,
   "squares": {
     "sq_m1405984_p773120": {
       "ix": -1.405984E+6,
@@ -310,6 +310,40 @@
         "species": 1
       }
     },
+    "sq_m1405977_p773122": {
+      "ix": -1.405977E+6,
+      "iy": 773122,
+      "last_observed": "2024-07-04",
+      "median_last10_observed": "2024-07-04",
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Sapindales",
+        "family_name": "Sapindaceae",
+        "genus_name": "Koelreuteria",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "last_observed": "2024-07-04",
+        "median_last10_observed": "2024-07-04"
+      },
+      "top_observers": {
+        "observer_id": 1.819166E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1405976_p773120": {
       "ix": -1.405976E+6,
       "iy": 773120,
@@ -573,6 +607,40 @@
         "species": 1
       }
     },
+    "sq_m1405966_p773127": {
+      "ix": -1.405966E+6,
+      "iy": 773127,
+      "last_observed": "2023-10-08",
+      "median_last10_observed": "2023-10-08",
+      "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Diptera",
+        "family_name": "Unknown",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ],
+        "last_observed": "2023-10-08",
+        "median_last10_observed": "2023-10-08"
+      },
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1405966_p773128": {
       "ix": -1.405966E+6,
       "iy": 773128,
@@ -610,15 +678,164 @@
     "sq_m1405966_p773130": {
       "ix": -1.405966E+6,
       "iy": 773130,
-      "last_observed": "2018-04-17",
-      "median_last10_observed": "2018-04-17",
+      "last_observed": "2024-05-28",
+      "median_last10_observed": "2022-09-27",
+      "genera": [
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Malpighiales",
+          "family_name": "Euphorbiaceae",
+          "genus_name": "Euphorbia",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2022-09-27",
+          "median_last10_observed": "2022-09-27"
+        },
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Lamiales",
+          "family_name": "Lamiaceae",
+          "genus_name": "Lamium",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2018-04-17",
+          "median_last10_observed": "2018-04-17"
+        },
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Unknown",
+          "family_name": "Unknown",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2024-05-28",
+          "median_last10_observed": "2024-05-28"
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 7580,
+          "count": 2,
+          "species": 2
+        },
+        {
+          "observer_id": 2179,
+          "count": 1,
+          "species": 1
+        }
+      ]
+    },
+    "sq_m1405966_p773132": {
+      "ix": -1.405966E+6,
+      "iy": 773132,
+      "last_observed": "2022-11-03",
+      "median_last10_observed": "2022-02-01",
+      "genera": [
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hymenoptera",
+          "family_name": "Formicidae",
+          "genus_name": "Tetramorium",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2021-05-02",
+          "median_last10_observed": "2021-05-02"
+        },
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hymenoptera",
+          "family_name": "Torymidae",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          "last_observed": "2022-11-03",
+          "median_last10_observed": "2022-11-03"
+        }
+      ],
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 2,
+        "species": 2
+      }
+    },
+    "sq_m1405965_p773121": {
+      "ix": -1.405965E+6,
+      "iy": 773121,
+      "last_observed": "2021-05-02",
+      "median_last10_observed": "2021-05-02",
       "genera": {
-        "iconic_taxon_name": "Plantae",
-        "order_name": "Lamiales",
-        "family_name": "Lamiaceae",
-        "genus_name": "Lamium",
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Coleoptera",
+        "family_name": "Coccinellidae",
+        "genus_name": "Coccinella",
         "count": 1,
         "month_counts": [
+          0,
           0,
           0,
           0,
@@ -629,14 +846,13 @@
           0,
           0,
           0,
-          0,
           0
         ],
-        "last_observed": "2018-04-17",
-        "median_last10_observed": "2018-04-17"
+        "last_observed": "2021-05-02",
+        "median_last10_observed": "2021-05-02"
       },
       "top_observers": {
-        "observer_id": 2179,
+        "observer_id": 7580,
         "count": 1,
         "species": 1
       }
@@ -675,6 +891,291 @@
         "species": 1
       }
     },
+    "sq_m1405965_p773128": {
+      "ix": -1.405965E+6,
+      "iy": 773128,
+      "last_observed": "2023-10-08",
+      "median_last10_observed": "2021-04-02",
+      "genera": [
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hymenoptera",
+          "family_name": "Apidae",
+          "genus_name": "Xylocopa",
+          "count": 2,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0
+          ],
+          "last_observed": "2023-10-08",
+          "median_last10_observed": "2021-10-06"
+        },
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hymenoptera",
+          "family_name": "Apidae",
+          "genus_name": "Bombus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "last_observed": "2019-10-06",
+          "median_last10_observed": "2019-10-06"
+        },
+        {
+          "iconic_taxon_name": "Plantae",
+          "order_name": "Caryophyllales",
+          "family_name": "Amaranthaceae",
+          "genus_name": "Gomphrena",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2022-09-29",
+          "median_last10_observed": "2022-09-29"
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 7580,
+          "count": 3,
+          "species": 3
+        },
+        {
+          "observer_id": 1.659651E+6,
+          "count": 1,
+          "species": 1
+        }
+      ]
+    },
+    "sq_m1405965_p773129": {
+      "ix": -1.405965E+6,
+      "iy": 773129,
+      "last_observed": "2022-11-03",
+      "median_last10_observed": "2022-11-03",
+      "genera": [
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hymenoptera",
+          "family_name": "Apidae",
+          "genus_name": "Apis",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          "last_observed": "2022-11-03",
+          "median_last10_observed": "2022-11-03"
+        },
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Lepidoptera",
+          "family_name": "Hesperiidae",
+          "genus_name": "Atalopedes",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          "last_observed": "2022-11-03",
+          "median_last10_observed": "2022-11-03"
+        },
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hymenoptera",
+          "family_name": "Apidae",
+          "genus_name": "Bombus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2022-08-23",
+          "median_last10_observed": "2022-08-23"
+        },
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hymenoptera",
+          "family_name": "Halictidae",
+          "genus_name": "Halictus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          "last_observed": "2022-11-03",
+          "median_last10_observed": "2022-11-03"
+        },
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Lepidoptera",
+          "family_name": "Pieridae",
+          "genus_name": "Pieris",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          "last_observed": "2022-11-03",
+          "median_last10_observed": "2022-11-03"
+        }
+      ],
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 5,
+        "species": 5
+      }
+    },
+    "sq_m1405965_p773132": {
+      "ix": -1.405965E+6,
+      "iy": 773132,
+      "last_observed": "2022-11-03",
+      "median_last10_observed": "2022-11-03",
+      "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hymenoptera",
+        "family_name": "Halictidae",
+        "genus_name": "Halictus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "last_observed": "2022-11-03",
+        "median_last10_observed": "2022-11-03"
+      },
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1405965_p773134": {
+      "ix": -1.405965E+6,
+      "iy": 773134,
+      "last_observed": "2021-05-02",
+      "median_last10_observed": "2021-05-02",
+      "genera": {
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Sturnidae",
+        "genus_name": "Sturnus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "last_observed": "2021-05-02",
+        "median_last10_observed": "2021-05-02"
+      },
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1405964_p773120": {
       "ix": -1.405964E+6,
       "iy": 773120,
@@ -709,6 +1210,140 @@
         "species": 1
       }
     },
+    "sq_m1405964_p773128": {
+      "ix": -1.405964E+6,
+      "iy": 773128,
+      "last_observed": "2020-05-18",
+      "median_last10_observed": "2020-05-18",
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Lamiaceae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "last_observed": "2020-05-18",
+        "median_last10_observed": "2020-05-18"
+      },
+      "top_observers": {
+        "observer_id": 2.085141E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1405964_p773129": {
+      "ix": -1.405964E+6,
+      "iy": 773129,
+      "last_observed": "2022-08-23",
+      "median_last10_observed": "2021-12-16",
+      "genera": [
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Hymenoptera",
+          "family_name": "Apidae",
+          "genus_name": "Bombus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2022-08-23",
+          "median_last10_observed": "2022-08-23"
+        },
+        {
+          "iconic_taxon_name": "Animalia",
+          "order_name": "Unknown",
+          "family_name": "Unknown",
+          "genus_name": "Unknown",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2021-04-11",
+          "median_last10_observed": "2021-04-11"
+        }
+      ],
+      "top_observers": [
+        {
+          "observer_id": 7580,
+          "count": 1,
+          "species": 1
+        },
+        {
+          "observer_id": 2.085141E+6,
+          "count": 1,
+          "species": 1
+        }
+      ]
+    },
+    "sq_m1405964_p773130": {
+      "ix": -1.405964E+6,
+      "iy": 773130,
+      "last_observed": "2019-09-02",
+      "median_last10_observed": "2019-09-02",
+      "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Lepidoptera",
+        "family_name": "Nymphalidae",
+        "genus_name": "Junonia",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ],
+        "last_observed": "2019-09-02",
+        "median_last10_observed": "2019-09-02"
+      },
+      "top_observers": {
+        "observer_id": 2.085141E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
     "sq_m1405963_p773129": {
       "ix": -1.405963E+6,
       "iy": 773129,
@@ -739,6 +1374,40 @@
       },
       "top_observers": {
         "observer_id": 232201,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1405962_p773130": {
+      "ix": -1.405962E+6,
+      "iy": 773130,
+      "last_observed": "2025-07-20",
+      "median_last10_observed": "2025-07-20",
+      "genera": {
+        "iconic_taxon_name": "Plantae",
+        "order_name": "Lamiales",
+        "family_name": "Oleaceae",
+        "genus_name": "Chionanthus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "last_observed": "2025-07-20",
+        "median_last10_observed": "2025-07-20"
+      },
+      "top_observers": {
+        "observer_id": 9.249862E+6,
         "count": 1,
         "species": 1
       }
@@ -811,16 +1480,84 @@
         "species": 1
       }
     },
-    "sq_m1405954_p773127": {
-      "ix": -1.405954E+6,
-      "iy": 773127,
-      "last_observed": "2019-06-02",
-      "median_last10_observed": "2019-06-02",
+    "sq_m1405960_p773134": {
+      "ix": -1.40596E+6,
+      "iy": 773134,
+      "last_observed": "2020-05-18",
+      "median_last10_observed": "2020-05-18",
       "genera": {
-        "iconic_taxon_name": "Arachnida",
-        "order_name": "Araneae",
-        "family_name": "Araneidae",
-        "genus_name": "Cyclosa",
+        "iconic_taxon_name": "Aves",
+        "order_name": "Passeriformes",
+        "family_name": "Mimidae",
+        "genus_name": "Mimus",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "last_observed": "2020-05-18",
+        "median_last10_observed": "2020-05-18"
+      },
+      "top_observers": {
+        "observer_id": 2.085141E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1405960_p773147": {
+      "ix": -1.40596E+6,
+      "iy": 773147,
+      "last_observed": "2023-04-29",
+      "median_last10_observed": "2023-04-29",
+      "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Coleoptera",
+        "family_name": "Scarabaeidae",
+        "genus_name": "Unknown",
+        "count": 1,
+        "month_counts": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "last_observed": "2023-04-29",
+        "median_last10_observed": "2023-04-29"
+      },
+      "top_observers": {
+        "observer_id": 3.604649E+6,
+        "count": 1,
+        "species": 1
+      }
+    },
+    "sq_m1405959_p773145": {
+      "ix": -1.405959E+6,
+      "iy": 773145,
+      "last_observed": "2025-06-10",
+      "median_last10_observed": "2025-06-10",
+      "genera": {
+        "iconic_taxon_name": "Insecta",
+        "order_name": "Hemiptera",
+        "family_name": "Berytidae",
+        "genus_name": "Jalysus",
         "count": 1,
         "month_counts": [
           0,
@@ -836,13 +1573,72 @@
           0,
           0
         ],
-        "last_observed": "2019-06-02",
-        "median_last10_observed": "2019-06-02"
+        "last_observed": "2025-06-10",
+        "median_last10_observed": "2025-06-10"
       },
       "top_observers": {
-        "observer_id": 7580,
+        "observer_id": 3.604649E+6,
         "count": 1,
         "species": 1
+      }
+    },
+    "sq_m1405954_p773127": {
+      "ix": -1.405954E+6,
+      "iy": 773127,
+      "last_observed": "2019-06-02",
+      "median_last10_observed": "2018-07-10",
+      "genera": [
+        {
+          "iconic_taxon_name": "Arachnida",
+          "order_name": "Araneae",
+          "family_name": "Araneidae",
+          "genus_name": "Cyclosa",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2019-06-02",
+          "median_last10_observed": "2019-06-02"
+        },
+        {
+          "iconic_taxon_name": "Insecta",
+          "order_name": "Lepidoptera",
+          "family_name": "Nymphalidae",
+          "genus_name": "Danaus",
+          "count": 1,
+          "month_counts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          "last_observed": "2017-08-18",
+          "median_last10_observed": "2017-08-18"
+        }
+      ],
+      "top_observers": {
+        "observer_id": 7580,
+        "count": 2,
+        "species": 2
       }
     }
   }
