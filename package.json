@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "publish:grid-assets": "node scripts/publish-grid-assets.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -19,6 +20,7 @@
   },
   "homepage": "https://github.com/atdemarco/gridwild#readme",
   "dependencies": {
-    "@supabase/supabase-js": "^2.105.3"
+    "@supabase/supabase-js": "^2.105.3",
+    "dotenv": "^17.4.2"
   }
 }

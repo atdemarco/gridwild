@@ -774,12 +774,57 @@ const GENUS_TAXONOMY_DICT_URL = "assets/genus_taxonomy_dictionary.json";
 window.__gwObserverDict = window.__gwObserverDict || null;
 const OBSERVER_DICT_URL = "assets/observer_dictionary.json";
 
+async function getGridAssetUrl(key, fallbackUrl) {
+  try {
+    if (window.GridWildAssets?.assetUrl) {
+      return (await window.GridWildAssets.assetUrl(key)) || fallbackUrl;
+    }
+  } catch (err) {
+    console.warn(`Falling back to local ${key} asset.`, err);
+  }
+
+  return fallbackUrl;
+}
+
+async function loadGridWildStaticAssets() {
+  if (window.GridWildAssets?.getCatalog) {
+    window.GridWildAssets.getCatalog()
+      .then((catalog) => {
+        window.__gwAssetBuild = catalog?.build || null;
+      })
+      .catch((err) => console.warn("GridWild asset catalog unavailable.", err));
+  }
+
+  if (window.GridWildAssets?.loadManifest) {
+    window.GridWildAssets.loadManifest()
+      .then((manifest) => {
+        window.__gwAssetManifest = manifest || null;
+      })
+      .catch((err) => console.warn("GridWild asset manifest unavailable.", err));
+  }
+
+  if (window.GridWildAssets?.loadSquareSummary) {
+    window.GridWildAssets.loadSquareSummary()
+      .then((summary) => {
+        window.__gwSquareGenusSummary = summary || null;
+      })
+      .catch((err) => console.warn("GridWild square summary unavailable.", err));
+  }
+
+  loadObserverDictionary()
+    .catch((err) => console.warn("GridWild observer dictionary unavailable.", err));
+
+  const heatUrl = await getGridAssetUrl("heat", "assets/dc_heat.csv");
+  loadStaticHeatmapCsv(heatUrl);
+}
+
 async function loadObserverDictionary() {
   if (window.__gwObserverDict) return window.__gwObserverDict;
 
-  const resp = await fetch(OBSERVER_DICT_URL);
+  const url = await getGridAssetUrl("observerDictionary", OBSERVER_DICT_URL);
+  const resp = await fetch(url);
   if (!resp.ok) {
-    throw new Error(`Failed to load observer dictionary: HTTP ${resp.status}`);
+    throw new Error(`Failed to load observer dictionary: HTTP ${resp.status} for ${url}`);
   }
 
   const data = await resp.json();
@@ -813,7 +858,7 @@ async function loadGeneraSuperchunk(ix, iy) {
     return pending.get(key);
   }
 
-  const url = getGeneraSuperchunkUrl(ix, iy);
+  const url = await getGeneraSuperchunkUrlAsync(ix, iy);
 
   const job = fetch(url)
     .then((resp) => {
@@ -850,6 +895,16 @@ function getGeneraSuperchunkUrl(ix, iy) {
   return url;
 }
 
+async function getGeneraSuperchunkUrlAsync(ix, iy) {
+  if (window.GridWildAssets?.superchunkUrl) {
+    const key = getGeneraSuperchunkKey(ix, iy);
+    const [superIx, superIy] = key.split("_").map(Number);
+    return window.GridWildAssets.superchunkUrl(superIx, superIy);
+  }
+
+  return getGeneraSuperchunkUrl(ix, iy);
+}
+
 async function loadGeneraSuperchunkOLD(ix, iy) {
   const key = getGeneraSuperchunkKey(ix, iy);
   const cache = window.__squareGeneraSuperchunkCache;
@@ -861,7 +916,7 @@ async function loadGeneraSuperchunkOLD(ix, iy) {
     return data;
   }
 
-  const url = getGeneraSuperchunkUrl(ix, iy);
+  const url = await getGeneraSuperchunkUrlAsync(ix, iy);
   const resp = await fetch(url);
   //console.log("GENERA fetch", url, resp.status);
 
@@ -1963,7 +2018,7 @@ map.on("move zoom resize viewreset zoomend moveend", scheduleGridHeatCanvasRende
 map.on("zoomend resize moveend", updateGrid);
 updateGrid();
 
-loadStaticHeatmapCsv("assets/dc_heat.csv");
+loadGridWildStaticAssets();
 
 // RPG-style grid cell popup on double click
 // Disable Leaflet dblclick-to-zoom so we can use dblclick for UI

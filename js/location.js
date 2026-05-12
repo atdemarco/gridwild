@@ -79,6 +79,11 @@ function setUserLocation(lat, lng, accuracyMeters) {
 // Geolocation
 let lastFix = null;
 let lastHeading = null;   // degrees, 0 = north
+let compassListenersAttached = false;
+let compassPermissionState = "unknown";
+let compassDeniedToastShown = false;
+
+const COMPASS_HEADING_SMOOTHING = 0.35;
 
 const GPS_GOOD_THRESHOLD_M = 20;
 
@@ -174,6 +179,10 @@ function setLockButtonVisual() {
   btn.classList.toggle("is-locked", locked);
   btn.setAttribute("aria-pressed", locked ? "true" : "false");
   btn.title = locked ? "Tracking on" : "Find me";
+
+  if (typeof syncCompassTracking === "function") {
+    syncCompassTracking({ requestPermission: false });
+  }
 }
 
 function enableLocationLock(options = {}) {
@@ -192,6 +201,8 @@ function enableLocationLock(options = {}) {
   state.lockToLocation = true;
   state.suspendAutoCenterUntil = 0;
   state.lockZoom = zoom;
+
+  startCompassTracking({ requestPermission: true });
 
   if (!wasLocked) {
     if (hadFix) {
@@ -273,6 +284,7 @@ function disableLocationLock() {
   window.__gwState.lockToLocation = false;
   showGridWildToast("Follow lock disabled");
   window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
+  stopCompassTracking();
 
   const cb = document.getElementById("toggleLockLocation");
   if (cb && cb.checked) {
@@ -356,8 +368,9 @@ function startWatchingLocation() {
 
   return navigator.geolocation.watchPosition(
     (pos) => {
-      const { latitude, longitude, accuracy } = pos.coords;
+      const { latitude, longitude, accuracy, heading, speed } = pos.coords;
       lastFix = { latitude, longitude, accuracy };
+      updateHeadingFromGps(heading, speed);
       setUserLocation(latitude, longitude, accuracy);
       setLockButtonVisual();
 
@@ -382,6 +395,144 @@ function normalizeHeading(deg) {
   return deg;
 }
 
+function smoothHeading(nextHeading) {
+  const next = normalizeHeading(nextHeading);
+  if (!Number.isFinite(lastHeading)) return next;
+
+  const delta = ((next - lastHeading + 540) % 360) - 180;
+  return normalizeHeading(lastHeading + delta * COMPASS_HEADING_SMOOTHING);
+}
+
+function applyCompassHeading(headingDeg, source = "unknown") {
+  if (!window.__gwState?.lockToLocation) return;
+  if (!Number.isFinite(headingDeg)) return;
+
+  lastHeading = smoothHeading(headingDeg);
+  window.__gwCompassHeading = lastHeading;
+  window.__gwCompassSource = source;
+  updateUserMarkerHeading(lastHeading);
+}
+
+function headingFromDeviceOrientation(event) {
+  const webkitHeading = Number(event.webkitCompassHeading);
+  if (Number.isFinite(webkitHeading)) {
+    return {
+      heading: normalizeHeading(webkitHeading),
+      source: "webkitCompassHeading"
+    };
+  }
+
+  const alpha = Number(event.alpha);
+  if (!Number.isFinite(alpha)) return null;
+
+  return {
+    heading: normalizeHeading(360 - alpha),
+    source: event.type || "deviceorientation"
+  };
+}
+
+function handleDeviceOrientation(event) {
+  const reading = headingFromDeviceOrientation(event);
+  if (!reading) return;
+
+  applyCompassHeading(reading.heading, reading.source);
+}
+
+function updateHeadingFromGps(headingDeg, speed) {
+  if (compassListenersAttached) return;
+  if (!window.__gwState?.lockToLocation) return;
+  if (!Number.isFinite(Number(headingDeg))) return;
+
+  const metersPerSecond = Number(speed);
+  if (Number.isFinite(metersPerSecond) && metersPerSecond < 0.5) return;
+
+  applyCompassHeading(Number(headingDeg), "gps");
+}
+
+function attachCompassListeners() {
+  if (compassListenersAttached) return;
+  if (!("DeviceOrientationEvent" in window)) return;
+
+  window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
+  window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+  compassListenersAttached = true;
+}
+
+function stopCompassTracking() {
+  if (!compassListenersAttached) return;
+
+  window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
+  window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
+  compassListenersAttached = false;
+}
+
+async function requestCompassPermission() {
+  const OrientationEvent = window.DeviceOrientationEvent;
+  if (!OrientationEvent || typeof OrientationEvent.requestPermission !== "function") {
+    compassPermissionState = "granted";
+    return true;
+  }
+
+  try {
+    const result = await OrientationEvent.requestPermission();
+    compassPermissionState = result;
+    return result === "granted";
+  } catch (err) {
+    console.warn("Compass permission request failed:", err);
+    compassPermissionState = "error";
+    return false;
+  }
+}
+
+async function startCompassTracking(options = {}) {
+  const { requestPermission = false } = options;
+
+  if (!window.__gwState?.lockToLocation) {
+    stopCompassTracking();
+    return false;
+  }
+
+  if (!("DeviceOrientationEvent" in window)) {
+    compassPermissionState = "unsupported";
+    return false;
+  }
+
+  if (requestPermission) {
+    const ok = await requestCompassPermission();
+    if (!ok) {
+      stopCompassTracking();
+      if (!compassDeniedToastShown) {
+        showGridWildToast("Compass unavailable");
+        compassDeniedToastShown = true;
+      }
+      return false;
+    }
+  }
+
+  if (compassPermissionState !== "denied" && compassPermissionState !== "error") {
+    attachCompassListeners();
+  }
+
+  return compassListenersAttached;
+}
+
+function syncCompassTracking(options = {}) {
+  if (window.__gwState?.lockToLocation) {
+    startCompassTracking(options);
+  } else {
+    stopCompassTracking();
+  }
+}
+
+function getCompassState() {
+  return {
+    active: compassListenersAttached,
+    permission: compassPermissionState,
+    heading: lastHeading,
+    source: window.__gwCompassSource || null
+  };
+}
+
 function applyMapRotation(headingDeg = 0) {
   const mapPane = map.getPane("mapPane");
   if (!mapPane) return;
@@ -390,18 +541,8 @@ function applyMapRotation(headingDeg = 0) {
   mapPane.style.transform = `rotate(${-headingDeg}deg)`;
 }
 
-function handleDeviceOrientation(event) {
-  if (typeof event.alpha !== "number") return;
-
-  lastHeading = normalizeHeading(event.alpha);
-
-  updateUserMarkerHeading(lastHeading);
-  applyMapRotation(lastHeading);
-}
-
 function enableDeviceOrientation() {
-//  window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
-//  window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+  return startCompassTracking({ requestPermission: true });
 }
 
 map.on("moveend zoomend", () => {
@@ -428,3 +569,15 @@ function getMapResolution() {
 window.enableLocationLock = enableLocationLock;
 window.disableLocationLock = disableLocationLock;
 window.setLockButtonVisual = setLockButtonVisual;
+window.requestLocationOnce = requestLocationOnce;
+window.startWatchingLocation = startWatchingLocation;
+window.startCompassTracking = startCompassTracking;
+window.stopCompassTracking = stopCompassTracking;
+window.syncCompassTracking = syncCompassTracking;
+window.enableDeviceOrientation = enableDeviceOrientation;
+window.GridWildCompass = {
+  start: startCompassTracking,
+  stop: stopCompassTracking,
+  sync: syncCompassTracking,
+  getState: getCompassState
+};

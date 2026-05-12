@@ -2177,6 +2177,7 @@
 
   <script src="js/mapinit.js"></script>
   <script src="js/gw-overview-map.js"></script>
+  <script src="js/gw-grid-assets.js"></script>
   <script src="js/initgrid.js"></script>
   <script src="js/gw-fog.js"></script>
   <script src="js/gw-fog-canvas.js"></script>
@@ -2883,8 +2884,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         recenterNow: true,
         force: true
       });
-    } else if (typeof requestLocationOnce === "function") {
-      requestLocationOnce();
+    } else if (typeof window.requestLocationOnce === "function") {
+      window.requestLocationOnce();
     }
 
     if (typeof window.refreshGridWildMobileInfo === "function") {
@@ -2965,8 +2966,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         }
       }, 50);
 
-      requestLocationOnce();
-      const watchId = startWatchingLocation();
+      window.requestLocationOnce?.();
+      const watchId = window.startWatchingLocation?.();
       window.__gwWatchId = watchId;
 
       if (typeof window.setLockButtonVisual === "function") {

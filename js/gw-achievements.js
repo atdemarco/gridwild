@@ -8,6 +8,7 @@
   const PROFILE_KEY = "gw_achievement_profile_v1";
 
   const RANKS = ["Novice", "Apprentice", "Adept", "Master", "Grandmaster", "Legend"];
+  let pendingBootstrapSync = false;
 
   const TAXON_LINES = [
     { key: "leafhopper", label: "Leafhopper", terms: ["leafhopper", "cicadellidae"], icon: "🟩" },
@@ -81,6 +82,19 @@ function saveStore(store) {
     achieved_where: state?.achieved_where || null,
     source: state?.source || null
   }));
+
+  if (!window.GridWildAPI?.getPlayerId?.()) {
+    if (!pendingBootstrapSync) {
+      pendingBootstrapSync = true;
+      window.addEventListener("gwBootstrapReady", () => {
+        pendingBootstrapSync = false;
+        saveStore(safeStore);
+      }, { once: true });
+    }
+    window.dispatchEvent(new CustomEvent("gwAchievementsChanged"));
+    refreshAchievementSummary();
+    return;
+  }
 
   window.GridWildAPI?.upsertPlayerAchievements?.(rows)
     .then(result => {
@@ -945,7 +959,7 @@ function refreshAchievementSummary() {
     evaluateCurrent({ source: "draft_observation_update" });
   });
 
-  document.addEventListener("DOMContentLoaded", () => {
-    setTimeout(() => evaluateCurrent({ source: "startup" }), 500);
-  });
+  window.addEventListener("gwBootstrapReady", () => {
+    setTimeout(() => evaluateCurrent({ source: "startup" }), 0);
+  }, { once: true });
 })();

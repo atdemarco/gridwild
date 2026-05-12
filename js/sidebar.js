@@ -170,6 +170,12 @@
     if (typeof window.setLockButtonVisual === "function") {
       window.setLockButtonVisual();
     }
+
+    if (typeof window.syncCompassTracking === "function") {
+      window.syncCompassTracking({
+        requestPermission: !!window.__gwState.lockToLocation
+      });
+    }
   }
     applyLayerVisibility();
 
