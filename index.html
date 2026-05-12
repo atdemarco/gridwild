@@ -304,6 +304,12 @@
       opacity: 0.86;
     }
 
+    .gw-hud-contrast-btn {
+      color: rgba(240, 209, 138, 0.74);
+      filter: none;
+      opacity: 0.84;
+    }
+
     .gw-hud-filter-placeholder {
       width: 100%;
       aspect-ratio: 1;
@@ -317,6 +323,13 @@
       background:
         radial-gradient(circle at 50% 38%, rgba(210,235,242,0.34), rgba(125,169,181,0.12) 58%, rgba(255,255,255,0.04) 100%);
       box-shadow: inset 0 0 0 1px rgba(210,235,242,0.42), 0 0 8px rgba(190,225,235,0.18);
+    }
+
+    .gw-hud-contrast-btn.is-on {
+      color: #fff2c7;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(255,230,154,0.36), rgba(215,183,116,0.12) 58%, rgba(255,255,255,0.04) 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,225,151,0.42), 0 0 8px rgba(240,209,138,0.20);
     }
 
     .gw-hud-coarse {
@@ -1839,7 +1852,12 @@
           <path d="M6.8 12.5A4.8 4.8 0 0 1 16 10.2a3.2 3.2 0 0 1 1.2 6.1"></path>
         </svg>
       </button>
-      <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
+      <button class="gw-hud-taxa-btn gw-hud-contrast-btn" id="gwHudHighContrastToggle" type="button" aria-label="Toggle high contrast lens colors" title="High contrast">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="4" y="4" width="16" height="16" rx="3"></rect>
+          <path d="m8 12.5 2.7 2.7L16.5 9"></path>
+        </svg>
+      </button>
       <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
       <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
       <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
@@ -2657,6 +2675,70 @@ window.refreshQuestBadge = refreshQuestBadge;
       return { bind, sync };
     })();
     window.GridWildHudTaxaFilter.bind();
+
+    // Compact HUD high-contrast lens toggle. Remove #gwHudHighContrastToggle
+    // plus this module and the GWLenses.applyHighContrast helper to undo it.
+    window.GridWildHudHighContrast = (function () {
+      function button() {
+        return document.getElementById("gwHudHighContrastToggle");
+      }
+
+      function loadSaved() {
+        try {
+          const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+          return state.highContrastLensEnabled === true;
+        } catch {
+          return false;
+        }
+      }
+
+      function save() {
+        try {
+          const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+          state.highContrastLensEnabled = window.__gwState?.highContrastLensEnabled === true;
+          localStorage.setItem("gw_ui_state", JSON.stringify(state));
+        } catch {}
+      }
+
+      function sync() {
+        const btn = button();
+        const enabled = window.__gwState?.highContrastLensEnabled === true;
+        if (!btn) return;
+
+        btn.classList.toggle("is-on", enabled);
+        btn.setAttribute("aria-pressed", enabled ? "true" : "false");
+      }
+
+      function apply(enabled) {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.highContrastLensEnabled = enabled === true;
+        sync();
+        save();
+
+        window.GridWildHudLegend?.refresh?.();
+        if (typeof window.updateGrid === "function") window.updateGrid();
+        if (typeof paintLegendFromHeatFunction === "function") paintLegendFromHeatFunction();
+      }
+
+      function bind() {
+        const btn = button();
+        if (!btn || btn.dataset.bound === "true") return;
+
+        window.__gwState = window.__gwState || {};
+        window.__gwState.highContrastLensEnabled =
+          window.__gwState.highContrastLensEnabled === true || loadSaved();
+
+        btn.dataset.bound = "true";
+        btn.setAttribute("aria-pressed", "false");
+        btn.addEventListener("click", () => {
+          apply(window.__gwState?.highContrastLensEnabled !== true);
+        });
+        sync();
+      }
+
+      return { bind, sync, apply };
+    })();
+    window.GridWildHudHighContrast.bind();
 
     // Compact HUD coarse-heat control. It mirrors the canonical hidden sidebar
     // checkbox so this experiment can be removed without touching map state code.

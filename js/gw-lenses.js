@@ -60,6 +60,22 @@ function lastObservedMonth(metrics){
   return ms ? new Date(ms).getUTCMonth() + 1 : 0;
 }
 
+function highContrastEnabled(){
+  return window.__gwState?.highContrastLensEnabled === true;
+}
+
+function applyHighContrast(c){
+  if (!c || !highContrastEnabled()) return c;
+
+  const lightPivot = 56;
+  return {
+    ...c,
+    sat: Math.min(100, Math.max(48, c.sat + (100 - c.sat) * 0.34)),
+    light: Math.max(24, Math.min(84, lightPivot + (c.light - lightPivot) * 1.35)),
+    alpha: clamp01(0.06 + c.alpha * 1.12)
+  };
+}
+
 
 window.GWLegendCopy = {
 
@@ -582,7 +598,7 @@ function compose(metrics){
   const lens = window.__gwState?.activeLens || "classic";
   const fn = recipes[lens] || recipes.classic;
 
-  const c = fn(metrics);
+  const c = applyHighContrast(fn(metrics));
 
   return {
     fillColor:
@@ -594,7 +610,8 @@ function compose(metrics){
 
 return {
   recipes,
-  compose
+  compose,
+  applyHighContrast
 };
 
 })();

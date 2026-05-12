@@ -9,6 +9,8 @@ const { createClient } = require("@supabase/supabase-js");
 const DEFAULT_BUCKET = "gridwild-assets";
 const SUPERCHUNK_UPSERT_BATCH_SIZE = 500;
 const UPLOAD_PROGRESS_EVERY = 250;
+const UPLOAD_MAX_ATTEMPTS = 5;
+const UPLOAD_RETRY_BASE_DELAY_MS = 1000;
 
 function requiredEnv(name) {
   const value = process.env[name];
@@ -61,6 +63,16 @@ async function assertFileExists(filePath, label) {
   }
 }
 
+async function fileExists(filePath) {
+  try {
+    const stat = await fs.stat(filePath);
+    return stat.isFile();
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
 function validateManifest(manifest) {
   if (!manifest || typeof manifest !== "object") {
     throw new Error("manifest.json must contain a JSON object.");
@@ -95,18 +107,33 @@ function validateManifest(manifest) {
 
 async function uploadFile({ supabase, bucket, localPath, storagePath, label }) {
   const body = await fs.readFile(localPath);
-  const { error } = await supabase.storage.from(bucket).upload(storagePath, body, {
-    cacheControl: "3600",
-    contentType: contentTypeFor(localPath),
-    upsert: true,
-  });
 
-  if (error) {
-    throw new Error(`Failed to upload ${label} to ${storagePath}: ${error.message}`);
+  for (let attempt = 1; attempt <= UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+    const { error } = await supabase.storage.from(bucket).upload(storagePath, body, {
+      cacheControl: "3600",
+      contentType: contentTypeFor(localPath),
+      upsert: true,
+    });
+
+    if (!error) return;
+
+    if (attempt === UPLOAD_MAX_ATTEMPTS) {
+      throw new Error(`Failed to upload ${label} to ${storagePath}: ${error.message}`);
+    }
+
+    const delayMs = UPLOAD_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1));
+    console.warn(
+      `Upload failed for ${label} (${error.message}). Retrying ${attempt + 1}/${UPLOAD_MAX_ATTEMPTS} in ${delayMs}ms...`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 }
 
 function buildMetadataRow(manifest, buildPrefix) {
+  const squareSummaryFile = manifest.square_summary_file
+    ? joinStoragePath(buildPrefix, normalizeAssetPath(manifest.square_summary_file))
+    : null;
+
   return {
     build_id: manifest.build_id,
     schema_version: manifest.schema_version,
@@ -121,10 +148,7 @@ function buildMetadataRow(manifest, buildPrefix) {
       buildPrefix,
       normalizeAssetPath(manifest.observer_dictionary_file || "observer_dictionary.json"),
     ),
-    square_summary_file: joinStoragePath(
-      buildPrefix,
-      normalizeAssetPath(manifest.square_summary_file || "squares_genus_summary.json"),
-    ),
+    square_summary_file: squareSummaryFile,
     superchunk_dir: joinStoragePath(
       buildPrefix,
       normalizeAssetPath(manifest.superchunk_dir || "square_genera_superchunks"),
@@ -185,9 +209,16 @@ async function main() {
   const topLevelAssets = [
     { manifestKey: "heat_file", fallback: "dc_heat.csv", label: "heat CSV" },
     { manifestKey: "observer_dictionary_file", fallback: "observer_dictionary.json", label: "observer dictionary" },
-    { manifestKey: "square_summary_file", fallback: "squares_genus_summary.json", label: "square genus summary" },
     { file: "manifest.json", label: "manifest" },
   ];
+
+  if (manifest.square_summary_file) {
+    topLevelAssets.push({
+      manifestKey: "square_summary_file",
+      label: "square genus summary",
+      optional: true,
+    });
+  }
 
   console.log(`GridWild asset publish`);
   console.log(`Build: ${manifest.build_id}`);
@@ -212,7 +243,19 @@ async function main() {
 
   for (const asset of topLevelAssets) {
     const file = normalizeAssetPath(asset.file || manifest[asset.manifestKey] || asset.fallback);
-    await assertFileExists(path.join(assetDir, file), asset.label);
+    const localPath = path.join(assetDir, file);
+    const exists = await fileExists(localPath);
+
+    if (!exists && asset.optional) {
+      console.log(`Skipping optional ${asset.label}: ${localPath}`);
+      asset.skip = true;
+      if (asset.manifestKey) {
+        manifest[asset.manifestKey] = null;
+      }
+      continue;
+    }
+
+    await assertFileExists(localPath, asset.label);
   }
 
   for (const superchunk of normalizedSuperchunks) {
@@ -230,6 +273,8 @@ async function main() {
 
   console.log("Uploading top-level assets...");
   for (const asset of topLevelAssets) {
+    if (asset.skip) continue;
+
     const file = normalizeAssetPath(asset.file || manifest[asset.manifestKey] || asset.fallback);
     const localPath = path.join(assetDir, file);
     const storagePath = joinStoragePath(buildPrefix, file);

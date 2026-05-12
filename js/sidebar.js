@@ -53,6 +53,7 @@
   window.__gwState.dynamicINatEnabled = $("toggleDynamicINat")?.checked ?? false;
   window.__gwState.showShimmer = $("toggleShimmer")?.checked ?? false;
   window.__gwState.showFog = $("toggleFog")?.checked ?? true;
+  window.__gwState.highContrastLensEnabled = window.__gwState.highContrastLensEnabled === true;
   window.__gwState.fogSmoothingEnabled = $("toggleFogSmoothing")?.checked ?? true;
   window.__gwState.godsEyeEnabled = $("toggleGodsEye")?.checked ?? false;
   window.__gwState.lockToLocation = $("toggleLockLocation")?.checked ?? true;
@@ -332,6 +333,7 @@ function saveUIState() {
     dynamicINatEnabled: byId("toggleDynamicINat")?.checked ?? false,
     showShimmer: byId("toggleShimmer")?.checked ?? false,
     showFog: byId("toggleFog")?.checked ?? true,
+    highContrastLensEnabled: window.__gwState?.highContrastLensEnabled === true,
     fogSmoothingEnabled: byId("toggleFogSmoothing")?.checked ?? true,
     godsEyeEnabled: byId("toggleGodsEye")?.checked ?? false,
     lockToLocation: byId("toggleLockLocation")?.checked ?? true,
@@ -366,6 +368,7 @@ function applySavedUIState() {
   if (byId("toggleDynamicINat"))  byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
   if (byId("toggleShimmer"))      byId("toggleShimmer").checked = s.showShimmer ?? false;
   if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? true;
+  window.__gwState.highContrastLensEnabled = s.highContrastLensEnabled === true;
   if (byId("toggleGodsEye"))      byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
   if (byId("toggleFogSmoothing")) byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? false;
