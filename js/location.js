@@ -82,8 +82,13 @@ let lastHeading = null;   // degrees, 0 = north
 let compassListenersAttached = false;
 let compassPermissionState = "unknown";
 let compassDeniedToastShown = false;
+let compassPreferredSource = null;
+let lastCompassAcceptedAt = 0;
 
-const COMPASS_HEADING_SMOOTHING = 0.35;
+const COMPASS_HEADING_SMOOTHING = 0.18;
+const COMPASS_HEADING_DEADBAND_DEG = 2.5;
+const COMPASS_HEADING_MIN_UPDATE_MS = 80;
+const COMPASS_SOURCE_STALE_MS = 1200;
 const LOCK_ZOOM_CLOSE = 19;
 const LOCK_ZOOM_WIDE = 17;
 const LOCK_PROGRAMMATIC_MOVE_GRACE_MS = 900;
@@ -533,11 +538,39 @@ function smoothHeading(nextHeading) {
   return normalizeHeading(lastHeading + delta * COMPASS_HEADING_SMOOTHING);
 }
 
+function headingDeltaDeg(a, b) {
+  return Math.abs(((normalizeHeading(a) - normalizeHeading(b) + 540) % 360) - 180);
+}
+
+function shouldPreferCompassSource(source) {
+  if (!compassPreferredSource) return true;
+  if (source === compassPreferredSource) return true;
+
+  // iOS Safari's webkitCompassHeading is the least ambiguous source when present.
+  if (source === "webkitCompassHeading") return true;
+  if (Date.now() - lastCompassAcceptedAt > COMPASS_SOURCE_STALE_MS) return true;
+
+  return false;
+}
+
 function applyCompassHeading(headingDeg, source = "unknown") {
   if (!window.__gwState?.lockToLocation) return;
   if (!Number.isFinite(headingDeg)) return;
+  if (!shouldPreferCompassSource(source)) return;
 
-  lastHeading = smoothHeading(headingDeg);
+  const now = Date.now();
+  const normalizedHeading = normalizeHeading(headingDeg);
+  const lastAcceptedHeading = Number.isFinite(lastHeading) ? lastHeading : null;
+
+  if (lastAcceptedHeading !== null) {
+    const delta = headingDeltaDeg(normalizedHeading, lastAcceptedHeading);
+    if (delta < COMPASS_HEADING_DEADBAND_DEG) return;
+    if (now - lastCompassAcceptedAt < COMPASS_HEADING_MIN_UPDATE_MS) return;
+  }
+
+  compassPreferredSource = source;
+  lastCompassAcceptedAt = now;
+  lastHeading = smoothHeading(normalizedHeading);
   window.__gwCompassHeading = lastHeading;
   window.__gwCompassSource = source;
   updateUserMarkerHeading(lastHeading);
