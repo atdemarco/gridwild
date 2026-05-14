@@ -88,8 +88,13 @@ const LOCK_ZOOM_CLOSE = 19;
 const LOCK_ZOOM_WIDE = 17;
 const LOCK_PROGRAMMATIC_MOVE_GRACE_MS = 900;
 const LOCK_PAN_BREAK_THRESHOLD_PX = 44;
+const LOCK_VIEW_ANIMATION_SECONDS = 0.9;
 
 const GPS_GOOD_THRESHOLD_M = 20;
+const MAP_HEADING_ROTATION_ENABLED = true;
+
+let mapHeadingDeg = 0;
+let mapHeadingRaf = null;
 
 function normalizeLockZoomMode(mode) {
   return mode === "wide" ? "wide" : "close";
@@ -103,6 +108,41 @@ function setProgrammaticLockMoveGuard() {
   window.__gwState = window.__gwState || {};
   window.__gwState.programmaticAutoCenterUntil =
     Date.now() + LOCK_PROGRAMMATIC_MOVE_GRACE_MS;
+}
+
+function setProgrammaticLockMoveGuardFor(seconds = LOCK_VIEW_ANIMATION_SECONDS) {
+  window.__gwState = window.__gwState || {};
+  const durationMs = Math.max(LOCK_PROGRAMMATIC_MOVE_GRACE_MS, Math.ceil(Number(seconds) * 1000) + 150);
+  window.__gwState.programmaticAutoCenterUntil = Date.now() + durationMs;
+  window.__gwState.lockViewAnimationUntil = Date.now() + durationMs;
+}
+
+function animateLockedUserView(latlng, zoom, options = {}) {
+  const {
+    animate = true,
+    duration = LOCK_VIEW_ANIMATION_SECONDS,
+    forceFly = false
+  } = options;
+
+  if (!map || !latlng) return;
+
+  const targetZoom = Number.isFinite(Number(zoom)) ? Number(zoom) : map.getZoom();
+  const currentZoom = map.getZoom();
+  const shouldFly = forceFly || Math.abs(currentZoom - targetZoom) > 0.05;
+
+  setProgrammaticLockMoveGuardFor(duration);
+
+  if (animate && shouldFly && typeof map.flyTo === "function") {
+    map.flyTo(latlng, targetZoom, {
+      animate: true,
+      duration,
+      easeLinearity: 0.25
+    });
+  } else if (shouldFly) {
+    map.setView(latlng, targetZoom, { animate });
+  } else {
+    map.panTo(latlng, { animate });
+  }
 }
 
 function setLockZoomMode(mode) {
@@ -175,8 +215,7 @@ navigator.geolocation.getCurrentPosition(
 
         if (toastOnSuccess && window.__gwState?.lockToLocation) {
       showGridWildToast("Follow lock enabled");
-      setProgrammaticLockMoveGuard();
-      map.setView([latitude, longitude], zoom, { animate: true });
+      animateLockedUserView([latitude, longitude], zoom, { forceFly: true });
     }
 
     map.once("moveend", () => {
@@ -255,8 +294,7 @@ function enableLocationLock(options = {}) {
   }
 
   if (recenterNow && lastFix) {
-    setProgrammaticLockMoveGuard();
-    map.setView([lastFix.latitude, lastFix.longitude], lockZoom, { animate: true });
+    animateLockedUserView([lastFix.latitude, lastFix.longitude], lockZoom, { forceFly: true });
 
     if (typeof window.handleUserPositionUpdate === "function") {
       window.handleUserPositionUpdate(lastFix.latitude, lastFix.longitude, force);
@@ -336,6 +374,7 @@ function disableLocationLock() {
   showGridWildToast("Follow lock disabled");
   window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
   stopCompassTracking();
+  applyMapRotation(0);
 
   const cb = document.getElementById("toggleLockLocation");
   if (cb && cb.checked) {
@@ -502,6 +541,7 @@ function applyCompassHeading(headingDeg, source = "unknown") {
   window.__gwCompassHeading = lastHeading;
   window.__gwCompassSource = source;
   updateUserMarkerHeading(lastHeading);
+  applyMapRotation(lastHeading);
 }
 
 function headingFromDeviceOrientation(event) {
@@ -610,8 +650,10 @@ async function startCompassTracking(options = {}) {
 function syncCompassTracking(options = {}) {
   if (window.__gwState?.lockToLocation) {
     startCompassTracking(options);
+    applyMapRotation(lastHeading ?? 0);
   } else {
     stopCompassTracking();
+    applyMapRotation(0);
   }
 }
 
@@ -624,21 +666,52 @@ function getCompassState() {
   };
 }
 
-function applyMapRotation(headingDeg = 0) {
+function getMapPanePosition(mapPane) {
+  if (window.L?.DomUtil?.getPosition) {
+    const pos = L.DomUtil.getPosition(mapPane);
+    if (pos) return pos;
+  }
+
+  return L.point(0, 0);
+}
+
+function setMapPaneHeadingTransform() {
   const mapPane = map.getPane("mapPane");
   if (!mapPane) return;
 
-  mapPane.style.transformOrigin = "50% 50%";
-  mapPane.style.transform = `rotate(${-headingDeg}deg)`;
+  const pos = getMapPanePosition(mapPane);
+  const size = map.getSize();
+  const originX = (size.x / 2) - pos.x;
+  const originY = (size.y / 2) - pos.y;
+  const rotationDeg = window.__gwState?.lockToLocation ? -mapHeadingDeg : 0;
+
+  // Leaflet owns the pane translation; GridWild appends heading rotation only.
+  mapPane.style.transformOrigin = `${originX}px ${originY}px`;
+  mapPane.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0) rotate(${rotationDeg}deg)`;
+}
+
+function scheduleMapHeadingTransform() {
+  if (mapHeadingRaf) return;
+
+  mapHeadingRaf = requestAnimationFrame(() => {
+    mapHeadingRaf = null;
+    setMapPaneHeadingTransform();
+  });
+}
+
+function applyMapRotation(headingDeg = 0) {
+  mapHeadingDeg = MAP_HEADING_ROTATION_ENABLED
+    ? normalizeHeading(Number(headingDeg) || 0)
+    : 0;
+
+  scheduleMapHeadingTransform();
 }
 
 function enableDeviceOrientation() {
   return startCompassTracking({ requestPermission: true });
 }
 
-map.on("moveend zoomend", () => {
-//  applyMapRotation(lastHeading ?? 0);
-});
+map.on("move zoom resize viewreset moveend zoomend", scheduleMapHeadingTransform);
 
 map.on("zoomend", () => {
   if (!lastFix) return;
@@ -663,6 +736,7 @@ window.disableLocationLock = disableLocationLock;
 window.setLockButtonVisual = setLockButtonVisual;
 window.requestLocationOnce = requestLocationOnce;
 window.startWatchingLocation = startWatchingLocation;
+window.animateLockedUserView = animateLockedUserView;
 window.startCompassTracking = startCompassTracking;
 window.stopCompassTracking = stopCompassTracking;
 window.syncCompassTracking = syncCompassTracking;

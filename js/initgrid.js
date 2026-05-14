@@ -3706,7 +3706,7 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
     window.GridWildFogCanvas.scheduleRender();
   }
 
-  if (autoCenterAllowed) {
+  if (autoCenterAllowed && now >= (state.lockViewAnimationUntil || 0)) {
     const targetZoom = state.lockZoom ?? 19;
     const currentZoom = map.getZoom();
     const userLatLng = [lat, lng];
@@ -3717,8 +3717,12 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
     // When lock is enabled, always follow.
     // If zoom has drifted, restore the lock zoom.
     if (Math.abs(currentZoom - targetZoom) > 0.05) {
-      state.programmaticAutoCenterUntil = Date.now() + 900;
-      map.setView(userLatLng, targetZoom, { animate: true });
+      if (typeof window.animateLockedUserView === "function") {
+        window.animateLockedUserView(userLatLng, targetZoom, { forceFly: true });
+      } else {
+        state.programmaticAutoCenterUntil = Date.now() + 900;
+        map.setView(userLatLng, targetZoom, { animate: true });
+      }
     } else if (force || centerDistM > 2) {
       state.programmaticAutoCenterUntil = Date.now() + 900;
       map.panTo(userLatLng, { animate: true });
