@@ -38,6 +38,8 @@ window.__gwState = {
   showOsmParks: true,
   showOsmBuildings: true,
   showOsmWater: true,
+  lockZoomMode: "close",
+  lockZoom: 19,
   activeLens: "classic"
 };
 

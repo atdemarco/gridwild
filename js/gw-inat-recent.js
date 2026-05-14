@@ -5,6 +5,7 @@
 
 (function () {
   const STORAGE_KEY = "gw_recent_inat_obs_v2";
+  const LEGACY_MIGRATION_MAX_CHARS = 4000000;
 
   const DAYS_BACK = 7;
   const MAX_ACCURACY_M = 20;
@@ -15,7 +16,8 @@
   const MORE_OBS_MAX_PAGES = 120;
   const PHOTO_CACHE_KEEP_COUNT = 120;
 
-  let recentObsCache = loadCache();
+  let recentObsCache = loadMetadata();
+  let storeReadyPromise = initObservationStore();
 
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -27,31 +29,135 @@
     return d.toISOString().slice(0, 10);
   }
 
-  function loadCache() {
+  function emptyCache() {
+    return { observations: [], refreshed_at: null };
+  }
+
+  function stripObservationsFromMetadata(value) {
+    const copy = value && typeof value === "object" ? { ...value } : {};
+    delete copy.observations;
+    return {
+      ...emptyCache(),
+      ...copy,
+      observations: []
+    };
+  }
+
+  function loadMetadata() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : { observations: [], refreshed_at: null };
+      if (!raw) return emptyCache();
+
+      if (raw.length > LEGACY_MIGRATION_MAX_CHARS) {
+        console.warn("GridWild recent observation localStorage cache is large; skipping parse and moving to IndexedDB-only cache.");
+        localStorage.removeItem(STORAGE_KEY);
+        return emptyCache();
+      }
+
+      const parsed = JSON.parse(raw);
       return parsed && typeof parsed === "object"
-        ? parsed
-        : { observations: [], refreshed_at: null };
+        ? stripObservationsFromMetadata(parsed)
+        : emptyCache();
     } catch {
-      return { observations: [], refreshed_at: null };
+      return emptyCache();
     }
   }
 
-  function saveCache() {
+  function saveMetadata() {
+    const meta = stripObservationsFromMetadata(recentObsCache);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(recentObsCache));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(meta));
     } catch (err) {
       if (!isQuotaError(err)) throw err;
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stripObservationsFromMetadata(meta)));
+    }
+  }
+
+  async function loadLegacyObservationsForMigration() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw || raw.length > LEGACY_MIGRATION_MAX_CHARS) return null;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed?.observations)
+        ? {
+          meta: stripObservationsFromMetadata(parsed),
+          observations: parsed.observations
+        }
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function initObservationStore() {
+    if (!window.GridWildObservationStore) return recentObsCache;
+
+    const username = recentObsCache.username || window.__gwUser?.username || "";
+
+    try {
+      const legacy = await loadLegacyObservationsForMigration();
+      if (legacy?.observations?.length) {
+        const legacyUser = legacy.meta.username || username;
+        const compacted = compactObservationPhotos(legacy.observations);
+        await window.GridWildObservationStore.replaceForUser(legacyUser, compacted);
+        recentObsCache = {
+          ...legacy.meta,
+          username: legacyUser,
+          migrated_to_indexeddb_at: new Date().toISOString()
+        };
+        saveMetadata();
+      }
+
+      const cacheUser = recentObsCache.username || username;
+      const rows = await window.GridWildObservationStore.getAll(cacheUser);
+      const needsCompaction = rows.some(row =>
+        row?.username ||
+        row?.uri ||
+        row?.photo_url ||
+        row?.photo_square_url ||
+        row?.photo_medium_url ||
+        row?.u ||
+        !("acc" in row) ||
+        !("d" in row) ||
+        !("t" in row)
+      );
+      const compactedRows = needsCompaction ? compactObservationPhotos(rows) : rows;
+
+      if (needsCompaction && compactedRows.length) {
+        await window.GridWildObservationStore.replaceForUser(cacheUser, compactedRows);
+      }
 
       recentObsCache = {
         ...recentObsCache,
-        compacted_at: new Date().toISOString(),
-        observations: compactObservationPhotos(getRecentObservations(), 0)
+        observations: sortObservationsNewestFirst(compactedRows)
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(recentObsCache));
+
+      window.dispatchEvent(new CustomEvent("gwRecentINatUpdated", {
+        detail: recentObsCache
+      }));
+
+      return recentObsCache;
+    } catch (err) {
+      console.warn("GridWild IndexedDB observation cache unavailable; using in-memory recent observations.", err);
+      return recentObsCache;
     }
+  }
+
+  async function persistObservations(observations, options = {}) {
+    const username = options.username || recentObsCache.username || window.__gwUser?.username || "";
+    const compacted = compactObservationPhotos(observations);
+
+    if (window.GridWildObservationStore) {
+      if (options.replace) {
+        await window.GridWildObservationStore.replaceForUser(username, compacted);
+      } else {
+        await window.GridWildObservationStore.putMany(compacted, { username });
+      }
+    }
+
+    recentObsCache.observations = sortObservationsNewestFirst(compacted);
+    saveMetadata();
   }
 
   function isQuotaError(err) {
@@ -69,11 +175,57 @@
     };
   }
 
+  function unpackObservationPayload(obs) {
+    if (!obs || typeof obs !== "object") return null;
+    if (!("acc" in obs) && !("d" in obs) && !("sci" in obs) && !("icon" in obs)) {
+      return obs;
+    }
+
+    const id = obs.id;
+    return {
+      id,
+      lat: obs.lat,
+      lng: obs.lng,
+      accuracy: obs.acc,
+      observed_on: obs.d || null,
+      time_observed_at: obs.t || null,
+      observed_time_zone: null,
+      taxon: obs.com || obs.sci || "Unknown taxon",
+      common_name: obs.com || "",
+      scientific_name: obs.sci || "",
+      genus_name: obs.gen || "",
+      iconic_taxon_name: obs.icon || "Unknown",
+      uri: id ? `https://www.inaturalist.org/observations/${encodeURIComponent(id)}` : null,
+      photo_url: null,
+      photo_square_url: null,
+      photo_medium_url: null,
+      quality_grade: null,
+      created_at: null
+    };
+  }
+
+  function compactObservationPayload(obs) {
+    const unpacked = unpackObservationPayload(obs) || {};
+    return {
+      id: String(unpacked.id || ""),
+      lat: Number(unpacked.lat),
+      lng: Number(unpacked.lng),
+      acc: Number(unpacked.accuracy) || null,
+      d: String(unpacked.observed_on || unpacked.time_observed_at || unpacked.created_at || "").slice(0, 10) || null,
+      t: unpacked.time_observed_at || null,
+      sci: unpacked.scientific_name || "",
+      com: unpacked.common_name || "",
+      gen: unpacked.genus_name || "",
+      icon: unpacked.iconic_taxon_name || "Unknown"
+    };
+  }
+
   function compactObservationPhotos(observations, keepCount = PHOTO_CACHE_KEEP_COUNT) {
-    return sortObservationsNewestFirst(observations).map((obs, index) => {
-      if (index < keepCount) return obs;
-      return stripObservationPhotos(obs);
-    });
+    return sortObservationsNewestFirst(observations)
+      .map((obs, index) => {
+        const compact = compactObservationPayload(obs);
+        return compact;
+      });
   }
 
   function hasOlderCachedPhotos(observations) {
@@ -82,7 +234,7 @@
       .some(obs => obs?.photo_url || obs?.photo_square_url || obs?.photo_medium_url);
   }
 
-  function compactExistingPhotoCache() {
+  async function compactExistingPhotoCache() {
     const observations = getRecentObservations();
     if (!hasOlderCachedPhotos(observations)) return;
 
@@ -92,7 +244,10 @@
       observations: compactObservationPhotos(observations)
     };
 
-    saveCache();
+    await persistObservations(recentObsCache.observations, {
+      username: recentObsCache.username || window.__gwUser?.username || "",
+      replace: true
+    });
   }
 
   function getObservationCoords(obs) {
@@ -197,20 +352,18 @@ function getPhotoUrls(obs) {
 
       // Extra display / filtering fields
       quality_grade: obs?.quality_grade || null,
-      description: obs?.description || "",
-      place_guess: obs?.place_guess || "",
       created_at: obs?.created_at || null,
     };
   }
 
   function getRecentObservations() {
     return Array.isArray(recentObsCache.observations)
-      ? recentObsCache.observations
+      ? recentObsCache.observations.map(unpackObservationPayload).filter(Boolean)
       : [];
   }
 
   function observationSortTime(obs) {
-    const raw = obs?.time_observed_at || obs?.observed_on || obs?.created_at || "";
+    const raw = obs?.time_observed_at || obs?.observed_on || obs?.created_at || obs?.d || "";
     const t = raw ? new Date(raw).getTime() : 0;
     return Number.isFinite(t) ? t : 0;
   }
@@ -273,6 +426,8 @@ function getPhotoUrls(obs) {
   }
 
   async function refreshRecentObservations(username) {
+    await storeReadyPromise;
+
     username = (username || window.__gwUser?.username || "andrew2285")
       .trim()
       .replace(/^@+/, "");
@@ -370,10 +525,10 @@ function getPhotoUrls(obs) {
       refreshed_at: new Date().toISOString(),
       days_back: DAYS_BACK,
       max_accuracy_m: MAX_ACCURACY_M,
-      observations: accepted
+      observations: []
     };
 
-    saveCache();
+    await persistObservations(accepted, { username, replace: true });
     applyRecentObservationsToFog();
 
     emitProgress({
@@ -394,6 +549,8 @@ function getPhotoUrls(obs) {
   }
 
   async function getMoreObservations(username) {
+    await storeReadyPromise;
+
     username = (username || window.__gwUser?.username || recentObsCache?.username || "andrew2285")
       .trim()
       .replace(/^@+/, "");
@@ -510,10 +667,13 @@ function getPhotoUrls(obs) {
       expanded_at: new Date().toISOString(),
       days_back: recentObsCache?.days_back || DAYS_BACK,
       max_accuracy_m: MAX_ACCURACY_M,
-      observations: compactObservationPhotos(mergeUniqueObservations(existing, additions))
+      observations: []
     };
 
-    saveCache();
+    await persistObservations(mergeUniqueObservations(existing, additions), {
+      username,
+      replace: true
+    });
     applyRecentObservationsToFog();
 
     emitProgress({
@@ -534,6 +694,7 @@ function getPhotoUrls(obs) {
     return {
       cache: recentObsCache,
       added: additions.length,
+      retained: getRecentObservations().length,
       fetched,
       rejected,
       duplicates
@@ -545,12 +706,14 @@ function getPhotoUrls(obs) {
     getMoreObservations,
     getRecentObservations,
     applyRecentObservationsToFog,
+    ready: () => storeReadyPromise,
     getCache: () => recentObsCache
   };
 
-  document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("DOMContentLoaded", async () => {
     try {
-      compactExistingPhotoCache();
+      await storeReadyPromise;
+      await compactExistingPhotoCache();
     } catch (err) {
       console.warn("Could not compact cached observation photos:", err);
     }

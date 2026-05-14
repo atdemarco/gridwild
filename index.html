@@ -304,8 +304,29 @@
       opacity: 0.86;
     }
 
+    .gw-hud-osm-btn {
+      color: rgba(224, 213, 188, 0.74);
+      filter: none;
+      opacity: 0.84;
+    }
+
+    .gw-hud-me-btn {
+      color: rgba(118, 231, 191, 0.74);
+      filter: none;
+      opacity: 0.84;
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
     .gw-hud-contrast-btn {
       color: rgba(240, 209, 138, 0.74);
+      filter: none;
+      opacity: 0.84;
+    }
+
+    .gw-hud-heat-btn {
+      color: rgba(255, 155, 92, 0.74);
       filter: none;
       opacity: 0.84;
     }
@@ -325,11 +346,32 @@
       box-shadow: inset 0 0 0 1px rgba(210,235,242,0.42), 0 0 8px rgba(190,225,235,0.18);
     }
 
+    .gw-hud-osm-btn.is-on {
+      color: #f7e4b6;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(244,218,163,0.34), rgba(164,135,88,0.12) 58%, rgba(255,255,255,0.04) 100%);
+      box-shadow: inset 0 0 0 1px rgba(244,218,163,0.40), 0 0 8px rgba(218,190,133,0.18);
+    }
+
+    .gw-hud-me-btn.is-on {
+      color: #d7fff0;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(118,231,191,0.34), rgba(58,150,118,0.12) 58%, rgba(255,255,255,0.04) 100%);
+      box-shadow: inset 0 0 0 1px rgba(118,231,191,0.42), 0 0 8px rgba(118,231,191,0.18);
+    }
+
     .gw-hud-contrast-btn.is-on {
       color: #fff2c7;
       background:
         radial-gradient(circle at 50% 38%, rgba(255,230,154,0.36), rgba(215,183,116,0.12) 58%, rgba(255,255,255,0.04) 100%);
       box-shadow: inset 0 0 0 1px rgba(255,225,151,0.42), 0 0 8px rgba(240,209,138,0.20);
+    }
+
+    .gw-hud-heat-btn.is-on {
+      color: #ffd2a8;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(255,155,92,0.34), rgba(204,92,52,0.12) 58%, rgba(255,255,255,0.04) 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,155,92,0.42), 0 0 8px rgba(255,155,92,0.18);
     }
 
     .gw-hud-coarse {
@@ -401,8 +443,24 @@
       min-width: 0;
     }
 
-    .gw-hud-zfilter-row span {
+    .gw-hud-zfilter-row label {
       white-space: nowrap;
+    }
+
+    .gw-hud-zfilter-direction {
+      margin-left: auto;
+      width: 24px;
+      height: 18px;
+      padding: 0;
+      border: 1px solid rgba(215,183,116,0.32);
+      border-radius: 6px;
+      color: #f0d18a;
+      background: rgba(255,255,255,0.06);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1;
+      cursor: pointer;
     }
 
     .gw-hud-zfilter input[type="checkbox"] {
@@ -416,7 +474,6 @@
     .gw-hud-zfilter-number {
       width: 36px;
       min-width: 0;
-      margin-left: auto;
       box-sizing: border-box;
       border: 1px solid rgba(215,183,116,0.32);
       border-radius: 6px;
@@ -439,9 +496,18 @@
       -moz-appearance: textfield;
     }
 
+    .gw-hud-zfilter-value-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 36px;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+    }
+
     .gw-hud-zfilter-slider {
       width: 100%;
       accent-color: #d7b774;
+      min-width: 0;
     }
 
     @media (max-width: 420px) {
@@ -1844,6 +1910,14 @@
       <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Fungi" aria-label="Toggle fungi" title="Fungi">🍄</button>
       <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Mammalia" aria-label="Toggle mammals" title="Mammals">🐾</button>
       <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Aves" aria-label="Toggle birds" title="Birds">🐦</button>
+      <button class="gw-hud-taxa-btn gw-hud-me-btn" id="gwHudMeToggle" type="button" data-gw-hud-me aria-label="Filter heat to my cached observations" title="My observations">ME</button>
+      <button class="gw-hud-taxa-btn gw-hud-osm-btn" id="gwHudTaxaOsmToggle" type="button" data-gw-hud-osm aria-label="Toggle OSM structures" title="OSM structures">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M3 11.5 12 4l9 7.5"></path>
+          <path d="M5 10.5V20h14v-9.5"></path>
+          <path d="M9.5 20v-6h5v6"></path>
+        </svg>
+      </button>
       <button class="gw-hud-taxa-btn gw-hud-fog-btn" id="gwHudFogToggle" type="button" data-gw-hud-fog aria-label="Toggle fog" title="Fog">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M4 15.5h16"></path>
@@ -1858,22 +1932,28 @@
           <path d="m8 12.5 2.7 2.7L16.5 9"></path>
         </svg>
       </button>
-      <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
-      <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
-      <span class="gw-hud-filter-placeholder" aria-hidden="true"></span>
+      <button class="gw-hud-taxa-btn gw-hud-heat-btn" id="gwHudHeatToggle" type="button" data-gw-hud-heat aria-label="Toggle heat overlay" title="Heat overlay">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M8.5 14.5a3.5 3.5 0 1 0 7 0c0-1.5-.8-2.5-1.8-3.7-.8-1-1.7-2.1-1.7-3.8-2.1 1.4-3.5 3.5-3.5 7.5z"></path>
+          <path d="M12 18a1.7 1.7 0 0 0 1.7-1.7c0-.8-.4-1.3-1-1.9-.4-.5-.7-1-.7-1.7-1 .8-1.7 1.9-1.7 3.6A1.7 1.7 0 0 0 12 18z"></path>
+        </svg>
+      </button>
     </div>
     <label class="gw-hud-coarse" title="Render the heat overlay as local median bins">
       <input type="checkbox" id="toggleSuperchunkHeat_hud" />
       <span>Coarse</span>
       <button class="gw-hud-coarse-bin" id="gwCoarseHeatBinBtn" type="button" title="Set heat bin size">8</button>
     </label>
-    <div class="gw-hud-zfilter" title="Skip heat cells below a z-score threshold">
-      <label class="gw-hud-zfilter-row">
+    <div class="gw-hud-zfilter" title="Filter heat cells by z-score cutoff">
+      <div class="gw-hud-zfilter-row">
         <input type="checkbox" id="toggleHeatZThreshold" />
-        <span>Cutoff</span>
+        <label for="toggleHeatZThreshold">Cutoff</label>
+        <button class="gw-hud-zfilter-direction" id="gwHeatZThresholdDirectionBtn" type="button" aria-label="Show heat cells above cutoff" title="Show values above cutoff">&ge;</button>
+      </div>
+      <div class="gw-hud-zfilter-value-row">
+        <input class="gw-hud-zfilter-slider" id="gwHeatZThresholdSlider" type="range" min="-3" max="3" step="0.1" value="0" />
         <input class="gw-hud-zfilter-number" id="gwHeatZThresholdInput" type="number" min="-3" max="3" step="0.1" value="0" />
-      </label>
-      <input class="gw-hud-zfilter-slider" id="gwHeatZThresholdSlider" type="range" min="-3" max="3" step="0.1" value="0" />
+      </div>
     </div>
   </div>
 
@@ -2201,6 +2281,7 @@
   <script src="js/gw-fog-canvas.js"></script>
   <script src="js/gw-osm-features-layer.js"></script>
 
+  <script src="js/gw-observation-store.js"></script>
   <script src="js/gw-inat-recent.js"></script>
   <script src="js/gw-observation-activity.js"></script>
   <script src="js/gw-playlists.js"></script>
@@ -2226,6 +2307,8 @@
   <script src="js/gw-economy.js"></script>
   <script src="js/gw-store-catalog.js"></script>
   <script src="js/gw-store.js"></script>
+  <script src="js/gw-avatar-renderer.js"></script>
+  <script src="js/gw-avatar-inspection.js"></script>
   <script src="js/gw-inventory.js"></script>
   <script src="js/gw-profile.js"></script>
   <script src="js/gw-account.js"></script>
@@ -2618,6 +2701,26 @@ window.refreshQuestBadge = refreshQuestBadge;
         return document.getElementById("gwHudFogToggle");
       }
 
+      function osmCheckbox() {
+        return document.getElementById("toggleOsmBuildings");
+      }
+
+      function osmButtons() {
+        return Array.from(document.querySelectorAll("[data-gw-hud-osm]"));
+      }
+
+      function heatCheckbox() {
+        return document.getElementById("toggleHeat");
+      }
+
+      function heatButton() {
+        return document.getElementById("gwHudHeatToggle");
+      }
+
+      function meButton() {
+        return document.getElementById("gwHudMeToggle");
+      }
+
       function sync() {
         buttons().forEach(btn => {
           const iconic = btn.dataset.gwHudIconic;
@@ -2631,6 +2734,26 @@ window.refreshQuestBadge = refreshQuestBadge;
         if (fog) {
           fog.classList.toggle("is-on", fogChecked);
           fog.setAttribute("aria-pressed", fogChecked ? "true" : "false");
+        }
+
+        const osmChecked = !!osmCheckbox()?.checked;
+        osmButtons().forEach(btn => {
+          btn.classList.toggle("is-on", osmChecked);
+          btn.setAttribute("aria-pressed", osmChecked ? "true" : "false");
+        });
+
+        const heat = heatButton();
+        const heatChecked = !!heatCheckbox()?.checked;
+        if (heat) {
+          heat.classList.toggle("is-on", heatChecked);
+          heat.setAttribute("aria-pressed", heatChecked ? "true" : "false");
+        }
+
+        const me = meButton();
+        const meChecked = window.__gwFilters?.onlyMe === true;
+        if (me) {
+          me.classList.toggle("is-on", meChecked);
+          me.setAttribute("aria-pressed", meChecked ? "true" : "false");
         }
       }
 
@@ -2652,20 +2775,64 @@ window.refreshQuestBadge = refreshQuestBadge;
         sync();
       }
 
+      function toggleOsm() {
+        const real = osmCheckbox();
+        if (!real) return;
+
+        real.checked = !real.checked;
+        real.dispatchEvent(new Event("change", { bubbles: true }));
+        sync();
+      }
+
+      function toggleHeat() {
+        const real = heatCheckbox();
+        if (!real) return;
+
+        real.checked = !real.checked;
+        real.dispatchEvent(new Event("change", { bubbles: true }));
+        sync();
+      }
+
+      function toggleMe() {
+        window.__gwFilters = window.__gwFilters || {};
+        window.__gwFilters.onlyMe = window.__gwFilters.onlyMe !== true;
+        if (window.__gwState) window.__gwState.onlyMeFilterEnabled = window.__gwFilters.onlyMe;
+
+        window.GridWildMeOverlayFilter?.invalidate?.();
+        window.GridWildCoarseHeatCache?.invalidate?.();
+        if (typeof saveUIState === "function") saveUIState();
+        if (typeof window.updateGrid === "function") window.updateGrid();
+        sync();
+      }
+
       function bind() {
         const root = document.getElementById("gwHudTaxaFilter");
-        if (!root || root.dataset.bound === "true") return;
+        if (root?.dataset.bound === "true") return;
 
-        root.dataset.bound = "true";
+        if (root) root.dataset.bound = "true";
         buttons().forEach(btn => {
           btn.setAttribute("aria-pressed", "false");
           btn.addEventListener("click", () => toggle(btn.dataset.gwHudIconic));
         });
         fogButton()?.addEventListener("click", toggleFog);
+        osmButtons().forEach(btn => {
+          if (btn.dataset.gwOsmBound === "true") return;
+          btn.dataset.gwOsmBound = "true";
+          btn.setAttribute("aria-pressed", "false");
+          btn.addEventListener("click", toggleOsm);
+        });
+        meButton()?.addEventListener("click", toggleMe);
+        heatButton()?.addEventListener("click", toggleHeat);
 
         document.addEventListener("change", evt => {
-          if (evt.target?.matches?.('input[data-iconic]')) sync();
+          if (evt.target?.matches?.('input[data-iconic]')) {
+            window.GridWildMeOverlayFilter?.invalidate?.();
+            window.GridWildCoarseHeatCache?.invalidate?.();
+            sync();
+          }
           if (evt.target?.id === "toggleFog") sync();
+          if (evt.target?.id === "toggleOsmBuildings") sync();
+          if (evt.target?.id === "toggleHeat") sync();
         });
 
         window.addEventListener("DOMContentLoaded", () => setTimeout(sync, 0));
@@ -2828,10 +2995,18 @@ window.refreshQuestBadge = refreshQuestBadge;
         return document.getElementById("gwHeatZThresholdSlider");
       }
 
+      function directionButton() {
+        return document.getElementById("gwHeatZThresholdDirectionBtn");
+      }
+
       function clampZ(value) {
         const raw = Number(value);
         if (!Number.isFinite(raw)) return 0;
         return Math.max(-3, Math.min(3, raw));
+      }
+
+      function normalizeDirection(value) {
+        return value === "below" ? "below" : "above";
       }
 
       function save() {
@@ -2839,6 +3014,7 @@ window.refreshQuestBadge = refreshQuestBadge;
           const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
           state.heatZThresholdEnabled = window.__gwState?.heatZThresholdEnabled === true;
           state.heatZThreshold = window.__gwState?.heatZThreshold ?? 0;
+          state.heatZThresholdDirection = normalizeDirection(window.__gwState?.heatZThresholdDirection);
           localStorage.setItem("gw_ui_state", JSON.stringify(state));
         } catch {}
       }
@@ -2848,14 +3024,23 @@ window.refreshQuestBadge = refreshQuestBadge;
 
         const enabled = window.__gwState.heatZThresholdEnabled === true;
         const z = clampZ(window.__gwState.heatZThreshold);
+        const direction = normalizeDirection(window.__gwState.heatZThresholdDirection);
         const cb = checkbox();
         const num = numberInput();
         const range = slider();
+        const dirBtn = directionButton();
 
         window.__gwState.heatZThreshold = z;
+        window.__gwState.heatZThresholdDirection = direction;
         if (cb) cb.checked = enabled;
         if (num) num.value = z.toFixed(1);
         if (range) range.value = String(z);
+        if (dirBtn) {
+          const isBelow = direction === "below";
+          dirBtn.innerHTML = isBelow ? "&le;" : "&ge;";
+          dirBtn.setAttribute("aria-label", isBelow ? "Show heat cells below cutoff" : "Show heat cells above cutoff");
+          dirBtn.title = isBelow ? "Show values below cutoff" : "Show values above cutoff";
+        }
       }
 
       function applyValue(value) {
@@ -2874,16 +3059,27 @@ window.refreshQuestBadge = refreshQuestBadge;
         if (typeof window.updateGrid === "function") window.updateGrid();
       }
 
+      function toggleDirection() {
+        window.__gwState = window.__gwState || {};
+        const direction = normalizeDirection(window.__gwState.heatZThresholdDirection);
+        window.__gwState.heatZThresholdDirection = direction === "below" ? "above" : "below";
+        sync();
+        save();
+        if (typeof window.updateGrid === "function") window.updateGrid();
+      }
+
       function bind() {
         const cb = checkbox();
         const num = numberInput();
         const range = slider();
+        const dirBtn = directionButton();
         if (!cb || cb.dataset.bound === "true") return;
 
         cb.dataset.bound = "true";
         cb.addEventListener("change", () => applyEnabled(cb.checked));
         num?.addEventListener("change", () => applyValue(num.value));
         range?.addEventListener("input", () => applyValue(range.value));
+        dirBtn?.addEventListener("click", toggleDirection);
 
         setTimeout(sync, 0);
       }
@@ -2960,7 +3156,12 @@ window.refreshQuestBadge = refreshQuestBadge;
     const recenterFab = document.getElementById("recenterFab");
 
   recenterFab?.addEventListener("click", () => {
-    if (typeof window.enableLocationLock === "function") {
+    if (typeof window.cycleLocationLock === "function") {
+      window.cycleLocationLock({
+        recenterNow: true,
+        force: true
+      });
+    } else if (typeof window.enableLocationLock === "function") {
       window.enableLocationLock({
         zoom: 19,
         recenterNow: true,

@@ -47,6 +47,7 @@ window.__gwUser = window.__gwUser || {
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
         <button class="gw-mini-btn" id="gwOpenProfileBtn">Profile</button>
+        <button class="gw-mini-btn" id="gwOpenAvatarInspectionBtn">My Field Look</button>
         <button class="gw-mini-btn" id="gwOpenStoreBtn">Store</button>
         <button class="gw-mini-btn" id="gwOpenInventoryBtn">Inventory</button>
         <button class="gw-mini-btn" id="gwEditCharacterBtn">Edit Character</button>
@@ -1662,6 +1663,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
   window.GridWildCharacter?.bindButtons?.(document);
 
   window.GridWildStore?.bindButtons?.(document);
+  window.GridWildAvatarInspection?.bindButtons?.(document);
   window.GridWildInventory?.bindButtons?.(document);
   window.GridWildProfile?.bindButtons?.(document);
   window.GridWildAccount?.bindButtons?.(document);
@@ -1881,6 +1883,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       window.GridWildCharacter?.bindButtons?.(document);
 
       window.GridWildStore?.bindButtons?.(document);
+      window.GridWildAvatarInspection?.bindButtons?.(document);
       window.GridWildInventory?.bindButtons?.(document);
       window.GridWildProfile?.bindButtons?.(document);
       window.GridWildAccount?.bindButtons?.(document);

@@ -1071,9 +1071,334 @@ window.GridWildIconicOverlayFilter = window.GridWildIconicOverlayFilter || (func
   };
 })();
 
+window.GridWildMeOverlayFilter = window.GridWildMeOverlayFilter || (function () {
+  let cache = null;
+  let signature = "";
+
+  const MONTH_COUNT = 12;
+
+  function isActive() {
+    return window.__gwFilters?.onlyMe === true;
+  }
+
+  function selectedTaxa() {
+    const taxa = window.__gwFilters?.iconicTaxa || [];
+    return Array.isArray(taxa) ? taxa.filter(Boolean) : [];
+  }
+
+  function obsSignature(observations) {
+    const first = observations[0];
+    const last = observations[observations.length - 1];
+    return [
+      observations.length,
+      first?.id || "",
+      first?.observed_on || first?.time_observed_at || first?.created_at || "",
+      last?.id || "",
+      last?.observed_on || last?.time_observed_at || last?.created_at || ""
+    ].join("|");
+  }
+
+  function dateIsoFromMs(ms) {
+    if (!Number.isFinite(ms) || ms <= 0) return null;
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+
+  function parseObsTimeMs(obs) {
+    const raw = obs?.observed_on || obs?.time_observed_at || obs?.created_at || "";
+    const ms = raw ? Date.parse(raw) : 0;
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  function entropy(values) {
+    const total = values.reduce((sum, value) => sum + (Number(value) || 0), 0);
+    if (!total) return 0;
+
+    return values.reduce((h, value) => {
+      const p = (Number(value) || 0) / total;
+      return p > 0 ? h - p * Math.log2(p) : h;
+    }, 0);
+  }
+
+  function makeAccumulator() {
+    return {
+      count: 0,
+      genusSet: new Set(),
+      iconic_counts: {},
+      month_totals: Array(MONTH_COUNT).fill(0),
+      lastObservedMs: 0,
+      recentObservedMs: []
+    };
+  }
+
+  function addObservation(acc, obs) {
+    acc.count++;
+
+    const genus = obs.genus_name || obs.scientific_name || obs.taxon || "Unknown";
+    if (genus) acc.genusSet.add(genus);
+
+    const iconic = obs.iconic_taxon_name || "Unknown";
+    acc.iconic_counts[iconic] = (acc.iconic_counts[iconic] || 0) + 1;
+
+    const ms = parseObsTimeMs(obs);
+    if (ms) {
+      acc.lastObservedMs = Math.max(acc.lastObservedMs, ms);
+      acc.recentObservedMs.push(ms);
+      acc.recentObservedMs.sort((a, b) => b - a);
+      if (acc.recentObservedMs.length > 10) acc.recentObservedMs.length = 10;
+
+      const month = new Date(ms).getUTCMonth();
+      if (month >= 0 && month < MONTH_COUNT) acc.month_totals[month]++;
+    }
+  }
+
+  function finalizeMetrics(acc) {
+    if (!acc || acc.count <= 0) return null;
+
+    const sortedTimes = acc.recentObservedMs
+      .filter(Number.isFinite)
+      .sort((a, b) => b - a);
+
+    const lastObservedMs = acc.lastObservedMs || sortedTimes[0] || 0;
+    const lastTen = sortedTimes.slice(0, 10).sort((a, b) => a - b);
+    const medianIdx = Math.floor(lastTen.length / 2);
+    const medianLast10ObservedMs = lastTen.length
+      ? (lastTen.length % 2
+        ? lastTen[medianIdx]
+        : (lastTen[medianIdx - 1] + lastTen[medianIdx]) / 2)
+      : lastObservedMs;
+
+    const peak = Math.max(...acc.month_totals);
+    const total = acc.month_totals.reduce((sum, value) => sum + value, 0);
+    const dominant =
+      Object.entries(acc.iconic_counts)
+        .sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
+
+    return {
+      count: acc.count,
+      species: acc.genusSet.size,
+      genera: acc.genusSet.size,
+      observers: 1,
+      n_captive: 0,
+      iconic_counts: { ...acc.iconic_counts },
+      dominant_iconic: dominant,
+      iconic_n: Object.keys(acc.iconic_counts).length,
+      month_totals: acc.month_totals.slice(),
+      peak_month: acc.month_totals.indexOf(peak) + 1,
+      seasonal_strength: total ? peak / total : 0,
+      month_entropy: entropy(acc.month_totals),
+      last_observed: dateIsoFromMs(lastObservedMs),
+      median_last10_observed: dateIsoFromMs(medianLast10ObservedMs),
+      last_observed_ms: lastObservedMs,
+      median_last10_observed_ms: medianLast10ObservedMs,
+      nActiveSquares: 1,
+      activity_score: Math.log1p(acc.count) * (1 + acc.genusSet.size * 0.05)
+    };
+  }
+
+  function mergeMetricsRecords(records) {
+    const merged = {
+      count: 0,
+      species: 0,
+      genera: 0,
+      observers: 1,
+      n_captive: 0,
+      iconic_counts: {},
+      month_totals: Array(MONTH_COUNT).fill(0),
+      last_observed: null,
+      median_last10_observed: null,
+      last_observed_ms: 0,
+      median_last10_observed_ms: 0,
+      nActiveSquares: 1
+    };
+
+    for (const rec of records) {
+      if (!rec) continue;
+
+      merged.count += Number(rec.count) || 0;
+      merged.species += Number(rec.species) || 0;
+      merged.genera += Number(rec.genera) || 0;
+
+      const lastMs = Number(rec.last_observed_ms) || parseGridDateMs(rec.last_observed);
+      if (lastMs > merged.last_observed_ms) {
+        merged.last_observed_ms = lastMs;
+        merged.last_observed = dateIsoFromMs(lastMs);
+      }
+
+      const medianMs = Number(rec.median_last10_observed_ms) || parseGridDateMs(rec.median_last10_observed);
+      if (medianMs > merged.median_last10_observed_ms) {
+        merged.median_last10_observed_ms = medianMs;
+        merged.median_last10_observed = dateIsoFromMs(medianMs);
+      }
+
+      for (const [iconic, count] of Object.entries(rec.iconic_counts || {})) {
+        merged.iconic_counts[iconic] =
+          (merged.iconic_counts[iconic] || 0) + (Number(count) || 0);
+      }
+
+      (rec.month_totals || []).forEach((count, index) => {
+        if (index >= 0 && index < MONTH_COUNT) {
+          merged.month_totals[index] += Number(count) || 0;
+        }
+      });
+    }
+
+    if (merged.count <= 0) return null;
+
+    const peak = Math.max(...merged.month_totals);
+    const total = merged.month_totals.reduce((sum, value) => sum + value, 0);
+    const dominant =
+      Object.entries(merged.iconic_counts)
+        .sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
+
+    merged.iconic_n = Object.keys(merged.iconic_counts).length;
+    merged.dominant_iconic = dominant;
+    merged.peak_month = merged.month_totals.indexOf(peak) + 1;
+    merged.seasonal_strength = total ? peak / total : 0;
+    merged.month_entropy = entropy(merged.month_totals);
+    merged.activity_score = Math.log1p(merged.count) * (1 + merged.species * 0.05);
+
+    return merged;
+  }
+
+  function buildCache() {
+    const observations = window.GridWildRecentINat?.getRecentObservations?.() || [];
+    const nextSignature = obsSignature(observations);
+    if (cache && signature === nextSignature) return cache;
+
+    signature = nextSignature;
+    cache = new Map();
+
+    for (const obs of observations) {
+      const lat = Number(obs?.lat);
+      const lng = Number(obs?.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+      const key = getCellKeyForLatLng(lat, lng);
+      const iconic = obs.iconic_taxon_name || "Unknown";
+
+      if (!cache.has(key)) {
+        cache.set(key, {
+          all: makeAccumulator(),
+          byIconic: new Map()
+        });
+      }
+
+      const entry = cache.get(key);
+      addObservation(entry.all, obs);
+
+      if (!entry.byIconic.has(iconic)) {
+        entry.byIconic.set(iconic, makeAccumulator());
+      }
+      addObservation(entry.byIconic.get(iconic), obs);
+    }
+
+    for (const [key, entry] of cache.entries()) {
+      const byIconicMetrics = new Map();
+      for (const [iconic, acc] of entry.byIconic.entries()) {
+        const metrics = finalizeMetrics(acc);
+        if (metrics) byIconicMetrics.set(iconic, metrics);
+      }
+
+      cache.set(key, {
+        all: finalizeMetrics(entry.all),
+        byIconic: byIconicMetrics
+      });
+    }
+
+    return cache;
+  }
+
+  function entriesInMeterBounds(startX, endX, startY, endY) {
+    if (!isActive()) return [];
+
+    const minIx = Math.floor(startX / GRID_SIZE_M);
+    const maxIx = Math.floor((endX - GRID_SIZE_M) / GRID_SIZE_M);
+    const minIy = Math.floor(startY / GRID_SIZE_M);
+    const maxIy = Math.floor((endY - GRID_SIZE_M) / GRID_SIZE_M);
+    const taxa = new Set(selectedTaxa());
+    const entries = [];
+
+    for (const [key, entry] of buildCache().entries()) {
+      const comma = key.indexOf(",");
+      if (comma <= 0) continue;
+
+      const ix = Number(key.slice(0, comma));
+      const iy = Number(key.slice(comma + 1));
+      if (
+        !Number.isFinite(ix) ||
+        !Number.isFinite(iy) ||
+        ix < minIx ||
+        ix > maxIx ||
+        iy < minIy ||
+        iy > maxIy
+      ) {
+        continue;
+      }
+
+      let metrics = entry.all || null;
+      if (taxa.size) {
+        const records = Array.from(taxa)
+          .map(taxon => entry.byIconic.get(taxon))
+          .filter(Boolean);
+        metrics = records.length === 1
+          ? records[0]
+          : mergeMetricsRecords(records);
+      }
+
+      if (metrics) entries.push({ ix, iy, key, metrics });
+    }
+
+    return entries;
+  }
+
+  function metricsForCell(ix, iy) {
+    if (!isActive()) return null;
+    const entry = buildCache().get(`${ix},${iy}`);
+    if (!entry) return null;
+
+    const taxa = new Set(selectedTaxa());
+    if (!taxa.size) return entry.all || null;
+
+    const records = Array.from(taxa)
+      .map(taxon => entry.byIconic.get(taxon))
+      .filter(Boolean);
+
+    if (!records.length) return null;
+    if (records.length === 1) return records[0];
+
+    return mergeMetricsRecords(records);
+  }
+
+  function invalidate() {
+    cache = null;
+    signature = "";
+    window.GridWildCoarseHeatCache?.invalidate?.();
+    scheduleGridHeatCanvasRender();
+  }
+
+  window.addEventListener("gwRecentINatUpdated", invalidate);
+
+  return {
+    isActive,
+    metricsForCell,
+    entriesInMeterBounds,
+    invalidate
+  };
+})();
+
+function getDisplayMetricsForCell(ix, iy, baseMetrics = {}) {
+  if (window.GridWildMeOverlayFilter?.isActive?.()) {
+    return window.GridWildMeOverlayFilter.metricsForCell(ix, iy);
+  }
+
+  return window.GridWildIconicOverlayFilter?.metricsForCell?.(ix, iy, baseMetrics) || null;
+}
+
 function warmRichMetricsForVisibleCells() {
   const counts = window.__staticGridCounts;
   if (!(counts instanceof Map) || counts.size === 0) return;
+
+  if (window.GridWildMeOverlayFilter?.isActive?.()) return;
 
   const lens = window.__gwState?.activeLens || "classic";
   const needsRichMetrics =
@@ -2535,6 +2860,10 @@ function getHeatZThreshold() {
   return Math.max(-3, Math.min(3, raw));
 }
 
+function getHeatZThresholdDirection() {
+  return window.__gwState?.heatZThresholdDirection === "below" ? "below" : "above";
+}
+
 function buildZStats(values) {
   const nums = values
     .map(Number)
@@ -2558,12 +2887,22 @@ function passesHeatZThreshold(value, stats) {
   if (!isHeatZThresholdEnabled() || !stats) return true;
 
   const threshold = getHeatZThreshold();
+  const direction = getHeatZThresholdDirection();
   const z = stats.sd > 0 ? ((Number(value) || 0) - stats.mean) / stats.sd : 0;
-  return z >= threshold;
+  return direction === "below" ? z <= threshold : z >= threshold;
 }
 
 function collectRegularHeatZStats(counts, startX, endX, startY, endY) {
   const values = [];
+
+  if (window.GridWildMeOverlayFilter?.isActive?.()) {
+    const entries = window.GridWildMeOverlayFilter.entriesInMeterBounds(startX, endX, startY, endY);
+    for (const entry of entries) {
+      const heatValue = getHeatValueForCell(entry.metrics);
+      if (heatValue > 0) values.push(heatValue);
+    }
+    return buildZStats(values);
+  }
 
   for (let x = startX; x < endX; x += GRID_SIZE_M) {
     for (let y = startY; y < endY; y += GRID_SIZE_M) {
@@ -2577,9 +2916,7 @@ function collectRegularHeatZStats(counts, startX, endX, startY, endY) {
 
       if (!metrics) continue;
 
-      const displayMetrics =
-        window.GridWildIconicOverlayFilter?.metricsForCell?.(ix, iy, metrics) ||
-        null;
+      const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics || {});
 
       if (!displayMetrics) continue;
 
@@ -2689,14 +3026,17 @@ function getCoarseMedianMetrics(anchorIx, anchorIy, binSize) {
   for (let ix = centerIx - radius; ix <= centerIx + radius; ix++) {
     for (let iy = centerIy - radius; iy <= centerIy + radius; iy++) {
       const m = counts.get(`${ix},${iy}`);
-      if (!m) continue;
+      if (!m && !window.GridWildMeOverlayFilter?.isActive?.()) continue;
 
-      const count = Number(m.count) || 0;
-      const species = Number(m.species) || 0;
-      const observers = Number(m.observers) || 0;
-      const nCaptive = Number(m.n_captive) || 0;
-      const lastObservedMs = Number(m.last_observed_ms) || parseGridDateMs(m.last_observed);
-      const medianLast10Ms = Number(m.median_last10_observed_ms) || parseGridDateMs(m.median_last10_observed);
+      const displayMetrics = getDisplayMetricsForCell(ix, iy, m || {});
+      if (!displayMetrics) continue;
+
+      const count = Number(displayMetrics.count) || 0;
+      const species = Number(displayMetrics.species) || 0;
+      const observers = Number(displayMetrics.observers) || 0;
+      const nCaptive = Number(displayMetrics.n_captive) || 0;
+      const lastObservedMs = Number(displayMetrics.last_observed_ms) || parseGridDateMs(displayMetrics.last_observed);
+      const medianLast10Ms = Number(displayMetrics.median_last10_observed_ms) || parseGridDateMs(displayMetrics.median_last10_observed);
 
       values.count.push(count);
       values.species.push(species);
@@ -2709,9 +3049,11 @@ function getCoarseMedianMetrics(anchorIx, anchorIy, binSize) {
     }
   }
 
-  if (!values.count.length) {
+  if (!values.count.length && !window.GridWildMeOverlayFilter?.isActive?.()) {
     return getNearestCoarseMetrics(centerIx, centerIy, binSize);
   }
+
+  if (!values.count.length) return null;
 
   return {
     count: median(values.count),
@@ -2803,6 +3145,48 @@ function updateStaticGridHeatOLD() {
 
   const { startX, endX, startY, endY } = getPaddedBoundsMeters();
 
+  if (window.GridWildMeOverlayFilter?.isActive?.()) {
+    const entries = window.GridWildMeOverlayFilter.entriesInMeterBounds(startX, endX, startY, endY);
+
+    for (const { ix, iy, key, metrics: displayMetrics } of entries) {
+      const heatValue = getHeatValueForCell(displayMetrics);
+      if (heatValue <= 0) continue;
+
+      const baseStyle = metricsToFill(displayMetrics);
+      if (!baseStyle) continue;
+
+      const x = ix * GRID_SIZE_M;
+      const y = iy * GRID_SIZE_M;
+      const sw = map.options.crs.unproject(L.point(x, y));
+      const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
+      const fogState = fogOn && window.GridWildFog
+        ? window.GridWildFog.getCellFogState(key)
+        : null;
+      const godsEyeTransientVisible =
+      typeof window.isGodsEyeTransientVisibleCell === "function" &&
+      window.isGodsEyeTransientVisibleCell(key);
+
+      if (
+        fogOn &&
+        fogState &&
+        !godsEyeTransientVisible &&
+        (fogState.state === "unknown" || fogState.state === "expired")
+      ) {
+        continue;
+      }
+
+      L.rectangle([sw, ne], {
+        ...HEAT_TILE_STYLE_BASE,
+        ...baseStyle
+      }).addTo(gridHeatLayer);
+    }
+
+    if (window.GridWildFogCanvas) {
+      window.GridWildFogCanvas.scheduleRender();
+    }
+    return;
+  }
+
   for (let x = startX; x < endX; x += GRID_SIZE_M) {
     for (let y = startY; y < endY; y += GRID_SIZE_M) {
       const ix = Math.floor(x / GRID_SIZE_M);
@@ -2816,8 +3200,7 @@ function updateStaticGridHeatOLD() {
       if (!metrics) continue;
 
       const displayMetrics =
-        window.GridWildIconicOverlayFilter?.metricsForCell?.(ix, iy, metrics) ||
-        null;
+        getDisplayMetricsForCell(ix, iy, metrics || {});
 
       if (!displayMetrics) continue;
 
@@ -3003,9 +3386,83 @@ function renderGridHeatCanvas() {
 
   const fogOn = window.__gwState?.showFog ?? true;
   const { startX, endX, startY, endY } = getPaddedBoundsMeters();
-  const heatZStats = isHeatZThresholdEnabled()
-    ? collectRegularHeatZStats(counts, startX, endX, startY, endY)
+  const meHeatActive = window.GridWildMeOverlayFilter?.isActive?.();
+  const meHeatEntries = meHeatActive
+    ? window.GridWildMeOverlayFilter.entriesInMeterBounds(startX, endX, startY, endY)
     : null;
+  const heatZStats = isHeatZThresholdEnabled()
+    ? (meHeatActive
+      ? buildZStats(meHeatEntries.map(entry => getHeatValueForCell(entry.metrics)).filter(value => value > 0))
+      : collectRegularHeatZStats(counts, startX, endX, startY, endY))
+    : null;
+
+  if (meHeatActive) {
+    for (const { ix, iy, key, metrics: displayMetrics } of meHeatEntries) {
+      const heatValue = getHeatValueForCell(displayMetrics);
+      if (heatValue <= 0) continue;
+      if (!passesHeatZThreshold(heatValue, heatZStats)) continue;
+
+      const baseStyle = metricsToFill(displayMetrics);
+      if (!baseStyle) continue;
+
+      let fogState = null;
+      const godsEyeTransientVisible =
+        typeof window.isGodsEyeTransientVisibleCell === "function" &&
+        window.isGodsEyeTransientVisibleCell(key);
+
+      if (fogOn && window.GridWildFog) {
+        fogState = window.GridWildFog.getCellFogState(key);
+
+        if (
+          !godsEyeTransientVisible &&
+          (fogState.state === "unknown" || fogState.state === "expired")
+        ) {
+          continue;
+        }
+      }
+
+      let fillOpacity = Number(baseStyle.fillOpacity || 0.25);
+
+      if (godsEyeTransientVisible && fogState?.state !== "documented") {
+        fillOpacity = Math.max(fillOpacity, 0.28);
+      }
+
+      if (fogOn && fogState?.state === "surveyed") {
+        fillOpacity = Math.max(0.08, fillOpacity * fogState.reveal);
+      }
+
+      if (fogOn && fogState?.state === "documented") {
+        fillOpacity = Math.min(0.92, fillOpacity + 0.12);
+      }
+
+      const x = ix * GRID_SIZE_M;
+      const y = iy * GRID_SIZE_M;
+      const sw = map.options.crs.unproject(L.point(x, y));
+      const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
+
+      const nwPx = gridHeatLayerPoint(L.latLng(ne.lat, sw.lng));
+      const sePx = gridHeatLayerPoint(L.latLng(sw.lat, ne.lng));
+
+      const pxX = Math.floor(nwPx.x);
+      const pxY = Math.floor(nwPx.y);
+      const pxW = Math.ceil(sePx.x - nwPx.x);
+      const pxH = Math.ceil(sePx.y - nwPx.y);
+
+      gridHeatCtx.globalAlpha = fillOpacity;
+      gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
+      gridHeatCtx.fillRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
+
+      if (fogOn && fogState?.state === "documented") {
+        gridHeatCtx.globalAlpha = 0.8;
+        gridHeatCtx.strokeStyle = "rgba(240, 209, 138, 0.72)";
+        gridHeatCtx.lineWidth = 1.2;
+        gridHeatCtx.strokeRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
+      }
+    }
+
+    gridHeatCtx.globalAlpha = 1;
+    return;
+  }
 
   for (let x = startX; x < endX; x += GRID_SIZE_M) {
     for (let y = startY; y < endY; y += GRID_SIZE_M) {
@@ -3019,9 +3476,7 @@ function renderGridHeatCanvas() {
 
       if (!metrics) continue;
 
-      const displayMetrics =
-        window.GridWildIconicOverlayFilter?.metricsForCell?.(ix, iy, metrics) ||
-        null;
+      const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics || {});
 
       if (!displayMetrics) continue;
 
@@ -3101,15 +3556,73 @@ function renderCoarseMedianHeatCanvas() {
   let painted = 0;
   const items = [];
 
-  for (let ix = startAnchorX; ix <= endAnchorX; ix += binSize) {
-    for (let iy = startAnchorY; iy <= endAnchorY; iy += binSize) {
-      const metrics = getCachedCoarseMedianMetrics(ix, iy, binSize);
-      if (!metrics) continue;
+  if (window.GridWildMeOverlayFilter?.isActive?.()) {
+    const bins = new Map();
+    const entries = window.GridWildMeOverlayFilter.entriesInMeterBounds(startX, endX, startY, endY);
 
+    for (const entry of entries) {
+      const anchorIx = Math.floor(entry.ix / binSize) * binSize;
+      const anchorIy = Math.floor(entry.iy / binSize) * binSize;
+      const key = `${anchorIx},${anchorIy}`;
+
+      if (!bins.has(key)) {
+        bins.set(key, {
+          ix: anchorIx,
+          iy: anchorIy,
+          count: [],
+          species: [],
+          observers: [],
+          n_captive: [],
+          median_last10_observed_ms: [],
+          latestLastObservedMs: 0,
+          nActiveSquares: 0
+        });
+      }
+
+      const bin = bins.get(key);
+      const metrics = entry.metrics;
+      const count = Number(metrics.count) || 0;
+      const lastObservedMs = Number(metrics.last_observed_ms) || parseGridDateMs(metrics.last_observed);
+      const medianLast10Ms = Number(metrics.median_last10_observed_ms) || parseGridDateMs(metrics.median_last10_observed);
+
+      bin.count.push(count);
+      bin.species.push(Number(metrics.species) || 0);
+      bin.observers.push(Number(metrics.observers) || 0);
+      bin.n_captive.push(Number(metrics.n_captive) || 0);
+      if (medianLast10Ms) bin.median_last10_observed_ms.push(medianLast10Ms);
+      bin.latestLastObservedMs = Math.max(bin.latestLastObservedMs, lastObservedMs || 0);
+      if (count > 0) bin.nActiveSquares++;
+    }
+
+    for (const bin of bins.values()) {
+      const metrics = {
+        count: median(bin.count),
+        species: median(bin.species),
+        observers: median(bin.observers),
+        n_captive: median(bin.n_captive),
+        last_observed: gridDateIsoFromMs(bin.latestLastObservedMs),
+        median_last10_observed: gridDateIsoFromMs(median(bin.median_last10_observed_ms)),
+        last_observed_ms: bin.latestLastObservedMs,
+        median_last10_observed_ms: median(bin.median_last10_observed_ms),
+        nSquares: binSize * binSize,
+        nActiveSquares: bin.nActiveSquares
+      };
       const heatValue = getHeatValueForCell(metrics);
       if (heatValue <= 0) continue;
 
-      items.push({ ix, iy, metrics, heatValue });
+      items.push({ ix: bin.ix, iy: bin.iy, metrics, heatValue });
+    }
+  } else {
+    for (let ix = startAnchorX; ix <= endAnchorX; ix += binSize) {
+      for (let iy = startAnchorY; iy <= endAnchorY; iy += binSize) {
+        const metrics = getCachedCoarseMedianMetrics(ix, iy, binSize);
+        if (!metrics) continue;
+
+        const heatValue = getHeatValueForCell(metrics);
+        if (heatValue <= 0) continue;
+
+        items.push({ ix, iy, metrics, heatValue });
+      }
     }
   }
 
@@ -3204,8 +3717,10 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
     // When lock is enabled, always follow.
     // If zoom has drifted, restore the lock zoom.
     if (Math.abs(currentZoom - targetZoom) > 0.05) {
+      state.programmaticAutoCenterUntil = Date.now() + 900;
       map.setView(userLatLng, targetZoom, { animate: true });
     } else if (force || centerDistM > 2) {
+      state.programmaticAutoCenterUntil = Date.now() + 900;
       map.panTo(userLatLng, { animate: true });
     }
   }

@@ -5,6 +5,7 @@
 
 (function () {
   const QUEST_PANE = "gwQuestPane";
+  const HUD_COLLAPSED_KEY = "gw_quest_hud_collapsed";
 
   let questLayer = null;
   let targetLayer = null;
@@ -98,10 +99,100 @@
         box-shadow:
           0 12px 30px rgba(0,0,0,0.34),
           inset 0 1px 0 rgba(255,255,255,0.05);
+        transition: left 180ms ease, width 180ms ease, padding 180ms ease, border-radius 180ms ease;
+      }
+
+      .gw-active-quest-chip.is-collapsed {
+        left: auto;
+        width: 94px;
+        min-height: 42px;
+        padding: 8px 9px;
+        border-radius: 14px;
+        justify-content: center;
+        gap: 6px;
+        cursor: pointer;
       }
 
       .gw-active-quest-chip-main {
         min-width: 0;
+        flex: 1 1 auto;
+      }
+
+      .gw-active-quest-chip.is-collapsed .gw-active-quest-chip-main,
+      .gw-active-quest-chip.is-collapsed .gw-active-quest-distance {
+        display: none;
+      }
+
+      .gw-active-quest-collapsed-label {
+        display: none;
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: 0.08em;
+        color: #ffe082;
+      }
+
+      .gw-active-quest-chip.is-collapsed .gw-active-quest-collapsed-label {
+        display: inline-flex;
+      }
+
+      .gw-active-quest-collapse-btn {
+        flex: 0 0 auto;
+        width: 24px;
+        height: 24px;
+        display: inline-grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(215,183,116,0.42);
+        border-radius: 8px;
+        color: #ffe082;
+        background: rgba(255,255,255,0.06);
+        cursor: pointer;
+      }
+
+      .gw-active-quest-collapse-btn svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        stroke-width: 2.4;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .gw-active-quest-collapse-btn:hover {
+        background: rgba(255,224,130,0.14);
+      }
+
+      .gw-active-quest-evidence-btn {
+        flex: 0 0 auto;
+        width: 30px;
+        height: 30px;
+        display: inline-grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(118,231,191,0.42);
+        border-radius: 10px;
+        color: #9ff0ce;
+        background: rgba(118,231,191,0.10);
+        cursor: pointer;
+      }
+
+      .gw-active-quest-evidence-btn svg {
+        width: 17px;
+        height: 17px;
+        stroke: currentColor;
+        stroke-width: 2.2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .gw-active-quest-evidence-btn:hover {
+        background: rgba(118,231,191,0.18);
+      }
+
+      .gw-active-quest-chip.is-collapsed .gw-active-quest-evidence-btn {
+        display: none;
       }
 
 .gw-quest-reward-backdrop {
@@ -357,6 +448,36 @@
     return null;
   }
 
+  function isHudCollapsed() {
+    return localStorage.getItem(HUD_COLLAPSED_KEY) === "1";
+  }
+
+  function setHudCollapsed(value) {
+    localStorage.setItem(HUD_COLLAPSED_KEY, value ? "1" : "0");
+    syncHudCollapsed();
+  }
+
+  function collapseIconSvg(collapsed) {
+    return collapsed
+      ? `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"></path></svg>`
+      : `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 6-6 6 6 6"></path></svg>`;
+  }
+
+  function syncHudCollapsed() {
+    if (!hudChip) return;
+
+    const collapsed = isHudCollapsed();
+    const btn = hudChip.querySelector(".gw-active-quest-collapse-btn");
+
+    hudChip.classList.toggle("is-collapsed", collapsed);
+
+    if (btn) {
+      btn.innerHTML = collapseIconSvg(collapsed);
+      btn.setAttribute("aria-label", collapsed ? "Expand quest banner" : "Collapse quest banner");
+      btn.title = collapsed ? "Expand quest banner" : "Collapse quest banner";
+    }
+  }
+
   function makeHudChip(quest, target) {
     hudChip = document.createElement("div");
     hudChip.className = "gw-active-quest-chip";
@@ -368,16 +489,43 @@
           ${target.mode === "anywhere" ? "Anywhere target · scan when ready" : "Drawing field tether..."}
         </div>
       </div>
+      <button class="gw-active-quest-evidence-btn" type="button" aria-label="Open quest evidence selector" title="Claim evidence">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M9 11l2 2 4-5"></path>
+          <path d="M5 4h14v16H5z"></path>
+          <path d="M8 17h8"></path>
+        </svg>
+      </button>
       <div class="gw-active-quest-distance" id="gwActiveQuestDistance">—</div>
+      <span class="gw-active-quest-collapsed-label" aria-hidden="true">QUEST</span>
+      <button class="gw-active-quest-collapse-btn" type="button" aria-label="Collapse quest banner" title="Collapse quest banner">
+        ${collapseIconSvg(false)}
+      </button>
     `;
 
+    hudChip.querySelector(".gw-active-quest-evidence-btn")?.addEventListener("click", evt => {
+      evt.stopPropagation();
+      window.GridWildQuestEvidence?.openEvidenceSelector?.(quest);
+    });
+
+    hudChip.querySelector(".gw-active-quest-collapse-btn")?.addEventListener("click", evt => {
+      evt.stopPropagation();
+      setHudCollapsed(!isHudCollapsed());
+    });
+
     hudChip.addEventListener("click", () => {
+      if (isHudCollapsed()) {
+        setHudCollapsed(false);
+        return;
+      }
+
       if (target.mode !== "anywhere") {
         map.flyTo([target.lat, target.lng], Math.max(map.getZoom(), 18), { duration: 0.65 });
       }
     });
 
     document.body.appendChild(hudChip);
+    syncHudCollapsed();
   }
 
   function drawTargetGeometry(quest, target) {

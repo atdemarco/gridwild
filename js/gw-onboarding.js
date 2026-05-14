@@ -726,8 +726,45 @@ function renderAccountCard() {
 
     document.body.appendChild(toast);
 
-    document.getElementById("gwBeginQuest").onclick = () => {
-      toast.remove();
+    document.getElementById("gwBeginQuest").onclick = async evt => {
+      const btn = evt.currentTarget;
+
+      if (!window.GridWildQuests?.startQuestFromRecipe) {
+        toast.remove();
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Starting...";
+
+      const quest = await window.GridWildQuests.startQuestFromRecipe({
+        range: "anywhere",
+        iconicTaxon: "Any",
+        objectiveType: "any_observation",
+        difficulty: 1,
+        timeframe: "today",
+        evidence: "photo_gps20",
+        surveyId: "none",
+        targetLocation: "anywhere",
+        target: {
+          mode: "anywhere",
+          label: "Anywhere",
+          radiusCells: null
+        }
+      }, {
+        title: "Beginner Quest: Observe any living thing",
+        source: "onboarding",
+        rewardXP: 100,
+        autoEmbark: true,
+        openStatus: false
+      });
+
+      if (quest) {
+        toast.remove();
+      } else {
+        btn.disabled = false;
+        btn.textContent = "Start exploring";
+      }
     };
   }
 

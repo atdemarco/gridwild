@@ -84,8 +84,34 @@ let compassPermissionState = "unknown";
 let compassDeniedToastShown = false;
 
 const COMPASS_HEADING_SMOOTHING = 0.35;
+const LOCK_ZOOM_CLOSE = 19;
+const LOCK_ZOOM_WIDE = 17;
+const LOCK_PROGRAMMATIC_MOVE_GRACE_MS = 900;
+const LOCK_PAN_BREAK_THRESHOLD_PX = 44;
 
 const GPS_GOOD_THRESHOLD_M = 20;
+
+function normalizeLockZoomMode(mode) {
+  return mode === "wide" ? "wide" : "close";
+}
+
+function zoomForLockMode(mode) {
+  return normalizeLockZoomMode(mode) === "wide" ? LOCK_ZOOM_WIDE : LOCK_ZOOM_CLOSE;
+}
+
+function setProgrammaticLockMoveGuard() {
+  window.__gwState = window.__gwState || {};
+  window.__gwState.programmaticAutoCenterUntil =
+    Date.now() + LOCK_PROGRAMMATIC_MOVE_GRACE_MS;
+}
+
+function setLockZoomMode(mode) {
+  window.__gwState = window.__gwState || {};
+  const nextMode = normalizeLockZoomMode(mode);
+  window.__gwState.lockZoomMode = nextMode;
+  window.__gwState.lockZoom = zoomForLockMode(nextMode);
+  return nextMode;
+}
 
 function updateGpsHealthBadge(accuracyMeters) {
   const badge = document.getElementById("gpsHealthIcon");
@@ -149,6 +175,7 @@ navigator.geolocation.getCurrentPosition(
 
         if (toastOnSuccess && window.__gwState?.lockToLocation) {
       showGridWildToast("Follow lock enabled");
+      setProgrammaticLockMoveGuard();
       map.setView([latitude, longitude], zoom, { animate: true });
     }
 
@@ -176,9 +203,13 @@ function setLockButtonVisual() {
   if (!btn) return;
 
   const locked = !!window.__gwState?.lockToLocation;
+  const mode = normalizeLockZoomMode(window.__gwState?.lockZoomMode);
   btn.classList.toggle("is-locked", locked);
+  btn.classList.toggle("is-locked-wide", locked && mode === "wide");
   btn.setAttribute("aria-pressed", locked ? "true" : "false");
-  btn.title = locked ? "Tracking on" : "Find me";
+  btn.title = locked
+    ? (mode === "wide" ? "Tracking on: wide" : "Tracking on: close")
+    : "Find me";
 
   if (typeof syncCompassTracking === "function") {
     syncCompassTracking({ requestPermission: false });
@@ -187,7 +218,8 @@ function setLockButtonVisual() {
 
 function enableLocationLock(options = {}) {
   const {
-    zoom = 19,
+    zoom = null,
+    mode = null,
     recenterNow = true,
     force = true
   } = options;
@@ -200,7 +232,9 @@ function enableLocationLock(options = {}) {
 
   state.lockToLocation = true;
   state.suspendAutoCenterUntil = 0;
-  state.lockZoom = zoom;
+  const nextMode = setLockZoomMode(mode || state.lockZoomMode || "close");
+  const lockZoom = Number.isFinite(Number(zoom)) ? Number(zoom) : zoomForLockMode(nextMode);
+  state.lockZoom = lockZoom;
 
   startCompassTracking({ requestPermission: true });
 
@@ -221,7 +255,8 @@ function enableLocationLock(options = {}) {
   }
 
   if (recenterNow && lastFix) {
-    map.setView([lastFix.latitude, lastFix.longitude], zoom, { animate: true });
+    setProgrammaticLockMoveGuard();
+    map.setView([lastFix.latitude, lastFix.longitude], lockZoom, { animate: true });
 
     if (typeof window.handleUserPositionUpdate === "function") {
       window.handleUserPositionUpdate(lastFix.latitude, lastFix.longitude, force);
@@ -229,10 +264,25 @@ function enableLocationLock(options = {}) {
   } else if (recenterNow && typeof requestLocationOnce === "function") {
     requestLocationOnce({
       toastOnSuccess: !hadFix,
-      zoom,
+      zoom: lockZoom,
       force
     });
   }
+}
+
+function cycleLocationLock(options = {}) {
+  window.__gwState = window.__gwState || {};
+  const state = window.__gwState;
+  const currentMode = normalizeLockZoomMode(state.lockZoomMode);
+  const nextMode = state.lockToLocation
+    ? (currentMode === "close" ? "wide" : "close")
+    : "close";
+
+  return enableLocationLock({
+    ...options,
+    mode: nextMode,
+    zoom: zoomForLockMode(nextMode)
+  });
 }
 function showGridWildToast(message = "") {
   let toast = document.getElementById("gwToast");
@@ -282,6 +332,7 @@ function disableLocationLock() {
   if (!window.__gwState.lockToLocation) return;
 
   window.__gwState.lockToLocation = false;
+  setLockZoomMode("close");
   showGridWildToast("Follow lock disabled");
   window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
   stopCompassTracking();
@@ -297,9 +348,10 @@ function disableLocationLock() {
 
 function disableAutoCenterFromUserGesture(e) {
   if (!window.__gwState?.lockToLocation) return;
+  if (Date.now() < (window.__gwState?.programmaticAutoCenterUntil || 0)) return;
 
   // Only break lock on real user interaction
-  if (e?.originalEvent || e?.sourceTarget) {
+  if (e?.originalEvent) {
     disableLocationLock();
   }
 }
@@ -308,6 +360,30 @@ function disableAutoCenterFromUserGesture(e) {
 //map.on("zoomstart", disableAutoCenterFromUserGesture);
 let gwLockTouchStart = null;
 let gwLockBrokenThisTouch = false;
+let gwLockDragStartPoint = null;
+
+function isTouchLikeOriginalEvent(evt) {
+  return !!(
+    evt?.type?.startsWith?.("touch") ||
+    evt?.pointerType === "touch"
+  );
+}
+
+function pointDistance(a, b) {
+  if (!a || !b) return 0;
+  const dx = Number(b.x) - Number(a.x);
+  const dy = Number(b.y) - Number(a.y);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function maybeDisableLockForPanDistance(distancePx) {
+  if (!window.__gwState?.lockToLocation) return false;
+  if (Date.now() < (window.__gwState?.programmaticAutoCenterUntil || 0)) return false;
+  if (distancePx < LOCK_PAN_BREAK_THRESHOLD_PX) return false;
+
+  disableLocationLock();
+  return true;
+}
 
 map.getContainer().addEventListener("touchstart", (e) => {
   const t = e.touches?.[0];
@@ -334,8 +410,7 @@ map.getContainer().addEventListener("touchmove", (e) => {
 
   const dist = Math.sqrt(dx * dx + dy * dy);
 
-  if (dist > 45) {   // swipe threshold in pixels
-    disableLocationLock();
+  if (maybeDisableLockForPanDistance(dist)) {
     gwLockBrokenThisTouch = true;
   }
 }, { passive: true });
@@ -345,16 +420,32 @@ map.getContainer().addEventListener("touchend", () => {
   gwLockBrokenThisTouch = false;
 }, { passive: true });
 
-// Desktop / mouse pan unlock.
-// Mobile touch pan is handled above by the 45px swipe threshold.
+// Manual pan unlock. Tiny drags/taps should not break follow lock.
 map.on("dragstart", (e) => {
   const oe = e?.originalEvent;
 
-  // Ignore touch-originated Leaflet drags so mobile does not become too sensitive.
+  if (!window.__gwState?.lockToLocation) return;
+  if (Date.now() < (window.__gwState?.programmaticAutoCenterUntil || 0)) return;
+
+  gwLockDragStartPoint = map.project(map.getCenter(), map.getZoom());
+
+  // Touch-originated Leaflet drags are also watched by touchmove above.
   if (oe?.type && oe.type.startsWith("touch")) return;
   if (oe?.pointerType === "touch") return;
+});
 
-  disableAutoCenterFromUserGesture(e);
+map.on("dragend", (e) => {
+  if (!gwLockDragStartPoint) return;
+
+  const oe = e?.originalEvent;
+  if (isTouchLikeOriginalEvent(oe) && gwLockBrokenThisTouch) {
+    gwLockDragStartPoint = null;
+    return;
+  }
+
+  const endPoint = map.project(map.getCenter(), map.getZoom());
+  maybeDisableLockForPanDistance(pointDistance(gwLockDragStartPoint, endPoint));
+  gwLockDragStartPoint = null;
 });
 
 map.on("zoomstart", disableAutoCenterFromUserGesture);
@@ -567,6 +658,7 @@ function getMapResolution() {
 }
 
 window.enableLocationLock = enableLocationLock;
+window.cycleLocationLock = cycleLocationLock;
 window.disableLocationLock = disableLocationLock;
 window.setLockButtonVisual = setLockButtonVisual;
 window.requestLocationOnce = requestLocationOnce;

@@ -147,8 +147,9 @@ async function unequipSlot(slot) {
           }
         </div>
 
-        <div class="gw-store-foot">
+        <div class="gw-store-foot" style="grid-template-columns:repeat(3,minmax(0,1fr));">
           <button class="gw-store-action secondary" id="gwInventoryCloseBtn" type="button">Close</button>
+          <button class="gw-store-action secondary" id="gwInventoryInspectBtn" type="button">My Field Look</button>
           <button class="gw-store-action" id="gwInventoryStoreBtn" type="button">Open Store</button>
         </div>
       </div>
@@ -193,6 +194,11 @@ async function unequipSlot(slot) {
 
     root.querySelector("#gwInventoryCloseBtn")?.addEventListener("click", () => {
       root.remove();
+    });
+
+    root.querySelector("#gwInventoryInspectBtn")?.addEventListener("click", () => {
+      root.remove();
+      window.GridWildAvatarInspection?.open?.();
     });
 
     root.querySelector("#gwInventoryStoreBtn")?.addEventListener("click", () => {

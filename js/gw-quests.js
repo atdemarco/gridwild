@@ -330,17 +330,19 @@ function isAbandonedQuest(q) {
 
 function normalizeDbQuest(q) {
   const playerQuest = q.player_quests?.[0] || null;
+  const storedRecipe = q.recipe && typeof q.recipe === "object" ? q.recipe : {};
 
   const recipe = {
-    range: "anywhere",
-    iconicTaxon: "Any",
-    objectiveType: q.quest_type === "identify" ? "new_square_taxon" : "any_observation",
-    difficulty: 1,
-    timeframe: "today",
-    evidence: "photo_gps20",
-    targetLocation: "anywhere",
-    target: null,
-    surveyId: "none"
+    range: storedRecipe.range || "anywhere",
+    iconicTaxon: storedRecipe.iconicTaxon || "Any",
+    objectiveType: storedRecipe.objectiveType || (q.quest_type === "identify" ? "new_square_taxon" : "any_observation"),
+    difficulty: Number(storedRecipe.difficulty || 1),
+    timeframe: storedRecipe.timeframe || "today",
+    evidence: storedRecipe.evidence || "photo_gps20",
+    targetLocation: storedRecipe.targetLocation || storedRecipe.target?.mode || "anywhere",
+    target: storedRecipe.target || null,
+    surveyId: storedRecipe.surveyId || "none",
+    quantity: storedRecipe.quantity || storedRecipe.targetCount || 1
   };
 
   return {
@@ -409,6 +411,47 @@ function updateRuntimeQuestPlayerState(questId, playerQuest, patch = {}) {
 function getVisibleQuests() {
   return getDbQuests()
     .filter(q => isPlayerTrackedQuest(q) && !isArchivedQuest(q) && !isAbandonedQuest(q));
+}
+
+async function acceptAndEmbarkQuest(quest) {
+  if (!quest) return null;
+
+  if (quest.source === "db" || quest.dbId) {
+    const questId = quest.dbId || quest.id;
+    const accepted = await window.GridWildAPI.acceptQuest(questId);
+    await window.GridWildAPI.setActiveQuest(questId);
+
+    quest.status = "active";
+    quest.startedAt = accepted.player_quest?.accepted_at || quest.startedAt || nowISO();
+
+    window.__gwState = window.__gwState || {};
+    window.__gwState.activeQuestId = questId;
+    updateRuntimeQuestPlayerState(questId, accepted.player_quest, {
+      status: "active",
+      accepted_at: quest.startedAt
+    });
+
+    window.refreshQuestBadge?.();
+    renderQuestListIntoPage();
+
+    if (window.GridWildQuestLayer) {
+      window.GridWildQuestLayer.embark(quest);
+    }
+
+    window.dispatchEvent(new CustomEvent("gwQuestEmbarked", {
+      detail: { quest }
+    }));
+
+    return quest;
+  }
+
+  const activeQuest = embarkQuest(quest.id);
+
+  window.dispatchEvent(new CustomEvent("gwQuestEmbarked", {
+    detail: { quest: activeQuest || quest }
+  }));
+
+  return activeQuest || quest;
 }
 
 function getArchivedQuests() {
@@ -735,10 +778,14 @@ function openQuestArchive() {
 async function startQuestFromRecipe(recipe, options = {}) {
   const title = options.title || buildQuestTitle(recipe);
   const source = options.source || "manual";
+  const rewardXP = Number(options.rewardXP);
 
   const quest = makeQuest(recipe);
   quest.title = title;
   quest.source = source;
+  if (Number.isFinite(rewardXP) && rewardXP > 0) {
+    quest.pointValue = Math.round(rewardXP);
+  }
 
   try {
     const result = await window.GridWildAPI.createQuest({
@@ -761,7 +808,12 @@ async function startQuestFromRecipe(recipe, options = {}) {
     const normalized = normalizeDbQuest(dbQuest);
 
     renderQuestListIntoPage();
-    openQuestStatus(normalized.id);
+
+    if (options.autoEmbark === true) {
+      await acceptAndEmbarkQuest(normalized);
+    } else if (options.openStatus !== false) {
+      openQuestStatus(normalized.id);
+    }
 
     window.dispatchEvent(new CustomEvent("gwQuestStarted", {
       detail: { quest: normalized }
@@ -1363,32 +1415,12 @@ async function startQuestFromRecipe(recipe, options = {}) {
  root.querySelector("#gwQuestEmbarkBtn")?.addEventListener("click", async () => {
   try {
     if (quest.source === "db" || quest.dbId) {
-      const questId = quest.dbId || quest.id;
-      const accepted = await window.GridWildAPI.acceptQuest(questId);
-      await window.GridWildAPI.setActiveQuest(questId);
-
-      quest.status = "active";
-      quest.startedAt = accepted.player_quest?.accepted_at || quest.startedAt || nowISO();
-      
-      window.__gwState = window.__gwState || {};
-      window.__gwState.activeQuestId = questId;
-      updateRuntimeQuestPlayerState(questId, accepted.player_quest, {
-        status: "active",
-        accepted_at: quest.startedAt
-      });
-
-      window.refreshQuestBadge?.();
+      await acceptAndEmbarkQuest(quest);
       closeModal(root);
-      renderQuestListIntoPage();
-
-      if (window.GridWildQuestLayer) {
-        window.GridWildQuestLayer.embark(quest);
-      }
-
       return;
     }
 
-    embarkQuest(quest.id);
+    await acceptAndEmbarkQuest(quest);
     closeModal(root);
   } catch (err) {
     console.error("Accept quest failed:", err);
@@ -2143,6 +2175,7 @@ function openNewSurveyConfigurator() {
     openQuestStatus,
     openQuestRecipeCreator,
     embarkQuest,
+    acceptAndEmbarkQuest,
     archiveQuest,
     abandonQuest,
     openQuestArchive,

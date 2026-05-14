@@ -42,12 +42,16 @@
     -3,
     Math.min(3, Number(window.__gwState.heatZThreshold) || 0)
   );
+  window.__gwState.heatZThresholdDirection =
+    window.__gwState.heatZThresholdDirection === "below" ? "below" : "above";
   
   window.__gwState.showOsmFeatures = $("toggleOsmBuildings")?.checked ?? true;
   window.__gwState.showOsmBuildings = window.__gwState.showOsmFeatures;
 
   window.__gwState.heatMetric = getSelectedHeatMetric();
   window.__gwFilters.iconicTaxa = getSelectedIconicTaxa();
+  window.__gwFilters.onlyMe = window.__gwFilters.onlyMe === true;
+  window.__gwState.onlyMeFilterEnabled = window.__gwFilters.onlyMe;
 
   window.__gwState.showPoints = $("togglePoints")?.checked ?? true;
   window.__gwState.dynamicINatEnabled = $("toggleDynamicINat")?.checked ?? false;
@@ -164,8 +168,12 @@
    if (id === "toggleLockLocation") {
     if (window.__gwState.lockToLocation) {
       window.__gwState.suspendAutoCenterUntil = 0;
+      window.__gwState.lockZoomMode = "close";
+      window.__gwState.lockZoom = 19;
     } else {
       window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
+      window.__gwState.lockZoomMode = "close";
+      window.__gwState.lockZoom = 19;
     }
 
     if (typeof window.setLockButtonVisual === "function") {
@@ -330,6 +338,7 @@ function saveUIState() {
     coarseHeatBinSize: window.__gwState?.coarseHeatBinSize ?? 8,
     heatZThresholdEnabled: byId("toggleHeatZThreshold")?.checked ?? window.__gwState?.heatZThresholdEnabled ?? false,
     heatZThreshold: window.__gwState?.heatZThreshold ?? 0,
+    heatZThresholdDirection: window.__gwState?.heatZThresholdDirection === "below" ? "below" : "above",
     dynamicINatEnabled: byId("toggleDynamicINat")?.checked ?? false,
     showShimmer: byId("toggleShimmer")?.checked ?? false,
     showFog: byId("toggleFog")?.checked ?? true,
@@ -338,6 +347,7 @@ function saveUIState() {
     godsEyeEnabled: byId("toggleGodsEye")?.checked ?? false,
     lockToLocation: byId("toggleLockLocation")?.checked ?? true,
     heatMetric: getSelectedHeatMetric(),
+    onlyMeFilterEnabled: window.__gwFilters?.onlyMe === true,
     showOsmBuildings: byId("toggleOsmBuildings")?.checked ?? true
     };
 
@@ -362,9 +372,16 @@ function applySavedUIState() {
     -3,
     Math.min(3, Number(s.heatZThreshold) || 0)
   );
+  window.__gwState.heatZThresholdDirection = s.heatZThresholdDirection === "below" ? "below" : "above";
   if (byId("toggleHeatZThreshold")) byId("toggleHeatZThreshold").checked = window.__gwState.heatZThresholdEnabled;
   if (byId("gwHeatZThresholdInput")) byId("gwHeatZThresholdInput").value = window.__gwState.heatZThreshold.toFixed(1);
   if (byId("gwHeatZThresholdSlider")) byId("gwHeatZThresholdSlider").value = String(window.__gwState.heatZThreshold);
+  if (byId("gwHeatZThresholdDirectionBtn")) {
+    const isBelow = window.__gwState.heatZThresholdDirection === "below";
+    byId("gwHeatZThresholdDirectionBtn").innerHTML = isBelow ? "&le;" : "&ge;";
+    byId("gwHeatZThresholdDirectionBtn").setAttribute("aria-label", isBelow ? "Show heat cells below cutoff" : "Show heat cells above cutoff");
+    byId("gwHeatZThresholdDirectionBtn").title = isBelow ? "Show values below cutoff" : "Show values above cutoff";
+  }
   if (byId("toggleDynamicINat"))  byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
   if (byId("toggleShimmer"))      byId("toggleShimmer").checked = s.showShimmer ?? false;
   if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? true;
@@ -373,6 +390,9 @@ function applySavedUIState() {
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
   if (byId("toggleFogSmoothing")) byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? false;
   if (byId("toggleOsmBuildings")) byId("toggleOsmBuildings").checked = s.showOsmBuildings ?? false;
+  window.__gwFilters = window.__gwFilters || {};
+  window.__gwFilters.onlyMe = s.onlyMeFilterEnabled === true;
+  window.__gwState.onlyMeFilterEnabled = window.__gwFilters.onlyMe;
 
   const metric = s.heatMetric ?? "count";
   const radio = document.querySelector(`input[name="heatMetric"][value="${metric}"]`);
