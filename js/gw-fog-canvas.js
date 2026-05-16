@@ -30,7 +30,9 @@
   function getRevealStrengthForCell(ix, iy, now) {
     const key = cellKey(ix, iy);
 
-    if (window.isGodsEyeTransientVisibleCell?.(key)) return 1;
+    const transientStrength = window.getGridWildTransientRevealStrength?.(key, now);
+    if (transientStrength > 0) return Math.max(0, Math.min(1, transientStrength));
+    if (window.isGridWildTransientVisibleCell?.(key)) return 1;
 
     const s = window.GridWildFog?.getCellFogState?.(key, now);
     if (!s) return 0;
@@ -156,7 +158,8 @@ function opacityKey(opacity) {
 function getCellFogOpacity(ix, iy, now, smoothingOn) {
   const key = `${ix},${iy}`;
 
-  if (window.isGodsEyeTransientVisibleCell?.(key)) return null;
+  const transientStrength = window.getGridWildTransientRevealStrength?.(key, now);
+  if (transientStrength >= 0.98 || window.isGridWildTransientVisibleCell?.(key)) return null;
 
   const fogState = window.GridWildFog.getCellFogState(key, now);
   if (fogState.state === "documented") return null;
@@ -173,6 +176,11 @@ function getCellFogOpacity(ix, iy, now, smoothingOn) {
     (fogState.state === "unknown" || fogState.state === "expired")
   ) {
     opacity = applyFogEdgeSoftening(opacity, ix, iy, now);
+  }
+
+  if (transientStrength > 0) {
+    opacity *= 1 - Math.max(0, Math.min(1, transientStrength)) * 0.94;
+    if (opacity <= 0.02) return null;
   }
 
   return quantizeOpacity(opacity);

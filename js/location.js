@@ -212,6 +212,9 @@ navigator.geolocation.getCurrentPosition(
     lastFix = { latitude, longitude, accuracy };
     setUserLocation(latitude, longitude, accuracy);
     setLockButtonVisual();
+    window.dispatchEvent(new CustomEvent("gwUserLocationUpdated", {
+      detail: { latitude, longitude, accuracy, force }
+    }));
 
     // Let the central logic decide whether auto-centering is allowed
     if (typeof window.handleUserPositionUpdate === "function") {
@@ -508,6 +511,9 @@ function startWatchingLocation() {
       updateHeadingFromGps(heading, speed);
       setUserLocation(latitude, longitude, accuracy);
       setLockButtonVisual();
+      window.dispatchEvent(new CustomEvent("gwUserLocationUpdated", {
+        detail: { latitude, longitude, accuracy }
+      }));
 
       if (typeof window.handleUserPositionUpdate === "function") {
         window.handleUserPositionUpdate(latitude, longitude, false);

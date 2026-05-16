@@ -1066,13 +1066,6 @@ function renderInfoContent() {
   function renderCommunityContent() {
     return `
   <div id="gwPartySheetBody">
-    <div class="gw-card">
-      <div class="gw-card-title">Online Party Sync</div>
-      <div id="gwPartyLiveStatus">
-        <div class="gw-muted">Loading shared party state...</div>
-      </div>
-    </div>
-
     <div id="gwLegacyPartyUI">
       <div class="gw-card">
         <div class="gw-card-title">Party</div>

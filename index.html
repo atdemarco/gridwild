@@ -241,13 +241,13 @@
 
     .gw-hud-taxa {
       box-sizing: border-box;
-      width: var(--gw-hud-control-width);
+      width: 126px;
       pointer-events: auto;
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 1px;
-      padding: 3px;
-      border-radius: 14px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 5px;
+      padding: 6px;
+      border-radius: 16px;
       background: linear-gradient(180deg, rgba(34,30,26,0.96), rgba(18,16,14,0.98));
       border: 1px solid var(--gw-jrpg-border, rgba(180, 150, 94, 0.42));
       box-shadow: 0 14px 36px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.05);
@@ -264,7 +264,7 @@
       align-items: center;
       justify-content: center;
       padding: 0;
-      font-size: 11px;
+      font-size: 16px;
       line-height: 1;
       color: rgba(239,230,211,0.52);
       background: rgba(255,255,255,0.035);
@@ -288,8 +288,8 @@
     }
 
     .gw-hud-taxa-btn svg {
-      width: 14px;
-      height: 14px;
+      width: 17px;
+      height: 17px;
       display: block;
       stroke: currentColor;
       fill: none;
@@ -314,7 +314,7 @@
       color: rgba(118, 231, 191, 0.74);
       filter: none;
       opacity: 0.84;
-      font-size: 8px;
+      font-size: 10px;
       font-weight: 900;
       letter-spacing: 0;
     }
@@ -329,6 +329,62 @@
       color: rgba(255, 155, 92, 0.74);
       filter: none;
       opacity: 0.84;
+    }
+
+    .gw-hud-blast-btn {
+      position: relative;
+      color: rgba(255, 224, 142, 0.78);
+      filter: none;
+      opacity: 0.88;
+      overflow: hidden;
+    }
+
+    .gw-hud-blast-btn::before {
+      content: "";
+      position: absolute;
+      inset: 2px;
+      border-radius: inherit;
+      background: conic-gradient(
+        rgba(255,224,142,0.80) var(--cooldown-progress, 0%),
+        rgba(255,255,255,0.06) 0
+      );
+      opacity: 0;
+      transition: opacity 160ms ease;
+    }
+
+    .gw-hud-blast-btn::after {
+      content: "";
+      position: absolute;
+      inset: 5px;
+      border-radius: inherit;
+      background: rgba(20,17,15,0.94);
+    }
+
+    .gw-hud-blast-btn svg,
+    .gw-hud-blast-btn .gw-hud-blast-count {
+      position: relative;
+      z-index: 1;
+    }
+
+    .gw-hud-blast-btn.is-ready {
+      color: #ffeab0;
+      opacity: 1;
+      box-shadow: inset 0 0 0 1px rgba(255,224,142,0.46), 0 0 12px rgba(255,205,94,0.28);
+    }
+
+    .gw-hud-blast-btn.is-cooling {
+      opacity: 0.78;
+      box-shadow: inset 0 0 0 1px rgba(255,224,142,0.22);
+    }
+
+    .gw-hud-blast-btn.is-cooling::before {
+      opacity: 1;
+    }
+
+    .gw-hud-blast-count {
+      font-size: 9px;
+      font-weight: 950;
+      line-height: 1;
     }
 
     .gw-hud-filter-placeholder {
@@ -372,6 +428,11 @@
       background:
         radial-gradient(circle at 50% 38%, rgba(255,155,92,0.34), rgba(204,92,52,0.12) 58%, rgba(255,255,255,0.04) 100%);
       box-shadow: inset 0 0 0 1px rgba(255,155,92,0.42), 0 0 8px rgba(255,155,92,0.18);
+    }
+
+    .gw-hud-blast-btn.is-ready.is-on {
+      background:
+        radial-gradient(circle at 50% 38%, rgba(255,224,142,0.40), rgba(197,122,54,0.14) 58%, rgba(255,255,255,0.04) 100%);
     }
 
     .gw-hud-coarse {
@@ -520,7 +581,9 @@
       }
 
       .gw-hud-taxa {
-        width: var(--gw-hud-control-width);
+        width: 114px;
+        gap: 4px;
+        padding: 5px;
       }
 
       .gw-hud-coarse {
@@ -1767,11 +1830,67 @@
 }
 
 /* Optional: make top pills less glassy and more label-like */
-.gw-pill {
-  background:
-    linear-gradient(180deg, rgba(55, 46, 35, 0.99), rgba(27, 23, 18, 0.995));
-  padding: 9px 13px;
-}
+  .gw-pill {
+    background:
+      linear-gradient(180deg, rgba(55, 46, 35, 0.99), rgba(27, 23, 18, 0.995));
+    padding: 9px 13px;
+  }
+
+  .gw-hud-toolband {
+    box-sizing: border-box;
+    width: var(--gw-hud-control-width);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    pointer-events: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .gw-hud-round-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 0;
+    padding: 0;
+    border-radius: 999px;
+    justify-content: center;
+    align-items: center;
+    gap: 0;
+  }
+
+  .gw-hud-round-btn svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .gw-hud-round-btn.is-on,
+  .gw-hud-round-btn[aria-expanded="true"] {
+    color: #ffe7a3;
+    border-color: rgba(240,209,138,0.68);
+    box-shadow:
+      0 14px 34px rgba(0,0,0,0.46),
+      inset 0 0 0 1px rgba(255,225,151,0.28),
+      0 0 10px rgba(240,209,138,0.16);
+  }
+
+  .gw-hud-geometry-foldout {
+    display: grid;
+    gap: 8px;
+  }
+
+  .gw-hud-geometry-foldout[hidden] {
+    display: none;
+  }
 
 
 
@@ -1874,16 +1993,32 @@
   <!-- Top controls -->
   <div class="gw-topbar">
   <div class="gw-topbar-left gw-topbar-stack">
-    <button class="gw-pill" id="legendPill" type="button">
-      🗺️ Legend
-    </button>
-    <button class="gw-pill gw-location-pill" id="gwLocationPickerBtn" type="button" title="Pick or save a location">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11z"></path>
-        <circle cx="12" cy="10" r="2.2"></circle>
-      </svg>
-      Location
-    </button>
+    <div class="gw-hud-toolband" aria-label="Map tools">
+      <button class="gw-pill gw-hud-round-btn" id="legendPill" type="button" aria-label="Open settings" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 7h16"></path>
+          <path d="M4 17h16"></path>
+          <circle cx="9" cy="7" r="2"></circle>
+          <circle cx="15" cy="17" r="2"></circle>
+        </svg>
+      </button>
+      <button class="gw-pill gw-location-pill gw-hud-round-btn" id="gwLocationPickerBtn" type="button" aria-label="Pick or save a location" title="Location">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11z"></path>
+          <circle cx="12" cy="10" r="2.2"></circle>
+        </svg>
+      </button>
+      <button class="gw-pill gw-hud-round-btn" id="gwHudGeometryToggle" type="button" aria-label="Toggle geometry controls" aria-expanded="false" aria-controls="gwHudGeometryFoldout" title="Geometry">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M5 6.5 12 3l7 3.5v10L12 21l-7-4.5z"></path>
+          <path d="M5 6.5 12 11l7-4.5"></path>
+          <path d="M12 11v10"></path>
+          <circle cx="5" cy="6.5" r="1.1"></circle>
+          <circle cx="19" cy="6.5" r="1.1"></circle>
+          <circle cx="12" cy="21" r="1.1"></circle>
+        </svg>
+      </button>
+    </div>
     <div class="gw-hud-legend" id="gwHudLegend" role="button" tabindex="0" aria-label="Open lens picker">
       <div class="gw-hud-legend-title">
         <span id="gwHudLegendTitle">Overlay</span>
@@ -1938,21 +2073,30 @@
           <path d="M12 18a1.7 1.7 0 0 0 1.7-1.7c0-.8-.4-1.3-1-1.9-.4-.5-.7-1-.7-1.7-1 .8-1.7 1.9-1.7 3.6A1.7 1.7 0 0 0 12 18z"></path>
         </svg>
       </button>
+      <button class="gw-hud-taxa-btn gw-hud-blast-btn is-ready" id="gwHudVisionBlastBtn" type="button" aria-label="Explosive vision" title="Explosive vision">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M2.8 12s3.4-6 9.2-6 9.2 6 9.2 6-3.4 6-9.2 6-9.2-6-9.2-6Z"></path>
+          <path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M21.5 12h-2.2M4.7 12H2.5M19.8 4.2l-1.6 1.6M5.8 18.2l-1.6 1.6"></path>
+        </svg>
+      </button>
     </div>
-    <label class="gw-hud-coarse" title="Render the heat overlay as local median bins">
-      <input type="checkbox" id="toggleSuperchunkHeat_hud" />
-      <span>Coarse</span>
-      <button class="gw-hud-coarse-bin" id="gwCoarseHeatBinBtn" type="button" title="Set heat bin size">8</button>
-    </label>
-    <div class="gw-hud-zfilter" title="Filter heat cells by z-score cutoff">
-      <div class="gw-hud-zfilter-row">
-        <input type="checkbox" id="toggleHeatZThreshold" />
-        <label for="toggleHeatZThreshold">Cutoff</label>
-        <button class="gw-hud-zfilter-direction" id="gwHeatZThresholdDirectionBtn" type="button" aria-label="Show heat cells above cutoff" title="Show values above cutoff">&ge;</button>
-      </div>
-      <div class="gw-hud-zfilter-value-row">
-        <input class="gw-hud-zfilter-slider" id="gwHeatZThresholdSlider" type="range" min="-3" max="3" step="0.1" value="0" />
-        <input class="gw-hud-zfilter-number" id="gwHeatZThresholdInput" type="number" min="-3" max="3" step="0.1" value="0" />
+    <div class="gw-hud-geometry-foldout" id="gwHudGeometryFoldout" hidden>
+      <label class="gw-hud-coarse" title="Render the heat overlay as local median bins">
+        <input type="checkbox" id="toggleSuperchunkHeat_hud" />
+        <span>Coarse</span>
+        <button class="gw-hud-coarse-bin" id="gwCoarseHeatBinBtn" type="button" title="Set heat bin size">8</button>
+      </label>
+      <div class="gw-hud-zfilter" title="Filter heat cells by z-score cutoff">
+        <div class="gw-hud-zfilter-row">
+          <input type="checkbox" id="toggleHeatZThreshold" />
+          <label for="toggleHeatZThreshold">Cutoff</label>
+          <button class="gw-hud-zfilter-direction" id="gwHeatZThresholdDirectionBtn" type="button" aria-label="Show heat cells above cutoff" title="Show values above cutoff">&ge;</button>
+        </div>
+        <div class="gw-hud-zfilter-value-row">
+          <input class="gw-hud-zfilter-slider" id="gwHeatZThresholdSlider" type="range" min="-3" max="3" step="0.1" value="0" />
+          <input class="gw-hud-zfilter-number" id="gwHeatZThresholdInput" type="number" min="-3" max="3" step="0.1" value="0" />
+        </div>
       </div>
     </div>
   </div>
@@ -2689,6 +2833,38 @@ window.refreshQuestBadge = refreshQuestBadge;
         return Array.from(document.querySelectorAll("[data-gw-hud-iconic]"));
       }
 
+      function toast(message) {
+        if (typeof window.showGridWildToast === "function") {
+          window.showGridWildToast(message);
+          return;
+        }
+
+        const el = document.createElement("div");
+        el.textContent = message;
+        Object.assign(el.style, {
+          position: "fixed",
+          left: "50%",
+          bottom: "118px",
+          zIndex: "999999",
+          transform: "translateX(-50%)",
+          padding: "10px 14px",
+          borderRadius: "999px",
+          color: "#efe6d3",
+          background: "rgba(20,17,15,0.94)",
+          border: "1px solid rgba(215,183,116,0.34)",
+          boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
+          fontSize: "13px",
+          fontWeight: "800",
+          pointerEvents: "none"
+        });
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 1400);
+      }
+
+      function stateLabel(name, enabled) {
+        return `${name} ${enabled ? "on" : "off"}`;
+      }
+
       function realCheckbox(iconic) {
         return document.querySelector(`input[data-iconic="${iconic}"]`);
       }
@@ -2717,9 +2893,17 @@ window.refreshQuestBadge = refreshQuestBadge;
         return document.getElementById("gwHudHeatToggle");
       }
 
+      function blastButton() {
+        return document.getElementById("gwHudVisionBlastBtn");
+      }
+
       function meButton() {
         return document.getElementById("gwHudMeToggle");
       }
+
+      const BLAST_COOLDOWN_MS = 60000;
+      let blastCooldownTimer = null;
+      let blastReadyAt = 0;
 
       function sync() {
         buttons().forEach(btn => {
@@ -2749,6 +2933,8 @@ window.refreshQuestBadge = refreshQuestBadge;
           heat.setAttribute("aria-pressed", heatChecked ? "true" : "false");
         }
 
+        syncBlastButton();
+
         const me = meButton();
         const meChecked = window.__gwFilters?.onlyMe === true;
         if (me) {
@@ -2764,6 +2950,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         real.checked = !real.checked;
         real.dispatchEvent(new Event("change", { bubbles: true }));
         sync();
+        const label = document.querySelector(`[data-gw-hud-iconic="${iconic}"]`)?.title || iconic;
+        toast(stateLabel(label, real.checked));
       }
 
       function toggleFog() {
@@ -2773,6 +2961,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         real.checked = !real.checked;
         real.dispatchEvent(new Event("change", { bubbles: true }));
         sync();
+        toast(stateLabel("Fog", real.checked));
       }
 
       function toggleOsm() {
@@ -2782,6 +2971,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         real.checked = !real.checked;
         real.dispatchEvent(new Event("change", { bubbles: true }));
         sync();
+        toast(stateLabel("House layer", real.checked));
       }
 
       function toggleHeat() {
@@ -2791,6 +2981,50 @@ window.refreshQuestBadge = refreshQuestBadge;
         real.checked = !real.checked;
         real.dispatchEvent(new Event("change", { bubbles: true }));
         sync();
+        toast(stateLabel("Heat", real.checked));
+      }
+
+      function syncBlastButton() {
+        const btn = blastButton();
+        if (!btn) return;
+
+        const remaining = Math.max(0, blastReadyAt - Date.now());
+        const ready = remaining <= 0;
+
+        btn.classList.toggle("is-ready", ready);
+        btn.classList.toggle("is-on", ready);
+        btn.classList.toggle("is-cooling", !ready);
+        btn.setAttribute("aria-disabled", ready ? "false" : "true");
+        btn.style.setProperty("--cooldown-progress", `${(remaining / BLAST_COOLDOWN_MS) * 100}%`);
+
+        if (ready && blastCooldownTimer) {
+          clearInterval(blastCooldownTimer);
+          blastCooldownTimer = null;
+        }
+      }
+
+      function startBlastCooldown() {
+        blastReadyAt = Date.now() + BLAST_COOLDOWN_MS;
+        syncBlastButton();
+        if (blastCooldownTimer) clearInterval(blastCooldownTimer);
+        blastCooldownTimer = setInterval(syncBlastButton, 250);
+      }
+
+      function triggerVisionBlast() {
+        const remaining = Math.max(0, blastReadyAt - Date.now());
+        if (remaining > 0) {
+          toast(`Explosive vision ready in ${Math.ceil(remaining / 1000)}s`);
+          return;
+        }
+
+        if (typeof window.triggerGodsEyeBlast !== "function") {
+          toast("Explosive vision is not ready");
+          return;
+        }
+
+        window.triggerGodsEyeBlast();
+        toast("Explosive vision");
+        startBlastCooldown();
       }
 
       function toggleMe() {
@@ -2803,6 +3037,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         if (typeof saveUIState === "function") saveUIState();
         if (typeof window.updateGrid === "function") window.updateGrid();
         sync();
+        toast(stateLabel("Me filter", window.__gwFilters.onlyMe === true));
       }
 
       function bind() {
@@ -2823,6 +3058,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         });
         meButton()?.addEventListener("click", toggleMe);
         heatButton()?.addEventListener("click", toggleHeat);
+        blastButton()?.addEventListener("click", triggerVisionBlast);
+        syncBlastButton();
 
         document.addEventListener("change", evt => {
           if (evt.target?.matches?.('input[data-iconic]')) {
@@ -2867,6 +3104,12 @@ window.refreshQuestBadge = refreshQuestBadge;
         } catch {}
       }
 
+      function toast(message) {
+        if (typeof window.showGridWildToast === "function") {
+          window.showGridWildToast(message);
+        }
+      }
+
       function sync() {
         const btn = button();
         const enabled = window.__gwState?.highContrastLensEnabled === true;
@@ -2885,6 +3128,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         window.GridWildHudLegend?.refresh?.();
         if (typeof window.updateGrid === "function") window.updateGrid();
         if (typeof paintLegendFromHeatFunction === "function") paintLegendFromHeatFunction();
+        toast(`Contrast ${window.__gwState.highContrastLensEnabled ? "on" : "off"}`);
       }
 
       function bind() {
@@ -3087,6 +3331,42 @@ window.refreshQuestBadge = refreshQuestBadge;
       return { bind, sync };
     })();
     window.GridWildHudZThresholdControl.bind();
+
+    window.GridWildHudGeometryFoldout = (function () {
+      function button() {
+        return document.getElementById("gwHudGeometryToggle");
+      }
+
+      function panel() {
+        return document.getElementById("gwHudGeometryFoldout");
+      }
+
+      function apply(open) {
+        const btn = button();
+        const root = panel();
+        const isOpen = open === true;
+
+        if (root) root.hidden = !isOpen;
+        if (btn) {
+          btn.classList.toggle("is-on", isOpen);
+          btn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        }
+      }
+
+      function bind() {
+        const btn = button();
+        if (!btn || btn.dataset.bound === "true") return;
+
+        btn.dataset.bound = "true";
+        btn.addEventListener("click", () => {
+          apply(panel()?.hidden !== false);
+        });
+        apply(false);
+      }
+
+      return { bind, apply };
+    })();
+    window.GridWildHudGeometryFoldout.bind();
 
   function bindLensCards(){
 

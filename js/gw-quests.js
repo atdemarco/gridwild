@@ -100,11 +100,217 @@ const CAMPAIGNS = {
 
 
 
-const LANIER_HEIGHTS_TEST_POINTS = [
-  { label: "Lanier Heights north", lat: 38.92555, lng: -77.04195 },
-  { label: "Lanier Heights middle", lat: 38.92395, lng: -77.04285 },
-  { label: "Lanier Heights south", lat: 38.92245, lng: -77.04365 }
-];
+const QUEST_REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
+const QUEST_LOCALE_CACHE_KEY = "gw_quest_locale_v1";
+
+let questLocale = loadCachedQuestLocale();
+let localeLookupController = null;
+let localeLookupTimer = null;
+
+function formatQuestCoord(value, axis) {
+  const n = Math.abs(Number(value) || 0).toFixed(4);
+  const suffix = axis === "lat"
+    ? Number(value) >= 0 ? "N" : "S"
+    : Number(value) >= 0 ? "E" : "W";
+  return `${n}${suffix}`;
+}
+
+function formatQuestCoords(lat, lng) {
+  return `${formatQuestCoord(lat, "lat")}, ${formatQuestCoord(lng, "lng")}`;
+}
+
+function hashString(value) {
+  let h = 2166136261;
+  const s = String(value || "");
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function seededRandom(seed) {
+  let t = hashString(seed) || 1;
+  return function () {
+    t += 0x6D2B79F5;
+    let r = t;
+    r = Math.imul(r ^ (r >>> 15), r | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seededInt(rand, min, max) {
+  return Math.floor(rand() * (max - min + 1)) + min;
+}
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadCachedQuestLocale() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(QUEST_LOCALE_CACHE_KEY) || "null");
+    if (!parsed || typeof parsed !== "object") return null;
+    if (!Number.isFinite(Number(parsed.lat)) || !Number.isFinite(Number(parsed.lng))) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveQuestLocale(locale) {
+  questLocale = locale;
+  window.__gwQuestLocale = locale;
+  try {
+    localStorage.setItem(QUEST_LOCALE_CACHE_KEY, JSON.stringify(locale));
+  } catch {}
+}
+
+function compactLocaleName(name) {
+  return String(name || "")
+    .split(",")
+    .map(part => part.trim())
+    .filter(Boolean)[0] || "";
+}
+
+function localeNameFromReverse(data) {
+  const address = data?.address || {};
+  return address.neighbourhood ||
+    address.suburb ||
+    address.quarter ||
+    address.city_district ||
+    address.borough ||
+    address.hamlet ||
+    address.village ||
+    address.town ||
+    address.city ||
+    address.municipality ||
+    address.county ||
+    compactLocaleName(data?.name) ||
+    compactLocaleName(data?.display_name);
+}
+
+function questReverseUrl(lat, lng) {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lng),
+    format: "jsonv2",
+    zoom: "16",
+    addressdetails: "1"
+  });
+  return `${QUEST_REVERSE_ENDPOINT}?${params.toString()}`;
+}
+
+function getGpsFix() {
+  if (typeof lastFix !== "undefined" && lastFix) {
+    const lat = Number(lastFix.latitude);
+    const lng = Number(lastFix.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return { lat, lng, accuracy: Number(lastFix.accuracy) || null, source: "gps" };
+    }
+  }
+  return null;
+}
+
+function getFallbackMapFix() {
+  if (typeof map === "undefined" || !map?.getCenter) return null;
+  const c = map.getCenter();
+  return { lat: c.lat, lng: c.lng, accuracy: null, source: "map" };
+}
+
+function makeCoordinateLocale(fix, label = null) {
+  const coordLabel = formatQuestCoords(fix.lat, fix.lng);
+  const shortLabel = compactLocaleName(label) || compactLocaleName(questLocale?.shortLabel) || "your area";
+  return {
+    lat: fix.lat,
+    lng: fix.lng,
+    accuracy: fix.accuracy || null,
+    label: label || questLocale?.label || coordLabel,
+    shortLabel,
+    seedKey: `${shortLabel}|${Math.round(fix.lat * 1000)}|${Math.round(fix.lng * 1000)}`,
+    source: fix.source || "gps",
+    updatedAt: nowISO()
+  };
+}
+
+function getQuestLocale() {
+  const fix = getGpsFix() || getFallbackMapFix();
+  if (!fix) {
+    return questLocale || {
+      lat: 38.911325,
+      lng: -77.076678,
+      accuracy: null,
+      label: "Current map area",
+      shortLabel: "your area",
+      seedKey: "your area",
+      source: "fallback",
+      updatedAt: nowISO()
+    };
+  }
+
+  const cachedClose = localeMatchesFix(fix);
+
+  return cachedClose ? questLocale : makeCoordinateLocale(fix);
+}
+
+function localeMatchesFix(fix) {
+  return !!(
+    fix &&
+    questLocale &&
+    Number.isFinite(Number(questLocale.lat)) &&
+    Number.isFinite(Number(questLocale.lng)) &&
+    Math.abs(Number(questLocale.lat) - fix.lat) < 0.01 &&
+    Math.abs(Number(questLocale.lng) - fix.lng) < 0.01
+  );
+}
+
+function refreshDailyQuestSurfaces() {
+  DAILY_QUESTS = generateDailyQuests();
+
+  const dailyBody = document.getElementById("gwDailyQuestListBody");
+  if (dailyBody) {
+    dailyBody.innerHTML = renderDailyQuestsHtml();
+  }
+}
+
+async function lookupQuestLocale(fix) {
+  if (!fix) return;
+
+  localeLookupController?.abort();
+  localeLookupController = new AbortController();
+
+  const provisional = makeCoordinateLocale(fix);
+  saveQuestLocale(provisional);
+  refreshDailyQuestSurfaces();
+
+  try {
+    const response = await fetch(questReverseUrl(fix.lat, fix.lng), {
+      signal: localeLookupController.signal,
+      headers: { "Accept": "application/json" }
+    });
+    if (!response.ok) throw new Error(`Locale lookup failed (${response.status})`);
+
+    const data = await response.json();
+    const name = localeNameFromReverse(data);
+    if (!name) return;
+
+    const resolved = makeCoordinateLocale(fix, name);
+    resolved.displayName = data?.display_name || name;
+    saveQuestLocale(resolved);
+    refreshDailyQuestSurfaces();
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      console.warn("GridWild quest locale lookup failed:", err);
+    }
+  }
+}
+
+function scheduleQuestLocaleRefresh(fix = getGpsFix()) {
+  if (!fix) return;
+  clearTimeout(localeLookupTimer);
+  localeLookupTimer = setTimeout(() => lookupQuestLocale(fix), 400);
+}
 
 function cellTargetFromLatLng(lat, lng, mode = "specific_square") {
   const p = map.options.crs.project(L.latLng(lat, lng));
@@ -130,58 +336,89 @@ function cellTargetFromLatLng(lat, lng, mode = "specific_square") {
   };
 }
 
-function makeLanierTarget(mode) {
+function cellTargetFromIndices(ix, iy, mode = "specific_square") {
+  const x = (ix + 0.5) * GRID_SIZE_M;
+  const y = (iy + 0.5) * GRID_SIZE_M;
+  const ll = map.options.crs.unproject(L.point(x, y));
+  return cellTargetFromLatLng(ll.lat, ll.lng, mode);
+}
+
+function targetOffsetForMode(mode) {
+  if (mode === "specific_square") return 2;
+  if (mode === "area_3x3") return 4;
+  if (mode === "area_20x20") return 12;
+  return 0;
+}
+
+function makeLocaleTarget(mode, salt = "") {
   if (mode === "anywhere") {
     return {
       mode: "anywhere",
       label: "Anywhere",
-      radiusCells: null
+      radiusCells: null,
+      placeName: getQuestLocale().shortLabel
     };
   }
 
-  const pt = LANIER_HEIGHTS_TEST_POINTS[
-    Math.floor(Math.random() * LANIER_HEIGHTS_TEST_POINTS.length)
-  ];
+  const locale = getQuestLocale();
+  const base = cellTargetFromLatLng(locale.lat, locale.lng, mode);
+  const rand = seededRandom(`${todayKey()}|${locale.seedKey}|${mode}|${salt}`);
+  const maxOffset = targetOffsetForMode(mode);
+  const dx = seededInt(rand, -maxOffset, maxOffset);
+  const dy = seededInt(rand, -maxOffset, maxOffset);
+  const target = cellTargetFromIndices(base.ix + dx, base.iy + dy, mode);
 
   return {
-    ...cellTargetFromLatLng(pt.lat, pt.lng, mode),
-    placeName: pt.label
+    ...target,
+    placeName: locale.shortLabel,
+    localeLabel: locale.label,
+    localeSeed: locale.seedKey,
+    source: locale.source
   };
 }
 
 function makeTodayQuestSeed(title, recipe, forcedTargetLocation) {
   const targetLocation = forcedTargetLocation || recipe.targetLocation || "area_3x3";
+  const locale = getQuestLocale();
+  const target = makeLocaleTarget(targetLocation, title);
+  const titleTemplate = String(title || "");
+  const titleText = titleTemplate.replaceAll("{locale}", locale.shortLabel);
+  const fullRecipe = {
+    range: targetLocation === "anywhere" ? "anywhere" : "here",
+    iconicTaxon: recipe.iconicTaxon || "Any",
+    objectiveType: recipe.objectiveType || "any_observation",
+    difficulty: Number(recipe.difficulty || 1),
+    timeframe: "today",
+    evidence: "photo_gps20",
+    surveyId: recipe.surveyId || "none",
+    targetLocation,
+    target
+  };
 
   return {
-    title,
-    recipe: {
-      range: targetLocation === "anywhere" ? "anywhere" : "here",
-      iconicTaxon: recipe.iconicTaxon || "Any",
-      objectiveType: recipe.objectiveType || "any_observation",
-      difficulty: Number(recipe.difficulty || 1),
-      timeframe: "today",
-      evidence: "photo_gps20",
-      surveyId: recipe.surveyId || "none",
-      targetLocation,
-      target: makeLanierTarget(targetLocation)
-    }
+    title: titleText,
+    description: buildQuestDescription(fullRecipe, locale),
+    recipe: fullRecipe
   };
 }
 
 function generateDailyQuests() {
+  const locale = getQuestLocale();
+  const extraModeRand = seededRandom(`${todayKey()}|${locale.seedKey}|extra-mode`);
+
   const required = [
     makeTodayQuestSeed(
-      "Open-world wander: observe anything today",
+      "Open-world wander: observe anything around {locale}",
       { iconicTaxon: "Any", objectiveType: "any_observation", difficulty: 1 },
       "anywhere"
     ),
     makeTodayQuestSeed(
-      "Lanier Heights pinpoint survey",
+      "{locale} pinpoint survey",
       { iconicTaxon: "Plantae", objectiveType: "any_observation", difficulty: 2 },
       "specific_square"
     ),
     makeTodayQuestSeed(
-      "Lanier Heights 3×3 sweep",
+      "{locale} 3x3 sweep",
       { iconicTaxon: "Insecta", objectiveType: "underobserved", difficulty: 3 },
       "area_3x3"
     )
@@ -189,14 +426,14 @@ function generateDailyQuests() {
 
   const extras = [
     makeTodayQuestSeed(
-      "Find fungi, lichens, or decomposers",
+      "Find fungi, lichens, or decomposers in {locale}",
       { iconicTaxon: "Fungi", objectiveType: "underobserved", difficulty: 3 },
       "area_20x20"
     ),
     makeTodayQuestSeed(
-      "Add one new taxon to the neighborhood",
+      `Add one new taxon to ${locale.shortLabel}`,
       { iconicTaxon: "Any", objectiveType: "new_square_taxon", difficulty: 4 },
-      ["specific_square", "area_3x3", "area_20x20", "anywhere"][Math.floor(Math.random() * 4)]
+      ["specific_square", "area_3x3", "area_20x20", "anywhere"][seededInt(extraModeRand, 0, 3)]
     )
   ];
 
@@ -315,6 +552,19 @@ const DAILY_QUESTS_ORIGINAL = [
     const tax = TAXON_FLAVORS[recipe.iconicTaxon]?.label || "Life";
     const obj = OBJECTIVES[recipe.objectiveType]?.label || "Field quest";
     return `${obj}: ${tax}`;
+  }
+
+  function buildQuestDescription(recipe, locale = getQuestLocale()) {
+    const target = recipe?.target || {};
+    const objective = OBJECTIVES[recipe?.objectiveType]?.summary || "Document life in the field.";
+    const place = target.placeName || locale.shortLabel || "your area";
+
+    if ((recipe?.targetLocation || target.mode) === "anywhere") {
+      return `${objective} Seeded from your GPS locale near ${place}; any qualifying observation around this area counts.`;
+    }
+
+    const scope = TARGET_LOCATION_LABELS[recipe?.targetLocation || target.mode] || "local target";
+    return `${objective} Seeded from your GPS locale near ${place}; head for the ${scope.toLowerCase()} generated from this local grid.`;
   }
 
  function isArchivedQuest(q) {
@@ -771,6 +1021,7 @@ function openQuestArchive() {
       archivedAt: null,
       completedAt: null,
       pointValue: estimateRewardXP(fullRecipe),
+      description: recipe.description || buildQuestDescription(fullRecipe),
       recipe: fullRecipe
     };
   }
@@ -783,6 +1034,7 @@ async function startQuestFromRecipe(recipe, options = {}) {
   const quest = makeQuest(recipe);
   quest.title = title;
   quest.source = source;
+  quest.description = options.description || recipe.description || quest.description || buildQuestDescription(quest.recipe);
   if (Number.isFinite(rewardXP) && rewardXP > 0) {
     quest.pointValue = Math.round(rewardXP);
   }
@@ -790,7 +1042,7 @@ async function startQuestFromRecipe(recipe, options = {}) {
   try {
     const result = await window.GridWildAPI.createQuest({
       title: quest.title,
-      description: "",
+      description: quest.description,
       quest_type: "explore",
       reward_wildpoints: quest.pointValue || estimateRewardXP(quest.recipe),
       recipe: quest.recipe,
@@ -1305,7 +1557,7 @@ async function startQuestFromRecipe(recipe, options = {}) {
       <div class="gw-quest-modal">
         <div class="gw-quest-modal-title">${esc(getFlavorIcon(quest))} ${esc(quest.title)}</div>
         <div class="gw-quest-modal-subtitle">
-          ${esc(obj.summary)}
+          ${esc(quest.description || obj.summary)}
         </div>
 
         <div class="gw-quest-status-grid">
@@ -1788,6 +2040,7 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
       if (daily) {
         startQuestFromRecipe(daily.recipe, {
           title: daily.title,
+          description: daily.description,
           source: "today"
         });
       }
@@ -1807,7 +2060,16 @@ function renderQuestListIntoPage() {
 }
 
 function renderDailyQuestsHtml() {
+  const locale = getQuestLocale();
+  const fix = getGpsFix();
+  if (fix && !localeMatchesFix(fix)) {
+    scheduleQuestLocaleRefresh(fix);
+  }
+
   return `
+    <div class="gw-muted" style="font-size:11px;margin-bottom:8px;">
+      Seeded from ${esc(locale.source === "gps" ? "your GPS locale" : "the current map area")}: ${esc(locale.shortLabel)}
+    </div>
     <div class="gw-list">
       ${DAILY_QUESTS.map((q, idx) => {
         const r = q.recipe || {};
@@ -1824,6 +2086,11 @@ function renderDailyQuestsHtml() {
               <span class="gw-muted" style="display:block;font-size:11px;">
                 ${esc(targetText)} · ${esc(difficultyLabel(r.difficulty))}
               </span>
+              ${q.description ? `
+                <span class="gw-muted" style="display:block;font-size:10.5px;margin-top:3px;">
+                  ${esc(q.description)}
+                </span>
+              ` : ""}
             </span>
             <span class="gw-quest-icon">${esc(TAXON_FLAVORS[r.iconicTaxon]?.icon || "🌎")}</span>
           </div>
@@ -2193,7 +2460,22 @@ function openNewSurveyConfigurator() {
 
   document.addEventListener("DOMContentLoaded", () => {
     injectStyles();
+    scheduleQuestLocaleRefresh(getGpsFix());
     setTimeout(openLinkedSurveyFromUrl, 0);
+  });
+
+  window.addEventListener("gwUserLocationUpdated", evt => {
+    const d = evt.detail || {};
+    const lat = Number(d.latitude);
+    const lng = Number(d.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    scheduleQuestLocaleRefresh({
+      lat,
+      lng,
+      accuracy: Number(d.accuracy) || null,
+      source: "gps"
+    });
   });
 
   window.addEventListener("gwBootstrapReady", openLinkedSurveyFromUrl);

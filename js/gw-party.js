@@ -1290,6 +1290,51 @@ function partyReportUrl(id) {
     return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&data=${data}`;
   }
 
+  function getPartyIdFromQrText(text = "") {
+    const value = String(text || "").trim();
+    if (!value) return "";
+
+    try {
+      const url = new URL(value, window.location.href);
+      return url.searchParams.get("party") || url.searchParams.get("party_id") || "";
+    } catch (err) {
+      const match = value.match(/[?&]party(?:_id)?=([^&]+)/i);
+      if (match) return decodeURIComponent(match[1]);
+      return /^[A-Za-z0-9_-]{4,}$/.test(value) ? value : "";
+    }
+  }
+
+  async function joinPartyFromQrFile(file) {
+    if (!file) return;
+
+    if (!("BarcodeDetector" in window) || !window.createImageBitmap) {
+      toast("QR scanning is not supported on this device");
+      return;
+    }
+
+    let bitmap = null;
+
+    try {
+      const detector = new BarcodeDetector({ formats: ["qr_code"] });
+      bitmap = await createImageBitmap(file);
+      const codes = await detector.detect(bitmap);
+      const rawValue = codes?.[0]?.rawValue || "";
+      const partyId = getPartyIdFromQrText(rawValue);
+
+      if (!partyId) {
+        toast("No party QR code found");
+        return;
+      }
+
+      joinParty(partyId);
+    } catch (err) {
+      console.error("Could not scan party QR:", err);
+      toast("Could not scan QR code");
+    } finally {
+      bitmap?.close?.();
+    }
+  }
+
   function renderPartyRow(p) {
     const joined = isJoined(p.id);
     const active = getActivePartyId() === p.id;
@@ -1353,13 +1398,29 @@ function partyReportUrl(id) {
           Start a live field session, schedule a bird walk, join nearby parties, or show a QR cover screen so others can join from their phones.
         </div>
 
-        <button class="gw-mini-btn gw-party-start-main" id="gwStartPartyBtn">
-          🎉 Start Party
-        </button>
+        <div class="gw-party-action-row">
+          <button class="gw-mini-btn gw-party-start-main" id="gwStartPartyBtn">
+            🎉 Start Party
+          </button>
 
-        <button class="gw-mini-btn" id="gwSchedulePartyBtn" style="margin-left:8px;">
-          📅 Schedule
-        </button>
+          <button class="gw-mini-btn" id="gwSchedulePartyBtn">
+            📅 Schedule
+          </button>
+
+          <input
+            id="gwJoinPartyInput"
+            class="gw-party-join-input"
+            placeholder="Enter Party ID"
+            autocomplete="off"
+          />
+          <button class="gw-mini-btn" id="gwJoinPartyBtn">Join Party</button>
+          <button class="gw-mini-btn gw-party-qr-scan-btn" id="gwPartyQrScanBtn" type="button" aria-label="Scan party QR code" title="Scan party QR code">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h2v2h-2v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2h-2v-2Zm4 0h2v2h-2v-2Z" />
+            </svg>
+          </button>
+          <input id="gwPartyQrInput" type="file" accept="image/*" capture="environment" hidden />
+        </div>
       </div>
 
         <div class="gw-party-tabs">
@@ -1470,6 +1531,32 @@ function partyReportUrl(id) {
 
     root.querySelector("#gwSchedulePartyBtn")?.addEventListener("click", () => {
       openPartyCreateModal("scheduled");
+    });
+
+    const joinInput = root.querySelector("#gwJoinPartyInput");
+    const joinBtn = root.querySelector("#gwJoinPartyBtn");
+    const joinById = () => {
+      const id = joinInput?.value?.trim();
+      if (!id) return;
+      joinParty(id);
+    };
+
+    joinBtn?.addEventListener("click", joinById);
+    joinInput?.addEventListener("keydown", evt => {
+      if (evt.key === "Enter") joinById();
+    });
+
+    const qrInput = root.querySelector("#gwPartyQrInput");
+    root.querySelector("#gwPartyQrScanBtn")?.addEventListener("click", () => {
+      if (!qrInput) return;
+      qrInput.value = "";
+      qrInput.click();
+    });
+
+    qrInput?.addEventListener("change", async () => {
+      const file = qrInput.files?.[0];
+      await joinPartyFromQrFile(file);
+      qrInput.value = "";
     });
 
     root.querySelectorAll(".gw-party-join-btn").forEach(btn => {
@@ -2701,6 +2788,47 @@ function scheduleActivePartyHudRender() {
         border-color: rgba(240,209,138,0.65) !important;
         color: #fff2c8 !important;
         box-shadow: 0 0 18px rgba(215,183,116,0.20), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+      }
+
+      .gw-party-action-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+        align-items: center;
+      }
+
+      .gw-party-join-input {
+        flex: 1 1 150px;
+        min-width: 0;
+        height: 33px;
+        padding: 7px 9px;
+        border-radius: 8px;
+        border: 1px solid rgba(215,183,116,0.22);
+        background: rgba(20,17,15,0.48);
+        color: #f4e8cf;
+        font: inherit;
+        font-size: 12px;
+        outline: none;
+      }
+
+      .gw-party-join-input:focus {
+        border-color: rgba(240,209,138,0.62);
+        box-shadow: 0 0 0 2px rgba(240,209,138,0.12);
+      }
+
+      .gw-party-qr-scan-btn {
+        width: 34px;
+        height: 33px;
+        padding: 0 !important;
+        display: inline-grid;
+        place-items: center;
+      }
+
+      .gw-party-qr-scan-btn svg {
+        width: 17px;
+        height: 17px;
+        fill: currentColor;
       }
 
       .gw-party-tabs {

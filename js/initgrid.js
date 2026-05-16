@@ -301,10 +301,16 @@ function getCenterMacroCellKeys() {
 }
 
 const GODS_EYE_TRANSIENT_RADIUS_CELLS = 5;
+const AVATAR_TRANSIENT_RADIUS_CELLS = GODS_EYE_TRANSIENT_RADIUS_CELLS;
+const GODS_EYE_BLAST_EXPAND_MS = 500;
+const GODS_EYE_BLAST_HOLD_MS = 3000;
+const GODS_EYE_BLAST_COLLAPSE_MS = 500;
+const GODS_EYE_BLAST_DURATION_MS =
+  GODS_EYE_BLAST_EXPAND_MS + GODS_EYE_BLAST_HOLD_MS + GODS_EYE_BLAST_COLLAPSE_MS;
+const GODS_EYE_BLAST_MAX_RADIUS_CELLS = 18;
+let godsEyeBlastRaf = null;
 
-function isGodsEyeTransientVisibleCell(key) {
-  if (!window.__gwState?.godsEyeEnabled) return false;
-
+function parseCellKey(key) {
   const parts = String(key).split(",");
   if (parts.length !== 2) return false;
 
@@ -312,15 +318,132 @@ function isGodsEyeTransientVisibleCell(key) {
   const iy = Number(parts[1]);
   if (!Number.isFinite(ix) || !Number.isFinite(iy)) return false;
 
+  return { ix, iy };
+}
+
+function isCellWithinRadius(cell, center, radiusCells) {
+  if (!cell || !center) return false;
+
+  const dx = cell.ix - center.ix;
+  const dy = cell.iy - center.iy;
+
+  return Math.sqrt(dx * dx + dy * dy) <= radiusCells;
+}
+
+function smoothStep(t) {
+  const x = Math.max(0, Math.min(1, Number(t) || 0));
+  return x * x * (3 - 2 * x);
+}
+
+function getGodsEyeBlastState(now = Date.now()) {
+  const pulse = window.__gwState?.godsEyeBlastPulse;
+  if (!pulse?.startedAt || !pulse?.center) return null;
+
+  const elapsed = now - pulse.startedAt;
+  const duration = Number(pulse.durationMs || GODS_EYE_BLAST_DURATION_MS);
+  if (elapsed < 0 || elapsed > duration) return null;
+
+  const expandMs = Number(pulse.expandMs || GODS_EYE_BLAST_EXPAND_MS);
+  const holdMs = Number(pulse.holdMs || GODS_EYE_BLAST_HOLD_MS);
+  const collapseMs = Number(pulse.collapseMs || GODS_EYE_BLAST_COLLAPSE_MS);
+  const phase = elapsed <= expandMs
+    ? smoothStep(elapsed / expandMs)
+    : elapsed <= expandMs + holdMs
+      ? 1
+      : smoothStep((duration - elapsed) / collapseMs);
+
+  const maxRadius = Number(pulse.maxRadiusCells || GODS_EYE_BLAST_MAX_RADIUS_CELLS);
+  return {
+    center: pulse.center,
+    radius: Math.max(0, maxRadius * phase),
+    strength: phase
+  };
+}
+
+function getGodsEyeBlastRevealStrength(key, now = Date.now()) {
+  const cell = parseCellKey(key);
+  const blast = getGodsEyeBlastState(now);
+  if (!cell || !blast || blast.radius <= 0) return 0;
+
+  const dx = cell.ix - blast.center.ix;
+  const dy = cell.iy - blast.center.iy;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist > blast.radius) return 0;
+
+  const edgeFalloff = 1 - Math.max(0, dist - blast.radius + 2) / 2;
+  return Math.max(0.18, Math.min(1, blast.strength * Math.max(0.35, edgeFalloff)));
+}
+
+function isGodsEyeTransientVisibleCell(key) {
+  if (!window.__gwState?.godsEyeEnabled) return false;
+
+  const cell = parseCellKey(key);
+  if (!cell) return false;
+
   const center = getCenterFineCell();
+  return isCellWithinRadius(cell, center, GODS_EYE_TRANSIENT_RADIUS_CELLS);
+}
 
-  const dx = ix - center.ix;
-  const dy = iy - center.iy;
+function isAvatarTransientVisibleCell(key) {
+  const cell = parseCellKey(key);
+  if (!cell) return false;
 
-  return Math.sqrt(dx * dx + dy * dy) <= GODS_EYE_TRANSIENT_RADIUS_CELLS;
+  const center = getCurrentUserCellIndices();
+  return isCellWithinRadius(cell, center, AVATAR_TRANSIENT_RADIUS_CELLS);
+}
+
+function isGridWildTransientVisibleCell(key) {
+  return isAvatarTransientVisibleCell(key) || isGodsEyeTransientVisibleCell(key);
+}
+
+function getGridWildTransientRevealStrength(key, now = Date.now()) {
+  if (isAvatarTransientVisibleCell(key) || isGodsEyeTransientVisibleCell(key)) return 1;
+  return getGodsEyeBlastRevealStrength(key, now);
+}
+
+function isGridWildTransientRevealCell(key, now = Date.now()) {
+  return getGridWildTransientRevealStrength(key, now) > 0;
+}
+
+function triggerGodsEyeBlast() {
+  window.__gwState = window.__gwState || {};
+  window.__gwState.godsEyeBlastPulse = {
+    startedAt: Date.now(),
+    durationMs: GODS_EYE_BLAST_DURATION_MS,
+    expandMs: GODS_EYE_BLAST_EXPAND_MS,
+    holdMs: GODS_EYE_BLAST_HOLD_MS,
+    collapseMs: GODS_EYE_BLAST_COLLAPSE_MS,
+    maxRadiusCells: GODS_EYE_BLAST_MAX_RADIUS_CELLS,
+    center: getCenterFineCell()
+  };
+
+  if (godsEyeBlastRaf) cancelAnimationFrame(godsEyeBlastRaf);
+
+  const tick = () => {
+    const active = !!getGodsEyeBlastState(Date.now());
+
+    window.GridWildFogCanvas?.scheduleRender?.();
+    if (typeof window.updateGrid === "function") window.updateGrid();
+
+    if (active) {
+      godsEyeBlastRaf = requestAnimationFrame(tick);
+    } else {
+      godsEyeBlastRaf = null;
+      window.__gwState.godsEyeBlastPulse = null;
+      window.GridWildFogCanvas?.scheduleRender?.();
+      if (typeof window.updateGrid === "function") window.updateGrid();
+    }
+  };
+
+  tick();
 }
 
 window.isGodsEyeTransientVisibleCell = isGodsEyeTransientVisibleCell;
+window.isAvatarTransientVisibleCell = isAvatarTransientVisibleCell;
+window.isGridWildTransientVisibleCell = isGridWildTransientVisibleCell;
+window.getGridWildTransientRevealStrength = getGridWildTransientRevealStrength;
+window.isGridWildTransientRevealCell = isGridWildTransientRevealCell;
+window.triggerGodsEyeBlast = triggerGodsEyeBlast;
 
 
 function markCenterMacroVisitedByGodsEye(force = false) {
@@ -3162,9 +3285,11 @@ function updateStaticGridHeatOLD() {
       const fogState = fogOn && window.GridWildFog
         ? window.GridWildFog.getCellFogState(key)
         : null;
-      const godsEyeTransientVisible =
-      typeof window.isGodsEyeTransientVisibleCell === "function" &&
-      window.isGodsEyeTransientVisibleCell(key);
+      const transientRevealStrength =
+      typeof window.getGridWildTransientRevealStrength === "function"
+      ? window.getGridWildTransientRevealStrength(key)
+      : (window.isGridWildTransientVisibleCell?.(key) ? 1 : 0);
+      const godsEyeTransientVisible = transientRevealStrength > 0;
 
       if (
         fogOn &&
@@ -3218,9 +3343,11 @@ function updateStaticGridHeatOLD() {
       // ------------------------------------------------------------------
       let fogState = null;
 
-      const godsEyeTransientVisible =
-      typeof window.isGodsEyeTransientVisibleCell === "function" &&
-      window.isGodsEyeTransientVisibleCell(key);
+      const transientRevealStrength =
+      typeof window.getGridWildTransientRevealStrength === "function"
+      ? window.getGridWildTransientRevealStrength(key)
+      : (window.isGridWildTransientVisibleCell?.(key) ? 1 : 0);
+      const godsEyeTransientVisible = transientRevealStrength > 0;
 
       if (fogOn && window.GridWildFog) {
         fogState = window.GridWildFog.getCellFogState(key);
@@ -3243,7 +3370,7 @@ function updateStaticGridHeatOLD() {
       if (godsEyeTransientVisible && fogState?.state !== "documented") {
         style.fillOpacity = Math.max(
           Number(baseStyle.fillOpacity || 0.25),
-          0.28
+          0.18 + transientRevealStrength * 0.24
         );
       }
 
@@ -3406,9 +3533,11 @@ function renderGridHeatCanvas() {
       if (!baseStyle) continue;
 
       let fogState = null;
-      const godsEyeTransientVisible =
-        typeof window.isGodsEyeTransientVisibleCell === "function" &&
-        window.isGodsEyeTransientVisibleCell(key);
+      const transientRevealStrength =
+        typeof window.getGridWildTransientRevealStrength === "function"
+        ? window.getGridWildTransientRevealStrength(key)
+        : (window.isGridWildTransientVisibleCell?.(key) ? 1 : 0);
+      const godsEyeTransientVisible = transientRevealStrength > 0;
 
       if (fogOn && window.GridWildFog) {
         fogState = window.GridWildFog.getCellFogState(key);
@@ -3424,7 +3553,7 @@ function renderGridHeatCanvas() {
       let fillOpacity = Number(baseStyle.fillOpacity || 0.25);
 
       if (godsEyeTransientVisible && fogState?.state !== "documented") {
-        fillOpacity = Math.max(fillOpacity, 0.28);
+        fillOpacity = Math.max(fillOpacity, 0.18 + transientRevealStrength * 0.24);
       }
 
       if (fogOn && fogState?.state === "surveyed") {
@@ -3489,9 +3618,11 @@ function renderGridHeatCanvas() {
 
       let fogState = null;
 
-      const godsEyeTransientVisible =
-        typeof window.isGodsEyeTransientVisibleCell === "function" &&
-        window.isGodsEyeTransientVisibleCell(key);
+      const transientRevealStrength =
+        typeof window.getGridWildTransientRevealStrength === "function"
+        ? window.getGridWildTransientRevealStrength(key)
+        : (window.isGridWildTransientVisibleCell?.(key) ? 1 : 0);
+      const godsEyeTransientVisible = transientRevealStrength > 0;
 
       if (fogOn && window.GridWildFog) {
         fogState = window.GridWildFog.getCellFogState(key);
@@ -3507,7 +3638,7 @@ function renderGridHeatCanvas() {
       let fillOpacity = Number(baseStyle.fillOpacity || 0.25);
 
       if (godsEyeTransientVisible && fogState?.state !== "documented") {
-        fillOpacity = Math.max(fillOpacity, 0.28);
+        fillOpacity = Math.max(fillOpacity, 0.18 + transientRevealStrength * 0.24);
       }
 
       if (fogOn && fogState?.state === "surveyed") {

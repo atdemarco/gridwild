@@ -221,13 +221,14 @@ async function loadPartyNow(options = {}) {
     const statusContainer = document.getElementById("gwPartyLiveStatus");
     const bodyContainer = document.getElementById("gwPartySheetBody");
 
-    if (!statusContainer || !bodyContainer) return;
+    if (!bodyContainer) return;
 
-    // 1. Update DB status card (top)
-    statusContainer.innerHTML = renderPartyHtml();
-    bindPartyControls();
+    if (statusContainer) {
+      statusContainer.innerHTML = renderPartyHtml();
+      bindPartyControls();
+    }
 
-        // 2. Render / refresh legacy Guild UI below
+        // Render / refresh unified Party UI
         let wrapper = bodyContainer.querySelector("#gwLegacyPartyUI");
 
         const legacyHtml = window.GridWildParty?.renderSheetHtml?.();
