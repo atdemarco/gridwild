@@ -302,6 +302,8 @@ function getCenterMacroCellKeys() {
 
 const GODS_EYE_TRANSIENT_RADIUS_CELLS = 5;
 const AVATAR_TRANSIENT_RADIUS_CELLS = GODS_EYE_TRANSIENT_RADIUS_CELLS;
+const AVATAR_HALO_BLEND_RADIUS_CELLS = 2;
+const AVATAR_HALO_MIN_REVEAL_STRENGTH = 0.16;
 const GODS_EYE_BLAST_EXPAND_MS = 500;
 const GODS_EYE_BLAST_HOLD_MS = 3000;
 const GODS_EYE_BLAST_COLLAPSE_MS = 500;
@@ -392,13 +394,48 @@ function isAvatarTransientVisibleCell(key) {
   return isCellWithinRadius(cell, center, AVATAR_TRANSIENT_RADIUS_CELLS);
 }
 
+function getAvatarTransientRevealStrength(key) {
+  const cell = parseCellKey(key);
+  if (!cell) return 0;
+
+  const center = getCurrentUserCellIndices();
+  if (!center) return 0;
+
+  const dx = cell.ix - center.ix;
+  const dy = cell.iy - center.iy;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const radius = Number(window.__gwState?.avatarRevealRadiusCells ?? AVATAR_TRANSIENT_RADIUS_CELLS);
+  const blendRadius = Math.max(
+    0,
+    Number(window.__gwState?.avatarHaloBlendRadiusCells ?? AVATAR_HALO_BLEND_RADIUS_CELLS)
+  );
+
+  if (dist <= radius) return 1;
+  if (blendRadius <= 0 || dist > radius + blendRadius) return 0;
+
+  const minStrength = Math.max(
+    0,
+    Math.min(
+      1,
+      Number(window.__gwState?.avatarHaloMinRevealStrength ?? AVATAR_HALO_MIN_REVEAL_STRENGTH)
+    )
+  );
+  const edgeT = smoothStep((dist - radius) / blendRadius);
+
+  return minStrength + (1 - minStrength) * (1 - edgeT);
+}
+
 function isGridWildTransientVisibleCell(key) {
   return isAvatarTransientVisibleCell(key) || isGodsEyeTransientVisibleCell(key);
 }
 
 function getGridWildTransientRevealStrength(key, now = Date.now()) {
-  if (isAvatarTransientVisibleCell(key) || isGodsEyeTransientVisibleCell(key)) return 1;
-  return getGodsEyeBlastRevealStrength(key, now);
+  if (isGodsEyeTransientVisibleCell(key)) return 1;
+
+  return Math.max(
+    getAvatarTransientRevealStrength(key),
+    getGodsEyeBlastRevealStrength(key, now)
+  );
 }
 
 function isGridWildTransientRevealCell(key, now = Date.now()) {
@@ -440,6 +477,7 @@ function triggerGodsEyeBlast() {
 
 window.isGodsEyeTransientVisibleCell = isGodsEyeTransientVisibleCell;
 window.isAvatarTransientVisibleCell = isAvatarTransientVisibleCell;
+window.getAvatarTransientRevealStrength = getAvatarTransientRevealStrength;
 window.isGridWildTransientVisibleCell = isGridWildTransientVisibleCell;
 window.getGridWildTransientRevealStrength = getGridWildTransientRevealStrength;
 window.isGridWildTransientRevealCell = isGridWildTransientRevealCell;

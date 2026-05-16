@@ -151,7 +151,8 @@
   }
 
     .gw-topbar-left {
-      --gw-hud-control-width: 106px;
+      --gw-hud-control-width: 142px;
+      --gw-hud-round-button-size: 44px;
     }
 
     .gw-hud-legend {
@@ -239,9 +240,44 @@
       margin-top: 7px;
     }
 
+    #gwHudLegend {
+      display: none;
+    }
+
+    .gw-hud-legend-compact {
+      padding: 6px;
+    }
+
+    .gw-hud-legend-compact .gw-hud-legend-title {
+      font-size: 9px;
+    }
+
+    .gw-hud-legend-compact .gw-hud-legend-subtitle {
+      margin-top: 5px;
+      font-size: 8.5px;
+      line-height: 1.15;
+      -webkit-line-clamp: 1;
+    }
+
+    .gw-hud-compact-scale {
+      margin-top: 4px;
+      display: grid;
+      gap: 3px;
+    }
+
+    .gw-hud-compact-bar {
+      position: relative;
+      height: 14px;
+      overflow: hidden;
+      border-radius: 6px;
+      border: 1px solid rgba(215,183,116,0.22);
+      background: rgba(255,255,255,0.12);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+    }
+
     .gw-hud-taxa {
       box-sizing: border-box;
-      width: 126px;
+      width: var(--gw-hud-control-width);
       pointer-events: auto;
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -573,7 +609,7 @@
 
     @media (max-width: 420px) {
       .gw-topbar-left {
-        --gw-hud-control-width: 98px;
+        --gw-hud-control-width: 142px;
       }
 
       .gw-hud-legend {
@@ -581,7 +617,6 @@
       }
 
       .gw-hud-taxa {
-        width: 114px;
         gap: 4px;
         padding: 5px;
       }
@@ -1852,8 +1887,8 @@
   }
 
   .gw-hud-round-btn {
-    width: 32px;
-    height: 32px;
+    width: var(--gw-hud-round-button-size);
+    height: var(--gw-hud-round-button-size);
     min-width: 0;
     padding: 0;
     border-radius: 999px;
@@ -1863,8 +1898,8 @@
   }
 
   .gw-hud-round-btn svg {
-    width: 16px;
-    height: 16px;
+    width: 19px;
+    height: 19px;
     flex: 0 0 auto;
     fill: none;
     stroke: currentColor;
@@ -2038,6 +2073,15 @@
         </div>
       </div>
       <div class="gw-hud-legend-lines" id="gwHudLegendLines"></div>
+    </div>
+    <div class="gw-hud-legend gw-hud-legend-compact" id="gwHudCompactLegend" role="button" tabindex="0" aria-label="Open lens picker">
+      <div class="gw-hud-legend-title">
+        <span id="gwHudCompactLegendTitle">Overlay</span>
+      </div>
+      <div class="gw-hud-compact-scale">
+        <div class="gw-hud-compact-bar" id="gwHudCompactLegendBar"></div>
+      </div>
+      <div class="gw-hud-legend-subtitle" id="gwHudCompactLegendSubtitle">Lens</div>
     </div>
     <div class="gw-hud-taxa" id="gwHudTaxaFilter" aria-label="Filter overlay by iconic taxon">
       <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Insecta" aria-label="Toggle insects" title="Insects">🐛</button>
@@ -2821,9 +2865,56 @@ window.refreshQuestBadge = refreshQuestBadge;
         });
       }
 
-      return { bind, refresh };
+      return { bind, refresh, sampleStyles };
     })();
     window.GridWildHudLegend.bind();
+
+    // Compact Overlay Pane. Remove #gwHudCompactLegend plus this object and
+    // its refresh calls to cleanly remove the duplicate compact pane.
+    window.GridWildHudCompactLegend = (function () {
+      function $(id) {
+        return document.getElementById(id);
+      }
+
+      function shortInfo(copy, lens) {
+        const source = copy.shortSubtitle || copy.subtitle || lensLabels[lens] || "Current lens";
+        const text = String(source).replace(/\.$/, "");
+        return text.length > 28 ? `${text.slice(0, 25).trim()}...` : text;
+      }
+
+      function refresh() {
+        const root = $("gwHudCompactLegend");
+        if (!root) return;
+
+        const lens = window.__gwState?.activeLens || "classic";
+        const copy = window.GWLegendCopy?.[lens] || window.GWLegendCopy?.classic || {};
+        const styles = window.GridWildHudLegend?.sampleStyles?.(lens) || [];
+
+        $("gwHudCompactLegendTitle").textContent = copy.title || lensLabels[lens] || "Overlay";
+        $("gwHudCompactLegendSubtitle").textContent = shortInfo(copy, lens);
+
+        if (styles.length >= 3) {
+          $("gwHudCompactLegendBar").style.background =
+            `linear-gradient(to right, ${styles[0].fillColor}, ${styles[1].fillColor}, ${styles[2].fillColor})`;
+        }
+      }
+
+      function bind() {
+        const root = $("gwHudCompactLegend");
+        if (!root || root.dataset.bound === "true") return;
+        root.dataset.bound = "true";
+        root.addEventListener("click", () => toggleSheet("lens"));
+        root.addEventListener("keydown", evt => {
+          if (evt.key === "Enter" || evt.key === " ") {
+            evt.preventDefault();
+            toggleSheet("lens");
+          }
+        });
+      }
+
+      return { bind, refresh };
+    })();
+    window.GridWildHudCompactLegend.bind();
 
     // Compact HUD taxa filter. It mirrors the existing Legend-pane checkboxes
     // instead of replacing them, so removing #gwHudTaxaFilter plus this module
@@ -3126,6 +3217,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         save();
 
         window.GridWildHudLegend?.refresh?.();
+        window.GridWildHudCompactLegend?.refresh?.();
         if (typeof window.updateGrid === "function") window.updateGrid();
         if (typeof paintLegendFromHeatFunction === "function") paintLegendFromHeatFunction();
         toast(`Contrast ${window.__gwState.highContrastLensEnabled ? "on" : "off"}`);
@@ -3380,6 +3472,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         localStorage.setItem("gwActiveLens", lens);
         updateLegendText();
         window.GridWildHudLegend?.refresh?.();
+        window.GridWildHudCompactLegend?.refresh?.();
 
         if (typeof updateGrid === "function") {
           updateGrid();
@@ -3521,6 +3614,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         paintLegendFromHeatFunction();
       }
       window.GridWildHudLegend?.refresh?.();
+      window.GridWildHudCompactLegend?.refresh?.();
 
 
       setTimeout(() => {
