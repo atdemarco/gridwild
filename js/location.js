@@ -96,7 +96,7 @@ const LOCK_PAN_BREAK_THRESHOLD_PX = 44;
 const LOCK_VIEW_ANIMATION_SECONDS = 0.9;
 
 const GPS_GOOD_THRESHOLD_M = 20;
-const MAP_HEADING_ROTATION_ENABLED = true;
+const MAP_HEADING_ROTATION_ENABLED = false;
 
 let mapHeadingDeg = 0;
 let mapHeadingRaf = null;
@@ -657,6 +657,12 @@ async function requestCompassPermission() {
 async function startCompassTracking(options = {}) {
   const { requestPermission = false } = options;
 
+  if (!MAP_HEADING_ROTATION_ENABLED) {
+    stopCompassTracking();
+    compassPermissionState = "disabled";
+    return false;
+  }
+
   if (!window.__gwState?.lockToLocation) {
     stopCompassTracking();
     return false;
@@ -722,11 +728,15 @@ function setMapPaneHeadingTransform() {
   const size = map.getSize();
   const originX = (size.x / 2) - pos.x;
   const originY = (size.y / 2) - pos.y;
-  const rotationDeg = window.__gwState?.lockToLocation ? -mapHeadingDeg : 0;
+  const rotationDeg = MAP_HEADING_ROTATION_ENABLED && window.__gwState?.lockToLocation
+    ? -mapHeadingDeg
+    : 0;
 
   // Leaflet owns the pane translation; GridWild appends heading rotation only.
   mapPane.style.transformOrigin = `${originX}px ${originY}px`;
-  mapPane.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0) rotate(${rotationDeg}deg)`;
+  mapPane.style.transform = rotationDeg
+    ? `translate3d(${pos.x}px, ${pos.y}px, 0) rotate(${rotationDeg}deg)`
+    : `translate3d(${pos.x}px, ${pos.y}px, 0)`;
 }
 
 function scheduleMapHeadingTransform() {
