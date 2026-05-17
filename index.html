@@ -248,21 +248,9 @@
       padding: 6px;
     }
 
-    .gw-hud-legend-compact .gw-hud-legend-title {
-      font-size: 9px;
-    }
-
-    .gw-hud-legend-compact .gw-hud-legend-subtitle {
-      margin-top: 5px;
-      font-size: 8.5px;
-      line-height: 1.15;
-      -webkit-line-clamp: 1;
-    }
-
     .gw-hud-compact-scale {
-      margin-top: 4px;
       display: grid;
-      gap: 3px;
+      gap: 4px;
     }
 
     .gw-hud-compact-bar {
@@ -273,6 +261,32 @@
       border: 1px solid rgba(215,183,116,0.22);
       background: rgba(255,255,255,0.12);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+    }
+
+    .gw-hud-compact-lens-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gw-hud-compact-fog-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(to right, rgba(18,24,28,0.38), rgba(18,24,28,0.62), rgba(18,24,28,0.78));
+    }
+
+    .gw-hud-compact-fog-bar[hidden] {
+      display: none;
+    }
+
+    .gw-hud-compact-bar-label {
+      color: rgba(239,230,211,0.86);
+      font-size: 8px;
+      font-weight: 950;
+      line-height: 1;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.88);
+      text-transform: uppercase;
     }
 
     .gw-hud-taxa {
@@ -288,6 +302,10 @@
       border: 1px solid var(--gw-jrpg-border, rgba(180, 150, 94, 0.42));
       box-shadow: 0 14px 36px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.05);
       backdrop-filter: blur(6px);
+    }
+
+    .gw-hud-taxa[hidden] {
+      display: none;
     }
 
     .gw-hud-taxa-btn {
@@ -2043,7 +2061,7 @@
           <circle cx="12" cy="10" r="2.2"></circle>
         </svg>
       </button>
-      <button class="gw-pill gw-hud-round-btn" id="gwHudGeometryToggle" type="button" aria-label="Toggle geometry controls" aria-expanded="false" aria-controls="gwHudGeometryFoldout" title="Geometry">
+      <button class="gw-pill gw-hud-round-btn" id="gwHudGeometryToggle" type="button" aria-label="Toggle geometry controls" aria-expanded="false" aria-controls="gwHudTaxaFilter gwHudGeometryFoldout" title="Geometry">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M5 6.5 12 3l7 3.5v10L12 21l-7-4.5z"></path>
           <path d="M5 6.5 12 11l7-4.5"></path>
@@ -2075,15 +2093,16 @@
       <div class="gw-hud-legend-lines" id="gwHudLegendLines"></div>
     </div>
     <div class="gw-hud-legend gw-hud-legend-compact" id="gwHudCompactLegend" role="button" tabindex="0" aria-label="Open lens picker">
-      <div class="gw-hud-legend-title">
-        <span id="gwHudCompactLegendTitle">Overlay</span>
-      </div>
       <div class="gw-hud-compact-scale">
-        <div class="gw-hud-compact-bar" id="gwHudCompactLegendBar"></div>
+        <div class="gw-hud-compact-bar gw-hud-compact-lens-bar" id="gwHudCompactLegendBar">
+          <span class="gw-hud-compact-bar-label" id="gwHudCompactLegendTitle">Overlay</span>
+        </div>
+        <div class="gw-hud-compact-bar gw-hud-compact-fog-bar" id="gwHudCompactFogBar" hidden>
+          <span class="gw-hud-compact-bar-label">UNEXPLORED</span>
+        </div>
       </div>
-      <div class="gw-hud-legend-subtitle" id="gwHudCompactLegendSubtitle">Lens</div>
     </div>
-    <div class="gw-hud-taxa" id="gwHudTaxaFilter" aria-label="Filter overlay by iconic taxon">
+    <div class="gw-hud-taxa" id="gwHudTaxaFilter" aria-label="Filter overlay by iconic taxon" hidden>
       <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Insecta" aria-label="Toggle insects" title="Insects">🐛</button>
       <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Plantae" aria-label="Toggle plants" title="Plants">🌿</button>
       <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Fungi" aria-label="Toggle fungi" title="Fungi">🍄</button>
@@ -2876,10 +2895,10 @@ window.refreshQuestBadge = refreshQuestBadge;
         return document.getElementById(id);
       }
 
-      function shortInfo(copy, lens) {
-        const source = copy.shortSubtitle || copy.subtitle || lensLabels[lens] || "Current lens";
-        const text = String(source).replace(/\.$/, "");
-        return text.length > 28 ? `${text.slice(0, 25).trim()}...` : text;
+      function fogIsEnabled() {
+        const fogCheckbox = document.getElementById("toggleFog");
+        if (fogCheckbox) return fogCheckbox.checked;
+        return window.__gwState?.showFog ?? true;
       }
 
       function refresh() {
@@ -2889,9 +2908,10 @@ window.refreshQuestBadge = refreshQuestBadge;
         const lens = window.__gwState?.activeLens || "classic";
         const copy = window.GWLegendCopy?.[lens] || window.GWLegendCopy?.classic || {};
         const styles = window.GridWildHudLegend?.sampleStyles?.(lens) || [];
+        const fogBar = $("gwHudCompactFogBar");
 
         $("gwHudCompactLegendTitle").textContent = copy.title || lensLabels[lens] || "Overlay";
-        $("gwHudCompactLegendSubtitle").textContent = shortInfo(copy, lens);
+        if (fogBar) fogBar.hidden = !fogIsEnabled();
 
         if (styles.length >= 3) {
           $("gwHudCompactLegendBar").style.background =
@@ -3158,7 +3178,10 @@ window.refreshQuestBadge = refreshQuestBadge;
             window.GridWildCoarseHeatCache?.invalidate?.();
             sync();
           }
-          if (evt.target?.id === "toggleFog") sync();
+          if (evt.target?.id === "toggleFog") {
+            sync();
+            window.GridWildHudCompactLegend?.refresh?.();
+          }
           if (evt.target?.id === "toggleOsmBuildings") sync();
           if (evt.target?.id === "toggleHeat") sync();
         });
@@ -3433,12 +3456,18 @@ window.refreshQuestBadge = refreshQuestBadge;
         return document.getElementById("gwHudGeometryFoldout");
       }
 
+      function taxaPanel() {
+        return document.getElementById("gwHudTaxaFilter");
+      }
+
       function apply(open) {
         const btn = button();
         const root = panel();
+        const taxa = taxaPanel();
         const isOpen = open === true;
 
         if (root) root.hidden = !isOpen;
+        if (taxa) taxa.hidden = !isOpen;
         if (btn) {
           btn.classList.toggle("is-on", isOpen);
           btn.setAttribute("aria-expanded", isOpen ? "true" : "false");
