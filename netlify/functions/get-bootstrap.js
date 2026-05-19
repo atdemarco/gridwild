@@ -94,6 +94,31 @@ exports.handler = async function (event) {
 
     if (achievementsResult.error) throw achievementsResult.error;
 
+    let homeNicheId = null;
+    let homeNiche = null;
+    const homeNicheResult = await supabase
+      .from("local_niche_stewards")
+      .select("niche_id")
+      .eq("user_id", player.id)
+      .maybeSingle();
+
+    if (homeNicheResult.error) {
+      if (homeNicheResult.error.code !== "42P01") throw homeNicheResult.error;
+    } else {
+      homeNicheId = homeNicheResult.data?.niche_id || null;
+    }
+
+    if (homeNicheId) {
+      const homeNicheDetailResult = await supabase
+        .from("local_niches")
+        .select("id, title, short_title, theme, primary_place_label")
+        .eq("id", homeNicheId)
+        .maybeSingle();
+
+      if (homeNicheDetailResult.error) throw homeNicheDetailResult.error;
+      homeNiche = homeNicheDetailResult.data || null;
+    }
+
   const publicSurveysResult = await supabase
     .from("surveys")
     .select("*")
@@ -139,6 +164,8 @@ exports.handler = async function (event) {
         player_inventory: inventoryResult.data || [],
         player_equipment: equipmentResult.data || null,
         player_achievements: achievementsResult.data || [],
+        home_niche_id: homeNicheId,
+        home_niche: homeNiche,
         surveys,
         player_surveys: playerSurveysResult.data || []
       })

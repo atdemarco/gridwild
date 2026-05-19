@@ -39,6 +39,11 @@
       label: "Challenge local territory",
       icon: "🏴",
       summary: "Target a cell where another observer currently dominates."
+    },
+    sample_niche: {
+      label: "Sample a niche",
+      icon: "N",
+      summary: "Visit a named local ecological opportunity and make observations that validate it."
     }
   };
 

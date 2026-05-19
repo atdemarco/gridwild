@@ -1085,6 +1085,14 @@ function renderInfoContent() {
   const questListHtml = window.GridWildQuests
     ? window.GridWildQuests.renderQuestListHtml()
     : `<div class="gw-muted">Quest system loading...</div>`;
+  const localNichesHtml = window.GridWildLocalNiches
+    ? window.GridWildLocalNiches.renderLocalNichesHtml()
+    : `
+      <div class="gw-card">
+        <div class="gw-card-title">Local Niches</div>
+        <div class="gw-muted">Local niches loading...</div>
+      </div>
+    `;
 
   return `
     <div class="gw-card">
@@ -1102,6 +1110,10 @@ function renderInfoContent() {
       <button class="gw-mini-btn" id="gwExploreSurveysBtn" style="margin-left:8px;">
         Explore Surveys
       </button>
+    </div>
+
+    <div id="gwLocalNichesBody">
+      ${localNichesHtml}
     </div>
 
     <div class="gw-card">
@@ -1821,6 +1833,9 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     setTimeout(() => {
       if (window.GridWildQuests && questBody) {
         window.GridWildQuests.bindQuestSheetControls(questBody);
+      }
+      if (window.GridWildLocalNiches && questBody) {
+        window.GridWildLocalNiches.renderIntoPage();
       }
       bindUserSettingsButton();
       bindINatOAuthButton();

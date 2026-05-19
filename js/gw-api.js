@@ -243,6 +243,120 @@ async getQuests() {
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 },
+async getNearbyLocalNiches(lat, lng, options = {}) {
+  const playerId = this.getPlayerId();
+
+  const res = await fetch("/.netlify/functions/get-local-niches", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      player_id: playerId,
+      lat,
+      lng,
+      radius_m: options.radius_m,
+      limit: options.limit
+    })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
+async setHomeNiche(nicheId) {
+  const playerId = this.getPlayerId();
+
+  const res = await fetch("/.netlify/functions/set-home-niche", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      player_id: playerId,
+      niche_id: nicheId
+    })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
+async unsetHomeNiche() {
+  const playerId = this.getPlayerId();
+
+  const res = await fetch("/.netlify/functions/unset-home-niche", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      player_id: playerId
+    })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
+async getLocalNicheHomeUsers(nicheId) {
+  const res = await fetch("/.netlify/functions/get-local-niche-home-users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ niche_id: nicheId })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
+async upsertLocalNiches(niches = []) {
+  const playerId = this.getPlayerId();
+
+  const res = await fetch("/.netlify/functions/upsert-local-niches", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      player_id: playerId,
+      niches
+    })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
+async getLocalNicheComments(nicheId) {
+  const res = await fetch("/.netlify/functions/get-local-niche-comments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ niche_id: nicheId })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
+async addLocalNicheComment(nicheId, commentText, commentType = "general_comment") {
+  const playerId = this.getPlayerId();
+
+  const res = await fetch("/.netlify/functions/add-local-niche-comment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      player_id: playerId,
+      niche_id: nicheId,
+      comment_text: commentText,
+      comment_type: commentType
+    })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
+async createSampleNicheQuest(nicheId) {
+  const playerId = this.getPlayerId();
+
+  const res = await fetch("/.netlify/functions/create-sample-niche-quest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      player_id: playerId,
+      niche_id: nicheId
+    })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
 async addPartyRoutePoint(partyId, lat, lng, accuracyMeters = null) {
   const playerId = this.getPlayerId();
 

@@ -39,7 +39,7 @@ exports.handler = async function (event) {
 
     const { data: quest, error: questError } = await supabase
       .from("quests")
-      .select("id, reward_wildpoints")
+      .select("id, reward_wildpoints, quest_type, niche_id, recipe")
       .eq("id", quest_id)
       .single();
 
@@ -83,6 +83,38 @@ exports.handler = async function (event) {
       .single();
 
     if (updateError) throw updateError;
+
+    if (quest.quest_type === "sample_niche" && quest.niche_id) {
+      const targetCount = Number(quest.recipe?.requiredObservationCount || quest.recipe?.quantity || 0);
+
+      const { data: niche } = await supabase
+        .from("local_niches")
+        .select("id, quest_completion_count, observations_generated_count, metrics")
+        .eq("id", quest.niche_id)
+        .maybeSingle();
+
+      if (niche) {
+        const metrics = niche.metrics && typeof niche.metrics === "object"
+          ? niche.metrics
+          : {};
+
+        await supabase
+          .from("local_niches")
+          .update({
+            quest_completion_count: Number(niche.quest_completion_count || 0) + 1,
+            observations_generated_count: Number(niche.observations_generated_count || 0) + targetCount,
+            last_validated_at: new Date().toISOString(),
+            status: "active",
+            metrics: {
+              ...metrics,
+              last_completion_quest_id: quest.id,
+              last_completion_player_id: player_id,
+              last_productive: true
+            }
+          })
+          .eq("id", quest.niche_id);
+      }
+    }
 
     return {
       statusCode: 200,

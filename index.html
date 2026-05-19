@@ -385,6 +385,15 @@
       opacity: 0.84;
     }
 
+    .gw-hud-niche-btn {
+      color: rgba(139, 211, 168, 0.78);
+      filter: none;
+      opacity: 0.86;
+      font-size: 12px;
+      font-weight: 950;
+      letter-spacing: 0;
+    }
+
     .gw-hud-blast-btn {
       position: relative;
       color: rgba(255, 224, 142, 0.78);
@@ -482,6 +491,13 @@
       background:
         radial-gradient(circle at 50% 38%, rgba(255,155,92,0.34), rgba(204,92,52,0.12) 58%, rgba(255,255,255,0.04) 100%);
       box-shadow: inset 0 0 0 1px rgba(255,155,92,0.42), 0 0 8px rgba(255,155,92,0.18);
+    }
+
+    .gw-hud-niche-btn.is-on {
+      color: #d7f5df;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(139,211,168,0.34), rgba(64,144,94,0.12) 58%, rgba(255,255,255,0.04) 100%);
+      box-shadow: inset 0 0 0 1px rgba(139,211,168,0.42), 0 0 8px rgba(139,211,168,0.18);
     }
 
     .gw-hud-blast-btn.is-ready.is-on {
@@ -2143,6 +2159,7 @@
           <path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M21.5 12h-2.2M4.7 12H2.5M19.8 4.2l-1.6 1.6M5.8 18.2l-1.6 1.6"></path>
         </svg>
       </button>
+      <button class="gw-hud-taxa-btn gw-hud-niche-btn" id="gwHudNicheLayerToggle" type="button" aria-label="Toggle local niches layer" title="Local niches">N</button>
     </div>
     <div class="gw-hud-geometry-foldout" id="gwHudGeometryFoldout" hidden>
       <label class="gw-hud-coarse" title="Render the heat overlay as local median bins">
@@ -2521,6 +2538,7 @@
   <script src="js/gw-account.js"></script>
 
   <script src="js/gw-quests.js"></script>
+  <script src="js/gw-local-niches.js"></script>
   
   <script src="js/gw-campaign-designer.js"></script>
   <script src="js/gw-campaign-layer.js"></script>
@@ -2610,6 +2628,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         const questBody = document.getElementById("sheetQuestBody");
         if (questBody) {
           window.GridWildQuests.bindQuestSheetControls(questBody);
+          window.GridWildLocalNiches?.renderIntoPage?.();
         }
       }
     }
@@ -3008,6 +3027,10 @@ window.refreshQuestBadge = refreshQuestBadge;
         return document.getElementById("gwHudVisionBlastBtn");
       }
 
+      function nicheButton() {
+        return document.getElementById("gwHudNicheLayerToggle");
+      }
+
       function meButton() {
         return document.getElementById("gwHudMeToggle");
       }
@@ -3045,6 +3068,14 @@ window.refreshQuestBadge = refreshQuestBadge;
         }
 
         syncBlastButton();
+
+        const niche = nicheButton();
+        const nicheChecked = window.GridWildLocalNiches?.isVisible?.() ??
+          window.__gwState?.showLocalNiches !== false;
+        if (niche) {
+          niche.classList.toggle("is-on", nicheChecked);
+          niche.setAttribute("aria-pressed", nicheChecked ? "true" : "false");
+        }
 
         const me = meButton();
         const meChecked = window.__gwFilters?.onlyMe === true;
@@ -3138,6 +3169,19 @@ window.refreshQuestBadge = refreshQuestBadge;
         startBlastCooldown();
       }
 
+      function toggleNicheLayer() {
+        window.__gwState = window.__gwState || {};
+        const next = window.GridWildLocalNiches?.toggleVisible?.() ??
+          (window.__gwState.showLocalNiches = window.__gwState.showLocalNiches === false);
+
+        if (window.GridWildLocalNiches?.getNiches?.().length) {
+          window.GridWildLocalNiches.drawNicheLayer?.();
+        }
+
+        sync();
+        toast(stateLabel("Local niches", next));
+      }
+
       function toggleMe() {
         window.__gwFilters = window.__gwFilters || {};
         window.__gwFilters.onlyMe = window.__gwFilters.onlyMe !== true;
@@ -3170,6 +3214,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         meButton()?.addEventListener("click", toggleMe);
         heatButton()?.addEventListener("click", toggleHeat);
         blastButton()?.addEventListener("click", triggerVisionBlast);
+        nicheButton()?.addEventListener("click", toggleNicheLayer);
         syncBlastButton();
 
         document.addEventListener("change", evt => {
@@ -3601,6 +3646,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         window.__gwState.playerEquipment = data.player_equipment || null;
 
         window.__gwState.playerAchievements = data.player_achievements || [];
+        window.__gwState.homeNicheId = data.home_niche_id || null;
+        window.__gwState.homeNiche = data.home_niche || null;
 
         window.GridWildAPI.setPlayerId(data.player.id);
         window.GridWildPlayerUI?.refreshPlayerUI?.();

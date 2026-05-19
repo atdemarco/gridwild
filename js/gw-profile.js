@@ -12,6 +12,33 @@
       .replaceAll("'", "&#39;");
   }
 
+  function homeNicheBadgeHtml() {
+    const home = window.GridWildLocalNiches?.getHomeNiche?.() || window.__gwState?.homeNiche || null;
+    const title = home?.short_title || home?.title || "";
+    if (!title) return "";
+
+    return `
+      <div class="gw-store-desc" style="
+        display:inline-flex;align-items:center;gap:7px;max-width:100%;
+        min-height:0;margin-top:8px;padding:5px 8px;border-radius:999px;
+        border:1px solid rgba(255,230,111,0.45);
+        background:rgba(255,230,111,0.08);
+        color:#fff0a1;font-size:12px;font-weight:900;
+      " title="Home Niche: ${esc(title)}">
+        <span style="width:14px;height:14px;display:inline-grid;place-items:center;flex:0 0 auto;">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+            <path d="M3 11.5 12 4l9 7.5"></path>
+            <path d="M5.5 10.5V20h13v-9.5"></path>
+            <path d="M9.5 20v-6h5v6"></path>
+          </svg>
+        </span>
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          Steward of ${esc(title)}
+        </span>
+      </div>
+    `;
+  }
+
   function getAchievementsUnlockedCount() {
     try {
       const raw = localStorage.getItem("gw_user_achievements_v1");
@@ -100,6 +127,7 @@
                 <div class="gw-store-desc" style="min-height:0;">
                   ${esc(character.color || "fern")} field style
                 </div>
+                ${homeNicheBadgeHtml()}
               </div>
             </div>
           </div>

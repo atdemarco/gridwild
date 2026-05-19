@@ -97,12 +97,6 @@
       body: "Choose how other GridWild explorers will see you: your name, explorer type, icon, and field style."
     },
     {
-      type: "account",
-      emoji: "GW",
-      title: "Save your explorer",
-      body: "Create a GridWild account to keep quests, Wildpoints, inventory, parties, and your field identity across devices."
-    },
-    {
       emoji: "🧑‍🤝‍🧑",
       title: "Explore as a party",
       body: "Start a party to explore with friends in real time, or schedule a public or private place and time to gather and survey nature together."
@@ -111,21 +105,6 @@
       emoji: "📚",
       title: "Publish Wildlists",
       body: "Curate and publish playlist galleries of your observations. Build them manually, choose a whole party event, or auto-generate collections, then present your finds as shareable field stories."
-    },
-    {
-    emoji: "🏕️",
-    title: "Choose a home base",
-    body: "Pick a home base for your GridWild identity. From there, you can host Field Stations for other explorers to visit, gather around, and help survey nearby life."
-    },
-    {
-    emoji: "🗺️",
-    title: "Plan your path",
-    body: "Map out a route before you explore. Choose the squares, habitats, or survey stops you want to visit, then follow your path in the field."
-    },
-    {
-      emoji: "📋",
-      title: "Join field surveys",
-      body: "Create or join ongoing field surveys to track what lives in a place over time. Surveys can focus a group around a habitat, event, season, or shared discovery goal."
     },
     {
       emoji: "🎯",
@@ -137,21 +116,6 @@
     //    title: "Claim territory",
     //    body: "Make observations in nearby squares to rise on the local leaderboard. Keep your observations fresh to defend your top spot."
     // },
-  {
-    emoji: "🏅",
-    title: "Earn achievements",
-    body: "Unlock achievements by meeting observation criteria. Record 10 plants in a day, or become the local Night Bloom Archivist by finding flowers after sunset."
-  },
-  {
-    emoji: "🍃",
-    title: "Spend Wildpoints",
-    body: "Earn Wildpoints as you explore, then use them to customize your GridWild identity, gear, titles, field style, and other explorer details."
-  },
-    {
-      emoji: "🐦",
-      title: "Powered by iNaturalist",
-      body: "GridWild connects with iNaturalist. Your observations can be identified by the community and contribute to real biodiversity knowledge."
-    }
   ];
 
   function injectStyles() {
@@ -186,6 +150,8 @@
       .gw-splash-card {
         width: min(430px, 94vw);
         min-height: 520px;
+        max-height: calc(100vh - 44px);
+        overflow: auto;
         border-radius: 26px;
         padding: 26px 22px 20px;
         box-sizing: border-box;
@@ -354,6 +320,15 @@
     return el;
   }
 
+  function esc(s) {
+    return String(s ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
   function launchSplash() {
     injectStyles();
 
@@ -427,6 +402,9 @@ function renderCharacterCard() {
     icon: "🌿",
     color: "fern"
   };
+  const signedIn = window.GridWildAccount?.getAccount?.();
+  const iNatConnected = window.GridWildINatAuth?.isConnected?.();
+  const iNatUsername = localStorage.getItem("gw_inat_username") || "";
 
   card.innerHTML = `
     <div class="gw-splash-emoji">${c.emoji}</div>
@@ -452,15 +430,15 @@ function renderCharacterCard() {
           background:rgba(240,209,138,0.12);
           border:1px solid rgba(240,209,138,0.26);
         ">
-          ${character.icon || "🌿"}
+          ${esc(character.icon || "🌿")}
         </div>
 
         <div>
           <div style="font-size:18px;font-weight:950;color:#ffe7a3;">
-            ${character.displayName || "New Wanderer"}
+            ${esc(character.displayName || "New Wanderer")}
           </div>
           <div style="font-size:12px;color:rgba(255,247,223,0.70);margin-top:3px;">
-            ${character.archetype || "naturalist"} · ${character.color || "fern"}
+            ${esc(character.archetype || "naturalist")} · ${esc(character.color || "fern")}
           </div>
         </div>
       </div>
@@ -468,6 +446,41 @@ function renderCharacterCard() {
       <button class="gw-onboard-btn secondary" id="gwOnboardEditCharacter" style="width:100%;margin-top:14px;">
         Edit character
       </button>
+
+      <div style="
+        margin-top:14px;
+        padding-top:14px;
+        border-top:1px solid rgba(240,207,132,0.24);
+      ">
+        <div style="font-size:12px;font-weight:950;color:#ffe7a3;margin-bottom:8px;">
+          Save and connect
+        </div>
+
+        <div style="font-size:12px;line-height:1.35;color:rgba(255,247,223,0.76);margin-bottom:10px;">
+          ${signedIn?.username
+            ? `GridWild account: <b>@${esc(signedIn.username)}</b>`
+            : "Create or log in to keep this explorer across devices."}
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="gw-onboard-btn secondary" id="gwOnboardLoginAccount" style="min-height:40px;padding:9px 10px;font-size:13px;">
+            Log in
+          </button>
+          <button class="gw-onboard-btn primary" id="gwOnboardCreateAccount" style="min-height:40px;padding:9px 10px;font-size:13px;">
+            Create
+          </button>
+        </div>
+
+        <div style="font-size:12px;line-height:1.35;color:rgba(255,247,223,0.76);margin:12px 0 8px;">
+          ${iNatConnected
+            ? `iNaturalist linked${iNatUsername ? ` as <b>@${esc(iNatUsername)}</b>` : ""}.`
+            : "Link iNaturalist when you want observations to sync into the wider nature network."}
+        </div>
+
+        <button class="gw-onboard-btn secondary" id="gwOnboardLinkINat" style="width:100%;min-height:40px;padding:9px 10px;font-size:13px;">
+          ${iNatConnected ? "Manage iNaturalist" : "Link iNaturalist"}
+        </button>
+      </div>
     </div>
 
     <div class="gw-splash-dots">
@@ -484,53 +497,6 @@ function renderCharacterCard() {
     window.GridWildCharacter?.openEditor?.();
   };
 
-  document.getElementById("gwOnboardSkip").onclick = finishAll;
-
-  document.getElementById("gwOnboardNext").onclick = goNextFromSplash;
-}
-
-function renderAccountCard() {
-  const c = splashCards[idx];
-  const signedIn = window.GridWildAccount?.getAccount?.();
-
-  card.innerHTML = `
-    <div class="gw-splash-emoji">${c.emoji}</div>
-    <h1 class="gw-splash-title">${c.title}</h1>
-    <p class="gw-splash-body">${c.body}</p>
-
-    <div style="
-      margin:22px auto 10px;
-      width:100%;
-      max-width:320px;
-      border-radius:20px;
-      border:1px solid rgba(240,207,132,0.34);
-      background:rgba(0,0,0,0.16);
-      padding:14px;
-      box-sizing:border-box;
-      text-align:left;
-    ">
-      <div style="font-size:14px;line-height:1.4;color:rgba(255,247,223,0.82);">
-        ${signedIn?.username
-          ? `Signed in as <b>@${signedIn.username}</b>.`
-          : "Guest progress stays on this device. An account lets you come back anywhere."}
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
-        <button class="gw-onboard-btn secondary" id="gwOnboardLoginAccount">Log in</button>
-        <button class="gw-onboard-btn primary" id="gwOnboardCreateAccount">Create</button>
-      </div>
-    </div>
-
-    <div class="gw-splash-dots">
-      ${splashCards.map((_, i) => `<div class="gw-splash-dot ${i === idx ? "active" : ""}"></div>`).join("")}
-    </div>
-
-    <div class="gw-onboard-actions">
-      <button class="gw-onboard-btn secondary" id="gwOnboardSkip">Skip</button>
-      <button class="gw-onboard-btn primary" id="gwOnboardNext">Continue</button>
-    </div>
-  `;
-
   document.getElementById("gwOnboardCreateAccount").onclick = () => {
     window.GridWildAccount?.openModal?.("signup");
   };
@@ -539,19 +505,19 @@ function renderAccountCard() {
     window.GridWildAccount?.openModal?.("login");
   };
 
+  document.getElementById("gwOnboardLinkINat").onclick = () => {
+    window.location.href = "/.netlify/functions/inat-oauth-start";
+  };
+
   document.getElementById("gwOnboardSkip").onclick = finishAll;
+
   document.getElementById("gwOnboardNext").onclick = goNextFromSplash;
 }
-
 
     function render() {
       const c = splashCards[idx];
       if (c.type === "character") {
         renderCharacterCard();
-        return;
-      }
-      if (c.type === "account") {
-        renderAccountCard();
         return;
       }
 
