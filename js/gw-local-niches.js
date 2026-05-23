@@ -11,15 +11,77 @@
   const LABEL_PANE = "gwLocalNicheLabelPane";
   const NOMINATIM_REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
   const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
+  const NICHE_OSM_CONTEXT_ENABLED = true;
+  const SAMPLING_RESULT_TOAST_MS = 1800;
+  const SAMPLING_FINISH_TOAST_MS = 5200;
   const placeContextCache = new Map();
+  let overpassPlaceLookupDisabledUntil = 0;
   const nicheBoundaryCache = new Map();
   const nicheSummaryHydrationCache = new Map();
+  const nicheSummaryHydrationPending = new Map();
   const NICHE_BOUNDARY_RENDERING = {
     enabled: true,
     smoothingSigmaCells: 1.0,
     contourThreshold: 0.45,
     simplifyToleranceCells: 0.3,
     chaikinIterations: 1
+  };
+  const CONSTRAINED_GEOMETRY_RULES = [
+    { scale: "micro", scaleClass: "micro-niche", sigma: 0.65, peakFactor: 0.34, floorFactor: 0.18, suppressCells: 3, maxRadiusCells: 3, minCells: 1, maxCells: 4, maxElongation: 3.2, maxComplexity: 2.7, quantCells: 3 },
+    { scale: "patch", scaleClass: "patch niche", sigma: 1.05, peakFactor: 0.30, floorFactor: 0.14, suppressCells: 5, maxRadiusCells: 7, minCells: 5, maxCells: 32, maxElongation: 3.1, maxComplexity: 3.1, quantCells: 5 },
+    { scale: "place", scaleClass: "place niche", sigma: 1.75, peakFactor: 0.24, floorFactor: 0.10, suppressCells: 9, maxRadiusCells: 12, minCells: 12, maxCells: 96, maxElongation: 3.7, maxComplexity: 3.4, quantCells: 9 }
+  ];
+  const TRAIL_CORRIDOR_RULE = {
+    enabled: false,
+    bufferM: 85,
+    binM: 28,
+    minLengthM: 20,
+    maxLengthM: 5000,
+    minCells: 1,
+    maxCells: 2200,
+    minMeanScore: 0,
+    minPeakScore: 0,
+    wholeTrailMode: true,
+    zWeight: 0.34,
+    signalWeight: 0.66
+  };
+  const HEAT_TENDRIL_RULE = {
+    enabled: true,
+    minCells: 4,
+    maxCells: 1800,
+    minScore: 0.06,
+    minPeakScore: 0.12,
+    minElongation: 1.55,
+    minMajorCells: 4,
+    maxMinorCells: 18,
+    maxPerimeterComplexity: 12,
+    fallbackEnabled: true,
+    fallbackMinCells: 5,
+    fallbackMinPeakScore: 0.1,
+    maxFallbackComponents: 3,
+    vectorMode: true,
+    minVectorLengthCells: 5,
+    maxEndpointCandidates: 34,
+    simplifyVectorToleranceCells: 0.55,
+    skeletonizeBeforeVector: true,
+    skeletonSigmaCells: 0.9,
+    skeletonThreshold: 0.26,
+    skeletonMaxIterations: 60,
+    extendAlongAxis: false,
+    extensionPadCells: 18,
+    extensionWidthCells: 2.15,
+    extensionMinScore: 0.045,
+    extensionIncludeActiveCells: false,
+    extensionMaxAddedCells: 650,
+    candidatePasses: [
+      { name: "edge", minScore: 0.06, minHeat: 0.02, minEdge: 0.035, heatWeight: 0.44, edgeWeight: 0.56 },
+      { name: "hot-ridge", minScore: 0.48, minHeat: 0.52, minEdge: 0.014, heatWeight: 0.7, edgeWeight: 0.3 },
+      { name: "super-hot", minScore: 0.78, minHeat: 0.78, minEdge: 0, heatWeight: 0.88, edgeWeight: 0.12, allowPlateau: true }
+    ],
+    saturatedHeatThreshold: 0.86,
+    saturatedMinEdgeScore: 0.012,
+    signalWeight: 0.68,
+    zWeight: 0.32
   };
   const DEFAULT_CONTROLS = {
     version: CONTROLS_VERSION,
@@ -37,6 +99,7 @@
     niches: [],
     selectedId: null,
     loading: false,
+    loadingAction: null,
     lastError: null,
     persistWarning: null,
     controls: loadControls(),
@@ -44,6 +107,7 @@
     labelLayer: null,
     layerVisible: loadLayerVisible(),
     detectorDebug: null,
+    constrainedGeometryDebug: null,
     samplingToast: null
   };
 
@@ -86,10 +150,36 @@
     return niche?.short_title || niche?.title || displayNicheTitle(niche);
   }
 
+  function showNicheToast(message) {
+    if (typeof window.showGridWildToast === "function") {
+      window.showGridWildToast(message);
+      return;
+    }
+    showSamplingToast(message, 100);
+  }
+
   function currentHomeNiche() {
     const homeId = String(window.__gwState?.homeNicheId || "");
     const local = state.niches.find((niche) => String(niche.id || "") === homeId) || null;
     return local || window.__gwState?.homeNiche || null;
+  }
+
+  function nicheKey(niche) {
+    return String(niche?.id || niche?.source_key || "");
+  }
+
+  function isSelectedNiche(niche) {
+    const selected = String(state.selectedId || "");
+    return Boolean(selected && selected === nicheKey(niche));
+  }
+
+  function isHeatTendrilNiche(niche) {
+    return String(niche?.metrics?.algorithm || "") === "heat_tendril_niche_v1";
+  }
+
+  function isCorridorNiche(niche) {
+    return ["trail_corridor_niche_v1", "heat_tendril_niche_v1"]
+      .includes(String(niche?.metrics?.algorithm || ""));
   }
 
   function homeIconSvg() {
@@ -145,6 +235,12 @@
     return new Promise(resolve => requestAnimationFrame(() => resolve()));
   }
 
+  function yieldToastMoment(ms = 180) {
+    return new Promise(resolve => {
+      requestAnimationFrame(() => setTimeout(resolve, ms));
+    });
+  }
+
   function showSamplingToast(message, progress = 0, detail = "") {
     injectStyles();
 
@@ -180,7 +276,7 @@
     setTimeout(() => {
       if (state.samplingToast === root) state.samplingToast = null;
       root.remove();
-    }, 1600);
+    }, SAMPLING_FINISH_TOAST_MS);
   }
 
   function failSamplingToast(message = "Niche sampling failed", detail = "") {
@@ -447,6 +543,53 @@
     return `#${adjusted.map(channel => channel.toString(16).padStart(2, "0")).join("")}`;
   }
 
+  function nicheVisualStyle(niche, fallbackColor) {
+    const algorithm = String(niche?.metrics?.algorithm || "");
+    if (algorithm === "heat_tendril_niche_v1") {
+      return {
+        baseColor: "#00d8ff",
+        outlineColor: "#00f0ff",
+        haloColor: "rgba(0,216,255,0.38)",
+        coreFill: "#d7fbff",
+        outlineClass: "gw-niche-visible-component-outline is-soft is-heat-tendril",
+        haloClass: "gw-niche-visible-component-outline-halo is-soft is-heat-tendril",
+        circleClass: "is-heat-tendril",
+        coreClass: "is-heat-tendril",
+        dashArray: "10 5",
+        weightBoost: 1.3,
+        haloBoost: 2.5
+      };
+    }
+    if (algorithm === "trail_corridor_niche_v1") {
+      return {
+        baseColor: "#ffb000",
+        outlineColor: "#ffc233",
+        haloColor: "rgba(255,176,0,0.34)",
+        coreFill: "#fff1be",
+        outlineClass: "gw-niche-visible-component-outline is-soft is-trail-corridor",
+        haloClass: "gw-niche-visible-component-outline-halo is-soft is-trail-corridor",
+        circleClass: "is-trail-corridor",
+        coreClass: "is-trail-corridor",
+        dashArray: null,
+        weightBoost: 1.0,
+        haloBoost: 1.7
+      };
+    }
+    return {
+      baseColor: fallbackColor,
+      outlineColor: strongerComponentColor(fallbackColor),
+      haloColor: null,
+      coreFill: "#fff7d1",
+      outlineClass: "gw-niche-visible-component-outline",
+      haloClass: "gw-niche-visible-component-outline-halo",
+      circleClass: "",
+      coreClass: "",
+      dashArray: null,
+      weightBoost: 0,
+      haloBoost: 0
+    };
+  }
+
   function featureLabel(feature) {
     const tags = feature?.tags || {};
     return tags.name || tags["addr:housename"] || tags.brand || tags.operator || "";
@@ -469,6 +612,26 @@
       best = Math.min(best, here.distanceTo(p));
     }
     return best;
+  }
+
+  function distanceMetersBetween(latA, lngA, latB, lngB) {
+    const aLat = Number(latA);
+    const aLng = Number(lngA);
+    const bLat = Number(latB);
+    const bLng = Number(lngB);
+    if (![aLat, aLng, bLat, bLng].every(Number.isFinite)) return Infinity;
+    if (typeof L !== "undefined" && L?.latLng) {
+      return L.latLng(aLat, aLng).distanceTo(L.latLng(bLat, bLng));
+    }
+
+    const toRad = deg => deg * Math.PI / 180;
+    const dLat = toRad(bLat - aLat);
+    const dLng = toRad(bLng - aLng);
+    const lat1 = toRad(aLat);
+    const lat2 = toRad(bLat);
+    const h = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
   }
 
   function angleDiffDeg(a, b) {
@@ -545,6 +708,64 @@
           distanceM,
           angleDeg,
           segmentIndex: i - 1
+        };
+      }
+    }
+
+    return best;
+  }
+
+  function featureSegmentSamples(feature) {
+    if (!Array.isArray(feature?.points) || feature.points.length < 2 || typeof map === "undefined") return [];
+    const segments = [];
+    let cumulativeM = 0;
+
+    for (let i = 1; i < feature.points.length; i++) {
+      const aLl = feature.points[i - 1];
+      const bLl = feature.points[i];
+      const a = map.options.crs.project(aLl);
+      const b = map.options.crs.project(bLl);
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const lengthM = Math.hypot(dx, dy);
+      if (lengthM <= 0.5) continue;
+      segments.push({
+        a,
+        b,
+        aLl,
+        bLl,
+        dx,
+        dy,
+        lengthM,
+        startM: cumulativeM,
+        endM: cumulativeM + lengthM
+      });
+      cumulativeM += lengthM;
+    }
+
+    return segments;
+  }
+
+  function nearestTrailProjection(cell, segments = []) {
+    if (!cell || !segments.length || typeof map === "undefined") return null;
+    const p = map.options.crs.project(L.latLng(cell.lat, cell.lng));
+    let best = null;
+
+    for (const segment of segments) {
+      const len2 = segment.dx * segment.dx + segment.dy * segment.dy;
+      if (len2 <= 0) continue;
+      const t = Math.max(0, Math.min(1, ((p.x - segment.a.x) * segment.dx + (p.y - segment.a.y) * segment.dy) / len2));
+      const x = segment.a.x + segment.dx * t;
+      const y = segment.a.y + segment.dy * t;
+      const distanceM = Math.hypot(p.x - x, p.y - y);
+      const alongM = segment.startM + segment.lengthM * t;
+      if (!best || distanceM < best.distanceM) {
+        best = {
+          distanceM,
+          alongM,
+          segment,
+          t,
+          projected: { x, y }
         };
       }
     }
@@ -641,7 +862,9 @@
 
   function resolveGeometricPlaceContext(lat, lng, component, baseContext) {
     const shapeContext = componentShapeContext(component?.members || []);
-    const corridor = alignedCorridorContext(lat, lng, shapeContext);
+    const corridor = NICHE_OSM_CONTEXT_ENABLED
+      ? alignedCorridorContext(lat, lng, shapeContext)
+      : null;
     return applyGeometryContextToPlace(baseContext, shapeContext, corridor);
   }
 
@@ -861,6 +1084,18 @@
   }
 
   function resolvePlaceContext(lat, lng) {
+    if (!NICHE_OSM_CONTEXT_ENABLED) {
+      return {
+        primary_label: "this niche area",
+        secondary_label: null,
+        place_type: "niche centroid area",
+        spatial_relation: "near",
+        centroid: { lat, lng },
+        label_confidence: 0.25,
+        label_source: "niche_coordinate_fallback"
+      };
+    }
+
     const groups = window.GridWildOsmFeaturesLayer?.getFeatures?.() || {};
     const priority = [
       { kind: "buildings", maxM: 70, base: 0.9 },
@@ -898,25 +1133,26 @@
 
       return {
         primary_label: best.label,
-        secondary_label: window.__gwQuestLocale?.shortLabel || null,
+        secondary_label: null,
         place_type: featureKindLabel(best.kind, best.feature),
         nearby_poi: best.kind === "buildings" ? best.label : null,
         osm_feature_ids: [best.feature.id].filter(Boolean),
         spatial_relation: relation,
         distance_m: Math.round(best.distanceM),
+        centroid: { lat, lng },
         label_confidence: Number(best.confidence.toFixed(2)),
         label_source: "osm_visible_context"
       };
     }
 
-    const locale = window.__gwQuestLocale || {};
-    const fallback = locale.shortLabel || locale.label || "this nearby area";
     return {
-      primary_label: fallback,
+      primary_label: "this niche area",
       secondary_label: null,
-      place_type: locale.source === "gps" ? "neighborhood / GPS locale" : "map area",
-      label_confidence: fallback === "this nearby area" ? 0.25 : 0.42,
-      label_source: "quest_locale_fallback"
+      place_type: "niche centroid area",
+      spatial_relation: "near",
+      centroid: { lat, lng },
+      label_confidence: 0.25,
+      label_source: "niche_coordinate_fallback"
     };
   }
 
@@ -1054,6 +1290,51 @@
     `;
   }
 
+  function overpassBatchQuery(bounds) {
+    const south = Number(bounds?.south);
+    const west = Number(bounds?.west);
+    const north = Number(bounds?.north);
+    const east = Number(bounds?.east);
+    if (![south, west, north, east].every(Number.isFinite)) return "";
+
+    return `
+      [out:json][timeout:14];
+      (
+        node["name"](${south},${west},${north},${east});
+        way["name"](${south},${west},${north},${east});
+        relation["name"](${south},${west},${north},${east});
+        way["highway"]["name"](${south},${west},${north},${east});
+      );
+      out tags center 220;
+    `;
+  }
+
+  function nicheCentroidBounds(niches = [], paddingM = 140) {
+    const points = niches
+      .map((niche) => ({
+        lat: Number(niche.centroid_lat),
+        lng: Number(niche.centroid_lng)
+      }))
+      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+    if (!points.length) return null;
+
+    const minLat = Math.min(...points.map(point => point.lat));
+    const maxLat = Math.max(...points.map(point => point.lat));
+    const minLng = Math.min(...points.map(point => point.lng));
+    const maxLng = Math.max(...points.map(point => point.lng));
+    const midLat = (minLat + maxLat) / 2;
+    const latPad = paddingM / 111320;
+    const lngPad = paddingM / Math.max(1, 111320 * Math.cos(midLat * Math.PI / 180));
+
+    const south = minLat - latPad;
+    const north = maxLat + latPad;
+    const west = minLng - lngPad;
+    const east = maxLng + lngPad;
+
+    if ((north - south) * (east - west) > 0.018) return null;
+    return { south, west, north, east };
+  }
+
   function overpassElementPoint(element) {
     if (Number.isFinite(Number(element.lat)) && Number.isFinite(Number(element.lon))) {
       return L.latLng(Number(element.lat), Number(element.lon));
@@ -1113,12 +1394,13 @@
         .filter(Boolean);
       return {
         primary_label: `${nearbyRoads[0].name} & ${nearbyRoads[1].name}`,
-        secondary_label: window.__gwQuestLocale?.shortLabel || null,
+        secondary_label: null,
         place_type: "street corner / intersection",
         street_or_block: `${nearbyRoads[0].name} & ${nearbyRoads[1].name}`,
         osm_feature_ids: osmFeatureIds,
         spatial_relation: "near",
         distance_m: Math.round(Math.min(nearbyRoads[0].distanceM, nearbyRoads[1].distanceM)),
+        centroid: { lat, lng },
         label_confidence: 0.68,
         label_source: "overpass_nearby_context"
       };
@@ -1142,13 +1424,14 @@
 
     return {
       primary_label: best.name,
-      secondary_label: window.__gwQuestLocale?.shortLabel || null,
+      secondary_label: null,
       place_type: placeType,
       nearby_poi: best.isRoad ? null : best.name,
       street_or_block: best.isRoad ? best.name : null,
       osm_feature_ids: [osmFeatureId].filter(Boolean),
       spatial_relation: relation,
       distance_m: Math.round(best.distanceM),
+      centroid: { lat, lng },
       label_confidence: Number(clamp01(0.78 - Math.min(best.distanceM, 100) / 260).toFixed(2)),
       label_source: "overpass_nearby_context"
     };
@@ -1157,10 +1440,36 @@
   function isGenericPlaceContext(placeContext = {}) {
     const label = String(placeContext.primary_label || "").trim().toLowerCase();
     const confidence = Number(placeContext.label_confidence) || 0;
+    const source = String(placeContext.label_source || "");
     return confidence < 0.58 ||
       !label ||
-      ["this nearby area", "your area", "current map area", "near your current location"].includes(label) ||
-      String(placeContext.label_source || "") === "quest_locale_fallback";
+      ["this nearby area", "this niche area", "your area", "current map area", "near your current location"].includes(label) ||
+      source === "quest_locale_fallback" ||
+      source === "niche_coordinate_fallback";
+  }
+
+  function placeContextCentroidDistanceM(placeContext = {}, lat, lng) {
+    const centroid = placeContext?.centroid || {};
+    const centroidLat = Number(centroid.lat);
+    const centroidLng = Number(centroid.lng ?? centroid.lon);
+    if (!Number.isFinite(centroidLat) || !Number.isFinite(centroidLng)) return null;
+    return distanceMetersBetween(lat, lng, centroidLat, centroidLng);
+  }
+
+  function placeContextBelongsToNiche(placeContext = {}, lat, lng) {
+    if (!placeContext || typeof placeContext !== "object") return false;
+    const source = String(placeContext.label_source || "");
+    if (source === "quest_locale_fallback") return false;
+
+    const distanceM = placeContextCentroidDistanceM(placeContext, lat, lng);
+    if (distanceM == null) return true;
+
+    const featureDistanceM = Number(placeContext.distance_m);
+    const allowanceM = Math.max(
+      180,
+      (Number.isFinite(featureDistanceM) ? featureDistanceM : 0) + 120
+    );
+    return distanceM <= allowanceM;
   }
 
   function betterPlaceContext(a, b) {
@@ -1181,6 +1490,7 @@
   }
 
   async function lookupOverpassPlaceContext(lat, lng) {
+    if (Date.now() < overpassPlaceLookupDisabledUntil) return null;
     const response = await fetch(OVERPASS_ENDPOINT, {
       method: "POST",
       headers: {
@@ -1189,13 +1499,50 @@
       },
       body: new URLSearchParams({ data: overpassQuery(lat, lng) })
     });
-    if (!response.ok) throw new Error(`Overpass lookup failed (${response.status})`);
+    if (!response.ok) {
+      if (response.status === 429) overpassPlaceLookupDisabledUntil = Date.now() + 120000;
+      throw new Error(`Overpass lookup failed (${response.status})`);
+    }
     const data = await response.json();
     return overpassContext(Array.isArray(data?.elements) ? data.elements : [], lat, lng);
   }
 
-  async function resolvePlaceContextAsync(lat, lng, currentContext = null) {
-    const current = currentContext || resolvePlaceContext(lat, lng);
+  async function lookupOverpassPlaceContextsForNiches(niches = []) {
+    if (Date.now() < overpassPlaceLookupDisabledUntil) return new Map();
+    const bounds = nicheCentroidBounds(niches);
+    const query = overpassBatchQuery(bounds);
+    if (!query) return new Map();
+
+    const response = await fetch(OVERPASS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+      },
+      body: new URLSearchParams({ data: query })
+    });
+    if (!response.ok) {
+      if (response.status === 429) overpassPlaceLookupDisabledUntil = Date.now() + 120000;
+      throw new Error(`Overpass batch lookup failed (${response.status})`);
+    }
+
+    const data = await response.json();
+    const elements = Array.isArray(data?.elements) ? data.elements : [];
+    const contexts = new Map();
+    for (const niche of niches) {
+      const lat = Number(niche.centroid_lat);
+      const lng = Number(niche.centroid_lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const context = overpassContext(elements, lat, lng);
+      if (context) contexts.set(nicheKey(niche) || `${lat},${lng}`, context);
+    }
+    return contexts;
+  }
+
+  async function resolvePlaceContextAsync(lat, lng, currentContext = null, options = {}) {
+    const current = placeContextBelongsToNiche(currentContext, lat, lng)
+      ? currentContext
+      : resolvePlaceContext(lat, lng);
     if (!isGenericPlaceContext(current)) return current;
 
     const key = `${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}`;
@@ -1204,16 +1551,20 @@
     }
 
     let resolved = null;
-    try {
-      resolved = betterPlaceContext(resolved, await lookupOverpassPlaceContext(lat, lng));
-    } catch (err) {
-      console.warn("GridWild niche Overpass place lookup failed:", err);
+    if (!options.skipOverpass && Date.now() >= overpassPlaceLookupDisabledUntil) {
+      try {
+        resolved = betterPlaceContext(resolved, await lookupOverpassPlaceContext(lat, lng));
+      } catch (err) {
+        console.warn("GridWild niche Overpass place lookup failed:", err);
+      }
     }
 
-    try {
-      resolved = betterPlaceContext(resolved, await lookupNominatimPlaceContext(lat, lng));
-    } catch (err) {
-      console.warn("GridWild niche reverse place lookup failed:", err);
+    if (!options.skipReverse) {
+      try {
+        resolved = betterPlaceContext(resolved, await lookupNominatimPlaceContext(lat, lng));
+      } catch (err) {
+        console.warn("GridWild niche reverse place lookup failed:", err);
+      }
     }
 
     placeContextCache.set(key, resolved);
@@ -1221,7 +1572,26 @@
   }
 
   async function enrichNichePlaceContexts(niches = []) {
+    if (!NICHE_OSM_CONTEXT_ENABLED) return niches;
+
     const enriched = [];
+    const batchCandidates = niches.filter((niche) => {
+      const lat = Number(niche.centroid_lat);
+      const lng = Number(niche.centroid_lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+      const current = placeContextBelongsToNiche(niche.place_context, lat, lng)
+        ? niche.place_context
+        : resolvePlaceContext(lat, lng);
+      return isGenericPlaceContext(current);
+    });
+    let overpassBatchContexts = new Map();
+    if (batchCandidates.length) {
+      try {
+        overpassBatchContexts = await lookupOverpassPlaceContextsForNiches(batchCandidates);
+      } catch (err) {
+        console.warn("GridWild niche Overpass batch place lookup failed:", err);
+      }
+    }
 
     for (const niche of niches) {
       const lat = Number(niche.centroid_lat);
@@ -1232,8 +1602,16 @@
       }
 
       const storedGeometryContext = niche.place_context?.geometry_context || niche.metrics?.geometry_context || null;
+      const currentContext = placeContextBelongsToNiche(niche.place_context, lat, lng)
+        ? niche.place_context
+        : resolvePlaceContext(lat, lng);
+      const batchContext = overpassBatchContexts.get(nicheKey(niche) || `${lat},${lng}`) || null;
+      const seededContext = betterPlaceContext(currentContext, batchContext);
       const placeContext = preserveGeometryContext(
-        await resolvePlaceContextAsync(lat, lng, niche.place_context),
+        await resolvePlaceContextAsync(lat, lng, seededContext, {
+          skipOverpass: batchCandidates.length > 0,
+          skipReverse: batchCandidates.length > 1
+        }),
         storedGeometryContext
       );
       const updated = {
@@ -1262,7 +1640,7 @@
     const geometryPhrase = String(placeContext.geometry_context?.label_phrase || "").trim();
 
     if (geometryPhrase && confidence >= 0.55) return abbreviateMapLabel(geometryPhrase);
-    if (!label) return confidence < 0.35 ? "near your current location" : "in this nearby area";
+    if (!label) return confidence < 0.35 ? "near this niche area" : "in this niche area";
     const shortLabel = abbreviateMapLabel(label);
     if (confidence >= 0.78) {
       if (relation) return `${relation} ${shortLabel}`;
@@ -1379,6 +1757,12 @@
     const theme = String(niche.theme || "").toLowerCase();
     const focus = titleSubjectCase(nicheFocusLabel(niche, ""));
 
+    if (niche.metrics?.algorithm === "heat_tendril_niche_v1") {
+      return focus ? `Sample heat-corridor ${focus}` : "Sample heat-corridor life";
+    }
+    if (niche.metrics?.algorithm === "trail_corridor_niche_v1") {
+      return focus ? `Sample trail-edge ${focus}` : "Sample trail-edge life";
+    }
     if (type === "edge_habitat_niche" || theme.includes("wet")) return "Sample wet-edge plants";
     if (type === "taxon_specific_hotspot") return focus ? `Look for ${focus}` : "Look for focal taxa";
     if (type === "seasonal_hotspot") return focus ? `Revisit seasonal ${focus}` : "Revisit seasonal life";
@@ -1403,8 +1787,19 @@
 
   function evidenceFor(type, metrics, placeContext) {
     const facts = [];
+    const constrained = metrics.algorithm === "constrained_geometry_niche_v1";
+    const trailCorridor = metrics.algorithm === "trail_corridor_niche_v1";
+    const heatTendril = metrics.algorithm === "heat_tendril_niche_v1";
     if (Number(metrics.lensPeakAbsZ) > 0) {
-      facts.push(`This locus is part of an absolute Z > ${Number(state.controls.lensZThreshold || 2.5).toFixed(1)} connected component in the current Lens heatmap.`);
+      facts.push(heatTendril
+        ? metrics.heat_path_length_m
+          ? `This niche follows a solved Lens-heat path vector about ${Math.round(Number(metrics.heat_path_length_m || 0))} m long.`
+          : `This niche follows a long, thin Lens-heat tendril inside the current FOV.`
+        : trailCorridor
+        ? `This niche follows a hot trail-edge run about ${Math.round(Number(metrics.trail_length_m || 0))} m long.`
+        : constrained
+        ? `This niche is anchored to a local Lens peak and constrained by radius, area, shape, and boundary complexity.`
+        : `This locus is part of an absolute Z > ${Number(state.controls.lensZThreshold || 2.5).toFixed(1)} connected component in the current Lens heatmap.`);
     }
     if (metrics.species > 0) facts.push(`Nearby cells contain ${Math.round(metrics.species)} genus/species signals.`);
     if (metrics.activeRatio < 0.35) facts.push("This cell cluster is under-sampled relative to its walking context.");
@@ -1412,11 +1807,13 @@
     if (metrics.observers >= 3) facts.push("Multiple observers have contributed records nearby.");
     if (placeContext?.primary_label) facts.push(`The niche is tied to ${placeContext.primary_label}.`);
     if (placeContext?.geometry_context?.label_phrase) {
-      facts.push(`The connected component is elongated and tracks ${placeContext.geometry_context.label_phrase}.`);
+      facts.push(`The niche shape is elongated and tracks ${placeContext.geometry_context.label_phrase}.`);
     }
 
     if (type === "edge_habitat_niche") {
-      facts.unshift("A nearby edge feature may concentrate plants, insects, or fungi.");
+      facts.unshift(heatTendril
+        ? "A narrow heatmap corridor may mark a walkable line of concentrated observations."
+        : "A nearby edge feature may concentrate plants, insects, or fungi.");
     }
 
     return {
@@ -1697,18 +2094,1613 @@
     return "Under-sampled";
   }
 
-  function generateLocalCandidates(origin = getOrigin()) {
+  function generateLocalCandidates(origin = getOrigin(), options = {}) {
+    const mode = options.mode === "corridors" ? "corridors" : "niches";
+    return generateConstrainedGeometryCandidates(origin, {
+      includeConstrained: mode === "niches",
+      includeCorridors: mode === "corridors"
+    });
+  }
+
+  function nicheCellSet(cells = []) {
+    return new Set((Array.isArray(cells) ? cells : []).map((cell) =>
+      typeof cell === "string" ? cell : cell?.key
+    ).filter(Boolean));
+  }
+
+  function nicheCellJaccard(aCells = [], bCells = []) {
+    const a = nicheCellSet(aCells);
+    const b = nicheCellSet(bCells);
+    if (!a.size || !b.size) return 0;
+    let intersection = 0;
+    for (const key of a) {
+      if (b.has(key)) intersection += 1;
+    }
+    return intersection / Math.max(1, a.size + b.size - intersection);
+  }
+
+  function peakDistanceCells(a, b) {
+    if (!a || !b) return Infinity;
+    const ax = Number(a.peak_ix ?? a.peakIx ?? a.ix);
+    const ay = Number(a.peak_iy ?? a.peakIy ?? a.iy);
+    const bx = Number(b.peak_ix ?? b.peakIx ?? b.ix);
+    const by = Number(b.peak_iy ?? b.peakIy ?? b.iy);
+    if (![ax, ay, bx, by].every(Number.isFinite)) return Infinity;
+    return Math.hypot(ax - bx, ay - by);
+  }
+
+  function quantizedCoreCell(cell, quantCells) {
+    const q = Math.max(1, Number(quantCells) || 1);
+    const ix = Math.round(Number(cell?.ix || 0) / q) * q;
+    const iy = Math.round(Number(cell?.iy || 0) / q) * q;
+    return `${ix},${iy}`;
+  }
+
+  function buildSignalRaster(signalData) {
+    const bounds = signalData.bounds || {};
+    const minIx = Number(bounds.minIx);
+    const minIy = Number(bounds.minIy);
+    const maxIx = Number(bounds.maxIx);
+    const maxIy = Number(bounds.maxIy);
+    if (![minIx, minIy, maxIx, maxIy].every(Number.isFinite)) return null;
+
+    const width = maxIx - minIx + 1;
+    const height = maxIy - minIy + 1;
+    if (width <= 1 || height <= 1 || width * height > 36000) return null;
+
+    const z = new Float32Array(width * height);
+    const signal = new Float32Array(width * height);
+    for (const cell of signalData.cells.values()) {
+      const x = cell.ix - minIx;
+      const y = cell.iy - minIy;
+      if (x < 0 || y < 0 || x >= width || y >= height) continue;
+      const idx = y * width + x;
+      z[idx] = Number(cell.z) || 0;
+      signal[idx] = Number(cell.signal) || 0;
+    }
+
+    return { minIx, minIy, width, height, z, signal };
+  }
+
+  function rasterCellAt(signalData, raster, x, y) {
+    const ix = raster.minIx + x;
+    const iy = raster.minIy + y;
+    return signalData.cells.get(`${ix},${iy}`) || null;
+  }
+
+  function componentFromMembers(members, peakCell) {
+    const safeMembers = Array.isArray(members) ? members : [];
+    if (!safeMembers.length || !peakCell) return null;
+    return {
+      peak: peakCell,
+      members: safeMembers,
+      peakSignal: peakCell.signal || 0,
+      peakZ: peakCell.z || 0,
+      peakAbsZ: Math.abs(peakCell.z || 0),
+      meanSignal: safeMembers.reduce((sum, cell) => sum + Number(cell.signal || 0), 0) / safeMembers.length,
+      meanZ: safeMembers.reduce((sum, cell) => sum + Number(cell.z || 0), 0) / safeMembers.length,
+      meanAbsZ: safeMembers.reduce((sum, cell) => sum + Math.abs(Number(cell.z || 0)), 0) / safeMembers.length,
+      componentCellCount: safeMembers.length
+    };
+  }
+
+  function localBackgroundScore(field, width, height, x, y, radius = 2) {
+    let sum = 0;
+    let count = 0;
+    for (let yy = Math.max(0, y - radius); yy <= Math.min(height - 1, y + radius); yy++) {
+      for (let xx = Math.max(0, x - radius); xx <= Math.min(width - 1, x + radius); xx++) {
+        if (xx === x && yy === y) continue;
+        sum += Number(field[yy * width + xx] || 0);
+        count += 1;
+      }
+    }
+    return count ? sum / count : 0;
+  }
+
+  function constrainedFindCores(signalData, raster, blurred, rule) {
+    const threshold = Math.max(0.16, Number(state.controls.lensZThreshold || 2.5) * rule.peakFactor);
+    const cores = [];
+
+    for (let y = 1; y < raster.height - 1; y++) {
+      for (let x = 1; x < raster.width - 1; x++) {
+        const idx = y * raster.width + x;
+        const score = Number(blurred[idx] || 0);
+        if (score < threshold) continue;
+
+        const localBackground = localBackgroundScore(blurred, raster.width, raster.height, x, y, 2);
+        if (score - localBackground < Math.max(0.05, threshold * 0.16)) continue;
+
+        let localMax = true;
+        for (let yy = y - 1; yy <= y + 1 && localMax; yy++) {
+          for (let xx = x - 1; xx <= x + 1; xx++) {
+            if (xx === x && yy === y) continue;
+            if (Number(blurred[yy * raster.width + xx] || 0) > score) {
+              localMax = false;
+              break;
+            }
+          }
+        }
+        if (!localMax) continue;
+
+        const cell = rasterCellAt(signalData, raster, x, y);
+        if (!cell || Number(cell.metrics?.count || 0) <= 0) continue;
+        cores.push({ x, y, cell, score, localBackground, localContrast: score - localBackground });
+      }
+    }
+
+    cores.sort((a, b) => b.score - a.score || b.localContrast - a.localContrast);
+
+    const selected = [];
+    const suppress = Math.max(1, Number(rule.suppressCells) || 4);
+    const maxCores = Math.max(8, Number(state.controls.maxCandidates || 8) * 4);
+    for (const core of cores) {
+      if (selected.some((other) => Math.hypot(other.x - core.x, other.y - core.y) < suppress)) continue;
+      selected.push(core);
+      if (selected.length >= maxCores) break;
+    }
+    return selected;
+  }
+
+  function barrierPenaltyForCell(cell) {
+    if (!cell || typeof window === "undefined") return 0;
+    const groups = window.GridWildOsmFeaturesLayer?.getFeatures?.() || {};
+    const lat = Number(cell.lat);
+    const lng = Number(cell.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return 0;
+
+    let penalty = 0;
+    for (const feature of groups.buildings || []) {
+      if (minDistanceToFeature(lat, lng, feature) <= 13) penalty = Math.max(penalty, 0.42);
+    }
+    for (const feature of groups.water || []) {
+      if (minDistanceToFeature(lat, lng, feature) <= 12) penalty = Math.max(penalty, 0.24);
+    }
+    for (const feature of groups.trails || []) {
+      if (minDistanceToFeature(lat, lng, feature) <= 7) penalty = Math.max(penalty, 0.12);
+    }
+    return penalty;
+  }
+
+  function constrainedGrowNiche(signalData, raster, blurred, rule, core, assigned) {
+    const floor = Math.max(0.06, Number(state.controls.lensZThreshold || 2.5) * rule.floorFactor);
+    const maxRadius = Math.max(1, Number(rule.maxRadiusCells) || 6);
+    const maxCells = Math.max(1, Number(rule.maxCells) || 24);
+    const queue = [{ x: core.x, y: core.y }];
+    const seen = new Set([`${core.x},${core.y}`]);
+    const scored = [];
+
+    while (queue.length) {
+      const current = queue.shift();
+      const distance = Math.hypot(current.x - core.x, current.y - core.y);
+      if (distance > maxRadius) continue;
+
+      const idx = current.y * raster.width + current.x;
+      const cell = rasterCellAt(signalData, raster, current.x, current.y);
+      if (!cell) continue;
+      if (assigned?.has(cell.key) && cell.key !== core.cell.key) continue;
+
+      const signalScore = Number(blurred[idx] || 0);
+      const distancePenalty = (distance / Math.max(1, maxRadius)) * 0.22;
+      const barrierPenalty = barrierPenaltyForCell(cell);
+      const score = signalScore - distancePenalty - barrierPenalty;
+      if (score < floor && cell.key !== core.cell.key) continue;
+
+      scored.push({ cell, score, distance, signalScore, barrierPenalty });
+
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const x = current.x + dx;
+          const y = current.y + dy;
+          if (x < 0 || y < 0 || x >= raster.width || y >= raster.height) continue;
+          const key = `${x},${y}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          queue.push({ x, y });
+        }
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score || a.distance - b.distance);
+    const members = scored.slice(0, maxCells).map((row) => row.cell);
+    const constrained = constrainMemberCells(members, core.cell, rule);
+    if (constrained.length < Math.max(1, Number(rule.minCells) || 1)) return [];
+
+    for (const cell of constrained) assigned?.add(cell.key);
+    return constrained;
+  }
+
+  function connectedSubsetFromCore(members, coreCell) {
+    const byKey = new Map((members || []).map((cell) => [cell.key, cell]));
+    if (!coreCell?.key || !byKey.has(coreCell.key)) return [];
+
+    const visited = new Set([coreCell.key]);
+    const queue = [coreCell];
+    const result = [];
+    while (queue.length) {
+      const cell = queue.shift();
+      result.push(cell);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const key = `${cell.ix + dx},${cell.iy + dy}`;
+          if (visited.has(key) || !byKey.has(key)) continue;
+          visited.add(key);
+          queue.push(byKey.get(key));
+        }
+      }
+    }
+    return result;
+  }
+
+  function supportNeighborCount(cell, keys) {
+    return [
+      `${cell.ix},${cell.iy - 1}`,
+      `${cell.ix + 1},${cell.iy}`,
+      `${cell.ix},${cell.iy + 1}`,
+      `${cell.ix - 1},${cell.iy}`
+    ].filter((key) => keys.has(key)).length;
+  }
+
+  function constrainMemberCells(members = [], coreCell, rule = {}) {
+    const byKey = new Map();
+    for (const cell of members || []) {
+      if (cell?.key) byKey.set(cell.key, cell);
+    }
+    if (coreCell?.key) byKey.set(coreCell.key, coreCell);
+
+    let constrained = connectedSubsetFromCore([...byKey.values()], coreCell);
+    if (constrained.length <= 4) return constrained;
+
+    for (let pass = 0; pass < 2; pass++) {
+      const keys = new Set(constrained.map((cell) => cell.key));
+      const keep = constrained.filter((cell) => {
+        if (cell.key === coreCell?.key) return true;
+        return supportNeighborCount(cell, keys) >= 2;
+      });
+      if (keep.length < Math.max(1, Number(rule.minCells) || 1)) break;
+      constrained = connectedSubsetFromCore(keep, coreCell);
+    }
+
+    const maxRadius = Math.max(1, Number(rule.maxRadiusCells) || 6) + 0.15;
+    constrained = constrained.filter((cell) => {
+      if (cell.key === coreCell?.key) return true;
+      return Math.hypot(cell.ix - coreCell.ix, cell.iy - coreCell.iy) <= maxRadius;
+    });
+
+    return connectedSubsetFromCore(constrained, coreCell);
+  }
+
+  function constrainedShapeMetrics(members = [], coreCell = null) {
+    const normalized = normalizedComponentMembers(members);
+    const keys = new Set(normalized.map((cell) => cell.key));
+    const boundaryEdges = gridBoundaryEdges(normalized);
+    const shapeContext = componentShapeContext(normalized);
+    const maxRadiusCells = coreCell
+      ? normalized.reduce((max, cell) => Math.max(max, Math.hypot(cell.ix - coreCell.ix, cell.iy - coreCell.iy)), 0)
+      : 0;
+    const complexity = boundaryEdges.length / Math.max(4, 4 * Math.sqrt(Math.max(1, normalized.length)));
+    const oneCellNecks = normalized.filter((cell) =>
+      cell.key !== coreCell?.key && supportNeighborCount(cell, keys) <= 1
+    ).length;
+
+    return {
+      ...shapeContext,
+      max_radius_cells: Number(maxRadiusCells.toFixed(2)),
+      perimeter_edges: boundaryEdges.length,
+      perimeter_complexity: Number(complexity.toFixed(2)),
+      one_cell_necks: oneCellNecks
+    };
+  }
+
+  function constrainedGeometryType(rule, component, placeContext, shapeMetrics) {
+    const count = Number(component?.members?.length || 0);
+    const placeType = String(placeContext?.place_type || "").toLowerCase();
+    const geometryContext = placeContext?.geometry_context || {};
+    if (count <= 4) return "point-halo";
+    if (geometryContext.corridor_kind || placeType.includes("corridor")) return "corridor-buffer";
+    if (shapeMetrics?.elongated && (placeType.includes("trail") || placeType.includes("stream") || placeType.includes("water"))) return "edge-band";
+    if (count >= 52) return "place-section";
+    return "patch-polygon";
+  }
+
+  function constrainedScaleClass(component, geometryType) {
+    const count = Number(component?.members?.length || 0);
+    if (geometryType === "point-halo" || count <= 4) return "micro-niche";
+    if (geometryType === "corridor-buffer" || geometryType === "edge-band") return "corridor niche";
+    if (count <= 25) return "patch niche";
+    if (count <= 96) return "place niche";
+    return "constellation";
+  }
+
+  function passesConstrainedContract(component, rule, placeContext) {
+    const members = component?.members || [];
+    const shape = constrainedShapeMetrics(members, component?.peak);
+    const corridor = placeContext?.geometry_context?.corridor_kind;
+    const maxElongation = corridor ? Math.max(5.6, Number(rule.maxElongation) || 3.2) : Number(rule.maxElongation) || 3.2;
+    const maxComplexity = Number(rule.maxComplexity) || 3.2;
+
+    if (!members.length) return { ok: false, shape, reason: "empty" };
+    if (members.length > Number(rule.maxCells || 999)) return { ok: false, shape, reason: "area_cap" };
+    if (shape.max_radius_cells > Number(rule.maxRadiusCells || 6) + 0.2) return { ok: false, shape, reason: "radius_cap" };
+    if (Number(shape.elongation_ratio || 1) > maxElongation) return { ok: false, shape, reason: "elongation_cap" };
+    if (Number(shape.perimeter_complexity || 1) > maxComplexity) return { ok: false, shape, reason: "complexity_cap" };
+    if (Number(shape.one_cell_necks || 0) > Math.max(0, Math.floor(members.length / 18))) return { ok: false, shape, reason: "neck_cap" };
+
+    return { ok: true, shape, reason: "passes" };
+  }
+
+  function constrainedComponentFromMembers(members, coreCell, rule) {
+    const component = componentFromMembers(members, coreCell);
+    if (!component) return null;
+    const sizeScore = clamp01(Math.log1p(component.componentCellCount || 1) / Math.log1p(Math.max(8, Number(rule.maxCells) || 32)));
+    const peakScore = clamp01(Math.abs(Number(component.peakZ) || 0) / 5);
+    return {
+      ...component,
+      clusterSizeScore: sizeScore,
+      clusterPeakScore: peakScore,
+      clusterPreferenceScore: clamp01(sizeScore * 0.44 + peakScore * 0.56)
+    };
+  }
+
+  function constrainedNicheFromComponent({ component, rule, origin, caps, activeLens, heatMetric, contract }) {
+    const agg = aggregateComponent(component);
+    const ll = agg.center;
+    const distanceM = L.latLng(origin.lat, origin.lng).distanceTo(L.latLng(ll.lat, ll.lng));
+    const m = agg.metrics;
+    const weights = scoreWeights();
+    const bio = clamp01((Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.68 + m.activeRatio * 0.17 + m.lensPeakSignal * 0.15);
+    const need = clamp01((1 - m.activeRatio) * 0.55 + (m.count > 0 && m.count < caps.count ? 0.22 : 0) + (m.observers <= 1 ? 0.08 : 0) + (1 - m.lensMeanSignal) * 0.15);
+    const stale = clamp01(daysSince(m.latestObservedMs) / 240);
+    const edge = detectEdgeScore(ll.lat, ll.lng);
+    const lensPeak = clamp01(m.lensPeakSignal);
+    const zStrength = clamp01((Number(m.lensPeakAbsZ) || 0) / 5);
+    const componentSizeScore = clamp01(Math.log1p(Number(m.componentCellCount) || 1) / Math.log1p(96));
+    const clusterPriority = clamp01(Number(m.clusterPreferenceScore) || (componentSizeScore * 0.42 + zStrength * 0.36 + lensPeak * 0.22));
+    const questability = clamp01(
+      clusterPriority * 0.36 +
+      zStrength * 0.18 +
+      componentSizeScore * 0.12 +
+      lensPeak * 0.08 +
+      bio * weights.bio * 0.7 +
+      need * weights.need * 0.7 +
+      stale * weights.stale * 0.7 +
+      edge * weights.edge * 0.7
+    );
+
+    const placeContext = resolveGeometricPlaceContext(
+      ll.lat,
+      ll.lng,
+      component,
+      resolvePlaceContext(ll.lat, ll.lng)
+    );
+    const geometryType = constrainedGeometryType(rule, component, placeContext, contract?.shape || {});
+    const scaleClass = constrainedScaleClass(component, geometryType);
+    const nicheType = chooseType({ bio, need, stale, edge }, m, placeContext);
+    const theme = `${themeFor(nicheType, placeContext)} / ${scaleClass}`;
+    const initialFocus = topTaxonomySubject({
+      ...m,
+      active_lens: activeLens,
+      heat_metric: heatMetric
+    });
+    const taxonFocus = theme.includes("Plants") || nicheType === "edge_habitat_niche"
+      ? { iconic: "Plantae", label: "plants" }
+      : initialFocus?.label
+        ? { iconic: initialFocus.rank || "Any", label: titleSubjectCase(initialFocus.label), source_rank: initialFocus.rank || null }
+        : { iconic: "Any", label: "life" };
+    const coreCell = component.peak ? `${component.peak.ix},${component.peak.iy}` : "";
+    const sourceKey = [
+      "gw-local-niche-v4",
+      activeLens,
+      isFovSampling() ? "fov" : `${numericRadiusM(500)}m`,
+      "constrained",
+      scaleClass.replace(/\s+/g, "-"),
+      quantizedCoreCell(component.peak, rule.quantCells),
+      agg.componentId
+    ].join(":");
+
+    const niche = {
+      source_key: sourceKey,
+      title: "",
+      short_title: "",
+      description: "A GridWild interpreted sampling opportunity generated as a peak-centered, constrained geometry niche.",
+      niche_type: nicheType,
+      theme,
+      centroid_lat: ll.lat,
+      centroid_lng: ll.lng,
+      geometry: boundsForCells(agg.minIx, agg.minIy, agg.maxIx, agg.maxIy),
+      grid_cell_ids: agg.cells,
+      radius_m: Math.round(Math.max(18, Math.sqrt(Math.max(1, m.componentCellCount || agg.cells.length)) * GRID_SIZE_M * 1.14)),
+      scale_level: `constrained-geometry:${scaleClass}`,
+      taxon_focus: taxonFocus,
+      seasonal_profile: { mode: "constrained_geometry_runtime_v1" },
+      evidence_summary: evidenceFor(nicheType, m, placeContext),
+      metrics: {
+        ...m,
+        algorithm: "constrained_geometry_niche_v1",
+        active_lens: activeLens,
+        heat_metric: heatMetric,
+        sampling_extent: isFovSampling() ? "fov" : "radius_m",
+        sampling_radius_m: isFovSampling() ? null : numericRadiusM(500),
+        emphasis: state.controls.emphasis,
+        z_threshold: Number(state.controls.lensZThreshold || 2.5),
+        core_cell: coreCell,
+        peak_cell: coreCell,
+        peak_signal: Number(lensPeak.toFixed(3)),
+        peak_z: Number((m.lensPeakZ || 0).toFixed(3)),
+        peak_abs_z: Number((m.lensPeakAbsZ || 0).toFixed(3)),
+        component_id: agg.componentId,
+        component_cell_count: Number(m.componentCellCount || agg.cells.length),
+        cluster_priority_score: Number(clusterPriority.toFixed(3)),
+        geometry_type: geometryType,
+        scale_class: scaleClass,
+        display_geometry: geometryType,
+        interaction_radius_m: Math.round(Math.max(28, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.35)),
+        geometry_contract: contract || null,
+        geometry_context: placeContext.geometry_context || null,
+        member_cells_are_analysis_object: true
+      },
+      confidence: clamp01(0.36 + placeContext.label_confidence * 0.2 + questability * 0.26 + clusterPriority * 0.18),
+      novelty_score: need,
+      sampling_need_score: need,
+      biodiversity_score: bio,
+      questability_score: questability,
+      place_context: placeContext,
+      primary_place_label: placeContext.primary_label || null,
+      secondary_place_label: placeContext.secondary_label || null,
+      place_label_confidence: placeContext.label_confidence || 0,
+      generated_by: "gridwild_constrained_geometry_niche_v1",
+      visibility: "public",
+      status: "active",
+      distance_m: Math.round(distanceM),
+      comment_count: 0,
+      _runtimeOnly: true
+    };
+
+    niche.title = buildNicheDisplayTitle(niche);
+    niche.short_title = niche.title.replace(/^(Sample|Survey|Look for|Revisit|Check)\s+/i, "");
+    return niche;
+  }
+
+  function trailCellScore(cell) {
+    const signalScore = clamp01(Number(cell?.signal || 0));
+    const zScore = clamp01(Math.max(0, Number(cell?.z || 0)) / 4);
+    return clamp01(signalScore * TRAIL_CORRIDOR_RULE.signalWeight + zScore * TRAIL_CORRIDOR_RULE.zWeight);
+  }
+
+  function smoothTrailBins(bins = []) {
+    return bins.map((bin, index) => {
+      const prev = bins[index - 1]?.score ?? bin.score;
+      const next = bins[index + 1]?.score ?? bin.score;
+      return {
+        ...bin,
+        smoothScore: bin.score * 0.58 + prev * 0.21 + next * 0.21
+      };
+    });
+  }
+
+  function trailRunsFromBins(bins = [], threshold) {
+    const runs = [];
+    let current = [];
+
+    for (const bin of bins) {
+      if (bin.smoothScore >= threshold || bin.peakScore >= TRAIL_CORRIDOR_RULE.minPeakScore) {
+        current.push(bin);
+      } else if (current.length) {
+        runs.push(current);
+        current = [];
+      }
+    }
+    if (current.length) runs.push(current);
+    return runs;
+  }
+
+  function splitTrailRun(run = []) {
+    const maxBins = Math.max(1, Math.ceil(TRAIL_CORRIDOR_RULE.maxLengthM / TRAIL_CORRIDOR_RULE.binM));
+    if (run.length <= maxBins) return [run];
+
+    const chunks = [];
+    for (let i = 0; i < run.length; i += maxBins) {
+      chunks.push(run.slice(i, i + maxBins));
+    }
+    return chunks;
+  }
+
+  function trailCorridorComponentFromRun(run = [], cellRows = [], inclusive = false) {
+    const startM = Math.min(...run.map(bin => bin.startM));
+    const endM = Math.max(...run.map(bin => bin.endM));
+    const byKey = new Map();
+
+    for (const row of cellRows) {
+      if (row.alongM < startM - TRAIL_CORRIDOR_RULE.binM * 0.5) continue;
+      if (row.alongM > endM + TRAIL_CORRIDOR_RULE.binM * 0.5) continue;
+      if (row.distanceM > TRAIL_CORRIDOR_RULE.bufferM) continue;
+      byKey.set(row.cell.key, row);
+    }
+
+    const rows = [...byKey.values()]
+      .sort((a, b) => inclusive
+        ? a.alongM - b.alongM || a.distanceM - b.distanceM
+        : b.score - a.score || a.distanceM - b.distanceM)
+      .slice(0, TRAIL_CORRIDOR_RULE.maxCells);
+    if (rows.length < TRAIL_CORRIDOR_RULE.minCells) return null;
+
+    const members = rows.map(row => row.cell);
+    const peakRow = rows.slice().sort((a, b) => b.score - a.score || a.distanceM - b.distanceM)[0];
+    const component = componentFromMembers(members, peakRow.cell);
+    if (!component) return null;
+
+    const meanScore = rows.reduce((sum, row) => sum + row.score, 0) / rows.length;
+    const peakScore = rows[0]?.score || 0;
+    const lengthM = Math.max(0, endM - startM);
+    if (lengthM < TRAIL_CORRIDOR_RULE.minLengthM) return null;
+    if (meanScore < TRAIL_CORRIDOR_RULE.minMeanScore && peakScore < TRAIL_CORRIDOR_RULE.minPeakScore) return null;
+
+    return {
+      ...component,
+      trailStartM: startM,
+      trailEndM: endM,
+      trailLengthM: lengthM,
+      trailMeanScore: meanScore,
+      trailPeakScore: peakScore,
+      clusterSizeScore: clamp01(lengthM / TRAIL_CORRIDOR_RULE.maxLengthM),
+      clusterPeakScore: clamp01(peakScore),
+      clusterPreferenceScore: clamp01(meanScore * 0.46 + peakScore * 0.34 + Math.min(1, lengthM / 180) * 0.2)
+    };
+  }
+
+  function trailCorridorComponentForWholeTrail(trailLengthM, cellRows = []) {
+    const syntheticRun = [{
+      startM: 0,
+      endM: trailLengthM
+    }];
+    return trailCorridorComponentFromRun(syntheticRun, cellRows, true);
+  }
+
+  function trailPlaceContext(feature, component, baseContext) {
+    const label = featureLabel(feature);
+    const corridor = {
+      feature,
+      kind: "trails",
+      label,
+      distanceM: 0,
+      angle_diff_deg: 0,
+      confidence: label ? 0.88 : 0.72,
+      relation: "along"
+    };
+    return applyGeometryContextToPlace(
+      baseContext,
+      {
+        ...componentShapeContext(component.members || []),
+        trail_corridor: true,
+        trail_length_m: Math.round(component.trailLengthM || 0)
+      },
+      corridor
+    );
+  }
+
+  function trailCorridorNicheFromComponent({ component, feature, origin, caps, activeLens, heatMetric }) {
+    const agg = aggregateComponent(component);
+    const ll = agg.center;
+    const distanceM = L.latLng(origin.lat, origin.lng).distanceTo(L.latLng(ll.lat, ll.lng));
+    const m = agg.metrics;
+    const placeContext = trailPlaceContext(feature, component, resolvePlaceContext(ll.lat, ll.lng));
+    const lensPeak = clamp01(m.lensPeakSignal);
+    const zStrength = clamp01((Number(m.lensPeakAbsZ) || 0) / 5);
+    const trailStrength = clamp01((component.trailMeanScore || 0) * 0.56 + (component.trailPeakScore || 0) * 0.34 + Math.min(1, (component.trailLengthM || 0) / 200) * 0.1);
+    const bio = clamp01((Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.6 + m.activeRatio * 0.16 + trailStrength * 0.24);
+    const need = clamp01((1 - m.activeRatio) * 0.46 + (m.observers <= 1 ? 0.12 : 0) + (1 - m.lensMeanSignal) * 0.18);
+    const stale = clamp01(daysSince(m.latestObservedMs) / 240);
+    const questability = clamp01(trailStrength * 0.46 + zStrength * 0.14 + lensPeak * 0.1 + bio * 0.16 + need * 0.1 + stale * 0.04);
+    const initialFocus = topTaxonomySubject({
+      ...m,
+      active_lens: activeLens,
+      heat_metric: heatMetric
+    });
+    const taxonFocus = initialFocus?.label
+      ? { iconic: initialFocus.rank || "Any", label: titleSubjectCase(initialFocus.label), source_rank: initialFocus.rank || null }
+      : { iconic: "Any", label: "life" };
+    const coreCell = component.peak ? `${component.peak.ix},${component.peak.iy}` : "";
+    const featureKey = String(feature?.id || featureLabel(feature) || "trail").replace(/\s+/g, "-").slice(0, 64);
+    const sourceKey = [
+      "gw-local-niche-v4",
+      activeLens,
+      isFovSampling() ? "fov" : `${numericRadiusM(500)}m`,
+      "trail-corridor",
+      featureKey,
+      Math.round(component.trailStartM || 0),
+      Math.round(component.trailEndM || 0),
+      agg.componentId
+    ].join(":");
+
+    const niche = {
+      source_key: sourceKey,
+      title: "",
+      short_title: "",
+      description: "A GridWild trail corridor niche generated from OSM path geometry and sustained Lens heat along the trail edge.",
+      niche_type: "edge_habitat_niche",
+      theme: "Trail corridor / corridor niche",
+      centroid_lat: ll.lat,
+      centroid_lng: ll.lng,
+      geometry: boundsForCells(agg.minIx, agg.minIy, agg.maxIx, agg.maxIy),
+      grid_cell_ids: agg.cells,
+      radius_m: Math.round(Math.max(36, Math.min(220, (component.trailLengthM || 80) * 0.42))),
+      scale_level: "constrained-geometry:corridor niche",
+      taxon_focus: taxonFocus,
+      seasonal_profile: { mode: "trail_corridor_runtime_v1" },
+      evidence_summary: evidenceFor("edge_habitat_niche", m, placeContext),
+      metrics: {
+        ...m,
+        algorithm: "trail_corridor_niche_v1",
+        active_lens: activeLens,
+        heat_metric: heatMetric,
+        sampling_extent: isFovSampling() ? "fov" : "radius_m",
+        sampling_radius_m: isFovSampling() ? null : numericRadiusM(500),
+        emphasis: state.controls.emphasis,
+        z_threshold: Number(state.controls.lensZThreshold || 2.5),
+        core_cell: coreCell,
+        peak_cell: coreCell,
+        peak_signal: Number(lensPeak.toFixed(3)),
+        peak_z: Number((m.lensPeakZ || 0).toFixed(3)),
+        peak_abs_z: Number((m.lensPeakAbsZ || 0).toFixed(3)),
+        component_id: agg.componentId,
+        component_cell_count: Number(m.componentCellCount || agg.cells.length),
+        cluster_priority_score: Number((component.clusterPreferenceScore || trailStrength).toFixed(3)),
+        geometry_type: "corridor-buffer",
+        scale_class: "corridor niche",
+        display_geometry: "corridor-buffer",
+        interaction_radius_m: Math.round(Math.max(48, Math.min(260, (component.trailLengthM || 80) * 0.5))),
+        trail_feature_id: feature?.id || null,
+        trail_feature_name: featureLabel(feature) || null,
+        trail_start_m: Math.round(component.trailStartM || 0),
+        trail_end_m: Math.round(component.trailEndM || 0),
+        trail_length_m: Math.round(component.trailLengthM || 0),
+        trail_buffer_m: TRAIL_CORRIDOR_RULE.bufferM,
+        trail_mean_score: Number((component.trailMeanScore || 0).toFixed(3)),
+        trail_peak_score: Number((component.trailPeakScore || 0).toFixed(3)),
+        trail_corridor_mode: TRAIL_CORRIDOR_RULE.wholeTrailMode ? "whole_trail_inclusive" : "hot_run",
+        trail_inclusion_policy: TRAIL_CORRIDOR_RULE.wholeTrailMode ? "emit_if_trail_cells_in_fov" : "emit_hot_runs",
+        geometry_contract: {
+          ok: true,
+          reason: "trail_corridor",
+          max_width_m: TRAIL_CORRIDOR_RULE.bufferM * 2,
+          min_length_m: TRAIL_CORRIDOR_RULE.minLengthM,
+          max_length_m: TRAIL_CORRIDOR_RULE.maxLengthM
+        },
+        geometry_context: placeContext.geometry_context || null,
+        member_cells_are_analysis_object: true
+      },
+      confidence: clamp01(0.42 + placeContext.label_confidence * 0.22 + questability * 0.24 + trailStrength * 0.12),
+      novelty_score: need,
+      sampling_need_score: need,
+      biodiversity_score: bio,
+      questability_score: questability,
+      place_context: placeContext,
+      primary_place_label: placeContext.primary_label || null,
+      secondary_place_label: placeContext.secondary_label || null,
+      place_label_confidence: placeContext.label_confidence || 0,
+      generated_by: "gridwild_trail_corridor_niche_v1",
+      visibility: "public",
+      status: "active",
+      distance_m: Math.round(distanceM),
+      comment_count: 0,
+      _runtimeOnly: true
+    };
+
+    niche.title = buildNicheDisplayTitle(niche);
+    niche.short_title = niche.title.replace(/^(Sample|Survey|Look for|Revisit|Check)\s+/i, "");
+    return niche;
+  }
+
+  function generateTrailCorridorCandidates(signalData, origin, caps, activeLens, heatMetric) {
+    if (!TRAIL_CORRIDOR_RULE.enabled || typeof map === "undefined") return { rows: [], components: [], debug: { trails: 0, emitted: 0 } };
+    const trails = (window.GridWildOsmFeaturesLayer?.getFeatures?.().trails || [])
+      .filter((feature) => Array.isArray(feature.points) && feature.points.length >= 2);
+    const rows = [];
+    const components = [];
+    const debug = [];
+
+    for (const feature of trails) {
+      const segments = featureSegmentSamples(feature);
+      const trailLengthM = segments.length ? segments[segments.length - 1].endM : 0;
+      if (trailLengthM < TRAIL_CORRIDOR_RULE.minLengthM) continue;
+
+      const cellRows = [];
+      for (const cell of signalData.cells.values()) {
+        const projection = nearestTrailProjection(cell, segments);
+        if (!projection || projection.distanceM > TRAIL_CORRIDOR_RULE.bufferM) continue;
+        const score = trailCellScore(cell);
+        cellRows.push({
+          cell,
+          score,
+          z: Number(cell.z || 0),
+          signal: Number(cell.signal || 0),
+          distanceM: projection.distanceM,
+          alongM: projection.alongM
+        });
+      }
+
+      if (cellRows.length < TRAIL_CORRIDOR_RULE.minCells) continue;
+
+      const binCount = Math.max(1, Math.ceil(trailLengthM / TRAIL_CORRIDOR_RULE.binM));
+      const bins = Array.from({ length: binCount }, (_, index) => ({
+        index,
+        startM: index * TRAIL_CORRIDOR_RULE.binM,
+        endM: Math.min(trailLengthM, (index + 1) * TRAIL_CORRIDOR_RULE.binM),
+        rows: [],
+        score: 0,
+        peakScore: 0
+      }));
+
+      for (const row of cellRows) {
+        const idx = Math.max(0, Math.min(binCount - 1, Math.floor(row.alongM / TRAIL_CORRIDOR_RULE.binM)));
+        bins[idx].rows.push(row);
+      }
+
+      for (const bin of bins) {
+        if (!bin.rows.length) continue;
+        const sorted = bin.rows.slice().sort((a, b) => b.score - a.score);
+        const topRows = sorted.slice(0, Math.min(4, sorted.length));
+        bin.score = topRows.reduce((sum, row) => sum + row.score, 0) / topRows.length;
+        bin.peakScore = sorted[0]?.score || 0;
+      }
+
+      const scoredBins = bins.filter(bin => bin.rows.length);
+      if (!scoredBins.length) continue;
+      const mean = scoredBins.reduce((sum, bin) => sum + bin.score, 0) / scoredBins.length;
+      const variance = scoredBins.reduce((sum, bin) => sum + (bin.score - mean) ** 2, 0) / scoredBins.length;
+      const sd = Math.sqrt(variance);
+      const threshold = Math.max(TRAIL_CORRIDOR_RULE.minMeanScore, mean + sd * 0.32);
+      const smoothed = smoothTrailBins(bins);
+      const runs = trailRunsFromBins(smoothed, threshold)
+        .flatMap(splitTrailRun);
+      let emitted = 0;
+
+      const wholeTrailComponent = TRAIL_CORRIDOR_RULE.wholeTrailMode
+        ? trailCorridorComponentForWholeTrail(trailLengthM, cellRows)
+        : null;
+      const candidateComponents = wholeTrailComponent
+        ? [wholeTrailComponent]
+        : runs.map(run => trailCorridorComponentFromRun(run, cellRows)).filter(Boolean);
+
+      for (const component of candidateComponents) {
+        const niche = trailCorridorNicheFromComponent({
+          component,
+          feature,
+          origin,
+          caps,
+          activeLens,
+          heatMetric
+        });
+        if (!TRAIL_CORRIDOR_RULE.wholeTrailMode && Number(niche.questability_score || 0) < 0.18) continue;
+        rows.push(niche);
+        components.push(component);
+        emitted += 1;
+      }
+
+      debug.push({
+        feature: featureLabel(feature) || feature.id || "trail",
+        lengthM: Math.round(trailLengthM),
+        candidateCells: cellRows.length,
+        threshold: Number(threshold.toFixed(3)),
+        mode: TRAIL_CORRIDOR_RULE.wholeTrailMode ? "whole-trail" : "hot-runs",
+        emitted
+      });
+    }
+
+    return {
+      rows,
+      components,
+      debug: {
+        trails: trails.length,
+        emitted: rows.length,
+        features: debug.slice(0, 12)
+      }
+    };
+  }
+
+  function heatBaseScore(cell) {
+    const signalScore = clamp01(Number(cell?.signal || 0));
+    const zScore = clamp01(Math.abs(Number(cell?.z || 0)) / 4);
+    return clamp01(signalScore * HEAT_TENDRIL_RULE.signalWeight + zScore * HEAT_TENDRIL_RULE.zWeight);
+  }
+
+  function heatLocalEdgeScore(cell, signalData) {
+    if (!cell || !signalData?.cells) return 0;
+    const center = heatBaseScore(cell);
+    const sample = (dx, dy) => {
+      const next = signalData.cells.get(`${cell.ix + dx},${cell.iy + dy}`);
+      return next ? heatBaseScore(next) : center;
+    };
+    const left = sample(-1, 0);
+    const right = sample(1, 0);
+    const up = sample(0, -1);
+    const down = sample(0, 1);
+    const ul = sample(-1, -1);
+    const ur = sample(1, -1);
+    const dl = sample(-1, 1);
+    const dr = sample(1, 1);
+    const sobelX = (ur + 2 * right + dr) - (ul + 2 * left + dl);
+    const sobelY = (dl + 2 * down + dr) - (ul + 2 * up + ur);
+    const gradient = Math.hypot(sobelX, sobelY) / 4;
+    const neighbors = [left, right, up, down, ul, ur, dl, dr];
+    const localContrast = Math.max(...neighbors.map((value) => Math.abs(center - value)));
+    const localDrop = Math.max(0, center - Math.min(...neighbors));
+    return clamp01(gradient * 0.5 + localContrast * 0.3 + localDrop * 0.2);
+  }
+
+  function heatPathPasses() {
+    const passes = Array.isArray(HEAT_TENDRIL_RULE.candidatePasses)
+      ? HEAT_TENDRIL_RULE.candidatePasses
+      : [];
+    return passes.length
+      ? passes
+      : [{ name: "heat", minScore: HEAT_TENDRIL_RULE.minScore, minHeat: 0, minEdge: 0, heatWeight: 1, edgeWeight: 0 }];
+  }
+
+  function heatTendrilCellScore(cell, signalData = null, pass = null) {
+    const heatScore = heatBaseScore(cell);
+    if (!pass || !signalData) return heatScore;
+    const edgeScore = heatLocalEdgeScore(cell, signalData);
+    return clamp01(
+      heatScore * Number(pass.heatWeight ?? 1) +
+      edgeScore * Number(pass.edgeWeight ?? 0)
+    );
+  }
+
+  function skeletonizeBinaryMask(binary, width, height, maxIterations = 60) {
+    const mask = Uint8Array.from(binary);
+    const at = (x, y) => (x < 0 || y < 0 || x >= width || y >= height ? 0 : mask[y * width + x]);
+    let changed = true;
+    let iteration = 0;
+
+    while (changed && iteration < maxIterations) {
+      changed = false;
+      for (let step = 0; step < 2; step++) {
+        const remove = [];
+        for (let y = 1; y < height - 1; y++) {
+          for (let x = 1; x < width - 1; x++) {
+            const idx = y * width + x;
+            if (!mask[idx]) continue;
+
+            const p2 = at(x, y - 1);
+            const p3 = at(x + 1, y - 1);
+            const p4 = at(x + 1, y);
+            const p5 = at(x + 1, y + 1);
+            const p6 = at(x, y + 1);
+            const p7 = at(x - 1, y + 1);
+            const p8 = at(x - 1, y);
+            const p9 = at(x - 1, y - 1);
+            const neighbors = [p2, p3, p4, p5, p6, p7, p8, p9];
+            const count = neighbors.reduce((sum, value) => sum + value, 0);
+            if (count < 2 || count > 6) continue;
+
+            let transitions = 0;
+            for (let i = 0; i < neighbors.length; i++) {
+              if (!neighbors[i] && neighbors[(i + 1) % neighbors.length]) transitions += 1;
+            }
+            if (transitions !== 1) continue;
+
+            const keepStep0 = p2 * p4 * p6 === 0 && p4 * p6 * p8 === 0;
+            const keepStep1 = p2 * p4 * p8 === 0 && p2 * p6 * p8 === 0;
+            if ((step === 0 && keepStep0) || (step === 1 && keepStep1)) remove.push(idx);
+          }
+        }
+        if (remove.length) {
+          changed = true;
+          for (const idx of remove) mask[idx] = 0;
+        }
+      }
+      iteration += 1;
+    }
+
+    return mask;
+  }
+
+  function skeletonizeHeatRows(signalData, scored = new Map(), pass = {}) {
+    if (!HEAT_TENDRIL_RULE.skeletonizeBeforeVector || scored.size < 9) {
+      return { rows: scored, skeletonCells: scored.size, used: false };
+    }
+
+    const bounds = signalData.bounds || {};
+    const minIx = Number(bounds.minIx);
+    const minIy = Number(bounds.minIy);
+    const maxIx = Number(bounds.maxIx);
+    const maxIy = Number(bounds.maxIy);
+    if (![minIx, minIy, maxIx, maxIy].every(Number.isFinite)) {
+      return { rows: scored, skeletonCells: scored.size, used: false };
+    }
+
+    const width = maxIx - minIx + 1;
+    const height = maxIy - minIy + 1;
+    if (width <= 2 || height <= 2 || width * height > 36000) {
+      return { rows: scored, skeletonCells: scored.size, used: false };
+    }
+
+    const field = new Float32Array(width * height);
+    for (const row of scored.values()) {
+      const x = row.cell.ix - minIx;
+      const y = row.cell.iy - minIy;
+      if (x < 0 || y < 0 || x >= width || y >= height) continue;
+      field[y * width + x] = Math.max(field[y * width + x], Number(row.score || 0));
+    }
+
+    const blurred = blurRaster(field, width, height, Number(HEAT_TENDRIL_RULE.skeletonSigmaCells) || 0.9);
+    const threshold = Math.max(0.02, Number(pass.skeletonThreshold ?? HEAT_TENDRIL_RULE.skeletonThreshold) || 0.26);
+    const binary = new Uint8Array(width * height);
+    for (let idx = 0; idx < blurred.length; idx++) {
+      if (blurred[idx] >= threshold) binary[idx] = 1;
+    }
+
+    const skeleton = skeletonizeBinaryMask(
+      binary,
+      width,
+      height,
+      Math.max(1, Number(HEAT_TENDRIL_RULE.skeletonMaxIterations) || 60)
+    );
+    const skeletonRows = new Map();
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (!skeleton[y * width + x]) continue;
+        const ix = minIx + x;
+        const iy = minIy + y;
+        const key = `${ix},${iy}`;
+        const cell = signalData.cells.get(key);
+        if (!cell) continue;
+        const heatScore = heatBaseScore(cell);
+        const edgeScore = heatLocalEdgeScore(cell, signalData);
+        const score = clamp01(
+          heatScore * Number(pass.heatWeight ?? 1) +
+          edgeScore * Number(pass.edgeWeight ?? 0)
+        );
+        if (score < Math.max(0.01, Number(pass.minScore ?? HEAT_TENDRIL_RULE.minScore) * 0.45)) continue;
+        skeletonRows.set(key, {
+          cell,
+          score,
+          heatScore,
+          edgeScore,
+          passName: pass.name || "heat",
+          skeleton: true
+        });
+      }
+    }
+
+    return skeletonRows.size >= Math.max(2, Number(HEAT_TENDRIL_RULE.minVectorLengthCells) || 5)
+      ? { rows: skeletonRows, skeletonCells: skeletonRows.size, used: true }
+      : { rows: scored, skeletonCells: skeletonRows.size, used: false };
+  }
+
+  function heatTendrilAxis(members = []) {
+    const shape = componentShapeContext(members);
+    const points = (members || [])
+      .map((cell) => ({ cell, x: Number(cell.ix), y: Number(cell.iy) }))
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+    if (points.length < 2) return null;
+
+    const angleRad = (Number(shape.axis_angle_deg || 0) * Math.PI) / 180;
+    const ux = Math.cos(angleRad);
+    const uy = Math.sin(angleRad);
+    const cx = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+    const cy = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+    let minProj = Infinity;
+    let maxProj = -Infinity;
+
+    for (const point of points) {
+      const dx = point.x - cx;
+      const dy = point.y - cy;
+      const proj = dx * ux + dy * uy;
+      minProj = Math.min(minProj, proj);
+      maxProj = Math.max(maxProj, proj);
+    }
+
+    if (![minProj, maxProj].every(Number.isFinite)) return null;
+    return { shape, ux, uy, cx, cy, minProj, maxProj };
+  }
+
+  function extendHeatTendrilMembers(signalData, members = []) {
+    if (!HEAT_TENDRIL_RULE.extendAlongAxis || !signalData?.cells?.size || members.length < 2) {
+      return { members, added: 0, axis: null };
+    }
+
+    const axis = heatTendrilAxis(members);
+    if (!axis) return { members, added: 0, axis: null };
+
+    const byKey = new Map(members.map((cell) => [cell.key, cell]));
+    const widthCells = Math.max(0.75, Number(HEAT_TENDRIL_RULE.extensionWidthCells) || 2.5);
+    const padCells = Math.max(0, Number(HEAT_TENDRIL_RULE.extensionPadCells) || 0);
+    const minScore = Math.max(0, Number(HEAT_TENDRIL_RULE.extensionMinScore) || 0);
+    const maxAdded = Math.max(0, Number(HEAT_TENDRIL_RULE.extensionMaxAddedCells) || 0);
+    const candidates = new Map();
+
+    const inAxisEnvelope = (cell) => {
+      const dx = Number(cell.ix) - axis.cx;
+      const dy = Number(cell.iy) - axis.cy;
+      if (![dx, dy].every(Number.isFinite)) return false;
+      const proj = dx * axis.ux + dy * axis.uy;
+      if (proj < axis.minProj - padCells || proj > axis.maxProj + padCells) return false;
+      const perp = Math.abs(dx * -axis.uy + dy * axis.ux);
+      return perp <= widthCells;
+    };
+
+    for (const cell of signalData.cells.values()) {
+      if (!cell?.key || byKey.has(cell.key)) continue;
+      const score = heatTendrilCellScore(cell);
+      const active = Number(cell.metrics?.count || 0) > 0;
+      if (score < minScore && !(HEAT_TENDRIL_RULE.extensionIncludeActiveCells && active)) continue;
+      if (!inAxisEnvelope(cell)) continue;
+      candidates.set(cell.key, { cell, score });
+    }
+
+    const offsets = [
+      [-1, -1], [0, -1], [1, -1],
+      [-1, 0],           [1, 0],
+      [-1, 1],  [0, 1],  [1, 1]
+    ];
+    const queue = members.slice();
+    const queued = new Set(queue.map((cell) => cell.key));
+    let added = 0;
+
+    while (queue.length && added < maxAdded) {
+      const current = queue.shift();
+      for (const [dx, dy] of offsets) {
+        const key = `${current.ix + dx},${current.iy + dy}`;
+        if (byKey.has(key) || queued.has(key)) continue;
+        const candidate = candidates.get(key);
+        if (!candidate) continue;
+        byKey.set(key, candidate.cell);
+        queued.add(key);
+        queue.push(candidate.cell);
+        added += 1;
+        if (added >= maxAdded) break;
+      }
+    }
+
+    const extended = [...byKey.values()];
+    const capped = extended.length > HEAT_TENDRIL_RULE.maxCells
+      ? extended
+          .map((cell) => {
+            const dx = Number(cell.ix) - axis.cx;
+            const dy = Number(cell.iy) - axis.cy;
+            const perp = Math.abs(dx * -axis.uy + dy * axis.ux);
+            return { cell, perp, score: heatTendrilCellScore(cell) };
+          })
+          .sort((a, b) => a.perp - b.perp || b.score - a.score)
+          .slice(0, HEAT_TENDRIL_RULE.maxCells)
+          .map((row) => row.cell)
+      : extended;
+
+    return {
+      members: capped,
+      added: Math.max(0, capped.length - members.length),
+      axis
+    };
+  }
+
+  function heatPathNeighborRows(row, rowMap) {
+    const out = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const next = rowMap.get(`${row.cell.ix + dx},${row.cell.iy + dy}`);
+        if (next) out.push(next);
+      }
+    }
+    return out;
+  }
+
+  function heatPathEndpointPair(rows = [], rowMap = new Map()) {
+    if (rows.length < 2) return null;
+    const axis = heatTendrilAxis(rows.map((row) => row.cell));
+    const candidates = new Map();
+    const addCandidate = (row) => {
+      if (row?.cell?.key) candidates.set(row.cell.key, row);
+    };
+
+    for (const row of rows) {
+      const neighborCount = heatPathNeighborRows(row, rowMap).length;
+      if (neighborCount <= 2) addCandidate(row);
+    }
+
+    if (axis) {
+      const projected = rows
+        .map((row) => {
+          const dx = Number(row.cell.ix) - axis.cx;
+          const dy = Number(row.cell.iy) - axis.cy;
+          return { row, proj: dx * axis.ux + dy * axis.uy };
+        })
+        .sort((a, b) => a.proj - b.proj);
+      const take = Math.max(3, Math.min(10, Math.ceil(rows.length / 10)));
+      for (const item of projected.slice(0, take)) addCandidate(item.row);
+      for (const item of projected.slice(-take)) addCandidate(item.row);
+    }
+
+    for (const row of rows.slice(0, 8)) addCandidate(row);
+
+    const limit = Math.max(8, Number(HEAT_TENDRIL_RULE.maxEndpointCandidates) || 34);
+    const list = [...candidates.values()]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+    const pool = list.length >= 2 ? list : rows.slice(0, Math.min(rows.length, limit));
+
+    let best = null;
+    for (let i = 0; i < pool.length; i++) {
+      for (let j = i + 1; j < pool.length; j++) {
+        const a = pool[i];
+        const b = pool[j];
+        const distanceCells = Math.hypot(a.cell.ix - b.cell.ix, a.cell.iy - b.cell.iy);
+        const score = distanceCells * 0.78 + Math.min(a.score, b.score) * 4.2;
+        if (!best || score > best.score) best = { start: a, end: b, distanceCells, score };
+      }
+    }
+    return best;
+  }
+
+  function solveHeatPathVector(rows = []) {
+    if (!HEAT_TENDRIL_RULE.vectorMode || rows.length < 2) return null;
+    const rowMap = new Map(rows.map((row) => [row.cell.key, row]));
+    const pair = heatPathEndpointPair(rows, rowMap);
+    if (!pair || pair.distanceCells < Math.max(2, Number(HEAT_TENDRIL_RULE.minVectorLengthCells) || 5)) return null;
+
+    const startKey = pair.start.cell.key;
+    const endKey = pair.end.cell.key;
+    const distances = new Map([[startKey, 0]]);
+    const previous = new Map();
+    const unsettled = new Set([startKey]);
+    const visited = new Set();
+
+    while (unsettled.size) {
+      let currentKey = null;
+      let currentDistance = Infinity;
+      for (const key of unsettled) {
+        const distance = distances.get(key) ?? Infinity;
+        if (distance < currentDistance) {
+          currentDistance = distance;
+          currentKey = key;
+        }
+      }
+      if (!currentKey) break;
+      unsettled.delete(currentKey);
+      if (visited.has(currentKey)) continue;
+      visited.add(currentKey);
+      if (currentKey === endKey) break;
+
+      const current = rowMap.get(currentKey);
+      if (!current) continue;
+      for (const next of heatPathNeighborRows(current, rowMap)) {
+        if (visited.has(next.cell.key)) continue;
+        const stepCells = Math.hypot(next.cell.ix - current.cell.ix, next.cell.iy - current.cell.iy);
+        const heatReward = clamp01((current.score + next.score) / 2);
+        const edgeReward = clamp01((Number(current.edgeScore || 0) + Number(next.edgeScore || 0)) / 2);
+        const cost = stepCells * (1.38 - heatReward * 0.48 - edgeReward * 0.42);
+        const candidateDistance = currentDistance + cost;
+        if (candidateDistance < (distances.get(next.cell.key) ?? Infinity)) {
+          distances.set(next.cell.key, candidateDistance);
+          previous.set(next.cell.key, currentKey);
+          unsettled.add(next.cell.key);
+        }
+      }
+    }
+
+    if (!distances.has(endKey)) return null;
+    const pathKeys = [];
+    let cursor = endKey;
+    while (cursor) {
+      pathKeys.push(cursor);
+      if (cursor === startKey) break;
+      cursor = previous.get(cursor);
+    }
+    pathKeys.reverse();
+    if (pathKeys[0] !== startKey) return null;
+
+    const pathRows = pathKeys.map((key) => rowMap.get(key)).filter(Boolean);
+    if (pathRows.length < Math.max(2, Number(HEAT_TENDRIL_RULE.minVectorLengthCells) || 5)) return null;
+
+    const gridPoints = pathRows.map((row) => ({ x: row.cell.ix + 0.5, y: row.cell.iy + 0.5 }));
+    const simplifiedPoints = simplifyOpenContourPath(
+      gridPoints,
+      Math.max(0.05, Number(HEAT_TENDRIL_RULE.simplifyVectorToleranceCells) || 0.55)
+    );
+    const polyline = simplifiedPoints.map((point) => gridLatLng(point.x, point.y));
+    let lengthM = 0;
+    for (let i = 1; i < pathRows.length; i++) {
+      lengthM += Math.hypot(
+        pathRows[i].cell.ix - pathRows[i - 1].cell.ix,
+        pathRows[i].cell.iy - pathRows[i - 1].cell.iy
+      ) * GRID_SIZE_M;
+    }
+
+    return {
+      cells: pathRows.map((row) => row.cell),
+      cellKeys: pathKeys,
+      polyline,
+      lengthM,
+      endpointDistanceCells: pair.distanceCells,
+      meanScore: pathRows.reduce((sum, row) => sum + row.score, 0) / pathRows.length,
+      peakScore: Math.max(...pathRows.map((row) => row.score)),
+      simplifiedPointCount: polyline.length
+    };
+  }
+
+  function heatTendrilComponents(signalData) {
+    if (!HEAT_TENDRIL_RULE.enabled) return [];
+
+    const passes = heatPathPasses();
+    const components = [];
+    const fallbackCandidates = [];
+    const rejected = {};
+    const passDebug = [];
+    let scoredCellTotal = 0;
+    const offsets = [
+      [-1, -1], [0, -1], [1, -1],
+      [-1, 0],           [1, 0],
+      [-1, 1],  [0, 1],  [1, 1]
+    ];
+
+    for (const pass of passes) {
+      const scored = new Map();
+      for (const cell of signalData.cells.values()) {
+        const heatScore = heatBaseScore(cell);
+        const edgeScore = heatLocalEdgeScore(cell, signalData);
+        const score = clamp01(
+          heatScore * Number(pass.heatWeight ?? 1) +
+          edgeScore * Number(pass.edgeWeight ?? 0)
+        );
+        if (heatScore < Number(pass.minHeat || 0)) continue;
+        if (edgeScore < Number(pass.minEdge || 0)) continue;
+        if (
+          !pass.allowPlateau &&
+          heatScore >= HEAT_TENDRIL_RULE.saturatedHeatThreshold &&
+          edgeScore < Math.max(Number(pass.minEdge || 0), Number(HEAT_TENDRIL_RULE.saturatedMinEdgeScore || 0))
+        ) {
+          continue;
+        }
+        if (score < Number(pass.minScore ?? HEAT_TENDRIL_RULE.minScore)) continue;
+        scored.set(cell.key, {
+          cell,
+          score,
+          heatScore,
+          edgeScore,
+          passName: pass.name || "heat"
+        });
+      }
+
+      const skeletonized = skeletonizeHeatRows(signalData, scored, pass);
+      const graphRows = skeletonized.rows;
+      scoredCellTotal += graphRows.size;
+      passDebug.push({
+        name: pass.name || "heat",
+        scoredCells: scored.size,
+        graphCells: graphRows.size,
+        skeletonCells: skeletonized.skeletonCells,
+        skeletonized: skeletonized.used
+      });
+      const visited = new Set();
+
+    for (const key of graphRows.keys()) {
+      if (visited.has(key)) continue;
+      const stack = [key];
+      const rows = [];
+      visited.add(key);
+
+      while (stack.length) {
+        const currentKey = stack.pop();
+        const row = graphRows.get(currentKey);
+        if (!row) continue;
+        rows.push(row);
+
+        for (const [dx, dy] of offsets) {
+          const nextKey = `${row.cell.ix + dx},${row.cell.iy + dy}`;
+          if (!graphRows.has(nextKey) || visited.has(nextKey)) continue;
+          visited.add(nextKey);
+          stack.push(nextKey);
+        }
+      }
+
+      if (rows.length < HEAT_TENDRIL_RULE.minCells) continue;
+      rows.sort((a, b) => b.score - a.score);
+      const keptRows = rows.slice(0, HEAT_TENDRIL_RULE.maxCells);
+      const vector = solveHeatPathVector(keptRows);
+      const baseMembers = vector?.cells?.length ? vector.cells : keptRows.map(row => row.cell);
+      const extension = vector
+        ? { members: baseMembers, added: 0, axis: heatTendrilAxis(baseMembers) }
+        : extendHeatTendrilMembers(signalData, baseMembers);
+      const members = extension.members;
+      const component = componentFromMembers(members, keptRows[0].cell);
+      if (!component) continue;
+
+      const shape = constrainedShapeMetrics(members, component.peak);
+      const peakScore = vector?.peakScore ?? keptRows[0]?.score ?? 0;
+      const meanScore = vector?.meanScore ?? members.reduce((sum, cell) => sum + heatTendrilCellScore(cell), 0) / members.length;
+      const rejectionReasons = [];
+      if (peakScore < HEAT_TENDRIL_RULE.minPeakScore) rejectionReasons.push("peak_score");
+      if (Number(shape.elongation_ratio || 1) < HEAT_TENDRIL_RULE.minElongation) rejectionReasons.push("elongation");
+      if (Number(shape.major_cells || 0) < HEAT_TENDRIL_RULE.minMajorCells) rejectionReasons.push("major_length");
+      if (Number(shape.minor_cells || 999) > HEAT_TENDRIL_RULE.maxMinorCells) rejectionReasons.push("minor_width");
+      if (Number(shape.perimeter_complexity || 0) > HEAT_TENDRIL_RULE.maxPerimeterComplexity) rejectionReasons.push("perimeter_complexity");
+
+      const candidate = {
+        ...component,
+        heatTendrilScore: meanScore,
+        heatTendrilPeakScore: peakScore,
+        heatTendrilShape: shape,
+        heatTendrilExtendedCells: extension.added,
+        heatTendrilPass: keptRows[0]?.passName || "heat",
+        heatPathVector: vector,
+        heatTendrilAxis: extension.axis ? {
+          angle_deg: Number(Number(extension.axis.shape?.axis_angle_deg || 0).toFixed(1)),
+          width_cells: HEAT_TENDRIL_RULE.extensionWidthCells,
+          pad_cells: HEAT_TENDRIL_RULE.extensionPadCells
+        } : null,
+        clusterSizeScore: clamp01(Math.log1p(members.length) / Math.log1p(HEAT_TENDRIL_RULE.maxCells)),
+        clusterPeakScore: clamp01(peakScore),
+        clusterPreferenceScore: clamp01(meanScore * 0.48 + peakScore * 0.32 + Math.min(1, Number(shape.major_cells || 0) / 18) * 0.2)
+      };
+
+      if (rejectionReasons.length) {
+        for (const reason of rejectionReasons) rejected[reason] = (rejected[reason] || 0) + 1;
+        fallbackCandidates.push({ ...candidate, heatTendrilRelaxed: true, heatTendrilRejected: rejectionReasons });
+        continue;
+      }
+
+      components.push(candidate);
+    }
+    }
+
+    if (!components.length && HEAT_TENDRIL_RULE.fallbackEnabled) {
+      const fallback = fallbackCandidates
+        .filter((component) =>
+          Number(component.componentCellCount || 0) >= HEAT_TENDRIL_RULE.fallbackMinCells &&
+          Number(component.heatTendrilPeakScore || 0) >= HEAT_TENDRIL_RULE.fallbackMinPeakScore
+        )
+        .sort((a, b) =>
+          b.clusterPreferenceScore - a.clusterPreferenceScore ||
+          b.componentCellCount - a.componentCellCount
+        )
+        .slice(0, Math.max(1, Number(HEAT_TENDRIL_RULE.maxFallbackComponents) || 1));
+      components.push(...fallback);
+    }
+
+    const sorted = components.sort((a, b) =>
+      b.clusterPreferenceScore - a.clusterPreferenceScore ||
+      b.componentCellCount - a.componentCellCount
+    );
+    sorted.debug = {
+      scoredCells: scoredCellTotal,
+      passes: passDebug,
+      skeletonizedPasses: passDebug.filter((pass) => pass.skeletonized).length,
+      skeletonCells: passDebug.reduce((sum, pass) => sum + Number(pass.skeletonCells || 0), 0),
+      fallbackCandidates: fallbackCandidates.length,
+      extendedCells: sorted.reduce((sum, component) => sum + Number(component.heatTendrilExtendedCells || 0), 0),
+      vectorSegments: sorted.filter((component) => component.heatPathVector?.polyline?.length >= 2).length,
+      rejected
+    };
+    return sorted;
+  }
+
+  function heatTendrilPlaceContext(component) {
+    const shape = component.heatTendrilShape || constrainedShapeMetrics(component.members || [], component.peak);
+    return {
+      primary_label: "heat corridor in view",
+      secondary_label: null,
+      place_type: "heatmap tendril corridor",
+      spatial_relation: "along",
+      centroid: component.peak ? { lat: component.peak.lat, lng: component.peak.lng } : null,
+      label_confidence: 0.64,
+      label_source: "heatmap_tendril_context",
+      geometry_context: {
+        ...shape,
+        heat_tendril: true,
+        corridor_kind: "heatmap",
+        corridor_relation: "along",
+        label_phrase: "along a heat corridor"
+      }
+    };
+  }
+
+  function heatTendrilNicheFromComponent({ component, origin, caps, activeLens, heatMetric }) {
+    const agg = aggregateComponent(component);
+    const ll = agg.center;
+    const distanceM = L.latLng(origin.lat, origin.lng).distanceTo(L.latLng(ll.lat, ll.lng));
+    const m = agg.metrics;
+    const placeContext = heatTendrilPlaceContext(component);
+    const lensPeak = clamp01(m.lensPeakSignal);
+    const zStrength = clamp01((Number(m.lensPeakAbsZ) || 0) / 5);
+    const tendrilStrength = clamp01((component.heatTendrilScore || 0) * 0.54 + (component.heatTendrilPeakScore || 0) * 0.34 + Math.min(1, Number(component.heatTendrilShape?.major_cells || 0) / 20) * 0.12);
+    const bio = clamp01((Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.58 + m.activeRatio * 0.14 + tendrilStrength * 0.28);
+    const need = clamp01((1 - m.activeRatio) * 0.42 + (m.observers <= 1 ? 0.1 : 0) + (1 - m.lensMeanSignal) * 0.18);
+    const stale = clamp01(daysSince(m.latestObservedMs) / 240);
+    const questability = clamp01(tendrilStrength * 0.48 + zStrength * 0.16 + lensPeak * 0.1 + bio * 0.14 + need * 0.08 + stale * 0.04);
+    const initialFocus = topTaxonomySubject({
+      ...m,
+      active_lens: activeLens,
+      heat_metric: heatMetric
+    });
+    const taxonFocus = initialFocus?.label
+      ? { iconic: initialFocus.rank || "Any", label: titleSubjectCase(initialFocus.label), source_rank: initialFocus.rank || null }
+      : { iconic: "Any", label: "life" };
+    const coreCell = component.peak ? `${component.peak.ix},${component.peak.iy}` : "";
+    const sourceKey = [
+      "gw-local-niche-v4",
+      activeLens,
+      isFovSampling() ? "fov" : `${numericRadiusM(500)}m`,
+      "heat-tendril",
+      quantizedCoreCell(component.peak, 8),
+      agg.componentId
+    ].join(":");
+
+    const niche = {
+      source_key: sourceKey,
+      title: "",
+      short_title: "",
+      description: "A GridWild corridor niche generated directly from a long, thin heatmap tendril inside the current FOV.",
+      niche_type: "edge_habitat_niche",
+      theme: "Heat corridor / corridor niche",
+      centroid_lat: ll.lat,
+      centroid_lng: ll.lng,
+      geometry: boundsForCells(agg.minIx, agg.minIy, agg.maxIx, agg.maxIy),
+      grid_cell_ids: agg.cells,
+      radius_m: Math.round(Math.max(42, Math.min(260, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.65))),
+      scale_level: "constrained-geometry:heat corridor",
+      taxon_focus: taxonFocus,
+      seasonal_profile: { mode: "heat_tendril_runtime_v1" },
+      evidence_summary: evidenceFor("edge_habitat_niche", m, placeContext),
+      metrics: {
+        ...m,
+        algorithm: "heat_tendril_niche_v1",
+        active_lens: activeLens,
+        heat_metric: heatMetric,
+        sampling_extent: isFovSampling() ? "fov" : "radius_m",
+        sampling_radius_m: isFovSampling() ? null : numericRadiusM(500),
+        emphasis: state.controls.emphasis,
+        z_threshold: Number(state.controls.lensZThreshold || 2.5),
+        core_cell: coreCell,
+        peak_cell: coreCell,
+        peak_signal: Number(lensPeak.toFixed(3)),
+        peak_z: Number((m.lensPeakZ || 0).toFixed(3)),
+        peak_abs_z: Number((m.lensPeakAbsZ || 0).toFixed(3)),
+        component_id: agg.componentId,
+        component_cell_count: Number(m.componentCellCount || agg.cells.length),
+        cluster_priority_score: Number((component.clusterPreferenceScore || tendrilStrength).toFixed(3)),
+        geometry_type: "corridor-buffer",
+        scale_class: "corridor niche",
+        display_geometry: "corridor-buffer",
+        interaction_radius_m: Math.round(Math.max(56, Math.min(320, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.9))),
+        heat_tendril_score: Number((component.heatTendrilScore || 0).toFixed(3)),
+        heat_tendril_peak_score: Number((component.heatTendrilPeakScore || 0).toFixed(3)),
+        heat_tendril_pass: component.heatTendrilPass || null,
+        heat_tendril_relaxed: Boolean(component.heatTendrilRelaxed),
+        heat_tendril_rejected_checks: Array.isArray(component.heatTendrilRejected) ? component.heatTendrilRejected : [],
+        heat_tendril_extended_cells: Number(component.heatTendrilExtendedCells || 0),
+        heat_tendril_axis: component.heatTendrilAxis || null,
+        heat_path_polyline: Array.isArray(component.heatPathVector?.polyline) ? component.heatPathVector.polyline : [],
+        heat_path_length_m: Number((component.heatPathVector?.lengthM || 0).toFixed(1)),
+        heat_path_cell_count: Number(component.heatPathVector?.cells?.length || 0),
+        heat_path_simplified_points: Number(component.heatPathVector?.simplifiedPointCount || 0),
+        geometry_contract: {
+          ok: true,
+          reason: component.heatPathVector
+            ? "heat_path_vector"
+            : component.heatTendrilRelaxed ? "heat_tendril_relaxed_fallback" : "heat_tendril",
+          min_elongation: HEAT_TENDRIL_RULE.minElongation,
+          min_major_cells: HEAT_TENDRIL_RULE.minMajorCells,
+          max_minor_cells: HEAT_TENDRIL_RULE.maxMinorCells
+        },
+        geometry_context: placeContext.geometry_context || null,
+        member_cells_are_analysis_object: true
+      },
+      confidence: clamp01(0.38 + questability * 0.28 + tendrilStrength * 0.22 + zStrength * 0.12),
+      novelty_score: need,
+      sampling_need_score: need,
+      biodiversity_score: bio,
+      questability_score: questability,
+      place_context: placeContext,
+      primary_place_label: placeContext.primary_label || null,
+      secondary_place_label: placeContext.secondary_label || null,
+      place_label_confidence: placeContext.label_confidence || 0,
+      generated_by: "gridwild_heat_tendril_niche_v1",
+      visibility: "public",
+      status: "active",
+      distance_m: Math.round(distanceM),
+      comment_count: 0,
+      _runtimeOnly: true
+    };
+
+    niche.title = buildNicheDisplayTitle(niche);
+    niche.short_title = niche.title.replace(/^(Sample|Survey|Look for|Revisit|Check)\s+/i, "");
+    return niche;
+  }
+
+  function generateHeatTendrilCandidates(signalData, origin, caps, activeLens, heatMetric) {
+    if (!HEAT_TENDRIL_RULE.enabled) return { rows: [], components: [], debug: { emitted: 0 } };
+    const components = heatTendrilComponents(signalData);
+    const detectorDebug = components.debug || {};
+    const rows = components.map((component) =>
+      heatTendrilNicheFromComponent({ component, origin, caps, activeLens, heatMetric })
+    );
+    return {
+      rows,
+      components,
+      debug: {
+        emitted: rows.length,
+        components: components.length,
+        scoredCells: detectorDebug.scoredCells || 0,
+        fallbackCandidates: detectorDebug.fallbackCandidates || 0,
+        extendedCells: detectorDebug.extendedCells || 0,
+        vectorSegments: detectorDebug.vectorSegments || 0,
+        passes: detectorDebug.passes || [],
+        skeletonizedPasses: detectorDebug.skeletonizedPasses || 0,
+        skeletonCells: detectorDebug.skeletonCells || 0,
+        rejected: detectorDebug.rejected || {},
+        minScore: HEAT_TENDRIL_RULE.minScore,
+        minElongation: HEAT_TENDRIL_RULE.minElongation
+      }
+    };
+  }
+
+  function constrainedDedupeRows(rows = []) {
+    const accepted = [];
+    const sorted = rows.slice().sort((a, b) =>
+      nicheClusterPriority(b) - nicheClusterPriority(a) ||
+      Number(b.questability_score || 0) - Number(a.questability_score || 0)
+    );
+
+    for (const row of sorted) {
+      const duplicate = accepted.some((kept) => {
+        const rowCorridor = row.metrics?.geometry_type === "corridor-buffer" || row.metrics?.algorithm === "trail_corridor_niche_v1";
+        const keptCorridor = kept.metrics?.geometry_type === "corridor-buffer" || kept.metrics?.algorithm === "trail_corridor_niche_v1";
+        if (rowCorridor !== keptCorridor) return false;
+        const rowAlgorithm = String(row.metrics?.algorithm || "");
+        const keptAlgorithm = String(kept.metrics?.algorithm || "");
+        const rowDebugCorridor = ["trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(rowAlgorithm);
+        const keptDebugCorridor = ["trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(keptAlgorithm);
+        if (rowDebugCorridor && keptDebugCorridor && rowAlgorithm !== keptAlgorithm) return false;
+
+        const overlap = nicheCellJaccard(row.grid_cell_ids || [], kept.grid_cell_ids || []);
+        const peakDistance = peakDistanceCells(
+          {
+            peak_ix: Number(String(row.metrics?.peak_cell || "").split(",")[0]),
+            peak_iy: Number(String(row.metrics?.peak_cell || "").split(",")[1])
+          },
+          {
+            peak_ix: Number(String(kept.metrics?.peak_cell || "").split(",")[0]),
+            peak_iy: Number(String(kept.metrics?.peak_cell || "").split(",")[1])
+          }
+        );
+        const sameTrail = rowCorridor && keptCorridor &&
+          row.metrics?.trail_feature_id &&
+          row.metrics?.trail_feature_id === kept.metrics?.trail_feature_id;
+        if (sameTrail) return overlap >= 0.35;
+        return overlap >= 0.42 || peakDistance <= 2.25;
+      });
+      if (!duplicate) accepted.push(row);
+      if (accepted.length >= Math.max(1, Number(state.controls.maxCandidates) || 8)) break;
+    }
+
+    return accepted;
+  }
+
+  function generateConstrainedGeometryCandidates(origin = getOrigin(), options = {}) {
     if (typeof map === "undefined" || typeof GRID_SIZE_M === "undefined") return [];
+    const includeConstrained = options.includeConstrained !== false;
+    const includeCorridors = options.includeCorridors === true;
 
     const signalData = lensSignalMap(origin);
-    const components = connectedComponents(signalData);
-    state.detectorDebug = {
-      signalData,
-      components,
-      zThreshold: Number(state.controls.lensZThreshold || 2.5),
-      sampledCellCount: signalData.cells.size,
-      thresholdCellCount: [...signalData.cells.values()].filter(cell => Math.abs(cell.z) > Number(state.controls.lensZThreshold || 2.5)).length
-    };
+    const raster = buildSignalRaster(signalData);
+    if (!raster) {
+      state.detectorDebug = {
+        signalData,
+        components: [],
+        sampledCellCount: signalData?.cells?.size || 0,
+        thresholdCellCount: 0,
+        constrainedGeometry: {
+          error: "Sampling field is too large or unavailable for constrained geometry."
+        }
+      };
+      state.constrainedGeometryDebug = state.detectorDebug.constrainedGeometry;
+      return [];
+    }
+
     const center = cellForLatLng(origin.lat, origin.lng);
     const capRadiusCells = isFovSampling()
       ? Math.max(
@@ -1720,160 +3712,124 @@
         )
       : Math.max(6, Math.round(numericRadiusM(500) / GRID_SIZE_M));
     const caps = scanCaps(center, capRadiusCells);
-    const weights = scoreWeights();
-    const raw = [];
-    const emittedComponentIds = new Set();
+    const activeLens = window.__gwState?.activeLens || "classic";
+    const heatMetric = window.__gwState?.heatMetric || "count";
+    const rows = [];
+    const acceptedComponents = [];
+    const rejected = {};
+    const debugRules = [];
+    let trailDebug = { trails: 0, emitted: 0, disabled: true };
+    let heatTendrilDebug = { components: 0, emitted: 0 };
 
-    for (const component of components) {
-      const agg = aggregateComponent(component);
-      if (emittedComponentIds.has(agg.componentId)) continue;
-      emittedComponentIds.add(agg.componentId);
+    if (includeConstrained) {
+      for (const rule of CONSTRAINED_GEOMETRY_RULES) {
+        const blurred = blurRaster(raster.z, raster.width, raster.height, rule.sigma);
+        const assigned = new Set();
+        const cores = constrainedFindCores(signalData, raster, blurred, rule);
+        let emitted = 0;
 
-      const ll = agg.center;
-      const distanceM = L.latLng(origin.lat, origin.lng).distanceTo(L.latLng(ll.lat, ll.lng));
-      const m = agg.metrics;
-      if (m.count <= 0 && m.activeRatio <= 0.05) continue;
+        for (const core of cores) {
+          if (assigned.has(core.cell.key)) continue;
+          const members = constrainedGrowNiche(signalData, raster, blurred, rule, core, assigned);
+          if (!members.length) continue;
 
-      const bio = clamp01((Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.68 + m.activeRatio * 0.17 + m.lensPeakSignal * 0.15);
-      const need = clamp01((1 - m.activeRatio) * 0.55 + (m.count > 0 && m.count < caps.count ? 0.22 : 0) + (m.observers <= 1 ? 0.08 : 0) + (1 - m.lensMeanSignal) * 0.15);
-      const stale = clamp01(daysSince(m.latestObservedMs) / 240);
-      const edge = detectEdgeScore(ll.lat, ll.lng);
-      const lensPeak = clamp01(m.lensPeakSignal);
-      const zStrength = clamp01((Number(m.lensPeakAbsZ) || 0) / 5);
-      const componentSizeScore = clamp01(Math.log1p(Number(m.componentCellCount) || 1) / Math.log1p(80));
-      const clusterPriority = clamp01(Number(m.clusterPreferenceScore) || 0);
-      const questability = clamp01(
-        clusterPriority * 0.34 +
-        zStrength * 0.18 +
-        componentSizeScore * 0.10 +
-        lensPeak * 0.10 +
-        bio * weights.bio * 0.72 +
-        need * weights.need * 0.72 +
-        stale * weights.stale * 0.72 +
-        edge * weights.edge * 0.72 +
-        (isFovSampling() ? 0.03 : Math.max(0, 1 - distanceM / numericRadiusM(500)) * 0.06)
-      );
+          const component = constrainedComponentFromMembers(members, core.cell, rule);
+          if (!component) continue;
 
-      if (questability < 0.18) continue;
+          const placeContext = resolveGeometricPlaceContext(
+            component.peak.lat,
+            component.peak.lng,
+            component,
+            resolvePlaceContext(component.peak.lat, component.peak.lng)
+          );
+          const contract = passesConstrainedContract(component, rule, placeContext);
+          if (!contract.ok) {
+            rejected[contract.reason] = (rejected[contract.reason] || 0) + 1;
+            continue;
+          }
 
-      const placeContext = resolveGeometricPlaceContext(
-        ll.lat,
-        ll.lng,
-        component,
-        resolvePlaceContext(ll.lat, ll.lng)
-      );
-      const nicheType = chooseType({ bio, need, stale, edge }, m, placeContext);
-      const theme = themeFor(nicheType, placeContext);
-      const activeLens = window.__gwState?.activeLens || "classic";
-      const heatMetric = window.__gwState?.heatMetric || "count";
-      const initialFocus = topTaxonomySubject({
-        ...m,
-        active_lens: activeLens,
-        heat_metric: heatMetric
-      });
-      const taxonFocus = theme.includes("Plants") || nicheType === "edge_habitat_niche"
-        ? { iconic: "Plantae", label: "plants" }
-        : initialFocus?.label
-          ? { iconic: initialFocus.rank || "Any", label: titleSubjectCase(initialFocus.label), source_rank: initialFocus.rank || null }
-          : { iconic: "Any", label: "life" };
-      const niche = {
-        source_key: [
-          "gw-local-niche-v3",
-          activeLens,
-          isFovSampling() ? "fov" : `${numericRadiusM(500)}m`,
-          `z${Number(state.controls.lensZThreshold || 2.5).toFixed(1)}`,
-          agg.componentId
-        ].join(":"),
-        title: "",
-        short_title: "",
-        description: "A GridWild interpreted ecological opportunity generated from a connected component in the current Lens heat signal.",
-        niche_type: nicheType,
-        theme,
-        centroid_lat: ll.lat,
-        centroid_lng: ll.lng,
-        geometry: boundsForCells(agg.minIx, agg.minIy, agg.maxIx, agg.maxIy),
-        grid_cell_ids: agg.cells,
-        radius_m: Math.round(Math.max(24, Math.sqrt(Math.max(1, m.componentCellCount || agg.cells.length)) * GRID_SIZE_M * 1.25)),
-        scale_level: `lens-component:z>${Number(state.controls.lensZThreshold || 2.5).toFixed(1)}`,
-        taxon_focus: taxonFocus,
-        seasonal_profile: { mode: "current_lens_inferred_v1" },
-        evidence_summary: evidenceFor(nicheType, m, placeContext),
-        metrics: {
-          ...m,
-          algorithm: "current_lens_z_connected_components_v3",
-          active_lens: activeLens,
-          heat_metric: heatMetric,
-          sampling_extent: isFovSampling() ? "fov" : "radius_m",
-          sampling_radius_m: isFovSampling() ? null : numericRadiusM(500),
-          emphasis: state.controls.emphasis,
-          z_threshold: Number(state.controls.lensZThreshold || 2.5),
-          component_min_cells: Number(state.controls.componentMinCells || 10),
-          component_id: agg.componentId,
-          component_cell_count: Number(m.componentCellCount || agg.cells.length),
-          cluster_size_score: Number((Number(m.clusterSizeScore) || 0).toFixed(3)),
-          cluster_peak_score: Number((Number(m.clusterPeakScore) || 0).toFixed(3)),
-          cluster_priority_score: Number(clusterPriority.toFixed(3)),
-          peak_cell: `${component.peak.ix},${component.peak.iy}`,
-          peak_signal: Number(lensPeak.toFixed(3)),
-          peak_z: Number((m.lensPeakZ || 0).toFixed(3)),
-          peak_abs_z: Number((m.lensPeakAbsZ || 0).toFixed(3)),
-          mean_z: Number((m.lensMeanZ || 0).toFixed(3)),
-          mean_abs_z: Number((m.lensMeanAbsZ || 0).toFixed(3)),
-          mean_signal: Number(m.lensMeanSignal.toFixed(3)),
-          distance_m: Math.round(distanceM),
-          geometry_context: placeContext.geometry_context || null
-        },
-        confidence: clamp01(0.35 + placeContext.label_confidence * 0.24 + questability * 0.29 + lensPeak * 0.12),
-        novelty_score: need,
-        sampling_need_score: need,
-        biodiversity_score: bio,
-        questability_score: questability,
-        place_context: placeContext,
-        primary_place_label: placeContext.primary_label || null,
-        secondary_place_label: placeContext.secondary_label || null,
-        place_label_confidence: placeContext.label_confidence || 0,
-        generated_by: "gridwild_current_lens_z_connected_components_v3",
-        visibility: "public",
-        status: "active",
-        distance_m: Math.round(distanceM),
-        comment_count: 0,
-        _runtimeOnly: true
-      };
+          const niche = constrainedNicheFromComponent({
+            component,
+            rule,
+            origin,
+            caps,
+            activeLens,
+            heatMetric,
+            contract
+          });
+          if (Number(niche.questability_score || 0) < 0.16) continue;
 
-      niche.title = buildNicheDisplayTitle(niche);
-      niche.short_title = niche.title.replace(/^(Sample|Survey|Look for|Revisit|Check)\s+/i, "");
-      raw.push(niche);
+          rows.push(niche);
+          acceptedComponents.push(component);
+          emitted += 1;
+        }
+
+        debugRules.push({
+          scale: rule.scale,
+          scaleClass: rule.scaleClass,
+          sigma: rule.sigma,
+          cores: cores.length,
+          emitted
+        });
+      }
     }
 
-    const byKey = new Map();
-    raw
-      .sort((a, b) =>
-        nicheClusterPriority(b) - nicheClusterPriority(a) ||
-        Number(b.questability_score || 0) - Number(a.questability_score || 0)
-      )
-      .forEach((niche) => {
-        if (!byKey.has(niche.source_key)) byKey.set(niche.source_key, niche);
-      });
+    if (includeCorridors && NICHE_OSM_CONTEXT_ENABLED && TRAIL_CORRIDOR_RULE.enabled) {
+      const trailCorridors = generateTrailCorridorCandidates(signalData, origin, caps, activeLens, heatMetric);
+      rows.push(...trailCorridors.rows);
+      acceptedComponents.push(...trailCorridors.components);
+      trailDebug = trailCorridors.debug;
+    }
 
-    return [...byKey.values()].slice(0, Math.max(1, Number(state.controls.maxCandidates) || 8));
+    if (includeCorridors) {
+      const heatTendrils = generateHeatTendrilCandidates(signalData, origin, caps, activeLens, heatMetric);
+      rows.push(...heatTendrils.rows);
+      acceptedComponents.push(...heatTendrils.components);
+      heatTendrilDebug = heatTendrils.debug;
+    }
+
+    const capped = constrainedDedupeRows(rows);
+    state.detectorDebug = {
+      signalData,
+      components: acceptedComponents,
+      zThreshold: Number(state.controls.lensZThreshold || 2.5),
+      sampledCellCount: signalData.cells.size,
+      thresholdCellCount: [...signalData.cells.values()].filter(cell => Math.abs(cell.z) > Number(state.controls.lensZThreshold || 2.5)).length,
+      constrainedGeometry: {
+        algorithm: includeCorridors ? "corridor_sampling_v1" : "constrained_geometry_niche_v1",
+        activeLens,
+        heatMetric,
+        includeConstrained,
+        includeCorridors,
+        rules: debugRules,
+        trailCorridors: trailDebug,
+        heatTendrils: heatTendrilDebug,
+        rejected,
+        resultCount: capped.length
+      }
+    };
+    state.constrainedGeometryDebug = state.detectorDebug.constrainedGeometry;
+
+    return capped;
   }
 
   function nicheClusterPriority(niche) {
     const metrics = niche?.metrics || {};
     const explicit = Number(metrics.cluster_priority_score ?? metrics.clusterPreferenceScore);
-    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    const heatBoost = isHeatTendrilNiche(niche) ? 0.55 : 0;
+    if (Number.isFinite(explicit) && explicit > 0) return explicit + heatBoost;
 
     const cells = Number(metrics.component_cell_count || metrics.componentCellCount || metrics.totalCells || 0);
     const meanAbsZ = Number(metrics.mean_abs_z || metrics.lensMeanAbsZ || metrics.meanAbsZ || 0);
     return clamp01(
       clamp01(Math.log1p(cells) / Math.log1p(100)) * 0.5 +
       clamp01(meanAbsZ / 6) * 0.5
-    );
+    ) + heatBoost;
   }
 
-  function mergeNiches(serverNiches, generatedNiches) {
+  function mergeNiches(...nicheGroups) {
     const byKey = new Map();
-    for (const row of [...serverNiches, ...generatedNiches]) {
+    for (const row of nicheGroups.flat()) {
       const niche = retitleNiche(row);
       const key = niche.source_key || niche.id || `${niche.centroid_lat},${niche.centroid_lng}`;
       const current = byKey.get(key);
@@ -1903,12 +3859,13 @@
         });
       }
     }
-    return [...byKey.values()]
+    const sorted = [...byKey.values()]
       .sort((a, b) =>
         nicheClusterPriority(b) - nicheClusterPriority(a) ||
         Number(b.questability_score || 0) - Number(a.questability_score || 0)
-      )
-      .slice(0, Math.max(1, Number(state.controls.maxCandidates) || 8));
+      );
+
+    return sorted;
   }
 
   function updateNicheDistances(origin = getOrigin()) {
@@ -1925,19 +3882,49 @@
     });
   }
 
+  function samplingModeConfig(mode = "niches") {
+    if (mode === "corridors") {
+      return {
+        mode,
+        busyTitle: "Generating corridors",
+        busyDetail: "Tracing long, narrow Lens signals in the current field.",
+        coreTitle: "Finding corridor paths",
+        coreDetail: "Solving heat tendrils and trail-aligned signal runs.",
+        resultTitle: "Constraining corridors",
+        saveDetail: "generated corridor candidates",
+        completeTitle: "Corridor generation complete"
+      };
+    }
+
+    return {
+      mode: "niches",
+      busyTitle: "Sampling niches",
+      busyDetail: "Preparing the current Lens field.",
+      coreTitle: "Finding niche cores",
+      coreDetail: "Smoothing the current Lens field and locating local peaks.",
+      resultTitle: "Constraining geometry",
+      saveDetail: "generated niche candidates",
+      completeTitle: "Niche sampling complete"
+    };
+  }
+
   async function refreshLocalNiches(options = {}) {
     if (state.loading) {
-      showSamplingToast("Niche sampling already running", 55, "Waiting for the current pass to finish.");
+      showSamplingToast("Niche generation already running", 55, "Waiting for the current pass to finish.");
       return;
     }
+    const modeConfig = samplingModeConfig(options.mode === "corridors" ? "corridors" : "niches");
     state.loading = true;
+    state.loadingAction = modeConfig.mode;
     state.lastError = null;
     state.persistWarning = null;
-    showSamplingToast("Sampling niches", 6, "Preparing the current Lens field.");
+    state.selectedId = null;
+    state.constrainedGeometryDebug = null;
+    showSamplingToast(modeConfig.busyTitle, 6, modeConfig.busyDetail);
     renderIntoPage();
     await yieldToPaint();
 
-    window.GridWildOsmFeaturesLayer?.scheduleFetch?.();
+    if (NICHE_OSM_CONTEXT_ENABLED) window.GridWildOsmFeaturesLayer?.scheduleFetch?.();
 
     const origin = getOrigin();
     let serverNiches = [];
@@ -1949,7 +3936,7 @@
       await yieldToPaint();
       const data = await window.GridWildAPI?.getNearbyLocalNiches?.(origin.lat, origin.lng, {
         radius_m: isFovSampling() ? 5000 : numericRadiusM(500),
-        limit: Number(state.controls.maxCandidates)
+        limit: Math.max(1, Number(state.controls.maxCandidates) || 8) * 3
       });
       if (data?.home_niche_id !== undefined) {
         window.__gwState = window.__gwState || {};
@@ -1958,9 +3945,14 @@
       const activeLens = window.__gwState?.activeLens || "classic";
       const zThreshold = Number(state.controls.lensZThreshold || 2.5);
       const extent = isFovSampling() ? "fov" : "radius_m";
+      const durableAlgorithms = [
+        "constrained_geometry_niche_v1",
+        "trail_corridor_niche_v1",
+        "heat_tendril_niche_v1"
+      ];
       serverNiches = (data?.niches || []).filter((niche) => {
         const metrics = niche.metrics || {};
-        return metrics.algorithm === "current_lens_z_connected_components_v3" &&
+        return durableAlgorithms.includes(metrics.algorithm) &&
           String(metrics.active_lens || "classic") === String(activeLens) &&
           String(metrics.sampling_extent || "radius_m") === extent &&
           Math.abs(Number(metrics.z_threshold || zThreshold) - zThreshold) < 0.01;
@@ -1970,17 +3962,21 @@
       console.warn("Local niche fetch failed:", err);
     }
 
-    showSamplingToast("Building detector mask", 42, "Z-scoring the current Lens heat matrix.");
-    await yieldToPaint();
-    generated = generateLocalCandidates(origin);
+    showSamplingToast(modeConfig.coreTitle, 42, modeConfig.coreDetail);
+    await yieldToastMoment(220);
+    generated = generateLocalCandidates(origin, { mode: modeConfig.mode });
+    const heatTendrilDebug = state.detectorDebug?.constrainedGeometry?.heatTendrils || {};
+    const heatTendrilCount = heatTendrilDebug.emitted || 0;
     showSamplingToast(
-      "Extracting connected components",
+      modeConfig.resultTitle,
       64,
-      `${state.detectorDebug?.thresholdCellCount || 0} threshold cells, ${state.detectorDebug?.components?.length || 0} components.`
+      modeConfig.mode === "corridors"
+        ? `${generated.length} corridor objects, ${heatTendrilCount} heat tendrils (${heatTendrilDebug.vectorSegments || 0} skeleton path vectors, ${heatTendrilDebug.skeletonCells || 0} skeleton cells).`
+        : `${state.detectorDebug?.constrainedGeometry?.resultCount || generated.length} niche objects.`
     );
-    await yieldToPaint();
+    await yieldToastMoment(SAMPLING_RESULT_TOAST_MS);
 
-    if (generated.length) {
+    if (generated.length && NICHE_OSM_CONTEXT_ENABLED) {
       showSamplingToast("Resolving place labels", 72, "Checking nearby OSM names, streets, and neighborhoods.");
       await yieldToPaint();
       generated = await enrichNichePlaceContexts(generated);
@@ -1988,7 +3984,7 @@
 
     if (generated.length && window.GridWildAPI?.upsertLocalNiches) {
       try {
-        showSamplingToast("Saving local niches", 82, `${generated.length} generated niche candidates.`);
+        showSamplingToast("Saving local niches", 82, `${generated.length} ${modeConfig.saveDetail}.`);
         await yieldToPaint();
         const generatedByKey = new Map(generated.map((niche) => [
           niche.source_key || niche.id || `${niche.centroid_lat},${niche.centroid_lng}`,
@@ -2030,23 +4026,30 @@
 
     showSamplingToast("Refreshing niche HUD", 92, "Drawing components, labels, and markers.");
     await yieldToPaint();
-    state.niches = mergeNiches(serverNiches, generated);
+    state.niches = mergeNiches(state.niches, serverNiches, generated);
+    const visibleCorridorCount = state.niches.filter(isCorridorNiche).length;
     state.loading = false;
+    state.loadingAction = null;
     drawNicheLayer();
     renderIntoPage();
     finishSamplingToast(
-      "Niche sampling complete",
-      `${state.niches.length} niches shown from ${state.detectorDebug?.sampledCellCount || 0} sampled cells.`
+      modeConfig.completeTitle,
+      `${state.niches.length} total objects shown; ${visibleCorridorCount} corridors in the HUD.`
     );
 
-    if (options.openFirst && state.niches[0]) {
-      openNicheDetail(state.niches[0].id || state.niches[0].source_key);
+    if (options.openFirst) {
+      const firstGenerated = generated[0] || null;
+      const first = firstGenerated
+        ? state.niches.find((niche) => nicheKey(niche) === nicheKey(firstGenerated)) || firstGenerated
+        : state.niches[0];
+      if (first) openNicheDetail(first.id || first.source_key);
     }
     } catch (err) {
       state.loading = false;
+      state.loadingAction = null;
       state.lastError = err;
       console.error("Niche sampling failed:", err);
-      failSamplingToast("Niche sampling failed", err.message || "Could not complete this sampling pass.");
+      failSamplingToast("Niche generation failed", err.message || "Could not complete this generation pass.");
       renderIntoPage();
     }
   }
@@ -3078,6 +5081,70 @@
     return hydrated;
   }
 
+  function hydrateNicheIntoState(key, options = {}) {
+    const niche = nicheByKey(key);
+    if (!niche) return Promise.resolve(null);
+
+    const hydrationKey = nicheHydrationKey(niche);
+    if (!hydrationKey) return Promise.resolve(niche);
+
+    if (nicheSummaryHydrationPending.has(hydrationKey)) {
+      return nicheSummaryHydrationPending.get(hydrationKey);
+    }
+
+    const selectedOnly = options.selectedOnly !== false;
+    const showToast = options.showToast === true;
+    const startedSelectedId = nicheKey(niche);
+
+    const job = hydrateNicheSummaryMetrics(niche, showToast
+      ? (done, total) => {
+          if (!total) return;
+          const progress = 14 + Math.round((done / total) * 78);
+          showSamplingToast(
+            "Hydrating niche summary",
+            progress,
+            `Loading month and taxonomy rows for ${done}/${total} cells.`
+          );
+        }
+      : null)
+      .then((hydrated) => {
+        const current = nicheByKey(startedSelectedId);
+        if (!current || !hydrated) return current || hydrated || niche;
+
+        const stillSelected = state.selectedId === startedSelectedId;
+        if (hydrated !== current) {
+          replaceNicheInState(hydrated);
+        }
+
+        if (!selectedOnly || stillSelected) {
+          drawNicheLayer();
+          renderIntoPage();
+        }
+
+        if (showToast && hydrated !== niche) {
+          finishSamplingToast(
+            "Niche summary hydrated",
+            "Monthly bars, life mix, and taxonomy data were refreshed from genera superchunks."
+          );
+        }
+
+        return hydrated;
+      })
+      .catch((err) => {
+        console.warn("Could not hydrate niche summary:", err);
+        if (showToast) {
+          failSamplingToast("Niche summary hydration failed", "Keeping the existing niche summary.");
+        }
+        return niche;
+      })
+      .finally(() => {
+        nicheSummaryHydrationPending.delete(hydrationKey);
+      });
+
+    nicheSummaryHydrationPending.set(hydrationKey, job);
+    return job;
+  }
+
   function renderNicheCalendarHtml(metrics = {}) {
     const totals = monthTotals(metrics);
     const max = Math.max(...totals, 0);
@@ -3300,37 +5367,46 @@
   function renderLocalNichesHtml() {
     injectStyles();
     const rows = state.niches || [];
+    const samplingNiches = state.loading && state.loadingAction === "niches";
+    const generatingCorridors = state.loading && state.loadingAction === "corridors";
 
     return `
       <div class="gw-card gw-local-niches-card">
         <div class="gw-card-title">Local Niches</div>
         ${renderControlsHtml()}
         <div class="gw-niche-actions">
-          <button class="gw-mini-btn" id="gwRefreshNichesBtn" type="button">
-            ${state.loading ? "Sampling..." : "Sample Niches"}
+          <button class="gw-mini-btn" id="gwRefreshNichesBtn" type="button" ${state.loading ? "disabled" : ""}>
+            ${samplingNiches ? "Sampling..." : "Sample Niches"}
+          </button>
+          <button class="gw-mini-btn" id="gwGenerateCorridorsBtn" type="button" ${state.loading ? "disabled" : ""}>
+            ${generatingCorridors ? "Generating..." : "Generate Corridors"}
           </button>
           ${state.persistWarning ? `<span class="gw-muted gw-niche-warning">${esc(state.persistWarning)}</span>` : ""}
         </div>
         <div id="gwLocalNicheList">
-          ${state.loading ? `<div class="gw-muted">Building local niche candidates...</div>` : ""}
+          ${state.loading ? `<div class="gw-muted">${generatingCorridors ? "Building corridor niche objects..." : "Building constrained niche objects..."}</div>` : ""}
           ${!state.loading && !rows.length ? `<div class="gw-muted">No local niches loaded yet.</div>` : ""}
           ${!state.loading && rows.length ? `
             <div class="gw-list">
               ${rows.map((niche) => `
-                <div class="gw-rowline gw-niche-row ${isHomeNiche(niche) ? "is-home-niche" : ""}" data-niche-key="${esc(niche.id || niche.source_key)}">
+                <div class="gw-rowline gw-niche-row ${isHomeNiche(niche) ? "is-home-niche" : ""} ${isSelectedNiche(niche) ? "is-selected-niche" : ""} ${isCorridorNiche(niche) ? "is-heat-tendril" : ""}" data-niche-key="${esc(nicheKey(niche))}">
                   <span class="gw-niche-row-main">
                     <span class="gw-niche-icon">${esc(iconForNiche(niche))}</span>
                     <span class="gw-niche-row-text">
-                      <span class="gw-niche-title">${isHomeNiche(niche) ? `<span class="gw-niche-home-mark" aria-hidden="true">${homeIconSvg()}</span>` : ""}${esc(displayNicheTitle(niche))}</span>
+                      <span class="gw-niche-title">
+                        ${isHomeNiche(niche) ? `<span class="gw-niche-home-mark" aria-hidden="true">${homeIconSvg()}</span>` : ""}
+                        ${esc(displayNicheTitle(niche))}
+                      </span>
                       <span class="gw-muted gw-niche-sub">
                         ${esc(formatDistance(niche.distance_m))} &middot; ${esc(niche.theme || "local niche")} &middot; ${esc(confidenceLabel(niche.confidence))}
+                        ${isCorridorNiche(niche) ? ` &middot; <b class="gw-niche-debug-kind">${isHeatTendrilNiche(niche) ? "heat corridor" : "trail corridor"}</b>` : ""}
                         ${Number(niche.comment_count || 0) ? ` &middot; ${esc(niche.comment_count)} comments` : ""}
                         ${homeUserCount(niche) ? ` &middot; ${esc(homeUserCount(niche))} home users` : ""}
                       </span>
                       <span class="gw-muted gw-niche-reason">${esc(reasonText(niche))}</span>
                     </span>
                   </span>
-                  <button class="gw-mini-btn gwStartNicheQuestBtn" data-niche-key="${esc(niche.id || niche.source_key)}" type="button">Start</button>
+                  <button class="gw-mini-btn gwStartNicheQuestBtn" data-niche-key="${esc(nicheKey(niche))}" type="button">Start</button>
                 </div>
               `).join("")}
             </div>
@@ -3341,6 +5417,8 @@
   }
 
   function iconForNiche(niche) {
+    if (isHeatTendrilNiche(niche)) return "T";
+    if (isCorridorNiche(niche)) return "C";
     if (String(niche.niche_type || "").includes("edge")) return "E";
     if (String(niche.niche_type || "").includes("rich")) return "R";
     if (String(niche.niche_type || "").includes("stale")) return "S";
@@ -3411,7 +5489,13 @@
     root.addEventListener("click", (evt) => {
       const refreshBtn = evt.target.closest("#gwRefreshNichesBtn");
       if (refreshBtn && root.contains(refreshBtn)) {
-        refreshLocalNiches();
+        refreshLocalNiches({ mode: "niches" });
+        return;
+      }
+
+      const corridorBtn = evt.target.closest("#gwGenerateCorridorsBtn");
+      if (corridorBtn && root.contains(corridorBtn)) {
+        refreshLocalNiches({ mode: "corridors" });
         return;
       }
 
@@ -3419,6 +5503,7 @@
       if (startBtn && root.contains(startBtn)) {
         evt.preventDefault();
         evt.stopPropagation();
+        if (startBtn.disabled) return;
         startNicheQuest(startBtn.dataset.nicheKey);
         return;
       }
@@ -3474,8 +5559,12 @@
     }
   }
 
-  function closeModals() {
+  function closeModals(clearSelection = true) {
     document.querySelectorAll(".gw-quest-modal-backdrop.gw-niche-detail-backdrop").forEach((el) => el.remove());
+    if (clearSelection) {
+      state.selectedId = null;
+      drawNicheLayer();
+    }
   }
 
   async function loadComments(nicheId) {
@@ -3500,11 +5589,14 @@
     }
   }
 
-  async function openNicheDetail(nicheKey) {
-    const niche = nicheByKey(nicheKey);
+  async function openNicheDetail(key) {
+    const niche = nicheByKey(key);
     if (!niche) return;
+    state.selectedId = nicheKey(niche);
+    drawNicheLayer();
+    renderIntoPage();
 
-    closeModals();
+    closeModals(false);
     injectStyles();
 
     const root = document.createElement("div");
@@ -3521,33 +5613,14 @@
       bindNicheDetail(root, nextNiche);
     };
 
-    const hydratePromise = hydrateNicheSummaryMetrics(niche, (done, total) => {
-      if (!total) return;
-      const progress = 14 + Math.round((done / total) * 78);
-      showSamplingToast(
-        "Hydrating niche summary",
-        progress,
-        `Loading month and taxonomy rows for ${done}/${total} cells.`
-      );
-    })
-      .then((hydrated) => {
-        if (hydrated !== niche) {
-          replaceNicheInState(hydrated);
-          drawNicheLayer();
-          renderIntoPage();
-          renderCurrent(hydrated);
-          finishSamplingToast(
-            "Niche summary hydrated",
-            "Monthly bars, life mix, and taxonomy data were refreshed from genera superchunks."
-          );
-        }
-        return hydrated;
-      })
-      .catch((err) => {
-        console.warn("Could not hydrate niche summary:", err);
-        failSamplingToast("Niche summary hydration failed", "Keeping the existing niche summary.");
-        return niche;
-      });
+    const hydratePromise = hydrateNicheIntoState(key, {
+      selectedOnly: false,
+      showToast: true
+    }).then((hydrated) => {
+      const current = nicheByKey(key) || hydrated || niche;
+      renderCurrent(current);
+      return current;
+    });
 
     if (niche.id) {
       const detailData = await Promise.all([
@@ -3556,13 +5629,34 @@
       ]);
       comments = detailData[0];
       homeUsers = detailData[1];
-      renderCurrent(nicheByKey(nicheKey) || niche);
+      renderCurrent(nicheByKey(key) || niche);
       const hydrated = await hydratePromise;
-      const current = nicheByKey(nicheKey);
+      const current = nicheByKey(key);
       renderCurrent(current || hydrated || niche);
     } else {
       await hydratePromise;
     }
+  }
+
+  function selectNichePin(key, evt = null) {
+    if (evt && typeof L !== "undefined" && L.DomEvent) {
+      L.DomEvent.stop(evt);
+    }
+
+    const niche = nicheByKey(key);
+    if (!niche) return;
+    const nextId = nicheKey(niche);
+    const alreadySelected = state.selectedId === nextId;
+
+    state.selectedId = nextId;
+    if (!alreadySelected) {
+      drawNicheLayer();
+      renderIntoPage();
+    }
+    hydrateNicheIntoState(nextId, {
+      selectedOnly: true,
+      showToast: false
+    });
   }
 
   function detailHtml(niche, comments, homeUsers = []) {
@@ -3575,7 +5669,9 @@
 
     return `
       <div class="gw-quest-modal gw-niche-detail">
-        <div class="gw-quest-modal-title ${home ? "is-home-niche" : ""}">${esc(displayNicheTitle(niche))}</div>
+        <div class="gw-quest-modal-title ${home ? "is-home-niche" : ""}">
+          ${esc(displayNicheTitle(niche))}
+        </div>
         <div class="gw-quest-modal-subtitle">${esc(niche.description || reasonText(niche))}</div>
 
         <div class="gw-niche-map-preview" aria-hidden="true">
@@ -3682,6 +5778,8 @@
     root.addEventListener("click", (evt) => {
       if (evt.target === root || evt.target.closest("#gwNicheCloseBtn")) {
         root.remove();
+        drawNicheLayer();
+        renderIntoPage();
       }
     });
 
@@ -3722,8 +5820,11 @@
     if (!original) return;
 
     try {
+      const previousHome = currentHomeNiche();
+      const previousHomeId = String(previousHome?.id || "");
       const niche = await ensurePersistedNiche(original);
       if (!niche.id) throw new Error("niche was not persisted");
+      const sameHome = previousHomeId && previousHomeId === String(niche.id);
 
       const result = await window.GridWildAPI.setHomeNiche(niche.id);
       window.__gwState = window.__gwState || {};
@@ -3763,6 +5864,11 @@
       renderIntoPage();
       window.GridWildCharacter?.renderSummary?.();
       window.GridWildPlayerUI?.refreshPlayerUI?.();
+      showNicheToast(sameHome
+        ? "Home niche confirmed"
+        : previousHomeId
+          ? `Home niche changed to ${homeNicheTitle(updated)}`
+          : `Home niche added: ${homeNicheTitle(updated)}`);
       openNicheDetail(updated.id || updated.source_key);
     } catch (err) {
       console.error("Could not set home niche:", err);
@@ -3772,6 +5878,7 @@
 
   async function unsetHomeNiche(nicheKey = null) {
     try {
+      const previousHome = currentHomeNiche();
       await window.GridWildAPI.unsetHomeNiche();
       window.__gwState = window.__gwState || {};
       window.__gwState.homeNicheId = null;
@@ -3790,6 +5897,9 @@
       renderIntoPage();
       window.GridWildCharacter?.renderSummary?.();
       window.GridWildPlayerUI?.refreshPlayerUI?.();
+      showNicheToast(previousHome
+        ? `Home niche removed: ${homeNicheTitle(previousHome)}`
+        : "Home niche removed");
 
       if (nicheKey) openNicheDetail(nicheKey);
     } catch (err) {
@@ -3809,7 +5919,7 @@
       map.createPane(LABEL_PANE);
     }
     map.getPane(LABEL_PANE).style.zIndex = 792;
-    map.getPane(LABEL_PANE).style.pointerEvents = "none";
+    map.getPane(LABEL_PANE).style.pointerEvents = "auto";
 
     if (!state.layer) {
       state.layer = L.layerGroup([], { pane: PANE }).addTo(map);
@@ -4275,6 +6385,7 @@
       opacity: options.haloOpacity || 0.62,
       lineCap: options.lineCap || "square",
       lineJoin: options.lineJoin || "miter",
+      dashArray: options.dashArray || null,
       className: options.haloClassName || "gw-niche-mask-component-outline-halo"
     }).addTo(layer);
 
@@ -4286,7 +6397,40 @@
       opacity: options.opacity || 0.96,
       lineCap: options.lineCap || "square",
       lineJoin: options.lineJoin || "miter",
+      dashArray: options.dashArray || null,
       className: options.className || "gw-niche-mask-component-outline"
+    }).addTo(layer);
+  }
+
+  function drawHeatPathVector(layer, polyline = [], visual = {}) {
+    if (!Array.isArray(polyline) || polyline.length < 2) return;
+    const points = polyline
+      .map((point) => Array.isArray(point)
+        ? [Number(point[0]), Number(point[1])]
+        : [Number(point?.lat), Number(point?.lng)])
+      .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+    if (points.length < 2) return;
+
+    L.polyline(points, {
+      pane: PANE,
+      interactive: false,
+      color: visual.haloColor || "rgba(0,216,255,0.35)",
+      weight: 11,
+      opacity: 0.52,
+      lineCap: "round",
+      lineJoin: "round",
+      className: "gw-niche-heat-path-vector-halo"
+    }).addTo(layer);
+
+    L.polyline(points, {
+      pane: PANE,
+      interactive: false,
+      color: visual.outlineColor || "#00f0ff",
+      weight: 4.2,
+      opacity: 0.96,
+      lineCap: "round",
+      lineJoin: "round",
+      className: "gw-niche-heat-path-vector"
     }).addTo(layer);
   }
 
@@ -4376,6 +6520,7 @@
     if (!state.layerVisible) return;
 
     drawDetectorMask(layer);
+    const selectedId = String(state.selectedId || "");
 
     for (const niche of state.niches || []) {
       const originalRadius = Number(niche.radius_m || 75);
@@ -4383,49 +6528,88 @@
       const componentCells = Number(niche.metrics?.component_cell_count || niche.metrics?.componentCellCount || 0);
       const weight = Math.max(2, Math.min(6, 1.6 + Math.log1p(componentCells || 1) * 0.7));
       const home = isHomeNiche(niche);
-      const color = home ? "#ffe66f" : componentColor(niche.metrics?.component_id || niche.source_key);
-      const softOutlines = state.controls.smartNicheHudPlots === true;
+      const selected = selectedId && selectedId === nicheKey(niche);
+      const baseColor = home ? "#ffe66f" : componentColor(niche.metrics?.component_id || niche.source_key);
+      const visual = nicheVisualStyle(niche, baseColor);
+      const color = home ? baseColor : visual.baseColor;
+      const constrainedGeometry = ["constrained_geometry_niche_v1", "trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(niche.metrics?.algorithm);
+      const softOutlines = state.controls.smartNicheHudPlots === true || constrainedGeometry;
+      const specialCorridor = ["trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(String(niche.metrics?.algorithm || ""));
+      const heatPathPolyline = isHeatTendrilNiche(niche) && Array.isArray(niche.metrics?.heat_path_polyline)
+        ? niche.metrics.heat_path_polyline
+        : [];
       const softPaths = softOutlines && !state.controls.showDetectorMask
         ? cellsToSmoothedBoundaryPaths(niche.grid_cell_ids || [])
         : [];
       const outlineSegments = state.controls.showDetectorMask
         ? []
+        : heatPathPolyline.length >= 2
+          ? []
         : softPaths.length
           ? softPaths
           : cellsToBoundarySegments(niche.grid_cell_ids || []);
-      drawBoundarySegments(layer, outlineSegments, strongerComponentColor(color), {
-        weight: home ? 3.2 : (softOutlines ? 2.1 : 2.4),
+      drawBoundarySegments(layer, outlineSegments, home ? strongerComponentColor(color) : visual.outlineColor, {
+        weight: home ? 3.2 : (softOutlines ? 2.1 + visual.weightBoost : 2.4),
         opacity: home ? 0.96 : (softOutlines ? 0.72 : 0.88),
-        haloWeight: home ? 6.4 : (softOutlines ? 5.0 : 3.8),
-        haloOpacity: home ? 0.62 : (softOutlines ? 0.26 : 0.48),
+        haloColor: !home && specialCorridor ? visual.haloColor : undefined,
+        haloWeight: home ? 6.4 : (softOutlines ? 5.0 + visual.haloBoost : 3.8),
+        haloOpacity: home ? 0.62 : (specialCorridor ? 0.52 : (softOutlines ? 0.26 : 0.48)),
         lineCap: softOutlines ? "round" : "square",
         lineJoin: softOutlines ? "round" : "miter",
-        className: `${softOutlines ? "gw-niche-visible-component-outline is-soft" : "gw-niche-visible-component-outline"}${home ? " is-home-niche" : ""}`,
-        haloClassName: `${softOutlines ? "gw-niche-visible-component-outline-halo is-soft" : "gw-niche-visible-component-outline-halo"}${home ? " is-home-niche" : ""}`
+        dashArray: !home ? visual.dashArray : null,
+        className: `${specialCorridor && !home ? visual.outlineClass : (softOutlines ? "gw-niche-visible-component-outline is-soft" : "gw-niche-visible-component-outline")}${home ? " is-home-niche" : ""}`,
+        haloClassName: `${specialCorridor && !home ? visual.haloClass : (softOutlines ? "gw-niche-visible-component-outline-halo is-soft" : "gw-niche-visible-component-outline-halo")}${home ? " is-home-niche" : ""}`
       });
+      if (!home && heatPathPolyline.length >= 2) {
+        drawHeatPathVector(layer, heatPathPolyline, visual);
+      }
 
       const circle = L.circle([niche.centroid_lat, niche.centroid_lng], {
         pane: PANE,
-        radius,
+        radius: selected ? radius : Math.max(GRID_SIZE_M * 0.58, radius * 0.82),
         color,
-        weight: home ? Math.max(weight, 4.4) : weight,
-        opacity: home ? 1 : 0.82,
+        weight: selected
+          ? (home ? Math.max(weight, 4.4) : weight)
+          : 2.2,
+        opacity: selected ? (home ? 1 : 0.82) : 0.82,
         fillColor: color,
-        fillOpacity: home ? 0.34 : Math.max(0.1, Math.min(0.26, 0.08 + Math.log1p(componentCells || 1) * 0.03)),
+        fillOpacity: selected
+          ? (home ? 0.34 : Math.max(0.1, Math.min(0.26, 0.08 + Math.log1p(componentCells || 1) * 0.03)))
+          : (specialCorridor ? 0.2 : 0.12),
         interactive: true,
-        className: home ? "gw-niche-home-circle" : ""
+        className: `${home ? "gw-niche-home-circle" : ""}${visual.circleClass ? ` ${visual.circleClass}` : ""}${selected ? " is-selected-niche" : " is-unselected-niche"}`
       }).addTo(layer);
 
-      circle.bindTooltip(displayNicheTitle(niche), {
-        pane: LABEL_PANE,
-        direction: "top",
-        opacity: 0.96,
-        className: "gw-niche-name-tooltip"
-      });
+      const coreCell = String(niche.metrics?.core_cell || niche.metrics?.peak_cell || "").split(",").map(Number);
+      if (constrainedGeometry && coreCell.length === 2 && coreCell.every(Number.isFinite)) {
+        const core = latLngForCell(coreCell[0], coreCell[1]);
+        L.circleMarker([core.lat, core.lng], {
+          pane: PANE,
+          radius: selected ? 5.2 : 4.2,
+          color: home ? strongerComponentColor(color) : visual.outlineColor,
+          weight: selected ? 2.4 : 1.7,
+          opacity: 0.94,
+          fillColor: visual.coreFill,
+          fillOpacity: selected ? 0.88 : 0.68,
+          interactive: true,
+          className: `gw-niche-core-marker${visual.coreClass ? ` ${visual.coreClass}` : ""}${selected ? " is-selected-niche" : ""}`
+        })
+          .on("click", (evt) => selectNichePin(nicheKey(niche), evt))
+          .addTo(layer);
+      }
 
-      circle.on("click", () => openNicheDetail(niche.id || niche.source_key));
+      if (selected) {
+        circle.bindTooltip(displayNicheTitle(niche), {
+          pane: LABEL_PANE,
+          direction: "top",
+          opacity: 0.96,
+          className: "gw-niche-name-tooltip"
+        });
+      }
 
-      if (state.labelLayer) {
+      circle.on("click", (evt) => selectNichePin(nicheKey(niche), evt));
+
+      if (selected && state.labelLayer) {
         const centroidLatLng = L.latLng(niche.centroid_lat, niche.centroid_lng);
         const labelLatLng = offsetLatLngByPixels(centroidLatLng, 0, -34);
 
@@ -4459,9 +6643,16 @@
         L.marker(labelLatLng, {
           pane: LABEL_PANE,
           icon: label,
-          interactive: false,
+          interactive: true,
           zIndexOffset: 1000
-        }).addTo(state.labelLayer);
+        })
+          .on("click", (evt) => {
+            if (evt && typeof L !== "undefined" && L.DomEvent) {
+              L.DomEvent.stop(evt);
+            }
+            openNicheDetail(nicheKey(niche));
+          })
+          .addTo(state.labelLayer);
       }
     }
   }
@@ -4615,7 +6806,8 @@
       }
 
       .gw-niche-name-label {
-        pointer-events: none;
+        pointer-events: auto;
+        cursor: pointer;
         z-index: 9999;
         overflow: visible;
       }
@@ -4648,6 +6840,26 @@
           0 0 0 2px rgba(255,230,111,0.22),
           0 10px 22px rgba(0,0,0,0.38),
           0 0 20px rgba(255,230,111,0.26);
+      }
+
+      .gw-niche-core-marker {
+        filter: drop-shadow(0 0 7px rgba(255,247,209,0.34));
+      }
+
+      .gw-niche-visible-component-outline.is-trail-corridor,
+      .gw-niche-visible-component-outline-halo.is-trail-corridor,
+      .gw-niche-core-marker.is-trail-corridor,
+      .is-trail-corridor {
+        filter: drop-shadow(0 0 8px rgba(255,176,0,0.42));
+      }
+
+      .gw-niche-visible-component-outline.is-heat-tendril,
+      .gw-niche-visible-component-outline-halo.is-heat-tendril,
+      .gw-niche-heat-path-vector,
+      .gw-niche-heat-path-vector-halo,
+      .gw-niche-core-marker.is-heat-tendril,
+      .is-heat-tendril {
+        filter: drop-shadow(0 0 10px rgba(0,216,255,0.52));
       }
 
       .gw-niche-label-main {
@@ -4719,6 +6931,7 @@
         display: flex;
         gap: 8px;
         align-items: center;
+        flex-wrap: wrap;
         margin-bottom: 10px;
       }
 
@@ -4738,6 +6951,33 @@
         border-radius: 8px;
         border: 1px solid rgba(255,230,111,0.42);
         background: rgba(255,230,111,0.08);
+      }
+
+      .gw-niche-row.is-selected-niche {
+        box-shadow: inset 3px 0 0 rgba(125,220,255,0.76);
+      }
+
+      .gw-niche-row.is-heat-tendril {
+        border: 1px solid rgba(0,216,255,0.48);
+        background: rgba(0,216,255,0.08);
+        box-shadow:
+          inset 3px 0 0 rgba(0,216,255,0.88),
+          0 0 14px rgba(0,216,255,0.12);
+      }
+
+      .gw-niche-row.is-heat-tendril .gw-niche-icon {
+        border-color: rgba(0,216,255,0.8);
+        background: rgba(0,216,255,0.18);
+        color: #d7fbff;
+      }
+
+      .gw-niche-row.is-heat-tendril .gw-niche-title {
+        color: #d7fbff;
+      }
+
+      .gw-niche-debug-kind {
+        color: #7ef4ff;
+        font-weight: 950;
       }
 
       .gw-niche-row-main {

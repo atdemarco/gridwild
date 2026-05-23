@@ -10,7 +10,7 @@ window.__gwState = {
   lockToLocation: true,
   showPoints: false, // off by default...
   showHeat: true,
-  showFog: true,
+  showFog: false,
   showShimmer: false,
   dynamicINatEnabled: false,   // OFF by default
   dynamicOSMEnabled: false,    // OFF by default
@@ -38,6 +38,9 @@ window.__gwState = {
   showOsmParks: true,
   showOsmBuildings: true,
   showOsmWater: true,
+  showOsmRoads: true,
+  osmPriorsEnabled: false,
+  osmPriorsMode: "path-adjacency",
   lockZoomMode: "close",
   lockZoom: 19,
   activeLens: "classic"

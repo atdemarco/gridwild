@@ -2019,7 +2019,7 @@
       </label>
 
       <label class="gw-row">
-        <input type="checkbox" id="toggleFog" checked />
+        <input type="checkbox" id="toggleFog" />
         <span>Fog of war</span>
       </label>
 
@@ -2388,6 +2388,41 @@
   </div>
 
 
+  <!-- OSM PRIORS -->
+  <div class="gw-card">
+    <div class="gw-card-title">OSM Priors</div>
+
+    <div class="gw-card gw-lens-card" data-lens="osm-path-adjacency">
+      <div class="gw-card-title">Path Buffer</div>
+      Path and trail-adjacent cells from shared OSM context.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="osm-trail-side">
+      <div class="gw-card-title">Trail Side</div>
+      Left/right side classification around the nearest path.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="osm-wet-edge">
+      <div class="gw-card-title">Wet Edge</div>
+      Water and stream-edge buffers.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="osm-barrier-map">
+      <div class="gw-card-title">Barrier Map</div>
+      Roads and buildings interpreted as movement barriers.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="osm-landuse-class">
+      <div class="gw-card-title">Land Use</div>
+      Park, wood, grass, water, and building class tint.
+    </div>
+
+    <div class="gw-card gw-lens-card" data-lens="osm-accessibility">
+      <div class="gw-card-title">Accessibility</div>
+      Scored access prior from trails, barriers, and land cover.
+    </div>
+  </div>
+
   <!-- ANALYTICS -->
   <div class="gw-card">
     <div class="gw-card-title">Analytics Lenses</div>
@@ -2504,6 +2539,13 @@
   <script src="js/gw-fog.js"></script>
   <script src="js/gw-fog-canvas.js"></script>
   <script src="js/gw-osm-features-layer.js"></script>
+  <script src="js/gw-osm-priors-layer.js"></script>
+  <script src="js/gw-niche-osm-priors.js"></script>
+  <script src="js/gw-niche-graph.js"></script>
+  <script src="js/gw-niche-partition.js"></script>
+  <script src="js/gw-niche-engine.js"></script>
+  <script src="js/gw-niche-debug-layer.js"></script>
+  <script src="js/gw-niche-debug-ui.js"></script>
 
   <script src="js/gw-observation-store.js"></script>
   <script src="js/gw-inat-recent.js"></script>
@@ -2516,6 +2558,7 @@
   <!-- <script src="js/osmoverlay.js"></script> -->
   <script src="js/gw-metrics.js"></script>
   <script src="js/gw-lenses.js"></script>
+  <script src="js/gw-here-panel.js"></script>
   <script src="js/location.js"></script>
   <script src="js/gw-location-picker.js"></script>
   <script src="js/sidebar.js"></script>
@@ -2761,6 +2804,12 @@ window.refreshQuestBadge = refreshQuestBadge;
       revisit: "Revisit",
       reactivated: "Reactivated",
       seasonalnow: "Season Watch",
+      "osm-path-adjacency": "OSM Path Buffer",
+      "osm-trail-side": "OSM Trail Side",
+      "osm-wet-edge": "OSM Wet Edge",
+      "osm-barrier-map": "OSM Barriers",
+      "osm-landuse-class": "OSM Land Use",
+      "osm-accessibility": "OSM Access",
     };
 
     // Compact HUD legend module. Remove #gwHudLegend plus this object to
@@ -2843,6 +2892,36 @@ window.refreshQuestBadge = refreshQuestBadge;
           { count: 10, species: 7, observers: 2, last_observed: daysAgo(180) },
           { count: 18, species: 12, observers: 3, last_observed: daysAgo(90) },
           { count: 28, species: 20, observers: 5, last_observed: daysAgo(12) }
+        ],
+        "osm-path-adjacency": [
+          { osm: { nearestPathDistanceM: 28, isPathAdjacent: false } },
+          { osm: { nearestPathDistanceM: 12, isPathAdjacent: false } },
+          { osm: { nearestPathDistanceM: 3, isPathAdjacent: true } }
+        ],
+        "osm-trail-side": [
+          { osm: { nearestPathSide: "left", isPathAdjacent: true } },
+          { osm: { nearestPathSide: "center", isPathAdjacent: true } },
+          { osm: { nearestPathSide: "right", isPathAdjacent: true } }
+        ],
+        "osm-wet-edge": [
+          { osm: { nearestWaterDistanceM: 18, isWetEdge: false, insideWater: false } },
+          { osm: { nearestWaterDistanceM: 4, isWetEdge: true, insideWater: false } },
+          { osm: { nearestWaterDistanceM: 0, isWetEdge: false, insideWater: true } }
+        ],
+        "osm-barrier-map": [
+          { osm: { roadBarrierClass: "none", insideBuilding: false } },
+          { osm: { roadBarrierClass: "near", insideBuilding: false } },
+          { osm: { roadBarrierClass: "crossing", insideBuilding: false } }
+        ],
+        "osm-landuse-class": [
+          { osm: { landuseClass: "park" } },
+          { osm: { landuseClass: "grass" } },
+          { osm: { landuseClass: "water" } }
+        ],
+        "osm-accessibility": [
+          { osm: { accessibilityScore: 0.18 } },
+          { osm: { accessibilityScore: 0.52 } },
+          { osm: { accessibilityScore: 0.86 } }
         ]
       };
 
@@ -2917,7 +2996,7 @@ window.refreshQuestBadge = refreshQuestBadge;
       function fogIsEnabled() {
         const fogCheckbox = document.getElementById("toggleFog");
         if (fogCheckbox) return fogCheckbox.checked;
-        return window.__gwState?.showFog ?? true;
+        return window.__gwState?.showFog ?? false;
       }
 
       function refresh() {
@@ -3189,6 +3268,9 @@ window.refreshQuestBadge = refreshQuestBadge;
 
         window.GridWildMeOverlayFilter?.invalidate?.();
         window.GridWildCoarseHeatCache?.invalidate?.();
+        window.dispatchEvent(new CustomEvent("gridwild:filterschange", {
+          detail: { onlyMe: window.__gwFilters.onlyMe === true }
+        }));
         if (typeof saveUIState === "function") saveUIState();
         if (typeof window.updateGrid === "function") window.updateGrid();
         sync();
@@ -3547,6 +3629,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         updateLegendText();
         window.GridWildHudLegend?.refresh?.();
         window.GridWildHudCompactLegend?.refresh?.();
+        window.GridWildOsmPriorsLayer?.handleLensChange?.(lens);
 
         if (typeof updateGrid === "function") {
           updateGrid();
@@ -3691,6 +3774,7 @@ window.refreshQuestBadge = refreshQuestBadge;
       }
       window.GridWildHudLegend?.refresh?.();
       window.GridWildHudCompactLegend?.refresh?.();
+      window.GridWildOsmPriorsLayer?.handleLensChange?.(window.__gwState.activeLens);
 
 
       setTimeout(() => {

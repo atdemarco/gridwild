@@ -56,7 +56,7 @@
   window.__gwState.showPoints = $("togglePoints")?.checked ?? true;
   window.__gwState.dynamicINatEnabled = $("toggleDynamicINat")?.checked ?? false;
   window.__gwState.showShimmer = $("toggleShimmer")?.checked ?? false;
-  window.__gwState.showFog = $("toggleFog")?.checked ?? true;
+  window.__gwState.showFog = $("toggleFog")?.checked ?? false;
   window.__gwState.highContrastLensEnabled = window.__gwState.highContrastLensEnabled === true;
   window.__gwState.fogSmoothingEnabled = $("toggleFogSmoothing")?.checked ?? true;
   window.__gwState.godsEyeEnabled = $("toggleGodsEye")?.checked ?? false;
@@ -222,6 +222,9 @@
     // Any taxa change triggers refetch
     $("taxaChecklist")?.addEventListener("change", () => {
   syncStateFromUI();
+  window.dispatchEvent(new CustomEvent("gridwild:filterschange", {
+    detail: { iconicTaxa: window.__gwFilters?.iconicTaxa || [] }
+  }));
   applyLayerVisibility();
 
   if (typeof window.updateGrid === "function") {
@@ -341,7 +344,7 @@ function saveUIState() {
     heatZThresholdDirection: window.__gwState?.heatZThresholdDirection === "below" ? "below" : "above",
     dynamicINatEnabled: byId("toggleDynamicINat")?.checked ?? false,
     showShimmer: byId("toggleShimmer")?.checked ?? false,
-    showFog: byId("toggleFog")?.checked ?? true,
+    showFog: byId("toggleFog")?.checked ?? false,
     highContrastLensEnabled: window.__gwState?.highContrastLensEnabled === true,
     fogSmoothingEnabled: byId("toggleFogSmoothing")?.checked ?? true,
     godsEyeEnabled: byId("toggleGodsEye")?.checked ?? false,
@@ -384,7 +387,7 @@ function applySavedUIState() {
   }
   if (byId("toggleDynamicINat"))  byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
   if (byId("toggleShimmer"))      byId("toggleShimmer").checked = s.showShimmer ?? false;
-  if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? true;
+  if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? false;
   window.__gwState.highContrastLensEnabled = s.highContrastLensEnabled === true;
   if (byId("toggleGodsEye"))      byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
@@ -452,6 +455,12 @@ function updateLegendTextOLD() {
 function paintLegendFromHeatFunction() {
   if (typeof window.metricsToFill !== "function") return;
 
+  if (window.GridWildOsmPriorsLayer?.isOsmPriorLens?.(window.__gwState?.activeLens)) {
+    window.GridWildHudLegend?.refresh?.();
+    window.GridWildHudCompactLegend?.refresh?.();
+    return;
+  }
+
   const dull = document.querySelector(".chip-dull");
   const mid = document.querySelector(".chip-mid");
   const vivid = document.querySelector(".chip-vivid");
@@ -466,7 +475,7 @@ function paintLegendFromHeatFunction() {
   const midObsr  = window.metricsToFill({ count: 10, species: 8, observers: 3 });
   const highObsr = window.metricsToFill({ count: 10, species: 8, observers: 6 });
 
-  if (huebar) {
+  if (huebar && lowObsr && midObsr && highObsr) {
     huebar.style.background = `linear-gradient(
       to right,
       ${lowObsr.fillColor},
@@ -475,25 +484,35 @@ function paintLegendFromHeatFunction() {
     )`;
   }
 
-  if (dull)  dull.style.background  = window.metricsToFill({ count: 10, species: 2,  observers: 3 }).fillColor;
-  if (mid)   mid.style.background   = window.metricsToFill({ count: 10, species: 7,  observers: 3 }).fillColor;
-  if (vivid) vivid.style.background = window.metricsToFill({ count: 10, species: 15, observers: 3 }).fillColor;
+  const dullStyle = window.metricsToFill({ count: 10, species: 2, observers: 3 });
+  const midStyle = window.metricsToFill({ count: 10, species: 7, observers: 3 });
+  const vividStyle = window.metricsToFill({ count: 10, species: 15, observers: 3 });
+
+  if (dull && dullStyle) dull.style.background = dullStyle.fillColor;
+  if (mid && midStyle) mid.style.background = midStyle.fillColor;
+  if (vivid && vividStyle) vivid.style.background = vividStyle.fillColor;
 
   if (faint) {
     const s = window.metricsToFill({ count: 1, species: 8, observers: 3 });
-    faint.style.background = s.fillColor;
-    faint.style.opacity = s.fillOpacity;
+    if (s) {
+      faint.style.background = s.fillColor;
+      faint.style.opacity = s.fillOpacity;
+    }
   }
 
   if (medium) {
     const s = window.metricsToFill({ count: 8, species: 8, observers: 3 });
-    medium.style.background = s.fillColor;
-    medium.style.opacity = s.fillOpacity;
+    if (s) {
+      medium.style.background = s.fillColor;
+      medium.style.opacity = s.fillOpacity;
+    }
   }
 
   if (opaque) {
     const s = window.metricsToFill({ count: 30, species: 8, observers: 3 });
-    opaque.style.background = s.fillColor;
-    opaque.style.opacity = s.fillOpacity;
+    if (s) {
+      opaque.style.background = s.fillColor;
+      opaque.style.opacity = s.fillOpacity;
+    }
   }
 }

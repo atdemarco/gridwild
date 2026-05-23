@@ -15,9 +15,11 @@
   const MORE_OBS_TARGET = 2000;
   const MORE_OBS_MAX_PAGES = 120;
   const PHOTO_CACHE_KEEP_COUNT = 120;
+  const PHOTO_BACKFILL_BATCH_SIZE = 20;
 
   let recentObsCache = loadMetadata();
   let storeReadyPromise = initObservationStore();
+  const photoBackfillPending = new Map();
 
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -166,13 +168,22 @@
       String(err?.message || "").includes("quota");
   }
 
-  function stripObservationPhotos(obs) {
-    return {
-      ...obs,
-      photo_url: null,
-      photo_square_url: null,
-      photo_medium_url: null
-    };
+  function asSquarePhotoUrl(url) {
+    const raw = String(url || "").trim();
+    return raw
+      ? raw.replace(/\/(small|medium|large|original)\./, "/square.")
+      : null;
+  }
+
+  function getSmallObservationPhotoUrl(obs) {
+    return asSquarePhotoUrl(
+      obs?.ps ||
+      obs?.photo_square_url ||
+      obs?.photo_url ||
+      obs?.photo_medium_url ||
+      obs?.photos?.[0]?.url ||
+      ""
+    );
   }
 
   function unpackObservationPayload(obs) {
@@ -182,6 +193,7 @@
     }
 
     const id = obs.id;
+    const photoSquare = getSmallObservationPhotoUrl(obs);
     return {
       id,
       lat: obs.lat,
@@ -196,17 +208,17 @@
       genus_name: obs.gen || "",
       iconic_taxon_name: obs.icon || "Unknown",
       uri: id ? `https://www.inaturalist.org/observations/${encodeURIComponent(id)}` : null,
-      photo_url: null,
-      photo_square_url: null,
+      photo_url: photoSquare,
+      photo_square_url: photoSquare,
       photo_medium_url: null,
       quality_grade: null,
       created_at: null
     };
   }
 
-  function compactObservationPayload(obs) {
+  function compactObservationPayload(obs, options = {}) {
     const unpacked = unpackObservationPayload(obs) || {};
-    return {
+    const compact = {
       id: String(unpacked.id || ""),
       lat: Number(unpacked.lat),
       lng: Number(unpacked.lng),
@@ -218,20 +230,26 @@
       gen: unpacked.genus_name || "",
       icon: unpacked.iconic_taxon_name || "Unknown"
     };
+
+    const photoSquare = options.includePhoto === false ? null : getSmallObservationPhotoUrl(obs);
+    if (photoSquare) compact.ps = photoSquare;
+
+    return compact;
   }
 
   function compactObservationPhotos(observations, keepCount = PHOTO_CACHE_KEEP_COUNT) {
     return sortObservationsNewestFirst(observations)
       .map((obs, index) => {
-        const compact = compactObservationPayload(obs);
-        return compact;
+        return compactObservationPayload(obs, {
+          includePhoto: index < keepCount
+        });
       });
   }
 
   function hasOlderCachedPhotos(observations) {
     return sortObservationsNewestFirst(observations)
       .slice(PHOTO_CACHE_KEEP_COUNT)
-      .some(obs => obs?.photo_url || obs?.photo_square_url || obs?.photo_medium_url);
+      .some(obs => obs?.ps || obs?.photo_url || obs?.photo_square_url || obs?.photo_medium_url);
   }
 
   async function compactExistingPhotoCache() {
@@ -397,19 +415,148 @@ function getPhotoUrls(obs) {
     return sortObservationsNewestFirst(merged);
   }
 
+  async function fetchObservationPhotoBatch(ids) {
+    const cleaned = [...new Set((ids || []).map(id => String(id || "").trim()).filter(Boolean))];
+    if (!cleaned.length) return new Map();
+
+    const url = new URL("https://api.inaturalist.org/v1/observations");
+    url.searchParams.set("id", cleaned.join(","));
+    url.searchParams.set("per_page", String(Math.min(200, cleaned.length)));
+
+    const resp = await fetch(url.toString());
+    if (!resp.ok) {
+      throw new Error(`iNaturalist thumbnail request failed: HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const photoById = new Map();
+    const results = Array.isArray(data?.results) ? data.results : [];
+
+    for (const obs of results) {
+      const id = String(obs?.id || "");
+      const thumb = getSmallObservationPhotoUrl(obs);
+      if (id && thumb) photoById.set(id, thumb);
+    }
+
+    return photoById;
+  }
+
+  async function applyObservationPhotoBackfill(photoById, options = {}) {
+    if (!(photoById instanceof Map) || !photoById.size) return 0;
+
+    const rows = Array.isArray(recentObsCache.observations)
+      ? sortObservationsNewestFirst(recentObsCache.observations)
+      : [];
+
+    let changed = 0;
+    const merged = rows.map(row => {
+      const id = String(row?.id || "");
+      const thumb = photoById.get(id);
+      if (!id || !thumb || getSmallObservationPhotoUrl(row)) return row;
+
+      changed++;
+      return {
+        ...compactObservationPayload(row, { includePhoto: true }),
+        ps: thumb
+      };
+    });
+
+    if (!changed) return 0;
+
+    recentObsCache = {
+      ...recentObsCache,
+      observations: merged,
+      photo_backfilled_at: new Date().toISOString()
+    };
+
+    if (options.persist !== false && window.GridWildObservationStore) {
+      const username = recentObsCache.username || window.__gwUser?.username || "";
+      await window.GridWildObservationStore.replaceForUser(username, compactObservationPhotos(merged));
+    }
+
+    saveMetadata();
+
+    window.dispatchEvent(new CustomEvent("gwRecentINatUpdated", {
+      detail: recentObsCache
+    }));
+
+    return changed;
+  }
+
+  async function ensureObservationPhotos(ids, options = {}) {
+    await storeReadyPromise;
+
+    const uniqueIds = [...new Set((ids || []).map(id => String(id || "").trim()).filter(Boolean))];
+    if (!uniqueIds.length) return { requested: 0, fetched: 0, updated: 0 };
+
+    const obsById = new Map(getRecentObservations().map(obs => [String(obs.id), obs]));
+    const missingIds = uniqueIds.filter(id => {
+      const obs = obsById.get(id);
+      return obs && !getSmallObservationPhotoUrl(obs);
+    });
+
+    if (!missingIds.length) {
+      return { requested: uniqueIds.length, fetched: 0, updated: 0 };
+    }
+
+    const pending = missingIds
+      .map(id => photoBackfillPending.get(id))
+      .filter(Boolean);
+    const toFetch = missingIds.filter(id => !photoBackfillPending.has(id));
+
+    const fetchTasks = [];
+    for (let i = 0; i < toFetch.length; i += PHOTO_BACKFILL_BATCH_SIZE) {
+      const batch = toFetch.slice(i, i + PHOTO_BACKFILL_BATCH_SIZE);
+      const task = (async () => {
+        const photoById = await fetchObservationPhotoBatch(batch);
+        return applyObservationPhotoBackfill(photoById, options);
+      })();
+
+      for (const id of batch) {
+        photoBackfillPending.set(id, task.finally(() => {
+          photoBackfillPending.delete(id);
+        }));
+      }
+
+      fetchTasks.push(task);
+    }
+
+    const settled = await Promise.allSettled([...pending, ...fetchTasks]);
+    const updated = settled.reduce((sum, result) => {
+      return sum + (result.status === "fulfilled" ? Number(result.value) || 0 : 0);
+    }, 0);
+
+    const failed = settled.find(result => result.status === "rejected");
+    if (failed && options.throwOnError) throw failed.reason;
+
+    return {
+      requested: uniqueIds.length,
+      fetched: toFetch.length,
+      updated
+    };
+  }
+
   function applyRecentObservationsToFog() {
     if (!window.GridWildFog || typeof window.getCellKeyForLatLng !== "function") {
       return;
     }
 
-    window.GridWildFog.clearRecentINatObserved();
+    const applyFogMarks = () => {
+      window.GridWildFog.clearRecentINatObserved();
 
-    for (const obs of getRecentObservations()) {
-      const key = window.getCellKeyForLatLng(obs.lat, obs.lng);
-      window.GridWildFog.markRecentINatObserved(key, {
-        timestamp: obs.observed_on ? new Date(obs.observed_on).getTime() : Date.now(),
-        obsCountIncrement: 1
-      });
+      for (const obs of getRecentObservations()) {
+        const key = window.getCellKeyForLatLng(obs.lat, obs.lng);
+        window.GridWildFog.markRecentINatObserved(key, {
+          timestamp: obs.observed_on ? new Date(obs.observed_on).getTime() : Date.now(),
+          obsCountIncrement: 1
+        });
+      }
+    };
+
+    if (typeof window.GridWildFog.batchUpdates === "function") {
+      window.GridWildFog.batchUpdates(applyFogMarks);
+    } else {
+      applyFogMarks();
     }
 
     if (typeof window.updateGrid === "function") {
@@ -705,6 +852,7 @@ function getPhotoUrls(obs) {
     refreshRecentObservations,
     getMoreObservations,
     getRecentObservations,
+    ensureObservationPhotos,
     applyRecentObservationsToFog,
     ready: () => storeReadyPromise,
     getCache: () => recentObsCache

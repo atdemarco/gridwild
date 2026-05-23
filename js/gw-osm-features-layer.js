@@ -25,20 +25,32 @@
   let raf = null;
   let fetchTimer = null;
   let lastFetchKey = null;
+  let fetchInFlight = false;
+  let lastFetchStartedAt = 0;
+  let overpassDisabledUntil = 0;
+  let cachedFeatureBounds = null;
 
   let features = {
     trails: [],
     parks: [],
     buildings: [],
-    water: []
+    water: [],
+    roads: [],
+    places: []
   };
+  let featuresVersion = 0;
+  let lastFetchToastAt = 0;
 
   const OSM_CONTEXT_Z = 405;
   const OSM_BUILDING_Z = 450;
 
   const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
   const FETCH_DEBOUNCE_MS = 900;
-  const MIN_ZOOM = 16;
+  const FETCH_MIN_INTERVAL_MS = 9000;
+  const OVERPASS_RATE_LIMIT_COOLDOWN_MS = 120000;
+  const OVERPASS_ERROR_COOLDOWN_MS = 30000;
+  const MIN_ZOOM = 15;
+  const QUERY_BOUNDS_PAD_RATIO = 0.35;
 
   let listenersBound = false;
 
@@ -99,7 +111,7 @@
 
   function resizeOneCanvas(c, cctx) {
     const size = map.getSize();
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = window.GridWildCanvasPerf?.getDpr?.("osm-features") || window.devicePixelRatio || 1;
 
     const wantW = Math.round(size.x * dpr);
     const wantH = Math.round(size.y * dpr);
@@ -122,23 +134,37 @@
     resizeOneCanvas(buildingCanvas, buildingCtx);
   }
 
-  function getBboxString() {
-    const b = map.getBounds();
+  function getBufferedQueryBounds() {
+    return map.getBounds().pad(QUERY_BOUNDS_PAD_RATIO);
+  }
+
+  function boundsToBboxString(b) {
     return `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
   }
 
-  function getFetchKey() {
-    const c = map.getCenter();
-
+  function boundsToFetchKey(b) {
     return [
-      map.getZoom(),
-      c.lat.toFixed(4),
-      c.lng.toFixed(4)
-    ].join("|");
+      b.getSouth().toFixed(4),
+      b.getWest().toFixed(4),
+      b.getNorth().toFixed(4),
+      b.getEast().toFixed(4)
+    ].join(",");
   }
 
-  function buildOverpassQuery() {
-    const bbox = getBboxString();
+  function boundsContain(outer, inner) {
+    if (!outer || !inner) return false;
+    return outer.getSouth() <= inner.getSouth() &&
+      outer.getWest() <= inner.getWest() &&
+      outer.getNorth() >= inner.getNorth() &&
+      outer.getEast() >= inner.getEast();
+  }
+
+  function hasCachedCoverage() {
+    return boundsContain(cachedFeatureBounds, map.getBounds());
+  }
+
+  function buildOverpassQuery(queryBounds = getBufferedQueryBounds()) {
+    const bbox = boundsToBboxString(queryBounds);
 
     return `
       [out:json][timeout:25];
@@ -147,6 +173,7 @@
         relation["building"](${bbox});
 
         way["highway"~"path|footway|cycleway|bridleway|track"](${bbox});
+        way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|service|unclassified|living_street|road"](${bbox});
 
         way["leisure"~"park|garden|nature_reserve"](${bbox});
         relation["leisure"~"park|garden|nature_reserve"](${bbox});
@@ -162,12 +189,22 @@
 
         way["waterway"="riverbank"](${bbox});
         relation["waterway"="riverbank"](${bbox});
+
+        way["waterway"~"stream|river|canal|ditch|drain"](${bbox});
+
+        node["place"]["name"](${bbox});
+        way["place"]["name"](${bbox});
+        relation["place"]["name"](${bbox});
       );
       out geom;
     `;
   }
 
   function geometryToLatLngs(el) {
+    if (el.type === "node" && Number.isFinite(el.lat) && Number.isFinite(el.lon)) {
+      return [L.latLng(el.lat, el.lon)];
+    }
+
     if (!Array.isArray(el.geometry)) return [];
 
     return el.geometry
@@ -188,11 +225,18 @@
   function classifyFeature(el) {
     const tags = el.tags || {};
 
+    if (tags.place && tags.name) return "places";
+
     if (tags.building) return "buildings";
 
     if (
       tags.natural === "water" ||
-      tags.waterway === "riverbank"
+      tags.waterway === "riverbank" ||
+      tags.waterway === "stream" ||
+      tags.waterway === "river" ||
+      tags.waterway === "canal" ||
+      tags.waterway === "ditch" ||
+      tags.waterway === "drain"
     ) {
       return "water";
     }
@@ -220,6 +264,21 @@
       return "trails";
     }
 
+    if (
+      tags.highway === "motorway" ||
+      tags.highway === "trunk" ||
+      tags.highway === "primary" ||
+      tags.highway === "secondary" ||
+      tags.highway === "tertiary" ||
+      tags.highway === "residential" ||
+      tags.highway === "service" ||
+      tags.highway === "unclassified" ||
+      tags.highway === "living_street" ||
+      tags.highway === "road"
+    ) {
+      return "roads";
+    }
+
     return null;
   }
 
@@ -228,15 +287,21 @@
       trails: [],
       parks: [],
       buildings: [],
-      water: []
+      water: [],
+      roads: [],
+      places: []
     };
 
     for (const el of data?.elements || []) {
-      const points = geometryToLatLngs(el);
-      if (points.length < 2) continue;
-
       const kind = classifyFeature(el);
       if (!kind) continue;
+
+      const points = geometryToLatLngs(el);
+      if (kind === "places") {
+        if (points.length < 1) continue;
+      } else if (points.length < 2) {
+        continue;
+      }
 
       next[kind].push({
         id: `${el.type}/${el.id}`,
@@ -249,25 +314,80 @@
     return next;
   }
 
+  function emptyFeatures() {
+    return {
+      trails: [],
+      parks: [],
+      buildings: [],
+      water: [],
+      roads: [],
+      places: []
+    };
+  }
+
+  function publishFeaturesUpdated() {
+    featuresVersion++;
+    window.dispatchEvent(new CustomEvent("gwOsmFeaturesUpdated", {
+      detail: {
+        version: featuresVersion,
+        counts: {
+          trails: features.trails.length,
+          parks: features.parks.length,
+          buildings: features.buildings.length,
+          water: features.water.length,
+          roads: features.roads.length,
+          places: features.places.length
+        }
+      }
+    }));
+  }
+
+  function showFetchToast() {
+    const now = Date.now();
+    if (now - lastFetchToastAt < 12000) return;
+    lastFetchToastAt = now;
+
+    if (typeof window.showGridWildToast === "function") {
+      window.showGridWildToast("Obtaining OSM data...");
+    }
+  }
+
+  function showFetchStatusToast(message) {
+    if (typeof window.showGridWildToast === "function") {
+      window.showGridWildToast(message);
+    }
+  }
+
   async function fetchFeatures() {
     if ((window.__gwState?.showOsmFeatures ?? true) === false) return;
+    if (fetchInFlight) return;
 
-    if (map.getZoom() < MIN_ZOOM) {
-      features = {
-        trails: [],
-        parks: [],
-        buildings: [],
-        water: []
-      };
+    const now = Date.now();
+    if (now < overpassDisabledUntil) return;
 
+    if (hasCachedCoverage()) {
       scheduleRender();
       return;
     }
 
-    const key = getFetchKey();
+    const sinceLastFetch = now - lastFetchStartedAt;
+    if (lastFetchStartedAt && sinceLastFetch < FETCH_MIN_INTERVAL_MS) {
+      scheduleFetch(FETCH_MIN_INTERVAL_MS - sinceLastFetch);
+      return;
+    }
+
+    if (map.getZoom() < MIN_ZOOM) {
+      scheduleRender();
+      return;
+    }
+
+    const queryBounds = getBufferedQueryBounds();
+    const key = boundsToFetchKey(queryBounds);
     if (key === lastFetchKey) return;
 
-    lastFetchKey = key;
+    fetchInFlight = true;
+    lastFetchStartedAt = now;
+    showFetchToast();
 
     try {
       const resp = await fetch(OVERPASS_URL, {
@@ -276,26 +396,37 @@
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
         },
         body: new URLSearchParams({
-          data: buildOverpassQuery()
+          data: buildOverpassQuery(queryBounds)
         })
       });
 
       if (!resp.ok) {
+        if (resp.status === 429) {
+          overpassDisabledUntil = Date.now() + OVERPASS_RATE_LIMIT_COOLDOWN_MS;
+          showFetchStatusToast("OSM data rate-limited; keeping current OSM cache");
+        } else {
+          overpassDisabledUntil = Date.now() + OVERPASS_ERROR_COOLDOWN_MS;
+        }
         throw new Error(`Overpass HTTP ${resp.status}`);
       }
 
       const data = await resp.json();
       features = parseFeatures(data);
+      lastFetchKey = key;
+      cachedFeatureBounds = queryBounds;
 
+      publishFeaturesUpdated();
       scheduleRender();
     } catch (err) {
       console.warn("GridWild OSM feature fetch failed:", err);
+    } finally {
+      fetchInFlight = false;
     }
   }
 
-  function scheduleFetch() {
+  function scheduleFetch(delayMs = FETCH_DEBOUNCE_MS) {
     clearTimeout(fetchTimer);
-    fetchTimer = setTimeout(fetchFeatures, FETCH_DEBOUNCE_MS);
+    fetchTimer = setTimeout(fetchFeatures, Math.max(0, Number(delayMs) || 0));
   }
 
   function beginPath(ctxLocal, points, topLeft) {
@@ -372,7 +503,7 @@
     // Water
     if (showWater) {
       for (const f of features.water) {
-        drawPolygon(contextCtx, f, {
+        const style = {
         //  fill: "rgba(60, 140, 190, 0.34)",
       //    stroke: "rgba(45, 105, 155, 0.58)",
     //      lineWidth: 1.2
@@ -380,6 +511,21 @@
           fill: "rgba(72, 108, 138, 0.26)",     // cooler muted blue
           stroke: "rgba(52, 78, 102, 0.42)",
           lineWidth: 1.1
+        };
+
+        if (f.closed) drawPolygon(contextCtx, f, style);
+        else drawLine(contextCtx, f, {
+          stroke: "rgba(52, 94, 132, 0.52)",
+          lineWidth: 1.4
+        });
+      }
+    }
+
+    if (window.__gwState?.showOsmRoads ?? true) {
+      for (const f of features.roads) {
+        drawLine(contextCtx, f, {
+          stroke: "rgba(82, 74, 68, 0.34)",
+          lineWidth: 2.0
         });
       }
     }
@@ -435,6 +581,7 @@
     clearCanvases();
 
     if ((window.__gwState?.showOsmFeatures ?? true) === false) return;
+    if (map.getZoom() < MIN_ZOOM) return;
 
     renderContextLayer();
     renderBuildingLayer();
@@ -459,15 +606,6 @@
         clearTimeout(fetchTimer);
 
         if (!show) {
-            features = {
-            trails: [],
-            parks: [],
-            buildings: [],
-            water: []
-            };
-
-            lastFetchKey = null;
-
             if (contextCanvas) contextCanvas.style.display = "none";
             if (buildingCanvas) buildingCanvas.style.display = "none";
 
@@ -478,7 +616,6 @@
         if (contextCanvas) contextCanvas.style.display = "block";
         if (buildingCanvas) buildingCanvas.style.display = "block";
 
-        lastFetchKey = null;
         scheduleFetch();
         scheduleRender();
     },
@@ -490,7 +627,8 @@
         trails: "showOsmTrails",
         parks: "showOsmParks",
         buildings: "showOsmBuildings",
-        water: "showOsmWater"
+        water: "showOsmWater",
+        roads: "showOsmRoads"
       };
 
       const stateKey = keyMap[kind];
@@ -505,7 +643,38 @@
         trails: features.trails.slice(),
         parks: features.parks.slice(),
         buildings: features.buildings.slice(),
-        water: features.water.slice()
+        water: features.water.slice(),
+        roads: features.roads.slice(),
+        places: features.places.slice()
+      };
+    },
+
+    getVersion() {
+      return featuresVersion;
+    },
+
+    getCacheStatus() {
+      const bounds = cachedFeatureBounds;
+      return {
+        hasCoverage: hasCachedCoverage(),
+        fetchInFlight,
+        overpassCooldownMs: Math.max(0, overpassDisabledUntil - Date.now()),
+        bounds: bounds
+          ? {
+            south: bounds.getSouth(),
+            west: bounds.getWest(),
+            north: bounds.getNorth(),
+            east: bounds.getEast()
+          }
+          : null,
+        counts: {
+          trails: features.trails.length,
+          parks: features.parks.length,
+          buildings: features.buildings.length,
+          water: features.water.length,
+          roads: features.roads.length,
+          places: features.places.length
+        }
       };
     }
   };

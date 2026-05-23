@@ -287,6 +287,66 @@ lines: [
 "Blue = off-season",
 "Opacity = freshness"
 ]
+},
+
+"osm-path-adjacency": {
+title: "OSM Path Buffer",
+subtitle: "Derived path-adjacent cells from shared OSM data.",
+lines: [
+"Gold = near a trail or path",
+"Bright edge = adjacent path buffer",
+"Opacity = proximity"
+]
+},
+
+"osm-trail-side": {
+title: "OSM Trail Side",
+subtitle: "Classifies cells by left/right side of nearest path.",
+lines: [
+"Blue = left side",
+"Orange = right side",
+"Opacity = trail-side confidence"
+]
+},
+
+"osm-wet-edge": {
+title: "OSM Wet Edge",
+subtitle: "Highlights water and stream-edge cells.",
+lines: [
+"Blue = inside water",
+"Cyan hatch = wet edge",
+"Opacity = proximity"
+]
+},
+
+"osm-barrier-map": {
+title: "OSM Barriers",
+subtitle: "Road and building barrier priors.",
+lines: [
+"Red = road-separated cell",
+"Brown = building footprint",
+"Amber = near road or building"
+]
+},
+
+"osm-landuse-class": {
+title: "OSM Land Use",
+subtitle: "Park, wood, grass, water, and building priors.",
+lines: [
+"Green = park or wood",
+"Yellow-green = grass/meadow",
+"Blue/brown = water/building"
+]
+},
+
+"osm-accessibility": {
+title: "OSM Access",
+subtitle: "Scored access prior from paths, barriers, and land use.",
+lines: [
+"Green = easier access",
+"Amber = mixed",
+"Red = blocked or constrained"
+]
 }
 
 };
@@ -589,13 +649,85 @@ seasonalnow(metrics){
   };
 },
 
+"osm-path-adjacency"(metrics){
+  const d = Number(metrics?.osm?.nearestPathDistanceM);
+  if (!Number.isFinite(d)) return { hue: 38, sat: 70, light: 62, alpha: 0.18 };
+  const t = 1 - clamp01(d / 32);
+  return {
+    hue: 36,
+    sat: 62 + 20*t,
+    light: 70 - 18*t,
+    alpha: 0.12 + 0.56*t
+  };
+},
+
+"osm-trail-side"(metrics){
+  const left = metrics?.osm?.nearestPathSide === "left";
+  const near = metrics?.osm?.isPathAdjacent === true ? 1 : 0.45;
+  return {
+    hue: left ? 204 : 18,
+    sat: 72,
+    light: 58,
+    alpha: 0.20 + 0.42*near
+  };
+},
+
+"osm-wet-edge"(metrics){
+  const inside = metrics?.osm?.insideWater === true;
+  const wet = metrics?.osm?.isWetEdge === true;
+  return {
+    hue: inside ? 204 : 184,
+    sat: wet ? 78 : 58,
+    light: inside ? 48 : 56,
+    alpha: wet || inside ? 0.56 : 0.18
+  };
+},
+
+"osm-barrier-map"(metrics){
+  const osm = metrics?.osm || {};
+  const cls = osm.insideBuilding ? "building" : osm.roadBarrierClass;
+  if (cls === "building") return { hue: 26, sat: 32, light: 40, alpha: 0.58 };
+  if (cls === "crossing") return { hue: 4, sat: 68, light: 48, alpha: 0.58 };
+  if (cls === "near") return { hue: 30, sat: 74, light: 52, alpha: 0.38 };
+  return { hue: 52, sat: 28, light: 66, alpha: 0.16 };
+},
+
+"osm-landuse-class"(metrics){
+  const cls = metrics?.osm?.landuseClass || "unclassified";
+  const palette = {
+    park: [122, 42, 48, 0.38],
+    wood: [146, 48, 34, 0.48],
+    grass: [72, 45, 52, 0.36],
+    water: [204, 52, 48, 0.48],
+    building: [28, 28, 42, 0.52],
+    unclassified: [48, 16, 62, 0.14]
+  };
+  const p = palette[cls] || palette.unclassified;
+  return { hue: p[0], sat: p[1], light: p[2], alpha: p[3] };
+},
+
+"osm-accessibility"(metrics){
+  const score = clamp01(Number(metrics?.osm?.accessibilityScore) || 0);
+  return {
+    hue: 4 + 124*score,
+    sat: 68,
+    light: score > 0.56 ? 42 : 50,
+    alpha: 0.18 + 0.42*Math.abs(score - 0.5)*2
+  };
+},
+
 
 };
 
 function compose(metrics){
-  if(!metrics || (metrics.count||0)<=0) return null;
-
   const lens = window.__gwState?.activeLens || "classic";
+  const isOsmPriorLens =
+    window.GridWildOsmPriorsLayer?.isOsmPriorLens?.(lens) === true;
+
+  if(!metrics) return null;
+  if(isOsmPriorLens && !metrics.osm) return null;
+  if(!isOsmPriorLens && (metrics.count||0)<=0) return null;
+
   const fn = recipes[lens] || recipes.classic;
 
   const c = applyHighContrast(fn(metrics));

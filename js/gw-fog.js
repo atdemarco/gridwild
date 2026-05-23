@@ -18,6 +18,8 @@
   const SURVEY_FULL_STRENGTH_MS = 24 * 60 * 60 * 1000;
 
   let cellStore = loadStore();
+  let saveBatchDepth = 0;
+  let saveBatchDirty = false;
 
   function nowMs() {
     return Date.now();
@@ -35,10 +37,31 @@
   }
 
   function saveStore() {
+    if (saveBatchDepth > 0) {
+      saveBatchDirty = true;
+      return;
+    }
+
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cellStore));
     } catch (err) {
       console.warn("GridWild fog store could not be saved:", err);
+    }
+  }
+
+  function batchUpdates(fn) {
+    if (typeof fn !== "function") return null;
+
+    saveBatchDepth++;
+    try {
+      return fn();
+    } finally {
+      saveBatchDepth = Math.max(0, saveBatchDepth - 1);
+
+      if (saveBatchDepth === 0 && saveBatchDirty) {
+        saveBatchDirty = false;
+        saveStore();
+      }
     }
   }
 
@@ -249,6 +272,7 @@ function markRecentINatObserved(key, options = {}) {
     markObserved,
     markRecentINatObserved,
     clearRecentINatObserved,
+    batchUpdates,
     clearMovementExploration,
     getCell,
     getCellFogState,

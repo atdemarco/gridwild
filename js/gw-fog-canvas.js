@@ -27,23 +27,63 @@
     return state === "documented" || state === "surveyed";
   }
 
-  function getRevealStrengthForCell(ix, iy, now) {
+  function makeFogRenderCache() {
+    return {
+      states: new Map(),
+      reveals: new Map()
+    };
+  }
+
+  function getCachedFogState(key, now, renderCache) {
+    if (!renderCache) return window.GridWildFog?.getCellFogState?.(key, now);
+    if (renderCache.states.has(key)) return renderCache.states.get(key);
+
+    const state = window.GridWildFog?.getCellFogState?.(key, now);
+    renderCache.states.set(key, state);
+    return state;
+  }
+
+  function getRevealStrengthForCell(ix, iy, now, renderCache) {
     const key = cellKey(ix, iy);
 
+    if (renderCache?.reveals?.has(key)) {
+      return renderCache.reveals.get(key);
+    }
+
     const transientStrength = window.getGridWildTransientRevealStrength?.(key, now);
-    if (transientStrength > 0) return Math.max(0, Math.min(1, transientStrength));
-    if (window.isGridWildTransientVisibleCell?.(key)) return 1;
+    if (transientStrength > 0) {
+      const reveal = Math.max(0, Math.min(1, transientStrength));
+      renderCache?.reveals?.set(key, reveal);
+      return reveal;
+    }
 
-    const s = window.GridWildFog?.getCellFogState?.(key, now);
-    if (!s) return 0;
+    if (window.isGridWildTransientVisibleCell?.(key)) {
+      renderCache?.reveals?.set(key, 1);
+      return 1;
+    }
 
-    if (s.state === "documented") return 1;
-    if (s.state === "surveyed") return Math.max(0, Math.min(1, s.reveal ?? 0.65));
+    const s = getCachedFogState(key, now, renderCache);
+    if (!s) {
+      renderCache?.reveals?.set(key, 0);
+      return 0;
+    }
 
+    if (s.state === "documented") {
+      renderCache?.reveals?.set(key, 1);
+      return 1;
+    }
+
+    if (s.state === "surveyed") {
+      const reveal = Math.max(0, Math.min(1, s.reveal ?? 0.65));
+      renderCache?.reveals?.set(key, reveal);
+      return reveal;
+    }
+
+    renderCache?.reveals?.set(key, 0);
     return 0;
   }
 
-  function getNearbyRevealStrength(ix, iy, now) {
+  function getNearbyRevealStrength(ix, iy, now, renderCache) {
     let best = 0;
 
     for (let dx = -FOG_EDGE_BLEND_RADIUS_CELLS; dx <= FOG_EDGE_BLEND_RADIUS_CELLS; dx++) {
@@ -53,7 +93,7 @@
         const dist = Math.max(Math.abs(dx), Math.abs(dy));
         if (dist > FOG_EDGE_BLEND_RADIUS_CELLS) continue;
 
-        const neighborReveal = getRevealStrengthForCell(ix + dx, iy + dy, now);
+        const neighborReveal = getRevealStrengthForCell(ix + dx, iy + dy, now, renderCache);
         if (neighborReveal <= 0) continue;
 
         // Adjacent cells get stronger thinning; 2 cells away get weaker thinning.
@@ -69,8 +109,8 @@
     return best;
   }
 
-  function applyFogEdgeSoftening(opacity, ix, iy, now) {
-    const nearbyReveal = getNearbyRevealStrength(ix, iy, now);
+  function applyFogEdgeSoftening(opacity, ix, iy, now, renderCache) {
+    const nearbyReveal = getNearbyRevealStrength(ix, iy, now, renderCache);
     if (nearbyReveal <= 0) return opacity;
 
     // Reduce opacity near revealed territory, but do not make unknown fog fully clear.
@@ -130,7 +170,7 @@
     positionCanvas();
 
     const size = map.getSize();
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = window.GridWildCanvasPerf?.getDpr?.("fog") || window.devicePixelRatio || 1;
 
     const wantW = Math.round(size.x * dpr);
     const wantH = Math.round(size.y * dpr);
@@ -155,13 +195,13 @@ function opacityKey(opacity) {
    return Math.round(quantizeOpacity(opacity) * 1000);
 }
 
-function getCellFogOpacity(ix, iy, now, smoothingOn) {
+function getCellFogOpacity(ix, iy, now, smoothingOn, renderCache) {
   const key = `${ix},${iy}`;
 
   const transientStrength = window.getGridWildTransientRevealStrength?.(key, now);
   if (transientStrength >= 0.98 || window.isGridWildTransientVisibleCell?.(key)) return null;
 
-  const fogState = window.GridWildFog.getCellFogState(key, now);
+  const fogState = getCachedFogState(key, now, renderCache);
   if (fogState.state === "documented") return null;
 
   let opacity = FOG_UNKNOWN_OPACITY;
@@ -175,7 +215,7 @@ function getCellFogOpacity(ix, iy, now, smoothingOn) {
     smoothingOn &&
     (fogState.state === "unknown" || fogState.state === "expired")
   ) {
-    opacity = applyFogEdgeSoftening(opacity, ix, iy, now);
+    opacity = applyFogEdgeSoftening(opacity, ix, iy, now, renderCache);
   }
 
   if (transientStrength > 0) {
@@ -196,7 +236,7 @@ function render() {
   const size = map.getSize();
   ctx.clearRect(0, 0, size.x, size.y);
 
-  const fogOn = window.__gwState?.showFog ?? true;
+  const fogOn = window.__gwState?.showFog ?? false;
 
   if (
     !fogOn ||
@@ -222,6 +262,7 @@ function render() {
       FOG_ROW_COMBINE_CELLS_DEFAULT
     )
   );
+  const renderCache = makeFogRenderCache();
 
   function drawFogRect(x0, y0, x1, y1, opacity) {
     const llA = map.options.crs.unproject(L.point(x0, y0));
@@ -266,7 +307,7 @@ function render() {
         const ix = Math.floor(x / GRID_SIZE_M);
         const iy = Math.floor(y / GRID_SIZE_M);
 
-        const opacity = getCellFogOpacity(ix, iy, now, smoothingOn);
+        const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
         const key = opacity === null ? null : opacityKey(opacity);
 
         if (key === null) {
@@ -306,7 +347,7 @@ function render() {
           const ix = Math.floor(x / GRID_SIZE_M);
           const iy = Math.floor(y / GRID_SIZE_M);
 
-          const opacity = getCellFogOpacity(ix, iy, now, smoothingOn);
+          const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
           if (opacity === null) continue;
 
           drawFogRect(
@@ -333,7 +374,7 @@ function renderROW() {
   const size = map.getSize();
   ctx.clearRect(0, 0, size.x, size.y);
 
-  const fogOn = window.__gwState?.showFog ?? true;
+  const fogOn = window.__gwState?.showFog ?? false;
 
   if (
     !fogOn ||
@@ -351,6 +392,7 @@ function renderROW() {
     (window.__gwState?.fogSmoothingEnabled ?? true) &&
     !map._animatingZoom &&
     !map._panAnim?._inProgress;
+  const renderCache = makeFogRenderCache();
 
   for (let y = startY; y < endY; y += GRID_SIZE_M) {
     const iy = Math.floor(y / GRID_SIZE_M);
@@ -388,7 +430,7 @@ function renderROW() {
 
     for (let x = startX; x < endX; x += GRID_SIZE_M) {
       const ix = Math.floor(x / GRID_SIZE_M);
-      const opacity = getCellFogOpacity(ix, iy, now, smoothingOn);
+      const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
       const key = opacity === null ? null : opacityKey(opacity);
 
       if (key === null) {

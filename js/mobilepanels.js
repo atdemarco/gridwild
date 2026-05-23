@@ -578,6 +578,8 @@ function renderRecentINatList() {
             data-genus="${escapeHtmlLocal(genus)}"
             style="cursor:${genus ? "pointer" : "default"};"
           >
+            ${renderObservationPhotoSlot(o, "recent")}
+
             <span style="min-width:0;flex:1 1 0;">
               <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                 ${escapeHtmlLocal(displayName)}
@@ -659,6 +661,11 @@ function renderRecentINatList() {
     evt.stopPropagation();
     window.GridWildObservationActivity?.open?.();
   });
+
+  requestObservationThumbnails(
+    obs.slice(0, RECENT_OBS_LIST_LIMIT).map(o => o.id),
+    el
+  );
 }
 
 function getObservationDisplayName(obs) {
@@ -666,11 +673,125 @@ function getObservationDisplayName(obs) {
 }
 
 function getObservationPhotoUrl(obs) {
-  return obs?.photo_medium_url || obs?.photo_square_url || obs?.photo_url || "";
+  return obs?.photo_square_url || obs?.photo_url || obs?.photo_medium_url || "";
 }
 
 function getObservationInitial(obs) {
   return getObservationDisplayName(obs).trim().slice(0, 1).toUpperCase() || "?";
+}
+
+function renderObservationPhotoSlot(obs, variant = "gallery") {
+  const id = escapeHtmlLocal(obs?.id || "");
+  const photo = getObservationPhotoUrl(obs);
+  const initial = escapeHtmlLocal(getObservationInitial(obs));
+
+  if (variant === "recent") {
+    return `
+      <span
+        class="gw-recent-obs-thumb"
+        data-obs-photo-slot="recent"
+        data-obs-id="${id}"
+        aria-hidden="true"
+        style="width:34px;height:34px;flex:0 0 34px;border-radius:10px;overflow:hidden;background:rgba(0,0,0,0.22);display:grid;place-items:center;color:#f0d18a;font-size:13px;font-weight:950;"
+      >
+        ${photo
+          ? `<img src="${escapeHtmlLocal(photo)}" loading="lazy" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;">`
+          : `<span>${initial}</span>`
+        }
+      </span>
+    `;
+  }
+
+  return photo
+    ? `<img class="gw-observation-gallery-photo" data-obs-photo-slot="gallery" data-obs-id="${id}" src="${escapeHtmlLocal(photo)}" loading="lazy" decoding="async" alt="">`
+    : `<span class="gw-observation-gallery-placeholder" data-obs-photo-slot="gallery" data-obs-id="${id}" aria-hidden="true">${initial}</span>`;
+}
+
+function updateObservationPhotoSlots(root = document) {
+  const latest = new Map(
+    (window.GridWildRecentINat?.getRecentObservations?.() || [])
+      .map(obs => [String(obs.id), obs])
+  );
+
+  root.querySelectorAll("[data-obs-photo-slot]").forEach(slot => {
+    const obs = latest.get(String(slot.dataset.obsId || ""));
+    const photo = getObservationPhotoUrl(obs);
+    if (!photo) return;
+
+    if (slot.dataset.obsPhotoSlot === "recent") {
+      if (slot.querySelector("img")) return;
+      slot.innerHTML = `<img src="${escapeHtmlLocal(photo)}" loading="lazy" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;">`;
+      return;
+    }
+
+    if (slot.tagName === "IMG") return;
+
+    const img = document.createElement("img");
+    img.className = "gw-observation-gallery-photo";
+    img.dataset.obsPhotoSlot = slot.dataset.obsPhotoSlot || "gallery";
+    img.dataset.obsId = slot.dataset.obsId || "";
+    img.src = photo;
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.alt = "";
+    slot.replaceWith(img);
+  });
+}
+
+function requestObservationThumbnails(ids, root = document) {
+  const ensure = window.GridWildRecentINat?.ensureObservationPhotos;
+  if (typeof ensure !== "function") return Promise.resolve();
+
+  const cleaned = [...new Set((ids || []).map(id => String(id || "").trim()).filter(Boolean))];
+  if (!cleaned.length) return Promise.resolve();
+
+  return ensure(cleaned)
+    .then(() => updateObservationPhotoSlots(root))
+    .catch(err => console.warn("Could not fetch observation thumbnails:", err));
+}
+
+function observeObservationThumbnails(root = document) {
+  const slots = Array.from(root.querySelectorAll("[data-obs-photo-slot]"))
+    .filter(slot => {
+      const id = String(slot.dataset.obsId || "");
+      const obs = (window.GridWildRecentINat?.getRecentObservations?.() || [])
+        .find(o => String(o.id) === id);
+      return id && !getObservationPhotoUrl(obs);
+    });
+
+  if (!slots.length) return;
+
+  if (!("IntersectionObserver" in window)) {
+    requestObservationThumbnails(slots.slice(0, 24).map(slot => slot.dataset.obsId), root);
+    return;
+  }
+
+  const queued = new Set();
+  let timer = null;
+  const flush = () => {
+    timer = null;
+    const ids = [...queued];
+    queued.clear();
+    requestObservationThumbnails(ids, root);
+  };
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const id = entry.target.dataset.obsId;
+      if (id) queued.add(id);
+      observer.unobserve(entry.target);
+    });
+
+    if (queued.size && !timer) {
+      timer = setTimeout(flush, 80);
+    }
+  }, {
+    root: root.querySelector(".gw-obs-editor") || null,
+    rootMargin: "220px"
+  });
+
+  slots.forEach(slot => observer.observe(slot));
 }
 
 function openObservationGallery() {
@@ -705,13 +826,9 @@ function openObservationGallery() {
 
       <div class="gw-observation-gallery-grid">
         ${obs.map(o => {
-          const photo = getObservationPhotoUrl(o);
           return `
             <button class="gw-observation-gallery-tile" type="button" data-obs-id="${escapeHtmlLocal(o.id)}">
-              ${photo
-                ? `<img class="gw-observation-gallery-photo" src="${escapeHtmlLocal(photo)}" alt="">`
-                : `<span class="gw-observation-gallery-placeholder" aria-hidden="true">${escapeHtmlLocal(getObservationInitial(o))}</span>`
-              }
+              ${renderObservationPhotoSlot(o, "gallery")}
               <span class="gw-observation-gallery-meta">
                 <span class="gw-observation-gallery-name">${escapeHtmlLocal(getObservationDisplayName(o))}</span>
                 <span class="gw-observation-gallery-date">${escapeHtmlLocal(o.observed_on || "unknown date")}</span>
@@ -744,10 +861,13 @@ function openObservationGallery() {
   modal.querySelectorAll(".gw-observation-gallery-tile").forEach(tile => {
     tile.addEventListener("click", evt => {
       evt.preventDefault();
-      const selected = obs.find(o => String(o.id) === String(tile.dataset.obsId));
+      const latestObs = window.GridWildRecentINat?.getRecentObservations?.() || obs;
+      const selected = latestObs.find(o => String(o.id) === String(tile.dataset.obsId));
       if (selected) openObservationDetails(selected);
     });
   });
+
+  observeObservationThumbnails(modal);
 }
 
 function openObservationDetails(obs) {
@@ -1216,7 +1336,7 @@ function renderInfoContent() {
             <span>Captive shimmer</span>
           </label>
           <label class="gw-toggleline">
-            <input type="checkbox" id="toggleFog_clone" checked />
+            <input type="checkbox" id="toggleFog_clone" />
             <span>Fog of war</span>
           </label>
 
@@ -1872,16 +1992,8 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
         window.paintLegendFromHeatFunction();
       }
 
-      if (typeof window.updateHudCenterSummary === "function") {
-        window.updateHudCenterSummary();
-      }
-
-      if (typeof window.updateTopObserversPanel === "function") {
-        window.updateTopObserversPanel();
-      }
-
-      if (typeof window.updateHudCladogram === "function") {
-        window.updateHudCladogram();
+      if (typeof window.refreshGridWildHudPanels === "function") {
+        window.refreshGridWildHudPanels({ reason: "mobile-init" });
       }
 
       window.GridWildAchievements?.bindButtons?.(document);
@@ -1932,16 +2044,18 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       window.paintLegendFromHeatFunction();
     }
 
-    if (typeof window.updateHudCenterSummary === "function") {
-      window.updateHudCenterSummary();
-    }
+    const infoSheetOpen =
+      document.getElementById("sheetInfo")?.classList?.contains("is-open") === true;
 
-    if (typeof window.updateTopObserversPanel === "function") {
-      window.updateTopObserversPanel();
-    }
-
-    if (typeof window.updateHudCladogram === "function") {
-      window.updateHudCladogram();
+    if (typeof window.refreshGridWildHudPanels === "function") {
+      window.refreshGridWildHudPanels({
+        force: infoSheetOpen,
+        reason: infoSheetOpen ? "mobile-info" : "mobile-sync"
+      });
+    } else if (infoSheetOpen) {
+      window.updateHudCenterSummary?.();
+      window.updateTopObserversPanel?.();
+      window.updateHudCladogram?.();
     }
 
 

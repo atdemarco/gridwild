@@ -48,7 +48,7 @@ function cleanNiche(raw, playerId) {
     centroid_lng: centroidLng,
     geometry: raw.geometry && typeof raw.geometry === "object" ? raw.geometry : null,
     grid_cell_ids: Array.isArray(raw.grid_cell_ids)
-      ? raw.grid_cell_ids.map((id) => cleanString(id, 60)).filter(Boolean).slice(0, 400)
+      ? raw.grid_cell_ids.map((id) => cleanString(id, 60)).filter(Boolean).slice(0, 3000)
       : [],
     radius_m: Math.round(clampNumber(raw.radius_m, 10, 800, 90)),
     scale_level: cleanString(raw.scale_level, 40) || "walking-radius",

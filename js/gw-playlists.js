@@ -231,6 +231,75 @@
     return window.GridWildRecentINat?.getRecentObservations?.() || [];
   }
 
+  function getObsThumbUrl(obs) {
+    return obs?.photo_square_url || obs?.photo_url || obs?.photo_medium_url || "";
+  }
+
+  function refreshWildlistPhotoSlots(root = document) {
+    const latest = new Map(getRecentObs().map(obs => [String(obs.id), obs]));
+
+    root.querySelectorAll("[data-wildlist-photo-slot]").forEach(slot => {
+      const obs = latest.get(String(slot.dataset.obsId || ""));
+      const img = getObsThumbUrl(obs);
+      if (!img || slot.querySelector("img")) return;
+
+      slot.innerHTML = `<img src="${esc(img)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;">`;
+    });
+  }
+
+  function requestWildlistThumbnails(ids, root = document) {
+    const ensure = window.GridWildRecentINat?.ensureObservationPhotos;
+    if (typeof ensure !== "function") return Promise.resolve();
+
+    const cleaned = [...new Set((ids || []).map(id => String(id || "").trim()).filter(Boolean))];
+    if (!cleaned.length) return Promise.resolve();
+
+    return ensure(cleaned)
+      .then(() => refreshWildlistPhotoSlots(root))
+      .catch(err => console.warn("Could not fetch Wildlist thumbnails:", err));
+  }
+
+  function observeWildlistThumbnails(root = document) {
+    const latest = new Map(getRecentObs().map(obs => [String(obs.id), obs]));
+    const slots = Array.from(root.querySelectorAll("[data-wildlist-photo-slot]"))
+      .filter(slot => {
+        const id = String(slot.dataset.obsId || "");
+        return id && !getObsThumbUrl(latest.get(id));
+      });
+
+    if (!slots.length) return;
+
+    if (!("IntersectionObserver" in window)) {
+      requestWildlistThumbnails(slots.slice(0, 24).map(slot => slot.dataset.obsId), root);
+      return;
+    }
+
+    const queued = new Set();
+    let timer = null;
+    const flush = () => {
+      timer = null;
+      const ids = [...queued];
+      queued.clear();
+      requestWildlistThumbnails(ids, root);
+    };
+
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const id = entry.target.dataset.obsId;
+        if (id) queued.add(id);
+        observer.unobserve(entry.target);
+      });
+
+      if (queued.size && !timer) timer = setTimeout(flush, 80);
+    }, {
+      root: root.querySelector(".gw-playlist-modal") || null,
+      rootMargin: "220px"
+    });
+
+    slots.forEach(slot => observer.observe(slot));
+  }
+
   const WILDLIST_RECIPES = [
   {
     id: "custom",
@@ -278,9 +347,9 @@
     common_name: o.common_name || "",
     scientific_name: o.scientific_name || "",
     observed_on: o.observed_on || null,
-    photo_url: o.photo_url || o.photo_square_url || null,
+    photo_url: o.photo_square_url || o.photo_url || null,
     photo_square_url: o.photo_square_url || o.photo_url || null,
-    photo_medium_url: o.photo_medium_url || o.photo_square_url || o.photo_url || null,
+    photo_medium_url: o.photo_square_url || o.photo_url || o.photo_medium_url || null,
     iconic_taxon_name: o.iconic_taxon_name || "Unknown",
     genus_name: o.genus_name || "",
     uri: o.uri || null,
@@ -632,11 +701,11 @@ function openPartyWildlistPlaceholder() {
         margin-top:12px;
       ">
         ${obs.slice(0, 120).map(o => {
-          const img = o.photo_square_url || o.photo_url || "";
+          const img = getObsThumbUrl(o);
           const name = o.taxon || o.common_name || o.scientific_name || "Unknown taxon";
 
           return `
-            <label class="gw-card gw-custom-wildlist-tile" style="
+            <label class="gw-card gw-custom-wildlist-tile" data-obs-id="${esc(o.id)}" style="
               margin:0;
               padding:8px;
               cursor:pointer;
@@ -659,9 +728,9 @@ function openPartyWildlistPlaceholder() {
                 align-items:center;
                 justify-content:center;
                 margin-bottom:8px;
-              ">
+              " data-wildlist-photo-slot data-obs-id="${esc(o.id)}">
                 ${img
-                  ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;">`
+                  ? `<img src="${esc(img)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;">`
                   : `<span class="gw-muted">No photo</span>`
                 }
               </div>
@@ -687,6 +756,7 @@ function openPartyWildlistPlaceholder() {
   `;
 
   document.body.appendChild(modal);
+  observeWildlistThumbnails(modal);
 
   const checks = Array.from(modal.querySelectorAll(".gwCustomWildlistObsCheck"));
   const countEl = modal.querySelector("#gwCustomWildlistCount");
@@ -720,8 +790,11 @@ function openPartyWildlistPlaceholder() {
       return;
     }
 
-    const selected = obs
-      .filter(o => selectedIds.includes(String(o.id)))
+    const latestById = new Map(getRecentObs().map(o => [String(o.id), o]));
+    const initialById = new Map(obs.map(o => [String(o.id), o]));
+    const selected = selectedIds
+      .map(id => latestById.get(String(id)) || initialById.get(String(id)))
+      .filter(Boolean)
       .map(compactObs);
 
     const title =

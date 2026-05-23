@@ -52,6 +52,24 @@ let gridHeatCtx = null;
 let gridHeatRaf = null;
 let gridHeatCanvasTopLeft = L.point(0, 0);
 
+window.GridWildCanvasPerf = window.GridWildCanvasPerf || (function () {
+  function isMobileLike() {
+    return window.matchMedia?.("(max-width: 700px), (pointer: coarse)")?.matches === true;
+  }
+
+  function getDpr(label = "canvas") {
+    const nativeDpr = window.devicePixelRatio || 1;
+    const configuredCap = Number(window.__gwState?.canvasDprCap);
+    const cap = Number.isFinite(configuredCap) && configuredCap > 0
+      ? configuredCap
+      : (isMobileLike() ? 1.5 : nativeDpr);
+
+    return Math.max(1, Math.min(nativeDpr, cap));
+  }
+
+  return { getDpr, isMobileLike };
+})();
+
 function ensureGridHeatCanvas() {
   if (gridHeatCanvas) return gridHeatCanvas;
 
@@ -90,7 +108,7 @@ function resizeGridHeatCanvas() {
   positionGridHeatCanvas();
 
   const size = map.getSize();
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = window.GridWildCanvasPerf?.getDpr?.("heat") || window.devicePixelRatio || 1;
 
   const wantW = Math.round(size.x * dpr);
   const wantH = Math.round(size.y * dpr);
@@ -595,6 +613,176 @@ function getCellKeyForLatLng(lat, lng) {
 
 window.getCellKeyForLatLng = getCellKeyForLatLng;
 
+window.GridWildGrid = window.GridWildGrid || (function () {
+  function latLngToCell(latlng) {
+    const ll = Array.isArray(latlng)
+      ? L.latLng(latlng[0], latlng[1])
+      : L.latLng(latlng);
+    const p = map.options.crs.project(ll);
+    return {
+      ix: Math.floor(p.x / GRID_SIZE_M),
+      iy: Math.floor(p.y / GRID_SIZE_M)
+    };
+  }
+
+  function cellKey(ix, iy) {
+    return `${ix},${iy}`;
+  }
+
+  function normalizeCellBounds(a, b) {
+    return {
+      minIx: Math.min(a.ix, b.ix),
+      maxIx: Math.max(a.ix, b.ix),
+      minIy: Math.min(a.iy, b.iy),
+      maxIy: Math.max(a.iy, b.iy)
+    };
+  }
+
+  function boundsToLatLngBounds(bounds) {
+    const { sw } = fineCellBoundsLL(bounds.minIx, bounds.minIy);
+    const { ne } = fineCellBoundsLL(bounds.maxIx, bounds.maxIy);
+    return L.latLngBounds(sw, ne);
+  }
+
+  function centerAreaBounds(radiusCells = 7) {
+    const radius = Math.max(1, Math.round(Number(radiusCells) || 7));
+    const center = getCenterFineCell();
+    return {
+      minIx: center.ix - radius,
+      maxIx: center.ix + radius,
+      minIy: center.iy - radius,
+      maxIy: center.iy + radius
+    };
+  }
+
+  function cellsForBounds(bounds) {
+    const out = [];
+    if (!bounds) return out;
+
+    for (let iy = bounds.minIy; iy <= bounds.maxIy; iy++) {
+      for (let ix = bounds.minIx; ix <= bounds.maxIx; ix++) {
+        const key = cellKey(ix, iy);
+        const baseMetrics =
+          window.__richGridMetrics?.get(key) ||
+          window.__staticGridCounts?.get(key) ||
+          null;
+        const displayMetrics = baseMetrics
+          ? getDisplayMetricsForCell(ix, iy, baseMetrics || {})
+          : null;
+
+        out.push({
+          ix,
+          iy,
+          key,
+          metrics: displayMetrics || baseMetrics,
+          style: displayMetrics ? metricsToFill(displayMetrics) : null,
+          bounds: fineCellBoundsLL(ix, iy)
+        });
+      }
+    }
+
+    return out;
+  }
+
+  function selectedIconicTaxa() {
+    const taxa = window.__gwFilters?.iconicTaxa || [];
+    return Array.isArray(taxa) ? taxa.filter(Boolean) : [];
+  }
+
+  function filteredSquareGeneraRecord(rec, taxa) {
+    if (!rec || !taxa?.length) return rec;
+
+    const selected = new Set(taxa);
+    const genera = (Array.isArray(rec.genera) ? rec.genera : [])
+      .filter(row => selected.has(row?.iconic_taxon_name || "Unknown"));
+
+    if (!genera.length) return null;
+
+    const totalCount = (Array.isArray(rec.genera) ? rec.genera : [])
+      .reduce((sum, row) => sum + (Number(row?.count) || 0), 0);
+    const filteredCount = genera.reduce((sum, row) => sum + (Number(row?.count) || 0), 0);
+    const ratio = totalCount > 0
+      ? Math.max(0, Math.min(1, filteredCount / totalCount))
+      : 1;
+
+    const topObservers = (Array.isArray(rec.top_observers) ? rec.top_observers : [])
+      .map(row => ({
+        ...row,
+        count: Math.round((Number(row?.count) || 0) * ratio),
+        species: Math.max(1, Math.round((Number(row?.species) || 0) * ratio))
+      }))
+      .filter(row => row.count > 0);
+
+    return {
+      ...rec,
+      genera,
+      top_observers: topObservers
+    };
+  }
+
+  function activeFilterSignature() {
+    return [
+      window.__gwFilters?.onlyMe === true ? "me" : "all",
+      selectedIconicTaxa().sort().join(",")
+    ].join("|");
+  }
+
+  async function mergedGeneraRecordForBounds(bounds, options = {}) {
+    if (!bounds) return { genera: [], __metrics: null };
+
+    if (options.applyFilters && window.GridWildMeOverlayFilter?.isActive?.()) {
+      return window.GridWildMeOverlayFilter.generaRecordForBounds?.(bounds) ||
+        { genera: [], top_observers: [], __metrics: null };
+    }
+
+    const jobs = [];
+
+    for (let iy = bounds.minIy; iy <= bounds.maxIy; iy++) {
+      for (let ix = bounds.minIx; ix <= bounds.maxIx; ix++) {
+        jobs.push(getSquareGeneraRecord(ix, iy));
+      }
+    }
+
+    let records = (await Promise.all(jobs)).filter(Boolean);
+    if (options.applyFilters) {
+      const taxa = selectedIconicTaxa();
+      if (taxa.length) {
+        records = records
+          .map(rec => filteredSquareGeneraRecord(rec, taxa))
+          .filter(Boolean);
+      }
+    }
+    return mergeSquareGeneraRecords(records);
+  }
+
+  function currentUserCell() {
+    return getCurrentUserCellIndices();
+  }
+
+  function centerCell() {
+    return getCenterFineCell();
+  }
+
+  return {
+    gridSizeM: GRID_SIZE_M,
+    latLngToCell,
+    cellKey,
+    normalizeCellBounds,
+    boundsToLatLngBounds,
+    centerAreaBounds,
+    cellsForBounds,
+    mergedGeneraRecordForBounds,
+    activeFilterSignature,
+    currentUserCell,
+    centerCell,
+    cellBounds: fineCellBoundsLL,
+    metricsToFill,
+    loadObserverDictionary,
+    observerMeta: getObserverMeta,
+    escapeHtml
+  };
+})();
+
 
 
 
@@ -871,6 +1059,7 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
 
 function mergeSquareGeneraRecords(squareRecords) {
   const genusMap = new Map();
+  const observerMap = new Map();
 
   const mergedMetrics =
     window.GWMetrics?.mergeSquareMetrics
@@ -907,10 +1096,34 @@ function mergeSquareGeneraRecords(squareRecords) {
         dest.month_counts[i] += Number(srcMonths[i]) || 0;
       }
     }
+
+    const observers = Array.isArray(rec?.top_observers) ? rec.top_observers : [];
+    for (const row of observers) {
+      const observerId = Number(row?.observer_id);
+      if (!Number.isFinite(observerId)) continue;
+
+      if (!observerMap.has(observerId)) {
+        observerMap.set(observerId, {
+          observer_id: observerId,
+          count: 0,
+          species: 0
+        });
+      }
+
+      const dest = observerMap.get(observerId);
+      dest.count += Number(row?.count) || 0;
+      dest.species = Math.max(dest.species, Number(row?.species) || 0);
+    }
   }
 
   return {
     genera: Array.from(genusMap.values()),
+    top_observers: Array.from(observerMap.values())
+      .sort((a, b) =>
+        (b.count - a.count) ||
+        (b.species - a.species) ||
+        (a.observer_id - b.observer_id)
+      ),
     __metrics: mergedMetrics
   };
 
@@ -926,6 +1139,11 @@ window.__squareGeneraSuperchunkCache = window.__squareGeneraSuperchunkCache || n
 window.__richGridMetrics = window.__richGridMetrics || new Map();
 window.__richGridMetricsPending = window.__richGridMetricsPending || new Map();
 window.__squareGeneraSuperchunkPending = window.__squareGeneraSuperchunkPending || new Map();
+window.__squareGeneraSuperchunkDownloadState = window.__squareGeneraSuperchunkDownloadState || {
+  active: 0,
+  timer: null,
+  lastToastAt: 0
+};
 
 
 const GENERA_SUPERCHUNK_SIZE = 32; // must match your MATLAB writer
@@ -934,6 +1152,52 @@ const GENUS_TAXONOMY_DICT_URL = "assets/genus_taxonomy_dictionary.json";
 
 window.__gwObserverDict = window.__gwObserverDict || null;
 const OBSERVER_DICT_URL = "assets/observer_dictionary.json";
+window.__gwRegularGridDataDownloadState = window.__gwRegularGridDataDownloadState || {
+  active: false,
+  toastTimer: null,
+  toastShown: false,
+  completed: false
+};
+
+function showRegularGridDataToast(message) {
+  if (typeof window.showGridWildToast === "function") {
+    window.showGridWildToast(message);
+    return;
+  }
+
+  window.setTimeout(() => {
+    if (typeof window.showGridWildToast === "function") {
+      window.showGridWildToast(message);
+    }
+  }, 700);
+}
+
+function beginRegularGridDataDownloadToast() {
+  const state = window.__gwRegularGridDataDownloadState;
+  if (state.active) return;
+
+  state.active = true;
+  state.completed = false;
+  state.toastShown = false;
+  window.clearTimeout(state.toastTimer);
+  state.toastTimer = window.setTimeout(() => {
+    if (!state.active || state.completed) return;
+    state.toastShown = true;
+    showRegularGridDataToast("Downloading GridWild map data...");
+  }, 450);
+}
+
+function finishRegularGridDataDownloadToast() {
+  const state = window.__gwRegularGridDataDownloadState;
+  state.completed = true;
+  state.active = false;
+  window.clearTimeout(state.toastTimer);
+  state.toastTimer = null;
+
+  if (state.toastShown) {
+    showRegularGridDataToast("GridWild map data downloaded");
+  }
+}
 
 async function getGridAssetUrl(key, fallbackUrl) {
   try {
@@ -948,6 +1212,8 @@ async function getGridAssetUrl(key, fallbackUrl) {
 }
 
 async function loadGridWildStaticAssets() {
+  beginRegularGridDataDownloadToast();
+
   if (window.GridWildAssets?.getCatalog) {
     window.GridWildAssets.getCatalog()
       .then((catalog) => {
@@ -972,11 +1238,23 @@ async function loadGridWildStaticAssets() {
       .catch((err) => console.warn("GridWild square summary unavailable.", err));
   }
 
-  loadObserverDictionary()
-    .catch((err) => console.warn("GridWild observer dictionary unavailable.", err));
-
-  const heatUrl = await getGridAssetUrl("heat", "assets/dc_heat.csv");
-  loadStaticHeatmapCsv(heatUrl);
+  try {
+    const heatUrl = await getGridAssetUrl("heat", "assets/dc_heat.csv");
+    await Promise.allSettled([
+      loadObserverDictionary(),
+      loadStaticHeatmapCsv(heatUrl)
+    ]).then((results) => {
+      const [observerResult, heatResult] = results;
+      if (observerResult.status === "rejected") {
+        console.warn("GridWild observer dictionary unavailable.", observerResult.reason);
+      }
+      if (heatResult.status === "rejected") {
+        console.warn("GridWild heat map unavailable.", heatResult.reason);
+      }
+    });
+  } finally {
+    finishRegularGridDataDownloadToast();
+  }
 }
 
 async function loadObserverDictionary() {
@@ -1019,27 +1297,60 @@ async function loadGeneraSuperchunk(ix, iy) {
     return pending.get(key);
   }
 
-  const url = await getGeneraSuperchunkUrlAsync(ix, iy);
+  const job = (async () => {
+    const url = await getGeneraSuperchunkUrlAsync(ix, iy);
+    beginGeneraSuperchunkDownloadToast();
 
-  const job = fetch(url)
-    .then((resp) => {
+    try {
+      const resp = await fetch(url);
       if (!resp.ok) {
         throw new Error(`Failed to load square genera superchunk: HTTP ${resp.status} for ${url}`);
       }
-      return resp.json();
-    })
-    .then((data) => {
+      const data = await resp.json();
       cache.set(key, data);
-      pending.delete(key);
       return data;
-    })
-    .catch((err) => {
+    } finally {
       pending.delete(key);
-      throw err;
-    });
+      endGeneraSuperchunkDownloadToast();
+    }
+  })();
 
   pending.set(key, job);
   return job;
+}
+
+function showGeneraSuperchunkDownloadToast(force = false) {
+  if (typeof window.showGridWildToast !== "function") return;
+
+  const state = window.__squareGeneraSuperchunkDownloadState;
+  const now = Date.now();
+  if (!force && now - state.lastToastAt < 1400) return;
+
+  state.lastToastAt = now;
+  const suffix = state.active > 1 ? ` (${state.active} chunks)` : "";
+  window.showGridWildToast(`Downloading superchunk data${suffix}...`);
+}
+
+function beginGeneraSuperchunkDownloadToast() {
+  const state = window.__squareGeneraSuperchunkDownloadState;
+  state.active += 1;
+  showGeneraSuperchunkDownloadToast(true);
+
+  if (!state.timer) {
+    state.timer = window.setInterval(() => {
+      if (state.active > 0) showGeneraSuperchunkDownloadToast(true);
+    }, 1400);
+  }
+}
+
+function endGeneraSuperchunkDownloadToast() {
+  const state = window.__squareGeneraSuperchunkDownloadState;
+  state.active = Math.max(0, state.active - 1);
+
+  if (state.active === 0 && state.timer) {
+    window.clearInterval(state.timer);
+    state.timer = null;
+  }
 }
 
 
@@ -1235,6 +1546,7 @@ window.GridWildIconicOverlayFilter = window.GridWildIconicOverlayFilter || (func
 window.GridWildMeOverlayFilter = window.GridWildMeOverlayFilter || (function () {
   let cache = null;
   let signature = "";
+  let genusTaxonomyByName = null;
 
   const MONTH_COUNT = 12;
 
@@ -1310,6 +1622,120 @@ window.GridWildMeOverlayFilter = window.GridWildMeOverlayFilter || (function () 
       const month = new Date(ms).getUTCMonth();
       if (month >= 0 && month < MONTH_COUNT) acc.month_totals[month]++;
     }
+  }
+
+  async function getGenusTaxonomyByName() {
+    if (genusTaxonomyByName) return genusTaxonomyByName;
+
+    genusTaxonomyByName = new Map();
+    try {
+      const dict = await loadGenusTaxonomyDictionary();
+      for (const rec of Object.values(dict || {})) {
+        const name = rec?.name || rec?.genus_name;
+        if (name && !genusTaxonomyByName.has(name)) {
+          genusTaxonomyByName.set(name, rec);
+        }
+      }
+    } catch (err) {
+      console.warn("GridWild Me taxonomy lookup unavailable.", err);
+    }
+
+    return genusTaxonomyByName;
+  }
+
+  function cellForObservation(obs) {
+    const lat = Number(obs?.lat);
+    const lng = Number(obs?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    const key = getCellKeyForLatLng(lat, lng);
+    const comma = key.indexOf(",");
+    if (comma <= 0) return null;
+
+    const ix = Number(key.slice(0, comma));
+    const iy = Number(key.slice(comma + 1));
+    return Number.isFinite(ix) && Number.isFinite(iy) ? { ix, iy } : null;
+  }
+
+  function observationsForCellBounds(bounds) {
+    if (!bounds) return [];
+
+    const taxa = new Set(selectedTaxa());
+    return (window.GridWildRecentINat?.getRecentObservations?.() || [])
+      .filter(obs => {
+        const cell = cellForObservation(obs);
+        if (!cell) return false;
+        if (
+          cell.ix < bounds.minIx ||
+          cell.ix > bounds.maxIx ||
+          cell.iy < bounds.minIy ||
+          cell.iy > bounds.maxIy
+        ) {
+          return false;
+        }
+        return !taxa.size || taxa.has(obs?.iconic_taxon_name || "Unknown");
+      });
+  }
+
+  async function generaRecordForBounds(bounds) {
+    const observations = observationsForCellBounds(bounds);
+    if (!observations.length) {
+      return { genera: [], top_observers: [], __metrics: null };
+    }
+
+    const taxonomyByName = await getGenusTaxonomyByName();
+    const genusMap = new Map();
+
+    for (const obs of observations) {
+      const genus =
+        obs?.genus_name ||
+        String(obs?.scientific_name || obs?.taxon || "Unknown").split(/\s+/)[0] ||
+        "Unknown";
+      const taxonomy = taxonomyByName.get(genus);
+      const path = Array.isArray(taxonomy?.path_names) ? taxonomy.path_names : [];
+      const iconic = obs?.iconic_taxon_name || path[2] || "Unknown";
+      const order = path[3] || "Unknown";
+      const family = path[4] || "Unknown";
+      const key = [iconic, order, family, genus].join("||");
+
+      if (!genusMap.has(key)) {
+        genusMap.set(key, {
+          iconic_taxon_name: iconic,
+          order_name: order,
+          family_name: family,
+          genus_name: genus,
+          count: 0,
+          month_counts: new Array(12).fill(0)
+        });
+      }
+
+      const dest = genusMap.get(key);
+      dest.count += 1;
+
+      const ms = parseObsTimeMs(obs);
+      if (ms) {
+        const month = new Date(ms).getUTCMonth();
+        if (month >= 0 && month < MONTH_COUNT) dest.month_counts[month] += 1;
+      }
+    }
+
+    const genera = Array.from(genusMap.values());
+    const metrics = window.GWMetrics?.buildSquareMetrics
+      ? window.GWMetrics.buildSquareMetrics({ genera })
+      : null;
+    const username = window.__gwUser?.username || "me";
+    const species = new Set(genera.map(row => row.genus_name).filter(Boolean)).size;
+
+    return {
+      genera,
+      top_observers: [{
+        observer_login: username,
+        observer_name: username === "me" ? "Me" : `@${username}`,
+        count: observations.length,
+        species
+      }],
+      __metrics: metrics ? { ...metrics, observers: 1 } : null
+    };
   }
 
   function finalizeMetrics(acc) {
@@ -1543,6 +1969,7 @@ window.GridWildMeOverlayFilter = window.GridWildMeOverlayFilter || (function () 
     isActive,
     metricsForCell,
     entriesInMeterBounds,
+    generaRecordForBounds,
     invalidate
   };
 })();
@@ -2481,12 +2908,30 @@ function updateGridLines() {
   }).addTo(gridLineLayer);
 }
 
-// this now renders the static assets
-function updateGrid() {
-  markCenterMacroVisitedByGodsEye();
-  updateGridLines();
-  updateStaticGridHeat();
-    if (typeof window.updateHudCenterSummary === "function") {
+let __lastGridWildHudCenterRefreshKey = null;
+
+function getCenterMacroRefreshKey() {
+  const { ix0, iy0 } = getCenterMacroAnchor();
+  return `${ix0},${iy0}`;
+}
+
+function isGridWildInfoPanelVisible() {
+  const sheet = document.getElementById("sheetInfo");
+  return sheet?.classList?.contains("is-open") === true;
+}
+
+function refreshGridWildHudPanels(options = {}) {
+  const force = options.force === true;
+  const key = getCenterMacroRefreshKey();
+
+  if (!force) {
+    if (!isGridWildInfoPanelVisible()) return false;
+    if (key === __lastGridWildHudCenterRefreshKey) return false;
+  }
+
+  __lastGridWildHudCenterRefreshKey = key;
+
+  if (typeof window.updateHudCenterSummary === "function") {
     window.updateHudCenterSummary();
   }
 
@@ -2498,6 +2943,17 @@ function updateGrid() {
     window.updateHudCladogram();
   }
 
+  return true;
+}
+
+window.refreshGridWildHudPanels = refreshGridWildHudPanels;
+
+// this now renders the static assets
+function updateGrid() {
+  markCenterMacroVisitedByGodsEye();
+  updateGridLines();
+  updateStaticGridHeat();
+  refreshGridWildHudPanels();
 }
 
 map.on("move zoom resize viewreset zoomend moveend", scheduleGridHeatCanvasRender);
@@ -3299,7 +3755,7 @@ function updateStaticGridHeatOLD() {
     if (gridShimmerLayer.getLayers().length) gridShimmerLayer.clearLayers();
   }
 
-  const fogOn = window.__gwState?.showFog ?? true;
+  const fogOn = window.__gwState?.showFog ?? false;
 
   const counts = window.__staticGridCounts;
   if (!(counts instanceof Map) || counts.size === 0) return;
@@ -3549,7 +4005,7 @@ function renderGridHeatCanvas() {
     if (coarseHudToggle) coarseHudToggle.checked = false;
   }
 
-  const fogOn = window.__gwState?.showFog ?? true;
+  const fogOn = window.__gwState?.showFog ?? false;
   const { startX, endX, startY, endY } = getPaddedBoundsMeters();
   const meHeatActive = window.GridWildMeOverlayFilter?.isActive?.();
   const meHeatEntries = meHeatActive
@@ -3915,17 +4371,7 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
   if (enteredNewCell) {
     updateStaticGridHeat();
     updateGridLines();
-
-    if (typeof window.updateHudCenterSummary === "function") {
-      window.updateHudCenterSummary();
-    }
-    
-    if (typeof window.updateTopObserversPanel === "function") {
-      window.updateTopObserversPanel();
-    }
-    if (typeof window.updateHudCladogram === "function") {
-      window.updateHudCladogram();
-    }
+    refreshGridWildHudPanels();
 
     if (typeof window.maybeRefreshDynamicINat === "function") {
       window.maybeRefreshDynamicINat(false, cellKey);

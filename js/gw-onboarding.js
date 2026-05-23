@@ -81,14 +81,14 @@
       body: "GridWild turns your neighborhood into a living map of biodiversity. Every square around you contains nature waiting to be observed."
     },
     {
+      emoji: "N",
+      title: "Find neighborhood niches",
+      body: "Explore existing local niches or discover new ones in your neighborhood. Niches highlight places where the map sees a useful ecological signal."
+    },
+    {
       emoji: "📷",
       title: "Anything alive counts",
       body: "A blade of grass, a flower, a beetle, a tree, moss on a wall, a pigeon on a roof — all of it helps reveal the life around you."
-    },
-    {
-      emoji: "🖼️",
-      title: "Tune your photos",
-      body: "After photographing a find, use the photo editor to lighten, crop, or zoom your image before handing it off to iNaturalist."
     },
     {
       type: "character",

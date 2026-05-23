@@ -1863,37 +1863,39 @@ function drawPartyRecapMap(id) {
         <input class="gw-party-input" id="gwPartyTitleInput" placeholder="e.g., Rock Creek Ant Hunt">
 
         <label class="gw-party-label">Template</label>
-        <div class="gw-party-template-grid">
-        ${PARTY_TEMPLATES.map(t => `
-            <button
-            class="gw-party-template-btn"
-            type="button"
-            data-template-key="${esc(t.key)}"
-            >
-            <span>${esc(t.emoji)}</span>
-            <span>${esc(t.label)}</span>
-            </button>
-        `).join("")}
+        <select class="gw-party-input" id="gwPartyTemplateInput">
+          <option value="">Choose a template</option>
+          ${PARTY_TEMPLATES.map(t => `
+            <option value="${esc(t.key)}">${esc(t.emoji)} ${esc(t.label)}</option>
+          `).join("")}
+        </select>
+
+        <div class="gw-party-setup-row">
+          <div class="gw-party-field">
+            <label class="gw-party-label" for="gwPartyGoalInput">Goal</label>
+            <select class="gw-party-input" id="gwPartyGoalInput">
+              <option value="ants">Ant hunt</option>
+              <option value="birds">Bird walk</option>
+              <option value="insects">Insect sweep</option>
+              <option value="plants">Plant survey</option>
+              <option value="fungi">Fungus / lichen foray</option>
+              <option value="any">General bioblitz</option>
+            </select>
+          </div>
+
+          <div class="gw-party-field">
+            <label class="gw-party-label" for="gwPartyTargetInput">Target count</label>
+            <input class="gw-party-input" id="gwPartyTargetInput" type="number" min="1" max="999" value="10">
+          </div>
+
+          <div class="gw-party-field">
+            <label class="gw-party-label" for="gwPartyVisibilityInput">Visibility</label>
+            <select class="gw-party-input" id="gwPartyVisibilityInput">
+              <option value="public">Public nearby</option>
+              <option value="private">Private / QR only</option>
+            </select>
+          </div>
         </div>
-
-        <label class="gw-party-label">Goal</label>
-        <select class="gw-party-input" id="gwPartyGoalInput">
-          <option value="ants">Ant hunt</option>
-          <option value="birds">Bird walk</option>
-          <option value="insects">Insect sweep</option>
-          <option value="plants">Plant survey</option>
-          <option value="fungi">Fungus / lichen foray</option>
-          <option value="any">General bioblitz</option>
-        </select>
-
-        <label class="gw-party-label">Target count</label>
-        <input class="gw-party-input" id="gwPartyTargetInput" type="number" min="1" max="999" value="10">
-
-        <label class="gw-party-label">Visibility</label>
-        <select class="gw-party-input" id="gwPartyVisibilityInput">
-          <option value="public">Public nearby</option>
-          <option value="private">Private / QR only</option>
-        </select>
 
         <label class="gw-party-label">Location</label>
         <div class="gw-party-location-segment" role="radiogroup" aria-label="Party location">
@@ -2008,19 +2010,14 @@ function drawPartyRecapMap(id) {
       });
     });
 
-    root.querySelectorAll(".gw-party-template-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-        const t = PARTY_TEMPLATES.find(x => x.key === btn.dataset.templateKey);
+    root.querySelector("#gwPartyTemplateInput")?.addEventListener("change", e => {
+        const t = PARTY_TEMPLATES.find(x => x.key === e.target.value);
         if (!t) return;
 
         root.querySelector("#gwPartyTitleInput").value = t.title;
         root.querySelector("#gwPartyGoalInput").value = t.goalType;
         root.querySelector("#gwPartyTargetInput").value = t.target;
         root.querySelector("#gwPartyDurationInput").value = String(t.durationMinutes);
-
-        root.querySelectorAll(".gw-party-template-btn").forEach(x => x.classList.remove("is-selected"));
-        btn.classList.add("is-selected");
-    });
     });
 
     root.querySelectorAll("[data-party-close]").forEach(btn => {
@@ -2989,6 +2986,7 @@ function scheduleActivePartyHudRender() {
 
       .gw-party-input {
         width: 100%;
+        min-width: 0;
         box-sizing: border-box;
         border-radius: 12px;
         border: 1px solid rgba(215,183,116,0.22);
@@ -3366,6 +3364,22 @@ function scheduleActivePartyHudRender() {
     border-color: rgba(240,209,138,0.72);
     background: rgba(240,209,138,0.14);
     color: #fff2c8;
+    }
+
+    .gw-party-setup-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(74px, 0.7fr) minmax(0, 1fr);
+    gap: 8px;
+    align-items: end;
+    margin-top: 2px;
+    }
+
+    .gw-party-field {
+    min-width: 0;
+    }
+
+    .gw-party-field .gw-party-label {
+    margin-top: 10px;
     }
 
     .gw-party-location-segment {
