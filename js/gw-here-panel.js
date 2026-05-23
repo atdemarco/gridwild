@@ -39,6 +39,16 @@
     Rudbeckia: "Black-eyed Susans",
     Zinnia: "Zinnias"
   };
+  const HERE_MAP_3D_STORAGE_KEY = "gw_here_map_3d_enabled";
+  let hereMap3dEnabled = localStorage.getItem(HERE_MAP_3D_STORAGE_KEY) === "true";
+  let hereMap3dExpanded = false;
+  let hereMap3dYawOffsetDeg = 0;
+  let hereMap3dDrag = null;
+  const HERE_3D_CAMERA = {
+    pitchDeg: 48,
+    fovDeg: 52,
+    avatarScreenY: 0.76
+  };
 
   function gridApi() {
     return window.GridWildGrid;
@@ -60,10 +70,9 @@
     style.id = "gwHerePanelStyles";
     style.textContent = `
       .gw-hud-toolband.has-here-tools {
-        width: max-content;
-        grid-auto-flow: column;
-        grid-auto-columns: var(--gw-hud-round-button-size);
-        grid-template-columns: none;
+        width: var(--gw-hud-control-width);
+        grid-template-columns: repeat(3, var(--gw-hud-round-button-size));
+        grid-auto-flow: row;
       }
 
       .gw-hud-toolband.has-here-tools .gw-hud-round-btn {
@@ -145,12 +154,138 @@
       }
 
       .gw-here-map {
+        position: relative;
         width: 100%;
         aspect-ratio: 1 / 0.72;
         overflow: hidden;
         border: 1px solid rgba(240,209,138,0.26);
         border-radius: 6px;
         background: rgba(8, 10, 9, 0.56);
+      }
+
+      .gw-here-map-toggle {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        z-index: 3;
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        border: 1px solid rgba(240,209,138,0.36);
+        background: rgba(20,17,15,0.82);
+        color: rgba(239,230,211,0.72);
+        box-shadow: 0 5px 12px rgba(0,0,0,0.28);
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .gw-here-map-toggle input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .gw-here-map-toggle-mark {
+        width: 11px;
+        height: 7px;
+        border-left: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: rotate(-45deg) translate(1px, -1px);
+        opacity: 0.28;
+      }
+
+      .gw-here-map-toggle input:checked + .gw-here-map-toggle-mark {
+        color: #f0d18a;
+        opacity: 1;
+      }
+
+      .gw-here-map.is-3d {
+        background:
+          radial-gradient(circle at 50% 12%, rgba(240,209,138,0.10), transparent 42%),
+          linear-gradient(180deg, rgba(13,18,17,0.78), rgba(6,8,8,0.92));
+        touch-action: none;
+        cursor: grab;
+      }
+
+      .gw-here-map.is-3d:active {
+        cursor: grabbing;
+      }
+
+      .gw-here-map.is-expanded {
+        position: fixed;
+        top: max(72px, calc(env(safe-area-inset-top) + 72px));
+        right: 14px;
+        width: min(680px, calc(100vw - 28px));
+        height: min(520px, calc(100vh - 138px));
+        aspect-ratio: auto;
+        z-index: 1580;
+        border-color: rgba(240,209,138,0.58);
+        box-shadow:
+          0 24px 90px rgba(0,0,0,0.62),
+          inset 0 1px 0 rgba(255,255,255,0.08),
+          0 0 0 1px rgba(255,231,163,0.10);
+      }
+
+      .gw-here-map-expand {
+        position: absolute;
+        top: 31px;
+        right: 5px;
+        z-index: 3;
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        border: 1px solid rgba(240,209,138,0.36);
+        background: rgba(20,17,15,0.82);
+        color: #f0d18a;
+        box-shadow: 0 5px 12px rgba(0,0,0,0.28);
+        cursor: pointer;
+        padding: 0;
+        font-size: 14px;
+        font-weight: 950;
+        line-height: 1;
+      }
+
+      .gw-here-map.is-expanded .gw-here-map-expand {
+        font-size: 16px;
+      }
+
+      .gw-here-3d-controls {
+        position: absolute;
+        left: 7px;
+        bottom: 7px;
+        z-index: 3;
+        display: inline-flex;
+        gap: 4px;
+        padding: 3px;
+        border-radius: 999px;
+        background: rgba(20,17,15,0.72);
+        border: 1px solid rgba(240,209,138,0.22);
+        box-shadow: 0 5px 12px rgba(0,0,0,0.22);
+      }
+
+      .gw-here-3d-control {
+        width: 22px;
+        height: 20px;
+        display: grid;
+        place-items: center;
+        border: 0;
+        border-radius: 999px;
+        padding: 0;
+        color: rgba(239,230,211,0.82);
+        background: rgba(255,255,255,0.06);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 950;
+        line-height: 1;
+      }
+
+      .gw-here-3d-control:hover {
+        color: #f0d18a;
+        background: rgba(240,209,138,0.14);
       }
 
       .gw-here-map svg,
@@ -385,36 +520,53 @@
       }
 
       .gw-here-stats {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        display: flex;
+        align-items: center;
+        justify-content: center;
         gap: 5px;
-        margin-top: 8px;
+        margin-top: 6px;
+        padding: 5px 6px;
+        border-radius: 6px;
+        border: 1px solid rgba(240,209,138,0.14);
+        background: rgba(0,0,0,0.16);
+        overflow: hidden;
       }
 
       .gw-here-stat {
         min-width: 0;
-        border-radius: 6px;
-        border: 1px solid rgba(240,209,138,0.14);
-        background: rgba(0,0,0,0.16);
-        padding: 5px 4px;
+        flex: 0 1 auto;
+        display: inline-flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 2px;
+        padding: 0;
+        line-height: 1;
+      }
+
+      .gw-here-stat + .gw-here-stat::before {
+        content: "|";
+        color: rgba(240,209,138,0.32);
+        font-size: 9px;
+        font-weight: 800;
+        line-height: 1;
+        margin-right: 5px;
       }
 
       .gw-here-stat b,
       .gw-here-stat span {
-        display: block;
+        display: inline;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
       .gw-here-stat b {
-        font-size: 12px;
+        font-size: 10px;
         line-height: 1.05;
       }
 
       .gw-here-stat span {
-        margin-top: 2px;
-        font-size: 8.5px;
+        font-size: 7.7px;
         line-height: 1;
         color: rgba(239,230,211,0.58);
         text-transform: uppercase;
@@ -455,15 +607,8 @@
           overflow: auto;
         }
 
-        .gw-here-stats {
-          grid-template-columns: 1fr;
-        }
-
         .gw-here-stat {
-          display: flex;
-          align-items: baseline;
-          justify-content: space-between;
-          gap: 6px;
+          gap: 1px;
         }
 
         .gw-here-stat span {
@@ -639,6 +784,333 @@
         ${markerFor(userCell, "gw-here-avatar", "A", "#98e6c4")}
       </svg>
     `;
+  }
+
+  function colorWithAlpha(color, alpha = 1) {
+    const raw = String(color || "").trim();
+    const a = Math.max(0, Math.min(1, Number(alpha) || 0));
+    if (raw.startsWith("#") && (raw.length === 7 || raw.length === 4)) {
+      const hex = raw.length === 4
+        ? raw.slice(1).split("").map(ch => ch + ch).join("")
+        : raw.slice(1);
+      const value = parseInt(hex, 16);
+      if (Number.isFinite(value)) {
+        const r = (value >> 16) & 255;
+        const g = (value >> 8) & 255;
+        const b = value & 255;
+        return `rgba(${r},${g},${b},${a})`;
+      }
+    }
+    return raw.startsWith("rgb(")
+      ? raw.replace("rgb(", "rgba(").replace(")", `,${a})`)
+      : raw;
+  }
+
+  function stableHash(value) {
+    const text = String(value || "");
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash);
+  }
+
+  function activeQuestTarget() {
+    return window.GridWildQuestLayer?.getActiveQuest?.()?.__gwNormalizedTarget || null;
+  }
+
+  function overlappingNiches(bounds) {
+    const niches = window.GridWildLocalNiches?.getNiches?.() || [];
+    return niches
+      .map(niche => ({
+        niche,
+        cells: (Array.isArray(niche?.grid_cell_ids) ? niche.grid_cell_ids : [])
+          .map(key => {
+            const [ix, iy] = String(key).split(",").map(Number);
+            return Number.isFinite(ix) && Number.isFinite(iy) ? { ix, iy } : null;
+          })
+          .filter(cell => cell &&
+            cell.ix >= bounds.minIx &&
+            cell.ix <= bounds.maxIx &&
+            cell.iy >= bounds.minIy &&
+            cell.iy <= bounds.maxIy
+          )
+      }))
+      .filter(entry => entry.cells.length);
+  }
+
+  function fogInfoForCell(key) {
+    if (!(window.__gwState?.showFog ?? false)) return null;
+    return window.GridWildFog?.getCellFogState?.(key) || null;
+  }
+
+  function renderHereViewport3d(bounds, selectedBounds) {
+    const api = gridApi();
+    if (!api) return "";
+
+    const cells = api.cellsForBounds(bounds);
+    const w = 220;
+    const h = 150;
+    const userCell = api.currentUserCell?.();
+    const centerCell = api.centerCell?.();
+    const cameraCell = inBounds(userCell) ? userCell : centerCell;
+    const heading = Number(window.GridWildCompass?.getState?.()?.heading);
+    const headingDeg = (Number.isFinite(heading) ? heading : 0) + hereMap3dYawOffsetDeg;
+    const headingRad = headingDeg * Math.PI / 180;
+    const pitchRad = HERE_3D_CAMERA.pitchDeg * Math.PI / 180;
+    const fovRad = HERE_3D_CAMERA.fovDeg * Math.PI / 180;
+    const avatarY = h * HERE_3D_CAMERA.avatarScreenY;
+    const focal = (w * 0.5) / Math.tan(fovRad / 2);
+    const cameraDepth = 5.8;
+
+    function inBounds(cellInfo) {
+      return cellInfo &&
+        cellInfo.ix >= bounds.minIx &&
+        cellInfo.ix <= bounds.maxIx &&
+        cellInfo.iy >= bounds.minIy &&
+        cellInfo.iy <= bounds.maxIy;
+    }
+
+    function worldToCamera(ix, iy, z = 0) {
+      const origin = cameraCell || {
+        ix: (bounds.minIx + bounds.maxIx) / 2,
+        iy: (bounds.minIy + bounds.maxIy) / 2
+      };
+      const dx = ix - origin.ix;
+      const dy = iy - origin.iy;
+      const right = dx * Math.cos(headingRad) - dy * Math.sin(headingRad);
+      const forward = dx * Math.sin(headingRad) + dy * Math.cos(headingRad);
+      const depth = cameraDepth + forward * Math.cos(pitchRad) - z * Math.sin(pitchRad);
+      const lift = forward * Math.sin(pitchRad) + z * Math.cos(pitchRad);
+      return {
+        right,
+        forward,
+        lift,
+        depth: Math.max(1.1, depth)
+      };
+    }
+
+    function project(ix, iy, z = 0) {
+      const cam = worldToCamera(ix, iy, z);
+      const scale = focal / cam.depth;
+      return {
+        x: w / 2 + cam.right * scale * 0.72,
+        y: avatarY - cam.lift * scale * 0.34,
+        scale,
+        depth: cam.depth,
+        forward: cam.forward
+      };
+    }
+
+    function cellPolygon(ix, iy, z = 0, inset = 0.04) {
+      const a = inset;
+      const b = 1 - inset;
+      return [
+        project(ix + a, iy + a, z),
+        project(ix + b, iy + a, z),
+        project(ix + b, iy + b, z),
+        project(ix + a, iy + b, z)
+      ];
+    }
+
+    function pointsAttr(points) {
+      return points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+    }
+
+    function isVisiblePoly(points) {
+      return points.some(p => p.x > -30 && p.x < w + 30 && p.y > -30 && p.y < h + 40);
+    }
+
+    const sorted = cells.slice().sort((a, b) =>
+      worldToCamera(a.ix + 0.5, a.iy + 0.5).forward -
+      worldToCamera(b.ix + 0.5, b.iy + 0.5).forward
+    );
+
+    const maxCount = Math.max(...sorted.map(item => Number(item.metrics?.count) || 0), 1);
+    const osmByKey = new Map();
+    for (const item of sorted) {
+      const prior = window.GridWildOsmPriorsLayer?.getCell?.(item.ix, item.iy) || null;
+      if (prior) osmByKey.set(item.key, prior.osm || null);
+    }
+
+    const terrain = sorted.map(item => {
+      const count = Number(item.metrics?.count) || 0;
+      const style = item.style || {};
+      const osm = osmByKey.get(item.key);
+      const fill = style.fillColor || "rgba(239,230,211,0.14)";
+      const alpha = Math.max(0.18, Math.min(0.92, Number(style.fillOpacity || 0.2)));
+      const poly = cellPolygon(item.ix, item.iy);
+      if (!isVisiblePoly(poly)) return "";
+      const selected = selectedBounds &&
+        item.ix >= selectedBounds.minIx &&
+        item.ix <= selectedBounds.maxIx &&
+        item.iy >= selectedBounds.minIy &&
+        item.iy <= selectedBounds.maxIy;
+      const fog = fogInfoForCell(item.key);
+      const fogAlpha = fog && (fog.state === "unknown" || fog.state === "expired")
+        ? 0.34
+        : fog?.state === "surveyed"
+          ? 0.12
+          : 0;
+      const landTint = {
+        building: "rgba(126,92,64,0.20)",
+        wood: "rgba(71,139,83,0.24)",
+        park: "rgba(88,157,84,0.18)",
+        grass: "rgba(126,174,83,0.16)",
+        water: "rgba(60,138,178,0.28)"
+      }[osm?.landuseClass] || "";
+
+      return `
+        <g data-layer="terrain">
+          <polygon points="${pointsAttr(poly)}" fill="${colorWithAlpha(fill, alpha)}" stroke="${selected ? "#ffe7a3" : "rgba(255,255,255,0.14)"}" stroke-width="${selected ? 1.2 : 0.35}"></polygon>
+          ${landTint ? `<polygon points="${pointsAttr(poly)}" fill="${landTint}"></polygon>` : ""}
+          ${count > 0 ? `<polygon points="${pointsAttr(cellPolygon(item.ix, item.iy, Math.sqrt(count / maxCount) * 0.18))}" fill="rgba(255,255,255,0.05)"></polygon>` : ""}
+          ${fogAlpha ? `<polygon points="${pointsAttr(poly)}" fill="rgba(9,12,14,${fogAlpha})"></polygon>` : ""}
+        </g>
+      `;
+    }).join("");
+
+    const buildings = sorted.map(item => {
+      const osm = osmByKey.get(item.key);
+      if (!osm?.insideBuilding) return "";
+      const stories = 1 + (stableHash(item.key) % 3);
+      const top = cellPolygon(item.ix, item.iy, stories * 0.9);
+      const base = cellPolygon(item.ix, item.iy);
+      if (!isVisiblePoly(top)) return "";
+      return `
+        <g data-layer="buildings">
+          <polygon points="${pointsAttr([top[0], top[1], base[1], base[0]])}" fill="rgba(89,67,52,0.72)"></polygon>
+          <polygon points="${pointsAttr([top[1], top[2], base[2], base[1]])}" fill="rgba(119,86,62,0.58)"></polygon>
+          <polygon points="${pointsAttr(top)}" fill="rgba(154,112,76,0.76)" stroke="rgba(255,226,181,0.36)" stroke-width="0.45"></polygon>
+        </g>
+      `;
+    }).join("");
+
+    const trees = sorted.map(item => {
+      const osm = osmByKey.get(item.key);
+      if (!(osm?.landuseClass === "wood" || osm?.landuseClass === "park")) return "";
+      if (stableHash(item.key) % 3 === 0) return "";
+      const p = project(item.ix + 0.5, item.iy + 0.5, 0.7);
+      if (p.x < -20 || p.x > w + 20 || p.y < -20 || p.y > h + 20) return "";
+      const r = Math.max(2.2, Math.min(5.8, p.scale * 0.19));
+      return `
+        <g data-layer="trees">
+          <line x1="${p.x}" y1="${p.y + r * 1.2}" x2="${p.x}" y2="${p.y + r * 0.15}" stroke="rgba(91,66,38,0.72)" stroke-width="${Math.max(0.7, r * 0.28)}"></line>
+          <polygon points="${p.x},${p.y - r} ${p.x + r * 1.15},${p.y - r * 0.05} ${p.x + r * 0.45},${p.y + r} ${p.x - r * 0.55},${p.y + r * 0.86} ${p.x - r * 1.18},${p.y - r * 0.1}" fill="rgba(88,171,102,0.76)" stroke="rgba(199,235,167,0.20)" stroke-width="0.4"></polygon>
+        </g>
+      `;
+    }).join("");
+
+    const niches = overlappingNiches(bounds).slice(0, 4).map((entry, index) => {
+      const polys = entry.cells.slice(0, 90).map(cell => {
+        const poly = cellPolygon(cell.ix, cell.iy, 0.72 + index * 0.12, 0.02);
+        if (!isVisiblePoly(poly)) return "";
+        return `<polygon points="${pointsAttr(poly)}" fill="rgba(118,231,191,0.13)" stroke="rgba(118,231,191,0.38)" stroke-width="0.5"></polygon>`;
+      }).join("");
+      return `<g data-layer="niches">${polys}</g>`;
+    }).join("");
+
+    const questTarget = activeQuestTarget();
+    const questMarker = questTarget && questTarget.mode !== "anywhere" && Number.isFinite(Number(questTarget.ix)) && Number.isFinite(Number(questTarget.iy))
+      ? (() => {
+        const qBounds = {
+          minIx: Number(questTarget.ix) - Math.max(0, Number(questTarget.radiusCells) || 0),
+          maxIx: Number(questTarget.ix) + Math.max(0, Number(questTarget.radiusCells) || 0),
+          minIy: Number(questTarget.iy) - Math.max(0, Number(questTarget.radiusCells) || 0),
+          maxIy: Number(questTarget.iy) + Math.max(0, Number(questTarget.radiusCells) || 0)
+        };
+        if (
+          qBounds.maxIx < bounds.minIx ||
+          qBounds.minIx > bounds.maxIx ||
+          qBounds.maxIy < bounds.minIy ||
+          qBounds.minIy > bounds.maxIy
+        ) {
+          return "";
+        }
+        const p = project(Number(questTarget.ix) + 0.5, Number(questTarget.iy) + 0.5, 0.25);
+        return `
+          <g data-layer="quest">
+            <line x1="${p.x}" y1="${p.y - 62}" x2="${p.x}" y2="${p.y + 3}" stroke="url(#gwHereQuestBeam)" stroke-width="8" stroke-linecap="round"></line>
+            <circle cx="${p.x}" cy="${p.y}" r="5" fill="rgba(255,224,130,0.86)" stroke="rgba(255,255,255,0.68)" stroke-width="1"></circle>
+          </g>
+        `;
+      })()
+      : "";
+
+    const userAvatar = inBounds(userCell) ? (() => {
+      const p = project(userCell.ix + 0.5, userCell.iy + 0.5, 1.05);
+      return `
+        <g aria-label="Avatar in viewport">
+          <ellipse cx="${p.x}" cy="${avatarY + 10}" rx="6.4" ry="2.4" fill="rgba(0,0,0,0.34)"></ellipse>
+          <path d="M${p.x - 4.1} ${avatarY + 8.5} L${p.x - 2.5} ${avatarY + 1.4} L${p.x + 2.5} ${avatarY + 1.4} L${p.x + 4.1} ${avatarY + 8.5} Z" fill="#98e6c4" stroke="rgba(20,17,15,0.9)" stroke-width="0.9"></path>
+          <circle cx="${p.x}" cy="${avatarY - 2.1}" r="3.7" fill="#f0d18a" stroke="rgba(20,17,15,0.94)" stroke-width="1"></circle>
+          <path d="M${p.x} ${avatarY - 8.5} L${p.x + Math.sin(headingRad) * 7} ${avatarY - 2.5}" stroke="#ffe7a3" stroke-width="1.2" stroke-linecap="round"></path>
+        </g>
+      `;
+    })() : "";
+
+    const centerMarker = inBounds(centerCell) ? (() => {
+      const p = project(centerCell.ix + 0.5, centerCell.iy + 0.5, 0.45);
+      return `<circle cx="${p.x}" cy="${p.y}" r="2.7" fill="none" stroke="#f0d18a" stroke-width="1.2"></circle>`;
+    })() : "";
+
+    return `
+      <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Here 3D viewport">
+        <defs>
+          <radialGradient id="gwHereViewportVignette" cx="50%" cy="54%" r="66%">
+            <stop offset="58%" stop-color="rgba(6,8,8,0)"></stop>
+            <stop offset="100%" stop-color="rgba(6,8,8,0.82)"></stop>
+          </radialGradient>
+          <linearGradient id="gwHereQuestBeam" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="rgba(255,224,130,0)"></stop>
+            <stop offset="0.28" stop-color="rgba(255,224,130,0.68)"></stop>
+            <stop offset="1" stop-color="rgba(118,231,191,0.16)"></stop>
+          </linearGradient>
+        </defs>
+        <rect x="0" y="0" width="${w}" height="${h}" fill="rgba(6,8,8,0.58)"></rect>
+        <path d="M0 ${h * 0.34} C56 ${h * 0.20} 150 ${h * 0.20} ${w} ${h * 0.34} L${w} 0 L0 0 Z" fill="rgba(149,196,184,0.08)"></path>
+        ${terrain}
+        ${niches}
+        ${buildings}
+        ${trees}
+        ${questMarker}
+        ${centerMarker}
+        ${userAvatar}
+        <rect x="0" y="0" width="${w}" height="${h}" fill="url(#gwHereViewportVignette)"></rect>
+        <path d="M0 0 H${w} V${h} H0 Z" fill="none" stroke="rgba(240,209,138,0.15)" stroke-width="1"></path>
+      </svg>
+    `;
+  }
+
+  function renderMapModeToggle() {
+    const checked = hereMap3dEnabled ? "checked" : "";
+    const label = hereMap3dEnabled ? "Show 2D Original map" : "Show 3D viewport";
+    const title = hereMap3dEnabled ? "3D viewport" : "2D Original";
+    return `
+      <label class="gw-here-map-toggle" title="${title}" aria-label="${label}">
+        <input id="gwHereMap3dToggle" type="checkbox" ${checked}>
+        <span class="gw-here-map-toggle-mark" aria-hidden="true"></span>
+      </label>
+    `;
+  }
+
+  function renderHere3dControls() {
+    if (!hereMap3dEnabled) return "";
+    return `
+      <button class="gw-here-map-expand" type="button" data-here-3d-expand aria-label="${hereMap3dExpanded ? "Shrink 3D viewport" : "Expand 3D viewport"}" title="${hereMap3dExpanded ? "Shrink 3D viewport" : "Expand 3D viewport"}">${hereMap3dExpanded ? "−" : "+"}</button>
+      <div class="gw-here-3d-controls" aria-label="3D view rotation controls">
+        <button class="gw-here-3d-control" type="button" data-here-3d-rotate="-22.5" aria-label="Rotate view left" title="Rotate left">‹</button>
+        <button class="gw-here-3d-control" type="button" data-here-3d-reset aria-label="Reset 3D rotation" title="Reset rotation">•</button>
+        <button class="gw-here-3d-control" type="button" data-here-3d-rotate="22.5" aria-label="Rotate view right" title="Rotate right">›</button>
+      </div>
+    `;
+  }
+
+  function renderHereMap(bounds, selectedBounds) {
+    const view = hereMap3dEnabled
+      ? renderHereViewport3d(bounds, selectedBounds)
+      : renderMiniMap(bounds, selectedBounds);
+    return `${view}${renderMapModeToggle()}${renderHere3dControls()}`;
   }
 
   function taxonDisplayName(name) {
@@ -991,6 +1463,13 @@
     }, { cells: cells.length, active: 0, obs: 0, species: 0 });
   }
 
+  function compactStatNumber(value) {
+    const n = Math.max(0, Number(value) || 0);
+    if (n >= 1000000) return `${(n / 1000000).toFixed(n >= 10000000 ? 0 : 1)}m`;
+    if (n >= 1000) return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
+    return String(Math.round(n));
+  }
+
   function cellCountForBounds(bounds) {
     if (!bounds) return 0;
     return Math.max(0, bounds.maxIx - bounds.minIx + 1) *
@@ -1124,6 +1603,41 @@
     rerenderTaxaHud();
   }
 
+  function setHere3dYawOffset(value) {
+    hereMap3dYawOffsetDeg = ((Number(value) || 0) % 360 + 360) % 360;
+    if (hereMap3dYawOffsetDeg > 180) hereMap3dYawOffsetDeg -= 360;
+    scheduleRefresh(10);
+  }
+
+  function rotateHere3d(delta) {
+    setHere3dYawOffset(hereMap3dYawOffsetDeg + (Number(delta) || 0));
+  }
+
+  function startHere3dDrag(evt) {
+    if (!hereMap3dEnabled) return;
+    const mapEl = evt.target.closest?.("#gwHereMap.is-3d");
+    if (!mapEl) return;
+    if (evt.target.closest?.("button, input, label")) return;
+
+    evt.preventDefault();
+    hereMap3dDrag = {
+      pointerId: evt.pointerId,
+      startX: evt.clientX,
+      startYaw: hereMap3dYawOffsetDeg
+    };
+    mapEl.setPointerCapture?.(evt.pointerId);
+  }
+
+  function moveHere3dDrag(evt) {
+    if (!hereMap3dDrag || evt.pointerId !== hereMap3dDrag.pointerId) return;
+    setHere3dYawOffset(hereMap3dDrag.startYaw + (evt.clientX - hereMap3dDrag.startX) * 0.45);
+  }
+
+  function endHere3dDrag(evt) {
+    if (!hereMap3dDrag || evt.pointerId !== hereMap3dDrag.pointerId) return;
+    hereMap3dDrag = null;
+  }
+
   function bindHerePanelInteractions() {
     const panel = ensurePanel();
     if (!panel || panel.dataset.interactionsBound === "true") return;
@@ -1144,6 +1658,41 @@
         evt.stopPropagation();
         const genus = taxonRow.dataset.genus;
         if (genus) window.GridWildGenusCodex?.open?.(genus);
+        return;
+      }
+
+      const mapModeToggle = evt.target.closest?.("#gwHereMap3dToggle");
+      if (mapModeToggle) {
+        evt.stopPropagation();
+        hereMap3dEnabled = mapModeToggle.checked === true;
+        if (!hereMap3dEnabled) hereMap3dExpanded = false;
+        localStorage.setItem(HERE_MAP_3D_STORAGE_KEY, hereMap3dEnabled ? "true" : "false");
+        scheduleRefresh(10);
+        return;
+      }
+
+      const expand3d = evt.target.closest?.("[data-here-3d-expand]");
+      if (expand3d) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        hereMap3dExpanded = !hereMap3dExpanded;
+        scheduleRefresh(10);
+        return;
+      }
+
+      const rotate3d = evt.target.closest?.("[data-here-3d-rotate]");
+      if (rotate3d) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        rotateHere3d(Number(rotate3d.getAttribute("data-here-3d-rotate")));
+        return;
+      }
+
+      const reset3d = evt.target.closest?.("[data-here-3d-reset]");
+      if (reset3d) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        setHere3dYawOffset(0);
         return;
       }
 
@@ -1168,6 +1717,11 @@
         zoomPieBack();
       }
     });
+
+    panel.addEventListener("pointerdown", startHere3dDrag);
+    panel.addEventListener("pointermove", moveHere3dDrag);
+    panel.addEventListener("pointerup", endHere3dDrag);
+    panel.addEventListener("pointercancel", endHere3dDrag);
   }
 
   async function refresh() {
@@ -1208,12 +1762,16 @@
 
     if (title) title.textContent = selection ? "Selection" : "Here";
     if (meta) meta.textContent = `${width} x ${height}`;
-    if (mapEl) mapEl.innerHTML = renderMiniMap(bounds, selection?.bounds || null);
+    if (mapEl) {
+      mapEl.classList.toggle("is-3d", hereMap3dEnabled);
+      mapEl.classList.toggle("is-expanded", hereMap3dEnabled && hereMap3dExpanded);
+      mapEl.innerHTML = renderHereMap(bounds, selection?.bounds || null);
+    }
     if (statsEl) {
       statsEl.innerHTML = `
-        <div class="gw-here-stat"><b>${summary.obs}</b><span>Obs</span></div>
-        <div class="gw-here-stat"><b>${summary.species}</b><span>Species</span></div>
-        <div class="gw-here-stat"><b>${summary.active}/${summary.cells}</b><span>Cells</span></div>
+        <div class="gw-here-stat" title="${summary.obs} observations"><b>${compactStatNumber(summary.obs)}</b><span>Obs</span></div>
+        <div class="gw-here-stat" title="${summary.species} species"><b>${compactStatNumber(summary.species)}</b><span>Spp</span></div>
+        <div class="gw-here-stat" title="${summary.active} active cells of ${summary.cells} cells"><b>${compactStatNumber(summary.active)}/${compactStatNumber(summary.cells)}</b><span>Cells</span></div>
       `;
     }
 
