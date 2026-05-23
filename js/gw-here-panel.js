@@ -101,6 +101,7 @@
 
       .gw-selection-active #map {
         cursor: crosshair;
+        touch-action: none;
       }
 
       .gw-here-panel {
@@ -729,6 +730,7 @@
     if (!api) return "";
 
     const cells = api.cellsForBounds(bounds);
+    const heatStats = buildHereHeatZStats(cells);
     const widthCells = bounds.maxIx - bounds.minIx + 1;
     const heightCells = bounds.maxIy - bounds.minIy + 1;
     const cell = 12;
@@ -742,9 +744,9 @@
     const rects = cells.map(item => {
       const x = (item.ix - bounds.minIx) * cell;
       const y = (bounds.maxIy - item.iy) * cell;
-      const style = item.style || {};
+      const style = hereHeatStyleForCell(item, heatStats);
       const fill = style.fillColor || "rgba(239,230,211,0.12)";
-      const alpha = Math.max(0.16, Math.min(0.9, Number(style.fillOpacity || 0.18)));
+      const alpha = Math.max(style.heatVisible ? 0.16 : 0.04, Math.min(0.9, Number(style.fillOpacity || 0.18)));
       return `<rect x="${x + gap / 2}" y="${y + gap / 2}" width="${cell - gap}" height="${cell - gap}" rx="1.2" fill="${fill}" opacity="${alpha}"></rect>`;
     }).join("");
 
@@ -801,6 +803,13 @@
         return `rgba(${r},${g},${b},${a})`;
       }
     }
+    if (raw.startsWith("hsl(")) {
+      return raw.replace("hsl(", "hsla(").replace(/\)$/, `,${a})`);
+    }
+    if (raw.startsWith("rgba(")) {
+      const parts = raw.slice(5, -1).split(",").map(part => part.trim());
+      if (parts.length >= 3) return `rgba(${parts[0]},${parts[1]},${parts[2]},${a})`;
+    }
     return raw.startsWith("rgb(")
       ? raw.replace("rgb(", "rgba(").replace(")", `,${a})`)
       : raw;
@@ -842,6 +851,132 @@
   function fogInfoForCell(key) {
     if (!(window.__gwState?.showFog ?? false)) return null;
     return window.GridWildFog?.getCellFogState?.(key) || null;
+  }
+
+  function hereHeatValue(metrics = {}) {
+    const metric = window.__gwState?.heatMetric ?? "count";
+    if (metric === "species") return Number(metrics.species) || 0;
+    if (metric === "observers") return Number(metrics.observers) || 0;
+    return Number(metrics.count) || 0;
+  }
+
+  function buildHereHeatZStats(cells = []) {
+    if (window.__gwState?.heatZThresholdEnabled !== true) return null;
+
+    const values = cells
+      .map(item => hereHeatValue(item?.metrics || {}))
+      .filter(value => value > 0);
+
+    if (!values.length) return null;
+
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance = values.reduce((sum, value) => {
+      const d = value - mean;
+      return sum + d * d;
+    }, 0) / values.length;
+
+    return {
+      mean,
+      sd: Math.sqrt(variance)
+    };
+  }
+
+  function passesHereHeatZThreshold(value, stats) {
+    if (window.__gwState?.heatZThresholdEnabled !== true || !stats) return true;
+
+    const raw = Number(window.__gwState?.heatZThreshold);
+    const threshold = Number.isFinite(raw) ? Math.max(-3, Math.min(3, raw)) : 0;
+    const direction = window.__gwState?.heatZThresholdDirection === "below" ? "below" : "above";
+    const z = stats.sd > 0 ? ((Number(value) || 0) - stats.mean) / stats.sd : 0;
+    return direction === "below" ? z <= threshold : z >= threshold;
+  }
+
+  function hereHeatStyleForCell(item, stats) {
+    const neutral = {
+      fillColor: "rgb(239,230,211)",
+      fillOpacity: 0.10,
+      heatVisible: false
+    };
+
+    if ((window.__gwFilters?.showHeat ?? true) === false) return neutral;
+
+    const metrics = item?.metrics || null;
+    const heatValue = metrics ? hereHeatValue(metrics) : 0;
+    if (!metrics || heatValue <= 0 || !passesHereHeatZThreshold(heatValue, stats)) {
+      return neutral;
+    }
+
+    const style = item?.style || gridApi()?.metricsToFill?.(metrics) || null;
+    if (!style) return neutral;
+
+    return {
+      fillColor: style.fillColor || neutral.fillColor,
+      fillOpacity: Number(style.fillOpacity ?? neutral.fillOpacity),
+      heatVisible: true
+    };
+  }
+
+  function latLngToGridPoint(latlng, gridSizeM) {
+    const leafletMap = typeof map !== "undefined" ? map : window.map;
+    const leaflet = typeof L !== "undefined" ? L : window.L;
+    if (!leafletMap?.options?.crs?.project || !Number.isFinite(gridSizeM) || gridSizeM <= 0) return null;
+
+    const lat = Number(latlng?.lat ?? latlng?.[0]);
+    const lng = Number(latlng?.lng ?? latlng?.lon ?? latlng?.[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    const projected = leafletMap.options.crs.project(leaflet?.latLng ? leaflet.latLng(lat, lng) : { lat, lng });
+    if (!projected || !Number.isFinite(projected.x) || !Number.isFinite(projected.y)) return null;
+    return {
+      ix: projected.x / gridSizeM,
+      iy: projected.y / gridSizeM
+    };
+  }
+
+  function clipSegmentToCellBounds(a, b, bounds, pad = 0.4) {
+    const minX = bounds.minIx - pad;
+    const maxX = bounds.maxIx + 1 + pad;
+    const minY = bounds.minIy - pad;
+    const maxY = bounds.maxIy + 1 + pad;
+    const dx = b.ix - a.ix;
+    const dy = b.iy - a.iy;
+    let t0 = 0;
+    let t1 = 1;
+
+    function clip(p, q) {
+      if (Math.abs(p) < 1e-9) return q >= 0;
+      const r = q / p;
+      if (p < 0) {
+        if (r > t1) return false;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return false;
+        if (r < t1) t1 = r;
+      }
+      return true;
+    }
+
+    if (
+      clip(-dx, a.ix - minX) &&
+      clip(dx, maxX - a.ix) &&
+      clip(-dy, a.iy - minY) &&
+      clip(dy, maxY - a.iy)
+    ) {
+      return {
+        a: { ix: a.ix + dx * t0, iy: a.iy + dy * t0 },
+        b: { ix: a.ix + dx * t1, iy: a.iy + dy * t1 }
+      };
+    }
+
+    return null;
+  }
+
+  function highwayClass(tags = {}) {
+    const highway = String(tags.highway || "").toLowerCase();
+    if (["motorway", "trunk", "primary", "secondary"].includes(highway)) return "major";
+    if (["tertiary", "residential", "unclassified", "living_street", "road"].includes(highway)) return "street";
+    if (["path", "footway", "cycleway", "bridleway", "track"].includes(highway)) return "trail";
+    return "service";
   }
 
   function renderHereViewport3d(bounds, selectedBounds) {
@@ -921,11 +1056,16 @@
       return points.some(p => p.x > -30 && p.x < w + 30 && p.y > -30 && p.y < h + 40);
     }
 
+    function isVisibleLine(points) {
+      return points.some(p => p.x > -35 && p.x < w + 35 && p.y > -35 && p.y < h + 45);
+    }
+
     const sorted = cells.slice().sort((a, b) =>
       worldToCamera(a.ix + 0.5, a.iy + 0.5).forward -
       worldToCamera(b.ix + 0.5, b.iy + 0.5).forward
     );
 
+    const heatStats = buildHereHeatZStats(cells);
     const maxCount = Math.max(...sorted.map(item => Number(item.metrics?.count) || 0), 1);
     const osmByKey = new Map();
     for (const item of sorted) {
@@ -933,12 +1073,76 @@
       if (prior) osmByKey.set(item.key, prior.osm || null);
     }
 
+    function renderRaisedOsmLines() {
+      const source = window.GridWildOsmFeaturesLayer;
+      const features = source?.getFeatures?.() || {};
+      const gridSizeM = Number(api.gridSizeM) || 1;
+      const groups = [];
+
+      if ((window.__gwState?.showOsmRoads ?? true) !== false) {
+        groups.push({ kind: "road", features: features.roads || [] });
+      }
+      if ((window.__gwState?.showOsmTrails ?? true) !== false) {
+        groups.push({ kind: "trail", features: features.trails || [] });
+      }
+
+      const segments = [];
+      for (const group of groups) {
+        for (const feature of group.features.slice(0, 90)) {
+          const points = (feature.points || [])
+            .map(point => latLngToGridPoint(point, gridSizeM))
+            .filter(Boolean);
+          if (points.length < 2) continue;
+
+          const cls = group.kind === "trail" ? "trail" : highwayClass(feature.tags);
+          for (let i = 1; i < points.length; i++) {
+            const clipped = clipSegmentToCellBounds(points[i - 1], points[i], bounds);
+            if (!clipped) continue;
+
+            const groundA = project(clipped.a.ix, clipped.a.iy, 0.05);
+            const groundB = project(clipped.b.ix, clipped.b.iy, 0.05);
+            const lift = cls === "trail" ? 0.33 : cls === "major" ? 0.52 : 0.43;
+            const raisedA = project(clipped.a.ix, clipped.a.iy, lift);
+            const raisedB = project(clipped.b.ix, clipped.b.iy, lift);
+            if (!isVisibleLine([groundA, groundB, raisedA, raisedB])) continue;
+
+            const width = cls === "major" ? 2.7 : cls === "street" ? 2.1 : cls === "trail" ? 1.35 : 1.75;
+            const stroke = cls === "trail" ? "rgba(212,177,112,0.78)" : "rgba(108,96,86,0.86)";
+            const core = cls === "trail" ? "rgba(255,231,163,0.72)" : "rgba(239,222,194,0.50)";
+            const dGround = `M${groundA.x.toFixed(1)} ${groundA.y.toFixed(1)} L${groundB.x.toFixed(1)} ${groundB.y.toFixed(1)}`;
+            const dRaised = `M${raisedA.x.toFixed(1)} ${raisedA.y.toFixed(1)} L${raisedB.x.toFixed(1)} ${raisedB.y.toFixed(1)}`;
+
+            segments.push({
+              depth: (raisedA.forward + raisedB.forward) / 2,
+              markup: `
+                <g data-layer="osm-${cls}">
+                  <path d="${dGround}" fill="none" stroke="rgba(0,0,0,0.26)" stroke-width="${(width + 2.2).toFixed(1)}" stroke-linecap="round"></path>
+                  <path d="${dRaised}" fill="none" stroke="rgba(255,231,163,0.18)" stroke-width="${(width + 3.1).toFixed(1)}" stroke-linecap="round"></path>
+                  <path d="${dRaised}" fill="none" stroke="${stroke}" stroke-width="${width.toFixed(1)}" stroke-linecap="round"></path>
+                  <path d="${dRaised}" fill="none" stroke="${core}" stroke-width="${Math.max(0.5, width * 0.34).toFixed(1)}" stroke-linecap="round"></path>
+                </g>
+              `
+            });
+
+            if (segments.length >= 180) break;
+          }
+          if (segments.length >= 180) break;
+        }
+        if (segments.length >= 180) break;
+      }
+
+      return segments
+        .sort((a, b) => a.depth - b.depth)
+        .map(segment => segment.markup)
+        .join("");
+    }
+
     const terrain = sorted.map(item => {
       const count = Number(item.metrics?.count) || 0;
-      const style = item.style || {};
+      const style = hereHeatStyleForCell(item, heatStats);
       const osm = osmByKey.get(item.key);
       const fill = style.fillColor || "rgba(239,230,211,0.14)";
-      const alpha = Math.max(0.18, Math.min(0.92, Number(style.fillOpacity || 0.2)));
+      const alpha = Math.max(style.heatVisible ? 0.18 : 0.06, Math.min(0.92, Number(style.fillOpacity || 0.2)));
       const poly = cellPolygon(item.ix, item.iy);
       if (!isVisiblePoly(poly)) return "";
       const selected = selectedBounds &&
@@ -964,11 +1168,13 @@
         <g data-layer="terrain">
           <polygon points="${pointsAttr(poly)}" fill="${colorWithAlpha(fill, alpha)}" stroke="${selected ? "#ffe7a3" : "rgba(255,255,255,0.14)"}" stroke-width="${selected ? 1.2 : 0.35}"></polygon>
           ${landTint ? `<polygon points="${pointsAttr(poly)}" fill="${landTint}"></polygon>` : ""}
-          ${count > 0 ? `<polygon points="${pointsAttr(cellPolygon(item.ix, item.iy, Math.sqrt(count / maxCount) * 0.18))}" fill="rgba(255,255,255,0.05)"></polygon>` : ""}
+          ${style.heatVisible && count > 0 ? `<polygon points="${pointsAttr(cellPolygon(item.ix, item.iy, Math.sqrt(count / maxCount) * 0.18))}" fill="rgba(255,255,255,0.05)"></polygon>` : ""}
           ${fogAlpha ? `<polygon points="${pointsAttr(poly)}" fill="rgba(9,12,14,${fogAlpha})"></polygon>` : ""}
         </g>
       `;
     }).join("");
+
+    const osmLines = renderRaisedOsmLines();
 
     const buildings = sorted.map(item => {
       const osm = osmByKey.get(item.key);
@@ -1070,6 +1276,7 @@
         <rect x="0" y="0" width="${w}" height="${h}" fill="rgba(6,8,8,0.58)"></rect>
         <path d="M0 ${h * 0.34} C56 ${h * 0.20} 150 ${h * 0.20} ${w} ${h * 0.34} L${w} 0 L0 0 Z" fill="rgba(149,196,184,0.08)"></path>
         ${terrain}
+        ${osmLines}
         ${niches}
         ${buildings}
         ${trees}
@@ -1840,9 +2047,43 @@
     let selection = null;
     let draftRect = null;
     let finalRect = null;
+    let activePointerId = null;
+    let gestureState = null;
 
     function button() {
       return document.getElementById("gwHudSelectTool");
+    }
+
+    function mapContainer() {
+      return map?.getContainer?.() || document.getElementById("map");
+    }
+
+    function isGestureEnabled(handler) {
+      return typeof handler?.enabled === "function" ? handler.enabled() : true;
+    }
+
+    function setMapGesturesLocked(locked) {
+      const container = mapContainer();
+      if (locked) {
+        if (!gestureState) {
+          gestureState = {
+            dragging: isGestureEnabled(map.dragging),
+            touchZoom: isGestureEnabled(map.touchZoom),
+            doubleClickZoom: isGestureEnabled(map.doubleClickZoom)
+          };
+        }
+        map.dragging?.disable?.();
+        map.touchZoom?.disable?.();
+        map.doubleClickZoom?.disable?.();
+        if (container) container.style.touchAction = "none";
+        return;
+      }
+
+      if (gestureState?.dragging) map.dragging?.enable?.();
+      if (gestureState?.touchZoom) map.touchZoom?.enable?.();
+      if (gestureState?.doubleClickZoom) map.doubleClickZoom?.enable?.();
+      gestureState = null;
+      if (container) container.style.touchAction = "";
     }
 
     function syncButton() {
@@ -1908,7 +2149,8 @@
       dragging = false;
       startCell = null;
       hoverCell = null;
-      map.dragging.enable();
+      activePointerId = null;
+      setMapGesturesLocked(false);
       syncButton();
       fireChange();
       toast(`${selection.cells.length} cells selected`);
@@ -1925,7 +2167,8 @@
       startCell = null;
       hoverCell = null;
       armed = false;
-      map.dragging.enable();
+      activePointerId = null;
+      setMapGesturesLocked(false);
       syncButton();
       fireChange();
     }
@@ -1934,6 +2177,7 @@
       armed = true;
       if (selection) clearSelection();
       armed = true;
+      setMapGesturesLocked(true);
       syncButton();
       toast("Drag to select cells");
     }
@@ -1947,7 +2191,8 @@
         ensureSelectionLayer()?.removeLayer(draftRect);
         draftRect = null;
       }
-      map.dragging.enable();
+      activePointerId = null;
+      setMapGesturesLocked(false);
       syncButton();
     }
 
@@ -1969,7 +2214,7 @@
       if (!armed || !evt?.latlng) return;
       evt.originalEvent?.preventDefault?.();
       evt.originalEvent?.stopPropagation?.();
-      map.dragging.disable();
+      setMapGesturesLocked(true);
       dragging = true;
       startCell = gridApi().latLngToCell(evt.latlng);
       hoverCell = startCell;
@@ -1990,6 +2235,58 @@
       setFinal(gridApi().normalizeCellBounds(startCell, hoverCell));
     }
 
+    function latLngForDomEvent(evt) {
+      const source = evt?.changedTouches?.[0] || evt?.touches?.[0] || evt;
+      if (!source || !Number.isFinite(Number(source.clientX)) || !Number.isFinite(Number(source.clientY))) return null;
+      return map.mouseEventToLatLng(source);
+    }
+
+    function beginDomDrag(evt) {
+      if (!armed || dragging) return;
+      if (evt.pointerType === "mouse") return;
+      const latlng = latLngForDomEvent(evt);
+      if (!latlng) return;
+
+      evt.preventDefault?.();
+      evt.stopPropagation?.();
+      activePointerId = Number.isFinite(evt.pointerId) ? evt.pointerId : "touch";
+      if (Number.isFinite(evt.pointerId)) {
+        mapContainer()?.setPointerCapture?.(evt.pointerId);
+      }
+      setMapGesturesLocked(true);
+      dragging = true;
+      startCell = gridApi().latLngToCell(latlng);
+      hoverCell = startCell;
+      redrawDraft();
+    }
+
+    function moveDomDrag(evt) {
+      if (!armed || !dragging) return;
+      if (Number.isFinite(evt.pointerId) && activePointerId !== evt.pointerId) return;
+      const latlng = latLngForDomEvent(evt);
+      if (!latlng) return;
+
+      evt.preventDefault?.();
+      evt.stopPropagation?.();
+      hoverCell = gridApi().latLngToCell(latlng);
+      redrawDraft();
+    }
+
+    function finishDomDrag(evt) {
+      if (!armed || !dragging) return;
+      if (Number.isFinite(evt.pointerId) && activePointerId !== evt.pointerId) return;
+      const latlng = latLngForDomEvent(evt);
+
+      evt.preventDefault?.();
+      evt.stopPropagation?.();
+      if (latlng) hoverCell = gridApi().latLngToCell(latlng);
+      if (startCell && hoverCell) {
+        setFinal(gridApi().normalizeCellBounds(startCell, hoverCell));
+      } else {
+        cancelArm();
+      }
+    }
+
     function bind() {
       const btn = button();
       if (!btn || btn.dataset.bound === "true") return;
@@ -1999,6 +2296,17 @@
       map.on("mousemove", onMouseMove);
       map.on("mouseup", onMouseUp);
       map.on("mouseout", onMouseUp);
+      const container = mapContainer();
+      if (container) {
+        container.addEventListener("pointerdown", beginDomDrag);
+        container.addEventListener("pointermove", moveDomDrag);
+        container.addEventListener("pointerup", finishDomDrag);
+        container.addEventListener("pointercancel", finishDomDrag);
+        container.addEventListener("touchstart", beginDomDrag, { passive: false });
+        container.addEventListener("touchmove", moveDomDrag, { passive: false });
+        container.addEventListener("touchend", finishDomDrag, { passive: false });
+        container.addEventListener("touchcancel", finishDomDrag, { passive: false });
+      }
       syncButton();
     }
 
@@ -2041,9 +2349,21 @@
     });
     window.addEventListener("gridwild:selectionchange", () => scheduleRefresh(10));
     window.addEventListener("gridwild:filterschange", () => scheduleRefresh(10));
+    window.addEventListener("gridwild:heatchange", () => scheduleRefresh(10));
+    window.addEventListener("gwOsmFeaturesUpdated", () => scheduleRefresh(40));
     window.addEventListener("gwRecentINatUpdated", () => scheduleRefresh(80));
     document.addEventListener("change", evt => {
-      if (evt.target?.matches?.("[data-iconic], #taxaChecklist input, #toggleHeat")) {
+      if (evt.target?.matches?.("[data-iconic], #taxaChecklist input, #toggleHeat, #toggleHeatZThreshold, input[name='heatMetric'], #gwHeatZThresholdInput")) {
+        scheduleRefresh(10);
+      }
+    });
+    document.addEventListener("input", evt => {
+      if (evt.target?.matches?.("#gwHeatZThresholdSlider, #gwHeatZThresholdInput")) {
+        scheduleRefresh(10);
+      }
+    });
+    document.addEventListener("click", evt => {
+      if (evt.target?.closest?.("#gwHudHighContrastToggle, #gwHeatZThresholdDirectionBtn")) {
         scheduleRefresh(10);
       }
     });

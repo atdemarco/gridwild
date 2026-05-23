@@ -3369,6 +3369,9 @@ window.refreshQuestBadge = refreshQuestBadge;
         window.GridWildHudLegend?.refresh?.();
         window.GridWildHudCompactLegend?.refresh?.();
         if (typeof window.updateGrid === "function") window.updateGrid();
+        window.dispatchEvent(new CustomEvent("gridwild:heatchange", {
+          detail: { highContrastLensEnabled: window.__gwState.highContrastLensEnabled === true }
+        }));
         if (typeof paintLegendFromHeatFunction === "function") paintLegendFromHeatFunction();
         toast(`Contrast ${window.__gwState.highContrastLensEnabled ? "on" : "off"}`);
       }
@@ -3535,6 +3538,9 @@ window.refreshQuestBadge = refreshQuestBadge;
         sync();
         save();
         if (typeof window.updateGrid === "function") window.updateGrid();
+        window.dispatchEvent(new CustomEvent("gridwild:heatchange", {
+          detail: { heatZThreshold: window.__gwState.heatZThreshold }
+        }));
       }
 
       function applyEnabled(value) {
@@ -3543,6 +3549,9 @@ window.refreshQuestBadge = refreshQuestBadge;
         sync();
         save();
         if (typeof window.updateGrid === "function") window.updateGrid();
+        window.dispatchEvent(new CustomEvent("gridwild:heatchange", {
+          detail: { heatZThresholdEnabled: window.__gwState.heatZThresholdEnabled === true }
+        }));
       }
 
       function toggleDirection() {
@@ -3552,6 +3561,9 @@ window.refreshQuestBadge = refreshQuestBadge;
         sync();
         save();
         if (typeof window.updateGrid === "function") window.updateGrid();
+        window.dispatchEvent(new CustomEvent("gridwild:heatchange", {
+          detail: { heatZThresholdDirection: window.__gwState.heatZThresholdDirection }
+        }));
       }
 
       function bind() {

@@ -190,6 +190,56 @@
       text-align: right;
     }
 
+    .gw-custom-wildlist-filter-bank {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid rgba(215,183,116,0.20);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.045);
+      display: grid;
+      gap: 8px;
+    }
+
+    .gw-custom-wildlist-filter-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(128px, .8fr) minmax(128px, .8fr) auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .gw-custom-wildlist-field {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .gw-custom-wildlist-field span {
+      color: rgba(239,230,211,0.68);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .gw-custom-wildlist-field input,
+    .gw-custom-wildlist-field select {
+      width: 100%;
+      min-height: 36px;
+      box-sizing: border-box;
+      border-radius: 12px;
+      border: 1px solid rgba(215,183,116,0.26);
+      background: rgba(0,0,0,0.20);
+      color: #efe6d3;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .gw-custom-wildlist-filter-reset {
+      min-height: 36px;
+      white-space: nowrap;
+    }
+
     @media (max-width: 560px) {
       .gw-wildlist-library-head {
         align-items: stretch;
@@ -206,6 +256,18 @@
       }
 
       .gw-wildlist-library-actions .gw-mini-btn {
+        width: 100%;
+      }
+
+      .gw-custom-wildlist-filter-row {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .gw-custom-wildlist-field:first-child {
+        grid-column: 1 / -1;
+      }
+
+      .gw-custom-wildlist-filter-reset {
         width: 100%;
       }
     }
@@ -359,6 +421,154 @@
     place_guess: o.place_guess || "",
   };
 }
+
+  function getWildlistObsName(o) {
+    return o?.taxon || o?.common_name || o?.scientific_name || "Unknown taxon";
+  }
+
+  function getWildlistObsTime(o) {
+    const raw = o?.time_observed_at || o?.observed_on || o?.created_at || "";
+    const t = raw ? new Date(raw).getTime() : 0;
+    return Number.isFinite(t) ? t : 0;
+  }
+
+  function getWildlistKingdom(o) {
+    const raw = String(o?.iconic_taxon_name || "").trim();
+    const key = raw.toLowerCase();
+
+    if (!key || key === "unknown") return "Unknown";
+    if (key === "plantae") return "Plants";
+    if (key === "fungi") return "Fungi";
+    if (key === "protozoa") return "Protozoa";
+    if (key === "chromista") return "Chromista";
+
+    if ([
+      "animalia",
+      "actinopterygii",
+      "amphibia",
+      "arachnida",
+      "aves",
+      "insecta",
+      "mammalia",
+      "mollusca",
+      "reptilia"
+    ].includes(key)) {
+      return "Animals";
+    }
+
+    return raw;
+  }
+
+  function getWildlistSearchText(o) {
+    return [
+      getWildlistObsName(o),
+      o?.common_name,
+      o?.scientific_name,
+      o?.genus_name,
+      o?.iconic_taxon_name,
+      getWildlistKingdom(o),
+      o?.observed_on
+    ].join(" ").toLowerCase();
+  }
+
+  function getWildlistKingdomOptions(obs) {
+    const preferredOrder = ["Animals", "Plants", "Fungi", "Protozoa", "Chromista", "Unknown"];
+    const found = new Set((obs || []).map(getWildlistKingdom).filter(Boolean));
+
+    return [
+      ...preferredOrder.filter(name => found.has(name)),
+      ...[...found].filter(name => !preferredOrder.includes(name)).sort((a, b) => a.localeCompare(b))
+    ];
+  }
+
+  function renderCustomWildlistFilterBank(obs) {
+    const kingdoms = getWildlistKingdomOptions(obs);
+
+    return `
+      <div class="gw-custom-wildlist-filter-bank" id="gwCustomWildlistFilterBank">
+        <div class="gw-custom-wildlist-filter-row">
+          <label class="gw-custom-wildlist-field">
+            <span>Find</span>
+            <input id="gwCustomWildlistSearch" type="search" placeholder="Taxon, genus, date">
+          </label>
+
+          <label class="gw-custom-wildlist-field">
+            <span>Kingdom</span>
+            <select id="gwCustomWildlistKingdom">
+              <option value="">All</option>
+              ${kingdoms.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join("")}
+            </select>
+          </label>
+
+          <label class="gw-custom-wildlist-field">
+            <span>Sort</span>
+            <select id="gwCustomWildlistSort">
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="taxon">Taxon A-Z</option>
+            </select>
+          </label>
+
+          <button class="gw-mini-btn gw-custom-wildlist-filter-reset" id="gwCustomWildlistFilterReset" type="button">
+            Reset
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function initCustomWildlistFilterBank(modal, updateCount) {
+    const bank = modal.querySelector("#gwCustomWildlistFilterBank");
+    const grid = modal.querySelector("#gwCustomWildlistGrid");
+    if (!bank || !grid) return;
+
+    const search = bank.querySelector("#gwCustomWildlistSearch");
+    const kingdom = bank.querySelector("#gwCustomWildlistKingdom");
+    const sort = bank.querySelector("#gwCustomWildlistSort");
+    const reset = bank.querySelector("#gwCustomWildlistFilterReset");
+
+    const tiles = Array.from(grid.querySelectorAll(".gw-custom-wildlist-tile"));
+
+    function apply() {
+      const q = String(search?.value || "").trim().toLowerCase();
+      const selectedKingdom = String(kingdom?.value || "");
+      const sortMode = String(sort?.value || "newest");
+
+      const ordered = tiles.slice().sort((a, b) => {
+        if (sortMode === "oldest") {
+          return Number(a.dataset.wildlistTime || 0) - Number(b.dataset.wildlistTime || 0);
+        }
+
+        if (sortMode === "taxon") {
+          return String(a.dataset.wildlistName || "").localeCompare(String(b.dataset.wildlistName || ""));
+        }
+
+        return Number(b.dataset.wildlistTime || 0) - Number(a.dataset.wildlistTime || 0);
+      });
+
+      ordered.forEach(tile => {
+        const matchesKingdom = !selectedKingdom || tile.dataset.wildlistKingdom === selectedKingdom;
+        const matchesSearch = !q || String(tile.dataset.wildlistSearch || "").includes(q);
+        tile.style.display = matchesKingdom && matchesSearch ? "block" : "none";
+        grid.appendChild(tile);
+      });
+
+      updateCount();
+    }
+
+    search?.addEventListener("input", apply);
+    kingdom?.addEventListener("change", apply);
+    sort?.addEventListener("change", apply);
+    reset?.addEventListener("click", () => {
+      if (search) search.value = "";
+      if (kingdom) kingdom.value = "";
+      if (sort) sort.value = "newest";
+      apply();
+      search?.focus();
+    });
+
+    apply();
+  }
 
   function savePlaylist(playlist) {
     const all = loadAll();
@@ -636,6 +846,7 @@ function openPartyWildlistPlaceholder() {
   ensureStyles();
 
   const obs = getRecentObs();
+  const builderObs = obs.slice(0, 120);
 
   const editingPlaylistId = options.editingPlaylistId || null;
   const preselectedIds = new Set((options.selectedIds || []).map(String));
@@ -690,22 +901,35 @@ function openPartyWildlistPlaceholder() {
         <button class="gw-mini-btn" id="gwSaveCustomWildlistBtn">Save Wildlist</button>
       </div>
 
+      ${renderCustomWildlistFilterBank(builderObs)}
+
       <div id="gwCustomWildlistCount" class="gw-muted" style="font-size:12px;margin-top:10px;">
         0 selected
       </div>
 
-      <div style="
+      <div id="gwCustomWildlistGrid" style="
         display:grid;
         grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
         gap:10px;
         margin-top:12px;
       ">
-        ${obs.slice(0, 120).map(o => {
+        ${builderObs.map(o => {
           const img = getObsThumbUrl(o);
-          const name = o.taxon || o.common_name || o.scientific_name || "Unknown taxon";
+          const name = getWildlistObsName(o);
+          const kingdom = getWildlistKingdom(o);
+          const searchText = getWildlistSearchText(o);
+          const sortName = name.toLowerCase();
+          const sortTime = getWildlistObsTime(o);
 
           return `
-            <label class="gw-card gw-custom-wildlist-tile" data-obs-id="${esc(o.id)}" style="
+            <label
+              class="gw-card gw-custom-wildlist-tile"
+              data-obs-id="${esc(o.id)}"
+              data-wildlist-kingdom="${esc(kingdom)}"
+              data-wildlist-search="${esc(searchText)}"
+              data-wildlist-name="${esc(sortName)}"
+              data-wildlist-time="${esc(sortTime)}"
+              style="
               margin:0;
               padding:8px;
               cursor:pointer;
@@ -760,16 +984,23 @@ function openPartyWildlistPlaceholder() {
 
   const checks = Array.from(modal.querySelectorAll(".gwCustomWildlistObsCheck"));
   const countEl = modal.querySelector("#gwCustomWildlistCount");
+  const tiles = Array.from(modal.querySelectorAll(".gw-custom-wildlist-tile"));
 
   function updateCount() {
     const n = checks.filter(c => c.checked).length;
-    countEl.textContent = `${n} selected`;
+    const shown = tiles.filter(tile => tile.style.display !== "none").length;
+    countEl.textContent = `${n} selected - ${shown} shown`;
+  }
+
+  function getShownChecks() {
+    return checks.filter(c => c.closest(".gw-custom-wildlist-tile")?.style.display !== "none");
   }
 
   checks.forEach(c => c.addEventListener("change", updateCount));
+  initCustomWildlistFilterBank(modal, updateCount);
 
   modal.querySelector("#gwSelectAllWildlistObsBtn").onclick = () => {
-    checks.forEach(c => c.checked = true);
+    getShownChecks().forEach(c => c.checked = true);
     updateCount();
   };
 
