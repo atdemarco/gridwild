@@ -40,6 +40,11 @@
       icon: "🏴",
       summary: "Target a cell where another observer currently dominates."
     },
+    identify_unknowns: {
+      label: "Identify unknowns",
+      icon: "ID",
+      summary: "Add identifications to nearby iNaturalist observations that have no ID yet."
+    },
     sample_niche: {
       label: "Sample a niche",
       icon: "N",
@@ -394,10 +399,11 @@ function makeTodayQuestSeed(title, recipe, forcedTargetLocation) {
     objectiveType: recipe.objectiveType || "any_observation",
     difficulty: Number(recipe.difficulty || 1),
     timeframe: "today",
-    evidence: "photo_gps20",
+    evidence: recipe.evidence || "photo_gps20",
     surveyId: recipe.surveyId || "none",
     targetLocation,
-    target
+    target,
+    quantity: recipe.quantity || recipe.targetCount || 1
   };
 
   return {
@@ -418,6 +424,11 @@ function generateDailyQuests() {
       "anywhere"
     ),
     makeTodayQuestSeed(
+      "Sort unknowns around {locale}",
+      { iconicTaxon: "Any", objectiveType: "identify_unknowns", difficulty: 2, evidence: "identification", quantity: 3 },
+      "anywhere"
+    ),
+    makeTodayQuestSeed(
       "{locale} pinpoint survey",
       { iconicTaxon: "Plantae", objectiveType: "any_observation", difficulty: 2 },
       "specific_square"
@@ -429,7 +440,7 @@ function generateDailyQuests() {
     )
   ];
 
-  const extras = [
+  const fieldExtras = [
     makeTodayQuestSeed(
       "Find fungi, lichens, or decomposers in {locale}",
       { iconicTaxon: "Fungi", objectiveType: "underobserved", difficulty: 3 },
@@ -442,7 +453,22 @@ function generateDailyQuests() {
     )
   ];
 
-  return [...required, ...extras];
+  const identifyExtras = [
+    makeTodayQuestSeed(
+      "Give one careful broad ID near {locale}",
+      { iconicTaxon: "Any", objectiveType: "identify_unknowns", difficulty: 3, evidence: "identification", quantity: 1 },
+      "anywhere"
+    ),
+    makeTodayQuestSeed(
+      "Coarse-sort five unknowns around {locale}",
+      { iconicTaxon: "Any", objectiveType: "identify_unknowns", difficulty: 4, evidence: "identification", quantity: 5 },
+      "anywhere"
+    )
+  ];
+
+  const identifyExtra = identifyExtras[seededInt(extraModeRand, 0, identifyExtras.length - 1)];
+
+  return [...required, ...fieldExtras, identifyExtra];
 }
 
 let DAILY_QUESTS = generateDailyQuests();
@@ -547,7 +573,8 @@ const DAILY_QUESTS_ORIGINAL = [
       new_square_taxon: 35,
       underobserved: 45,
       revisit_fading: 30,
-      leaderboard: 50
+      leaderboard: 50,
+      identify_unknowns: 40
     }[recipe.objectiveType] ?? 10;
 
     return Math.round(20 + difficulty * 20 + rangeBonus + objectiveBonus);
@@ -563,6 +590,12 @@ const DAILY_QUESTS_ORIGINAL = [
     const target = recipe?.target || {};
     const objective = OBJECTIVES[recipe?.objectiveType]?.summary || "Document life in the field.";
     const place = target.placeName || locale.shortLabel || "your area";
+    const quantity = Number(recipe?.quantity || recipe?.targetCount || 1);
+
+    if (isIdentificationQuest(recipe)) {
+      const count = Number.isFinite(quantity) && quantity > 1 ? quantity : 1;
+      return `Add ${count} identification${count === 1 ? "" : "s"} to currently unknown iNaturalist observations around ${place}.`;
+    }
 
     if ((recipe?.targetLocation || target.mode) === "anywhere") {
       return `${objective} Seeded from your GPS locale near ${place}; any qualifying observation around this area counts.`;
@@ -590,7 +623,7 @@ function normalizeDbQuest(q) {
   const recipe = {
     range: storedRecipe.range || "anywhere",
     iconicTaxon: storedRecipe.iconicTaxon || "Any",
-    objectiveType: storedRecipe.objectiveType || (q.quest_type === "identify" ? "new_square_taxon" : "any_observation"),
+    objectiveType: storedRecipe.objectiveType || (q.quest_type === "identify" ? "identify_unknowns" : "any_observation"),
     difficulty: Number(storedRecipe.difficulty || 1),
     timeframe: storedRecipe.timeframe || "today",
     evidence: storedRecipe.evidence || "photo_gps20",
@@ -625,6 +658,20 @@ function getDbQuests() {
 function isPlayerTrackedQuest(q) {
   const status = String(q?.status || "").toLowerCase();
   return !["", "available", "unavailable"].includes(status);
+}
+
+function isIdentificationQuest(questOrRecipe) {
+  if (window.GridWildIdentify?.isIdentificationQuest) {
+    return window.GridWildIdentify.isIdentificationQuest(questOrRecipe);
+  }
+
+  const r = questOrRecipe?.recipe || questOrRecipe || {};
+  return (
+    String(questOrRecipe?.quest_type || "").toLowerCase() === "identify" ||
+    r.objectiveType === "identify_unknowns" ||
+    r.evidence === "identification" ||
+    r.evidenceType === "identification"
+  );
 }
 
 function updateRuntimeQuestPlayerState(questId, playerQuest, patch = {}) {
@@ -670,6 +717,14 @@ function getVisibleQuests() {
 
 async function acceptAndEmbarkQuest(quest) {
   if (!quest) return null;
+
+  if (isIdentificationQuest(quest)) {
+    const ok = await window.GridWildIdentify?.ensureLinkedAccount?.({
+      reason: "accept",
+      quest
+    });
+    if (!ok) return null;
+  }
 
   if (quest.source === "db" || quest.dbId) {
     const questId = quest.dbId || quest.id;
@@ -1013,7 +1068,8 @@ function openQuestArchive() {
     evidence: recipe.evidence || "photo_gps20",
     targetLocation: recipe.targetLocation || "area_3x3",
     target: recipe.target || null,
-    surveyId: recipe.surveyId || "none"
+    surveyId: recipe.surveyId || "none",
+    quantity: recipe.quantity || recipe.targetCount || 1
     };
 
     return {
@@ -1048,7 +1104,7 @@ async function startQuestFromRecipe(recipe, options = {}) {
     const result = await window.GridWildAPI.createQuest({
       title: quest.title,
       description: quest.description,
-      quest_type: "explore",
+      quest_type: isIdentificationQuest(quest) ? "identify" : "explore",
       reward_wildpoints: quest.pointValue || estimateRewardXP(quest.recipe),
       recipe: quest.recipe,
       source
@@ -1089,6 +1145,16 @@ async function startQuestFromRecipe(recipe, options = {}) {
     const taxIcon = TAXON_FLAVORS[recipe.iconicTaxon]?.icon || "🌎";
     const objIcon = OBJECTIVES[recipe.objectiveType]?.icon || "🎯";
     return `${taxIcon}${objIcon}`;
+  }
+
+  function evidenceLabel(recipe = {}) {
+    if (recipe.evidence === "identification" || isIdentificationQuest(recipe)) {
+      const target = Number(recipe.quantity || recipe.targetCount || 1);
+      const count = Number.isFinite(target) && target > 0 ? target : 1;
+      return `${count} identification${count === 1 ? "" : "s"}`;
+    }
+
+    return recipe.evidence === "photo_gps20" ? "Photo + GPS <=20 m" : String(recipe.evidence || "Evidence");
   }
 
   function injectStyles() {
@@ -1593,7 +1659,7 @@ async function startQuestFromRecipe(recipe, options = {}) {
 
           <div class="gw-quest-status-line">
             <span>Evidence</span>
-            <span>${r.evidence === "photo_gps20" ? "Photo + GPS ≤20 m" : esc(r.evidence)}</span>
+            <span>${esc(evidenceLabel(r))}</span>
           </div>
 
           <div class="gw-quest-status-line">
@@ -1602,13 +1668,15 @@ async function startQuestFromRecipe(recipe, options = {}) {
           </div>
         </div>
 
-        ${window.GridWildQuestEvidence
-          ? window.GridWildQuestEvidence.renderQuestEvidencePanel(quest)
-          : `
-            <div class="gw-quest-modal-subtitle" style="margin-top:14px;">
-              Evidence matching is not loaded yet.
-            </div>
-          `
+        ${isIdentificationQuest(quest) && window.GridWildIdentify
+          ? window.GridWildIdentify.renderQuestEvidencePanel(quest)
+          : window.GridWildQuestEvidence
+            ? window.GridWildQuestEvidence.renderQuestEvidencePanel(quest)
+            : `
+              <div class="gw-quest-modal-subtitle" style="margin-top:14px;">
+                Evidence matching is not loaded yet.
+              </div>
+            `
         }
 
       <div class="gw-quest-actions gw-quest-actions-four">
@@ -1630,7 +1698,9 @@ async function startQuestFromRecipe(recipe, options = {}) {
     `;
 
     document.body.appendChild(root);
-    window.GridWildQuestEvidence?.bindQuestEvidencePanel?.(root, quest);
+    if (!isIdentificationQuest(quest)) {
+      window.GridWildQuestEvidence?.bindQuestEvidencePanel?.(root, quest);
+    }
 
     root.addEventListener("click", evt => {
       if (evt.target === root) closeModal(root);
@@ -1671,14 +1741,8 @@ async function startQuestFromRecipe(recipe, options = {}) {
 
  root.querySelector("#gwQuestEmbarkBtn")?.addEventListener("click", async () => {
   try {
-    if (quest.source === "db" || quest.dbId) {
-      await acceptAndEmbarkQuest(quest);
-      closeModal(root);
-      return;
-    }
-
-    await acceptAndEmbarkQuest(quest);
-    closeModal(root);
+    const acceptedQuest = await acceptAndEmbarkQuest(quest);
+    if (acceptedQuest) closeModal(root);
   } catch (err) {
     console.error("Accept quest failed:", err);
     alert(`Could not accept quest: ${err.message}`);
@@ -1698,6 +1762,14 @@ root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", async evt => {
   }
 
   try {
+    if (isIdentificationQuest(quest)) {
+      const ok = await window.GridWildIdentify?.ensureLinkedAccount?.({
+        reason: "accept",
+        quest
+      });
+      if (!ok) return;
+    }
+
     if (quest.source === "db" || quest.dbId) {
       const questId = quest.dbId || quest.id;
       const accepted = await window.GridWildAPI.acceptQuest(questId);
@@ -1736,6 +1808,20 @@ root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", async evt => {
 
     root.querySelector("#gwQuestCompleteBtn").onclick = async () => {
       try {
+        if (isIdentificationQuest(quest)) {
+          const linked = await window.GridWildIdentify?.ensureLinkedAccount?.({
+            reason: "submit",
+            quest
+          });
+          if (!linked) return;
+
+          const progress = window.GridWildIdentify?.getQuestProgress?.(quest) || { claimed: 0, target: 1 };
+          if (progress.claimed < progress.target) {
+            alert(`This identification quest needs ${progress.target - progress.claimed} more ID claim${progress.target - progress.claimed === 1 ? "" : "s"}.`);
+            return;
+          }
+        }
+
         if (quest.source === "db" || quest.dbId) {
           const result = await window.GridWildAPI.completeQuest(quest.dbId || quest.id);
 
@@ -1858,7 +1944,13 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
               <option value="underobserved">Under-observed life</option>
               <option value="revisit_fading">Revisit fading territory</option>
               <option value="leaderboard">Challenge local territory</option>
+              <option value="identify_unknowns">Identify unknowns</option>
             </select>
+          </div>
+
+          <div class="gw-quest-field">
+            <label>Quantity</label>
+            <input id="gwQuestQuantity" type="number" min="1" max="25" step="1" value="1" />
           </div>
 
           <div class="gw-quest-field">
@@ -1882,6 +1974,7 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
               <option value="photo_gps20">Photo + GPS ≤20 m</option>
               <option value="photo">Photo only</option>
               <option value="observation">Observation only</option>
+              <option value="identification">Identification claim</option>
               <option value="research_grade">Research-grade eventually</option>
             </select>
           </div>
@@ -1910,6 +2003,16 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
       diffLabel.textContent = difficultyLabel(diff.value);
     });
 
+    const objective = root.querySelector("#gwQuestObjective");
+    const evidence = root.querySelector("#gwQuestEvidence");
+    const quantity = root.querySelector("#gwQuestQuantity");
+
+    objective?.addEventListener("change", () => {
+      if (objective.value !== "identify_unknowns") return;
+      if (evidence) evidence.value = "identification";
+      if (quantity && Number(quantity.value || 0) < 3) quantity.value = "3";
+    });
+
     root.addEventListener("click", evt => {
       if (evt.target === root) closeModal(root);
     });
@@ -1924,7 +2027,8 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
         objectiveType: root.querySelector("#gwQuestObjective").value,
         difficulty: Number(root.querySelector("#gwQuestDifficulty").value),
         timeframe: root.querySelector("#gwQuestTimeframe").value,
-        evidence: root.querySelector("#gwQuestEvidence").value
+        evidence: root.querySelector("#gwQuestEvidence").value,
+        quantity: Number(root.querySelector("#gwQuestQuantity").value || 1)
         };
 
       const quests = loadQuests();
@@ -2079,6 +2183,9 @@ function renderDailyQuestsHtml() {
       ${DAILY_QUESTS.map((q, idx) => {
         const r = q.recipe || {};
         const t = r.target || {};
+        const quantityText = isIdentificationQuest(r)
+          ? ` - ${Number(r.quantity || 1)} IDs`
+          : "";
         const targetText =
           r.targetLocation === "anywhere"
             ? "Anywhere"
@@ -2089,7 +2196,7 @@ function renderDailyQuestsHtml() {
             <span>
               <span>${esc(q.title)}</span>
               <span class="gw-muted" style="display:block;font-size:11px;">
-                ${esc(targetText)} · ${esc(difficultyLabel(r.difficulty))}
+                ${esc(targetText)} · ${esc(difficultyLabel(r.difficulty))}${esc(quantityText)}
               </span>
               ${q.description ? `
                 <span class="gw-muted" style="display:block;font-size:10.5px;margin-top:3px;">
@@ -2454,6 +2561,7 @@ function openNewSurveyConfigurator() {
     getVisibleQuests,
     getArchivedQuests,
     isArchivedQuest,
+    isIdentificationQuest,
     
     constants: {
       TAXON_FLAVORS,

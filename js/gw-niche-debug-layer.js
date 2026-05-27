@@ -231,6 +231,13 @@
     if (r.bothPathAdjacent) lines.push("both path-adjacent");
     if (r.bothWetEdge) lines.push("both wet-edge");
     if (Number.isFinite(r.signalSimilarity)) lines.push(`signal similarity: ${Number(r.signalSimilarity).toFixed(2)}`);
+    if (Number(r.signalNeighborhoodSize) > 1) {
+      lines.push(`signal pool: ${Number(r.signalNeighborhoodSize)}x${Number(r.signalNeighborhoodSize)}`);
+    }
+    if (Number.isFinite(r.signalSupport)) lines.push(`signal support: ${Number(r.signalSupport).toFixed(2)}`);
+    if (Number(r.signalActiveCellsA) || Number(r.signalActiveCellsB)) {
+      lines.push(`active cells: ${Number(r.signalActiveCellsA) || 0} / ${Number(r.signalActiveCellsB) || 0}`);
+    }
     if ((r.roadBarrierPenalty || 0) > 0) lines.push(`road penalty: ${Number(r.roadBarrierPenalty).toFixed(2)}`);
     if ((r.waterBarrierPenalty || 0) > 0) lines.push(`water penalty: ${Number(r.waterBarrierPenalty).toFixed(2)}`);
     if ((r.insideBuildingPenalty || 0) > 0) lines.push(`building penalty: ${Number(r.insideBuildingPenalty).toFixed(2)}`);

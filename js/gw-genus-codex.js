@@ -549,6 +549,63 @@
     `;
   }
 
+  function getRecord(genusName) {
+    const clean = normalizeGenus(genusName);
+    return GENERA[clean] || makeFallbackGenus(clean || "Unknown");
+  }
+
+  function listRecords() {
+    return Object.values(GENERA)
+      .filter(rec => rec?.genus)
+      .sort((a, b) => String(a.genus).localeCompare(String(b.genus)));
+  }
+
+  function recordFieldMarks(rec, limit = 3) {
+    return (rec?.fieldMarks || [])
+      .map(k => FIELD_MARKS[k])
+      .filter(Boolean)
+      .slice(0, limit);
+  }
+
+  function renderRecordCardHtml(input, options = {}) {
+    const rec = typeof input === "string" ? getRecord(input) : input;
+    const safeRec = rec?.genus ? rec : makeFallbackGenus("Unknown");
+    const slides = Array.isArray(safeRec.lore) && safeRec.lore.length
+      ? safeRec.lore
+      : ["This genus is waiting for a better field note."];
+    const idx = Math.max(0, Math.min(slides.length - 1, Number(options.slideIndex) || 0));
+    const marks = recordFieldMarks(safeRec, Number(options.fieldMarkLimit) || 3);
+
+    return `
+      <div class="gw-codex-card gw-codex-card-embedded">
+        <div class="gw-codex-top">
+          <div class="gw-codex-thumb">
+            ${safeRec.thumbUrl ? `<img src="${esc(safeRec.thumbUrl)}" alt="${esc(safeRec.genus)}">` : esc(safeRec.genus.slice(0, 1))}
+          </div>
+          <div>
+            <div class="gw-codex-genus">${esc(safeRec.genus)}</div>
+            <div class="gw-codex-common">${esc(safeRec.common || "Genus account")}</div>
+            <div class="gw-codex-meta">${esc(safeRec.family || "family unknown")} - ${esc(safeRec.badge || "Field Mark")}</div>
+          </div>
+        </div>
+
+        <div class="gw-codex-lore">${esc(slides[idx])}</div>
+
+        <div class="gw-codex-section-title">Field marks</div>
+        <div class="gw-fieldmark-grid">
+          ${marks.length ? marks.map(renderFieldMark).join("") : renderFieldMark({
+            label: "Placeholder",
+            desc: "Add glossary tokens for this genus.",
+            svg: simpleIconSvg("?", "placeholder")
+          })}
+        </div>
+
+        <div class="gw-codex-section-title">Rotating field note</div>
+        <div class="gw-codex-fact">${esc(selectFact(safeRec, idx))}</div>
+      </div>
+    `;
+  }
+
   function selectFact(rec, idx) {
     const facts = Array.isArray(rec.facts) && rec.facts.length ? rec.facts : ["No factoids loaded yet."];
     const salt = Math.floor(Date.now() / 45000);
@@ -759,6 +816,11 @@
     open,
     openFromTaxonName,
     load: loadGenusCodex,
+    getRecord,
+    listRecords,
+    renderRecordCardHtml,
+    renderFieldMarkHtml: renderFieldMark,
+    ensureStyles: injectStyles,
     genera: GENERA,
     fieldMarks: FIELD_MARKS
   };

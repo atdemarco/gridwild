@@ -10,7 +10,10 @@
     pass1Threshold: 0.45,
     pass2Threshold: 0.50,
     pass3Threshold: 0.55,
-    minCellCount: 3
+    minCellCount: 3,
+    pass2NeighborhoodSize: 5,
+    pass2NeighborhoodMinActiveCells: 2,
+    pass2NeighborhoodMinObservations: 3
   };
 
   function nowMs() {

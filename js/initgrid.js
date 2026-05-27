@@ -541,7 +541,7 @@ window.markCenterMacroVisitedByGodsEye = markCenterMacroVisitedByGodsEye;
 function summarizeCenterMacroSquare() {
 
   const counts = window.__staticGridCounts;
-  if (!(counts instanceof Map) || counts.size === 0) {
+  if (!(counts instanceof Map) || (counts.size === 0 && !window.GridWildPyriteLake?.hasData?.())) {
     return null;
   }
 
@@ -560,7 +560,10 @@ function summarizeCenterMacroSquare() {
   for (const key of keys) {
     nCells += 1;
 
-    const m = counts.get(key);
+    const [ix, iy] = key.split(",").map(Number);
+    const m = Number.isFinite(ix) && Number.isFinite(iy)
+      ? getDisplayMetricsForCell(ix, iy, counts.get(key) || null)
+      : counts.get(key);
     if (!m) continue;
 
     const obs = m.count || 0;
@@ -666,15 +669,13 @@ window.GridWildGrid = window.GridWildGrid || (function () {
           window.__richGridMetrics?.get(key) ||
           window.__staticGridCounts?.get(key) ||
           null;
-        const displayMetrics = baseMetrics
-          ? getDisplayMetricsForCell(ix, iy, baseMetrics || {})
-          : null;
+        const displayMetrics = getDisplayMetricsForCell(ix, iy, baseMetrics || null);
 
         out.push({
           ix,
           iy,
           key,
-          metrics: displayMetrics || baseMetrics,
+          metrics: displayMetrics || null,
           style: displayMetrics ? metricsToFill(displayMetrics) : null,
           bounds: fineCellBoundsLL(ix, iy)
         });
@@ -739,19 +740,27 @@ window.GridWildGrid = window.GridWildGrid || (function () {
 
     for (let iy = bounds.minIy; iy <= bounds.maxIy; iy++) {
       for (let ix = bounds.minIx; ix <= bounds.maxIx; ix++) {
+        if (!hasStaticGoldCellForGenera(ix, iy)) continue;
         jobs.push(getSquareGeneraRecord(ix, iy));
       }
     }
 
     let records = (await Promise.all(jobs)).filter(Boolean);
+    const taxa = options.applyFilters ? selectedIconicTaxa() : [];
+
     if (options.applyFilters) {
-      const taxa = selectedIconicTaxa();
       if (taxa.length) {
         records = records
           .map(rec => filteredSquareGeneraRecord(rec, taxa))
           .filter(Boolean);
       }
     }
+
+    const pyriteRecords = window.GridWildPyriteLake?.recordsForBounds?.(bounds, {
+      iconicTaxa: taxa
+    }) || [];
+    records = records.concat(pyriteRecords);
+
     return mergeSquareGeneraRecords(records);
   }
 
@@ -1100,19 +1109,31 @@ function mergeSquareGeneraRecords(squareRecords) {
     const observers = Array.isArray(rec?.top_observers) ? rec.top_observers : [];
     for (const row of observers) {
       const observerId = Number(row?.observer_id);
-      if (!Number.isFinite(observerId)) continue;
+      const observerLogin = String(row?.observer_login || "").trim();
+      const observerKey = Number.isFinite(observerId) && observerId > 0
+        ? `id:${observerId}`
+        : observerLogin
+          ? `login:${observerLogin}`
+          : "";
+      if (!observerKey) continue;
 
-      if (!observerMap.has(observerId)) {
-        observerMap.set(observerId, {
-          observer_id: observerId,
+      if (!observerMap.has(observerKey)) {
+        observerMap.set(observerKey, {
+          observer_id: Number.isFinite(observerId) && observerId > 0 ? observerId : null,
+          observer_login: observerLogin,
+          observer_name: row?.observer_name || "",
+          observer_url: row?.observer_url || "",
           count: 0,
           species: 0
         });
       }
 
-      const dest = observerMap.get(observerId);
+      const dest = observerMap.get(observerKey);
       dest.count += Number(row?.count) || 0;
       dest.species = Math.max(dest.species, Number(row?.species) || 0);
+      if (!dest.observer_login && observerLogin) dest.observer_login = observerLogin;
+      if (!dest.observer_name && row?.observer_name) dest.observer_name = row.observer_name;
+      if (!dest.observer_url && row?.observer_url) dest.observer_url = row.observer_url;
     }
   }
 
@@ -1122,7 +1143,7 @@ function mergeSquareGeneraRecords(squareRecords) {
       .sort((a, b) =>
         (b.count - a.count) ||
         (b.species - a.species) ||
-        (a.observer_id - b.observer_id)
+        String(a.observer_login || a.observer_id || "").localeCompare(String(b.observer_login || b.observer_id || ""))
       ),
     __metrics: mergedMetrics
   };
@@ -1304,6 +1325,10 @@ async function loadGeneraSuperchunk(ix, iy) {
     try {
       const resp = await fetch(url);
       if (!resp.ok) {
+        if (resp.status === 400 || resp.status === 404) {
+          cache.set(key, null);
+          return null;
+        }
         throw new Error(`Failed to load square genera superchunk: HTTP ${resp.status} for ${url}`);
       }
       const data = await resp.json();
@@ -1407,7 +1432,19 @@ function encodeGeneraSquareId(ix, iy) {
   return `sq_${enc(ix)}_${enc(iy)}`;
 }
 
+function hasStaticGoldCellForGenera(ix, iy) {
+  const key = `${ix},${iy}`;
+  if (window.__richGridMetrics?.has?.(key)) return true;
+
+  const counts = window.__staticGridCounts;
+  if (counts instanceof Map) return counts.has(key);
+
+  return false;
+}
+
 async function getSquareGeneraRecord(ix, iy) {
+  if (!hasStaticGoldCellForGenera(ix, iy)) return null;
+
   const squareId = encodeGeneraSquareId(ix, iy);
   //console.log("GENERA squareId wanted", squareId);
 
@@ -1979,7 +2016,103 @@ function getDisplayMetricsForCell(ix, iy, baseMetrics = {}) {
     return window.GridWildMeOverlayFilter.metricsForCell(ix, iy);
   }
 
-  return window.GridWildIconicOverlayFilter?.metricsForCell?.(ix, iy, baseMetrics) || null;
+  const staticMetrics = hasGridMetricSignal(baseMetrics)
+    ? window.GridWildIconicOverlayFilter?.metricsForCell?.(ix, iy, baseMetrics) || null
+    : null;
+  const pyriteMetrics = window.GridWildPyriteLake?.getMetricsForCell?.(ix, iy, {
+    iconicTaxa: window.GridWildIconicOverlayFilter?.selectedTaxa?.() || []
+  }) || null;
+
+  return mergeDisplayMetricRecords([staticMetrics, pyriteMetrics]);
+}
+
+function hasGridMetricSignal(metrics) {
+  if (!metrics) return false;
+  return (
+    (Number(metrics.count) || 0) > 0 ||
+    (Number(metrics.species) || 0) > 0 ||
+    (Number(metrics.genera) || 0) > 0 ||
+    (Number(metrics.observers) || 0) > 0
+  );
+}
+
+function mergeMetricObjects(target, source) {
+  for (const [key, value] of Object.entries(source || {})) {
+    target[key] = (Number(target[key]) || 0) + (Number(value) || 0);
+  }
+}
+
+function metricEntropy(values) {
+  const total = values.reduce((sum, value) => sum + (Number(value) || 0), 0);
+  if (!total) return 0;
+  return values.reduce((h, value) => {
+    const p = (Number(value) || 0) / total;
+    return p > 0 ? h - p * Math.log2(p) : h;
+  }, 0);
+}
+
+function mergeDisplayMetricRecords(records) {
+  const usable = (records || []).filter(hasGridMetricSignal);
+  if (!usable.length) return null;
+  if (usable.length === 1) return usable[0];
+
+  const merged = {
+    count: 0,
+    species: 0,
+    genera: 0,
+    observers: 0,
+    n_captive: 0,
+    iconic_counts: {},
+    month_totals: Array(12).fill(0),
+    last_observed: null,
+    median_last10_observed: null,
+    last_observed_ms: 0,
+    median_last10_observed_ms: 0,
+    nActiveSquares: 0,
+    source: "gold+pyrite"
+  };
+
+  for (const rec of usable) {
+    merged.count += Number(rec.count) || 0;
+    merged.species += Number(rec.species) || Number(rec.genera) || 0;
+    merged.genera += Number(rec.genera) || Number(rec.species) || 0;
+    merged.observers += Number(rec.observers) || 0;
+    merged.n_captive += Number(rec.n_captive) || 0;
+    merged.nActiveSquares += Number(rec.nActiveSquares) || ((Number(rec.count) || 0) > 0 ? 1 : 0);
+    mergeMetricObjects(merged.iconic_counts, rec.iconic_counts);
+
+    (rec.month_totals || []).forEach((value, index) => {
+      if (index >= 0 && index < merged.month_totals.length) {
+        merged.month_totals[index] += Number(value) || 0;
+      }
+    });
+
+    const lastMs = Number(rec.last_observed_ms) || parseGridDateMs(rec.last_observed);
+    if (lastMs > merged.last_observed_ms) {
+      merged.last_observed_ms = lastMs;
+      merged.last_observed = gridDateIsoFromMs(lastMs);
+    }
+
+    const medianMs = Number(rec.median_last10_observed_ms) || parseGridDateMs(rec.median_last10_observed);
+    if (medianMs > merged.median_last10_observed_ms) {
+      merged.median_last10_observed_ms = medianMs;
+      merged.median_last10_observed = gridDateIsoFromMs(medianMs);
+    }
+  }
+
+  const peak = Math.max(...merged.month_totals);
+  const total = merged.month_totals.reduce((sum, value) => sum + value, 0);
+  const dominant = Object.entries(merged.iconic_counts)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
+
+  merged.iconic_n = Object.keys(merged.iconic_counts).length;
+  merged.dominant_iconic = dominant;
+  merged.peak_month = merged.month_totals.indexOf(peak) + 1;
+  merged.seasonal_strength = total ? peak / total : 0;
+  merged.month_entropy = metricEntropy(merged.month_totals);
+  merged.activity_score = Math.log1p(merged.count) * (1 + merged.genera * 0.05);
+
+  return merged;
 }
 
 function warmRichMetricsForVisibleCells() {
@@ -3509,6 +3642,156 @@ function passesHeatZThreshold(value, stats) {
   return direction === "below" ? z <= threshold : z >= threshold;
 }
 
+const HEAT_MORPH_DEFAULT_MIN_SIZE = 10;
+const HEAT_MORPH_MAX_SIZE = 999;
+const HEAT_MORPH_OFFSETS = [
+  [-1, -1], [0, -1], [1, -1],
+  [-1, 0],           [1, 0],
+  [-1, 1],  [0, 1],  [1, 1]
+];
+
+function clampHeatMorphSize(value, fallback) {
+  const raw = Number(value);
+  const next = Number.isFinite(raw) ? raw : fallback;
+  return Math.max(1, Math.min(HEAT_MORPH_MAX_SIZE, Math.round(next)));
+}
+
+function getHeatMorphologySettings() {
+  const state = window.__gwState || {};
+  return {
+    minEnabled: state.heatMorphMinEnabled === true,
+    minSize: clampHeatMorphSize(state.heatMorphMinSize, HEAT_MORPH_DEFAULT_MIN_SIZE)
+  };
+}
+
+function isHeatMorphologyEnabled() {
+  if (!isHeatZThresholdEnabled()) return false;
+  const settings = getHeatMorphologySettings();
+  return settings.minEnabled;
+}
+
+function parseHeatCellKey(key) {
+  const parts = String(key || "").split(",");
+  if (parts.length !== 2) return null;
+  const ix = Number(parts[0]);
+  const iy = Number(parts[1]);
+  return Number.isFinite(ix) && Number.isFinite(iy) ? { ix, iy } : null;
+}
+
+function heatNeighborKey(ix, iy, dx, dy, step = 1) {
+  return `${ix + dx * step},${iy + dy * step}`;
+}
+
+function removeSmallHeatComponents(activeKeys, minSize, step = 1) {
+  if (minSize <= 1) return new Set(activeKeys);
+
+  const kept = new Set();
+  const visited = new Set();
+
+  for (const key of activeKeys) {
+    if (visited.has(key)) continue;
+
+    const start = parseHeatCellKey(key);
+    if (!start) continue;
+
+    const stack = [key];
+    const component = [];
+    visited.add(key);
+
+    while (stack.length) {
+      const currentKey = stack.pop();
+      const cell = parseHeatCellKey(currentKey);
+      if (!cell) continue;
+      component.push(currentKey);
+
+      for (const [dx, dy] of HEAT_MORPH_OFFSETS) {
+        const nextKey = heatNeighborKey(cell.ix, cell.iy, dx, dy, step);
+        if (!activeKeys.has(nextKey) || visited.has(nextKey)) continue;
+        visited.add(nextKey);
+        stack.push(nextKey);
+      }
+    }
+
+    if (component.length >= minSize) {
+      for (const componentKey of component) kept.add(componentKey);
+    }
+  }
+
+  return kept;
+}
+
+function buildThresholdedHeatMorphologyMask(items, heatZStats, options = {}) {
+  const step = Math.max(1, Math.round(Number(options.step) || 1));
+  const settings = getHeatMorphologySettings();
+  const itemMap = new Map();
+  let activeKeys = new Set();
+
+  for (const item of items || []) {
+    if (!item?.key) continue;
+    itemMap.set(item.key, item);
+    if (passesHeatZThreshold(item.heatValue, heatZStats)) activeKeys.add(item.key);
+  }
+
+  if (!itemMap.size) return activeKeys;
+
+  if (settings.minEnabled) {
+    activeKeys = removeSmallHeatComponents(activeKeys, settings.minSize, step);
+  }
+
+  return activeKeys;
+}
+
+function collectRegularHeatItems(counts, startX, endX, startY, endY) {
+  const items = [];
+
+  for (let x = startX; x < endX; x += GRID_SIZE_M) {
+    for (let y = startY; y < endY; y += GRID_SIZE_M) {
+      const ix = Math.floor(x / GRID_SIZE_M);
+      const iy = Math.floor(y / GRID_SIZE_M);
+      const key = `${ix},${iy}`;
+
+      const metrics =
+        window.__richGridMetrics?.get(key) ||
+        counts.get(key) ||
+        null;
+
+      const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics);
+      if (!displayMetrics) continue;
+
+      const heatValue = getHeatValueForCell(displayMetrics);
+      if (heatValue <= 0) continue;
+
+      items.push({
+        ix,
+        iy,
+        key,
+        x,
+        y,
+        metrics: displayMetrics,
+        heatValue
+      });
+    }
+  }
+
+  return items;
+}
+
+function collectMeHeatItems(entries = []) {
+  return entries
+    .map(entry => {
+      const heatValue = getHeatValueForCell(entry.metrics);
+      if (heatValue <= 0) return null;
+      return {
+        ix: entry.ix,
+        iy: entry.iy,
+        key: entry.key,
+        metrics: entry.metrics,
+        heatValue
+      };
+    })
+    .filter(Boolean);
+}
+
 function collectRegularHeatZStats(counts, startX, endX, startY, endY) {
   const values = [];
 
@@ -3529,11 +3812,10 @@ function collectRegularHeatZStats(counts, startX, endX, startY, endY) {
 
       const metrics =
         window.__richGridMetrics?.get(key) ||
-        counts.get(key);
+        counts.get(key) ||
+        null;
 
-      if (!metrics) continue;
-
-      const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics || {});
+      const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics);
 
       if (!displayMetrics) continue;
 
@@ -3624,7 +3906,7 @@ function getCachedCoarseMedianMetrics(anchorIx, anchorIy, binSize) {
 
 function getCoarseMedianMetrics(anchorIx, anchorIy, binSize) {
   const counts = window.__staticGridCounts;
-  if (!(counts instanceof Map)) return null;
+  if (!(counts instanceof Map) && !window.GridWildPyriteLake?.hasData?.()) return null;
 
   const centerIx = anchorIx + Math.floor(binSize / 2);
   const centerIy = anchorIy + Math.floor(binSize / 2);
@@ -3642,10 +3924,9 @@ function getCoarseMedianMetrics(anchorIx, anchorIy, binSize) {
 
   for (let ix = centerIx - radius; ix <= centerIx + radius; ix++) {
     for (let iy = centerIy - radius; iy <= centerIy + radius; iy++) {
-      const m = counts.get(`${ix},${iy}`);
-      if (!m && !window.GridWildMeOverlayFilter?.isActive?.()) continue;
+      const m = counts instanceof Map ? counts.get(`${ix},${iy}`) : null;
 
-      const displayMetrics = getDisplayMetricsForCell(ix, iy, m || {});
+      const displayMetrics = getDisplayMetricsForCell(ix, iy, m || null);
       if (!displayMetrics) continue;
 
       const count = Number(displayMetrics.count) || 0;
@@ -3974,6 +4255,70 @@ function scheduleGridHeatCanvasRender() {
   gridHeatRaf = requestAnimationFrame(renderGridHeatCanvas);
 }
 
+function drawFineHeatItem(item, fogOn) {
+  const { ix, iy, key, metrics: displayMetrics } = item;
+  const baseStyle = metricsToFill(displayMetrics);
+  if (!baseStyle) return false;
+
+  let fogState = null;
+  const transientRevealStrength =
+    typeof window.getGridWildTransientRevealStrength === "function"
+    ? window.getGridWildTransientRevealStrength(key)
+    : (window.isGridWildTransientVisibleCell?.(key) ? 1 : 0);
+  const godsEyeTransientVisible = transientRevealStrength > 0;
+
+  if (fogOn && window.GridWildFog) {
+    fogState = window.GridWildFog.getCellFogState(key);
+
+    if (
+      !godsEyeTransientVisible &&
+      (fogState.state === "unknown" || fogState.state === "expired")
+    ) {
+      return false;
+    }
+  }
+
+  let fillOpacity = Number(baseStyle.fillOpacity || 0.25);
+
+  if (godsEyeTransientVisible && fogState?.state !== "documented") {
+    fillOpacity = Math.max(fillOpacity, 0.18 + transientRevealStrength * 0.24);
+  }
+
+  if (fogOn && fogState?.state === "surveyed") {
+    fillOpacity = Math.max(0.08, fillOpacity * fogState.reveal);
+  }
+
+  if (fogOn && fogState?.state === "documented") {
+    fillOpacity = Math.min(0.92, fillOpacity + 0.12);
+  }
+
+  const x = Number.isFinite(item.x) ? item.x : ix * GRID_SIZE_M;
+  const y = Number.isFinite(item.y) ? item.y : iy * GRID_SIZE_M;
+  const sw = map.options.crs.unproject(L.point(x, y));
+  const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
+
+  const nwPx = gridHeatLayerPoint(L.latLng(ne.lat, sw.lng));
+  const sePx = gridHeatLayerPoint(L.latLng(sw.lat, ne.lng));
+
+  const pxX = Math.floor(nwPx.x);
+  const pxY = Math.floor(nwPx.y);
+  const pxW = Math.ceil(sePx.x - nwPx.x);
+  const pxH = Math.ceil(sePx.y - nwPx.y);
+
+  gridHeatCtx.globalAlpha = fillOpacity;
+  gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
+  gridHeatCtx.fillRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
+
+  if (fogOn && fogState?.state === "documented") {
+    gridHeatCtx.globalAlpha = 0.8;
+    gridHeatCtx.strokeStyle = "rgba(240, 209, 138, 0.72)";
+    gridHeatCtx.lineWidth = 1.2;
+    gridHeatCtx.strokeRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
+  }
+
+  return true;
+}
+
 function renderGridHeatCanvas() {
   gridHeatRaf = null;
 
@@ -3987,7 +4332,8 @@ function renderGridHeatCanvas() {
   if (!heatOn) return;
 
   const counts = window.__staticGridCounts;
-  if (!(counts instanceof Map) || counts.size === 0) return;
+  const pyriteEnabled = window.GridWildPyriteLake?.isEnabled?.() === true;
+  if (!(counts instanceof Map) || (counts.size === 0 && !pyriteEnabled)) return;
 
   if (isCoarseHeatEnabled()) {
     const painted = renderCoarseMedianHeatCanvas();
@@ -4008,79 +4354,45 @@ function renderGridHeatCanvas() {
   const fogOn = window.__gwState?.showFog ?? false;
   const { startX, endX, startY, endY } = getPaddedBoundsMeters();
   const meHeatActive = window.GridWildMeOverlayFilter?.isActive?.();
+  const heatMorphologyActive = isHeatMorphologyEnabled();
   const meHeatEntries = meHeatActive
     ? window.GridWildMeOverlayFilter.entriesInMeterBounds(startX, endX, startY, endY)
     : null;
+  const meHeatItems = meHeatActive && heatMorphologyActive
+    ? collectMeHeatItems(meHeatEntries)
+    : null;
+  const regularHeatItems = !meHeatActive && heatMorphologyActive
+    ? collectRegularHeatItems(counts, startX, endX, startY, endY)
+    : null;
   const heatZStats = isHeatZThresholdEnabled()
     ? (meHeatActive
-      ? buildZStats(meHeatEntries.map(entry => getHeatValueForCell(entry.metrics)).filter(value => value > 0))
-      : collectRegularHeatZStats(counts, startX, endX, startY, endY))
+      ? buildZStats((meHeatItems || meHeatEntries).map(entry => getHeatValueForCell(entry.metrics)).filter(value => value > 0))
+      : (regularHeatItems
+        ? buildZStats(regularHeatItems.map(item => item.heatValue))
+        : collectRegularHeatZStats(counts, startX, endX, startY, endY)))
+    : null;
+  const heatMorphologyMask = heatMorphologyActive
+    ? buildThresholdedHeatMorphologyMask(meHeatItems || regularHeatItems || [], heatZStats)
     : null;
 
   if (meHeatActive) {
-    for (const { ix, iy, key, metrics: displayMetrics } of meHeatEntries) {
+    for (const item of (meHeatItems || meHeatEntries)) {
+      const { key, metrics: displayMetrics } = item;
       const heatValue = getHeatValueForCell(displayMetrics);
       if (heatValue <= 0) continue;
-      if (!passesHeatZThreshold(heatValue, heatZStats)) continue;
+      if (heatMorphologyMask ? !heatMorphologyMask.has(key) : !passesHeatZThreshold(heatValue, heatZStats)) continue;
 
-      const baseStyle = metricsToFill(displayMetrics);
-      if (!baseStyle) continue;
+      drawFineHeatItem(item, fogOn);
+    }
 
-      let fogState = null;
-      const transientRevealStrength =
-        typeof window.getGridWildTransientRevealStrength === "function"
-        ? window.getGridWildTransientRevealStrength(key)
-        : (window.isGridWildTransientVisibleCell?.(key) ? 1 : 0);
-      const godsEyeTransientVisible = transientRevealStrength > 0;
+    gridHeatCtx.globalAlpha = 1;
+    return;
+  }
 
-      if (fogOn && window.GridWildFog) {
-        fogState = window.GridWildFog.getCellFogState(key);
-
-        if (
-          !godsEyeTransientVisible &&
-          (fogState.state === "unknown" || fogState.state === "expired")
-        ) {
-          continue;
-        }
-      }
-
-      let fillOpacity = Number(baseStyle.fillOpacity || 0.25);
-
-      if (godsEyeTransientVisible && fogState?.state !== "documented") {
-        fillOpacity = Math.max(fillOpacity, 0.18 + transientRevealStrength * 0.24);
-      }
-
-      if (fogOn && fogState?.state === "surveyed") {
-        fillOpacity = Math.max(0.08, fillOpacity * fogState.reveal);
-      }
-
-      if (fogOn && fogState?.state === "documented") {
-        fillOpacity = Math.min(0.92, fillOpacity + 0.12);
-      }
-
-      const x = ix * GRID_SIZE_M;
-      const y = iy * GRID_SIZE_M;
-      const sw = map.options.crs.unproject(L.point(x, y));
-      const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
-
-      const nwPx = gridHeatLayerPoint(L.latLng(ne.lat, sw.lng));
-      const sePx = gridHeatLayerPoint(L.latLng(sw.lat, ne.lng));
-
-      const pxX = Math.floor(nwPx.x);
-      const pxY = Math.floor(nwPx.y);
-      const pxW = Math.ceil(sePx.x - nwPx.x);
-      const pxH = Math.ceil(sePx.y - nwPx.y);
-
-      gridHeatCtx.globalAlpha = fillOpacity;
-      gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
-      gridHeatCtx.fillRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
-
-      if (fogOn && fogState?.state === "documented") {
-        gridHeatCtx.globalAlpha = 0.8;
-        gridHeatCtx.strokeStyle = "rgba(240, 209, 138, 0.72)";
-        gridHeatCtx.lineWidth = 1.2;
-        gridHeatCtx.strokeRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
-      }
+  if (regularHeatItems) {
+    for (const item of regularHeatItems) {
+      if (heatMorphologyMask && !heatMorphologyMask.has(item.key)) continue;
+      drawFineHeatItem(item, fogOn);
     }
 
     gridHeatCtx.globalAlpha = 1;
@@ -4095,11 +4407,10 @@ function renderGridHeatCanvas() {
 
       const metrics =
         window.__richGridMetrics?.get(key) ||
-        counts.get(key);
+        counts.get(key) ||
+        null;
 
-      if (!metrics) continue;
-
-      const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics || {});
+      const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics);
 
       if (!displayMetrics) continue;
 
@@ -4235,7 +4546,13 @@ function renderCoarseMedianHeatCanvas() {
       const heatValue = getHeatValueForCell(metrics);
       if (heatValue <= 0) continue;
 
-      items.push({ ix: bin.ix, iy: bin.iy, metrics, heatValue });
+      items.push({
+        ix: bin.ix,
+        iy: bin.iy,
+        key: `${bin.ix},${bin.iy}`,
+        metrics,
+        heatValue
+      });
     }
   } else {
     for (let ix = startAnchorX; ix <= endAnchorX; ix += binSize) {
@@ -4246,7 +4563,7 @@ function renderCoarseMedianHeatCanvas() {
         const heatValue = getHeatValueForCell(metrics);
         if (heatValue <= 0) continue;
 
-        items.push({ ix, iy, metrics, heatValue });
+        items.push({ ix, iy, key: `${ix},${iy}`, metrics, heatValue });
       }
     }
   }
@@ -4254,10 +4571,13 @@ function renderCoarseMedianHeatCanvas() {
   const heatZStats = isHeatZThresholdEnabled()
     ? buildZStats(items.map(item => item.heatValue))
     : null;
+  const heatMorphologyMask = isHeatMorphologyEnabled()
+    ? buildThresholdedHeatMorphologyMask(items, heatZStats, { step: binSize })
+    : null;
 
   for (const item of items) {
-      const { ix, iy, metrics, heatValue } = item;
-      if (!passesHeatZThreshold(heatValue, heatZStats)) continue;
+      const { ix, iy, metrics, heatValue, key } = item;
+      if (heatMorphologyMask ? !heatMorphologyMask.has(key) : !passesHeatZThreshold(heatValue, heatZStats)) continue;
 
       const baseStyle = metricsToFill(metrics);
       if (!baseStyle) continue;
@@ -4300,18 +4620,34 @@ function staticChunkUrlFromKey(chunkKey) {
   return `assets/chunks/${chunkKey}.csv`;
 }
 
+function vibrateGridWild(pattern) {
+  if (!("vibrate" in navigator)) return false;
+  try {
+    return navigator.vibrate(pattern);
+  } catch {
+    return false;
+  }
+}
+
 function buzzOnNewSquare() {
-  if (!("vibrate" in navigator)) return;
-  // Short, subtle buzz. You can also use [20, 30, 20] for a double tap.
-  navigator.vibrate(35);
+  // Short, subtle tick for ordinary grid-cell movement.
+  vibrateGridWild(18);
+}
+
+function buzzOnQuestTargetEntry() {
+  // Stronger arrival pattern for crossing into an active quest target area.
+  vibrateGridWild([70, 35, 95]);
 }
 
 
 window.handleUserPositionUpdate = async function(lat, lng, force = false) {
   const cellKey = latLngToDisplayCellKey(lat, lng);
 
-  const state = window.__gwState || {};
+  window.__gwState = window.__gwState || {};
+  const state = window.__gwState;
   const now = Date.now();
+  const previousCellKey = state.lastUserCellKey || null;
+  const movedToNewCell = Boolean(previousCellKey && cellKey !== previousCellKey);
 
   const suspendUntil = state.suspendAutoCenterUntil ?? 0;
 
@@ -4322,6 +4658,26 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
 
   const enteredNewCell = force || (cellKey !== state.lastUserCellKey);
   state.lastUserCellKey = cellKey;
+
+  if (movedToNewCell) {
+    const questStatus = window.GridWildQuestLayer?.activeTargetStatus?.(lat, lng) || null;
+    const questAreaKey = questStatus?.questId && questStatus?.targetKey
+      ? `${questStatus.questId}:${questStatus.targetKey}`
+      : "";
+    const previousQuestAreaKey = state.lastHapticQuestTargetAreaKey || "";
+    const enteredQuestTarget =
+      questStatus?.inside === true &&
+      questAreaKey &&
+      questAreaKey !== previousQuestAreaKey;
+
+    if (enteredQuestTarget) {
+      buzzOnQuestTargetEntry();
+    } else {
+      buzzOnNewSquare();
+    }
+
+    state.lastHapticQuestTargetAreaKey = questStatus?.inside === true ? questAreaKey : "";
+  }
 
   if (enteredNewCell && window.GridWildFog) {
     window.GridWildFog.markVisited(cellKey);
@@ -4353,17 +4709,6 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
       map.panTo(userLatLng, { animate: true });
     }
   }
-
-
-// Buzz when entering a new cell, even if auto-centering is off
-//  const previousCellKey = state.lastUserCellKey;
- // const movedToNewCell = previousCellKey && cellKey !== previousCellKey;
- // const enteredNewCell = force || (cellKey !== state.lastUserCellKey);
- // state.lastUserCellKey = cellKey;
-
-//  if (movedToNewCell) {
- //   buzzOnNewSquare();
- // }
 
 
   // Update grid and related UI if we entered a new cell

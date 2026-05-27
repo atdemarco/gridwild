@@ -81,6 +81,19 @@
       .gw-niche-debug-panel input[type="range"] {
         width: 100%;
       }
+      .gw-niche-debug-slider {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 38px;
+        align-items: center;
+        gap: 8px;
+      }
+      .gw-niche-debug-value {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: #f2d08d;
+        font-size: 11px;
+        font-weight: 900;
+      }
       .gw-niche-debug-actions {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -150,7 +163,10 @@
     return `
       <div class="gw-niche-debug-row">
         <label for="${id}">${label}</label>
-        <input id="${id}" type="range" min="0.1" max="0.9" step="0.01" value="${value}" />
+        <div class="gw-niche-debug-slider">
+          <input id="${id}" type="range" min="0.1" max="0.9" step="0.01" value="${value}" />
+          <output class="gw-niche-debug-value" id="${id}Value" for="${id}">${Number(value).toFixed(2)}</output>
+        </div>
       </div>
     `;
   }
@@ -224,6 +240,14 @@
     };
   }
 
+  function syncSliderValue(id) {
+    const input = $(id);
+    const output = $(`${id}Value`);
+    if (!input || !output) return;
+    output.value = Number(input.value || 0).toFixed(2);
+    output.textContent = output.value;
+  }
+
   function toast(message) {
     if (typeof window.showGridWildToast === "function") {
       window.showGridWildToast(message);
@@ -272,6 +296,10 @@
     $("gwNicheDebugPass")?.addEventListener("change", () => {
       window.GridWildNicheDebug?.setPass?.($("gwNicheDebugPass").value);
     });
+    ["gwNicheDebugPass1", "gwNicheDebugPass2", "gwNicheDebugPass3"].forEach(id => {
+      syncSliderValue(id);
+      $(id)?.addEventListener("input", () => syncSliderValue(id));
+    });
     ["gwNicheDebugPass1", "gwNicheDebugPass2", "gwNicheDebugPass3", "gwNicheDebugTrailMode"].forEach(id => {
       $(id)?.addEventListener("change", () => {
         if (window.GridWildNicheDebug?.getLastResult?.()) run();
@@ -307,10 +335,14 @@
         status.innerHTML = "<div>Run current view to build graph.</div>";
       } else {
         const warnings = result.debug?.warnings || [];
+        const p2Size = Number(result.options?.pass2NeighborhoodSize || 5);
+        const p2Active = Number(result.options?.pass2NeighborhoodMinActiveCells || 2);
+        const p2Obs = Number(result.options?.pass2NeighborhoodMinObservations || 3);
         status.innerHTML = `
           <div>Cells: ${result.cells.length.toLocaleString()} | Edges: ${result.graph.edges.length.toLocaleString()}</div>
           <div>${regionCounts(result)}</div>
           <div>Stride: ${result.debug?.visibleStrideCells || 1} | OSM path cells: ${result.osmPriorsSummary.pathAdjacent}</div>
+          <div>Pass 2 Lens: ${p2Size}x${p2Size} pool | min ${p2Active} cells / ${p2Obs} obs</div>
           ${warnings.slice(0, 2).map(w => `<div class="gw-niche-debug-warn">${w}</div>`).join("")}
         `;
       }

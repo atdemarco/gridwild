@@ -601,6 +601,35 @@
     }
   }
 
+  function activeTargetStatus(lat, lng) {
+    if (!activeQuest) return { inside: false, questId: null, targetKey: "" };
+
+    const target = activeQuest.__gwNormalizedTarget || normalizeTarget(activeQuest);
+    if (!target || target.mode === "anywhere") {
+      return { inside: false, questId: activeQuest.id || null, targetKey: "anywhere" };
+    }
+
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+      return { inside: false, questId: activeQuest.id || null, targetKey: target.cellKey || "" };
+    }
+
+    const p = map.options.crs.project(L.latLng(latNum, lngNum));
+    const ix = Math.floor(p.x / GRID_SIZE_M);
+    const iy = Math.floor(p.y / GRID_SIZE_M);
+    const radius = Math.max(0, Number(target.radiusCells) || 0);
+    const inside =
+      Math.abs(ix - Number(target.ix)) <= radius &&
+      Math.abs(iy - Number(target.iy)) <= radius;
+
+    return {
+      inside,
+      questId: activeQuest.id || null,
+      targetKey: `${target.cellKey || `${target.ix},${target.iy}`}:${radius}`
+    };
+  }
+
   function embark(quest) {
     if (!quest) return;
 
@@ -689,6 +718,7 @@ function completeQuest(quest) {
   embark,
   clear,
   completeQuest,
+  activeTargetStatus,
   showRewardPopup,
   update: updateTetherAndHud,
   getActiveQuest: () => activeQuest

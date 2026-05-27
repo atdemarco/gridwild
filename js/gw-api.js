@@ -375,6 +375,48 @@ async addPartyRoutePoint(partyId, lat, lng, accuracyMeters = null) {
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 },
+async upsertPlayerPresence(patch = {}, options = {}) {
+  const playerId = this.getPlayerId();
+  const sessionToken = this.getSessionToken();
+
+  const fetchOptions = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      player_id: playerId,
+      session_token: sessionToken,
+      ...patch
+    })
+  };
+
+  if (options.keepalive) {
+    fetchOptions.keepalive = true;
+  }
+
+  const res = await fetch("/.netlify/functions/upsert-player-presence", fetchOptions);
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
+async getNearbyPlayerPresence(lat, lng, options = {}) {
+  const playerId = this.getPlayerId();
+  const sessionToken = this.getSessionToken();
+
+  const res = await fetch("/.netlify/functions/get-nearby-player-presence", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      player_id: playerId,
+      session_token: sessionToken,
+      lat,
+      lng,
+      radius_m: options.radius_m
+    })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
 
 async updatePartyEvidenceStatus(partyId, draftId, status) {
   const playerId = this.getPlayerId();
@@ -610,6 +652,16 @@ async setPlayerEquipment(slot, itemId = null) {
 
   getPlayerId() {
     return localStorage.getItem("gwPlayerId");
+  },
+
+  getSessionToken() {
+    try {
+      const raw = localStorage.getItem("gwAccountSession");
+      const session = raw ? JSON.parse(raw) : null;
+      return session?.token || "";
+    } catch {
+      return "";
+    }
   },
 
   setPlayerId(id) {

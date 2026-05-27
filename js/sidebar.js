@@ -44,6 +44,14 @@
   );
   window.__gwState.heatZThresholdDirection =
     window.__gwState.heatZThresholdDirection === "below" ? "below" : "above";
+  window.__gwState.heatMorphMinEnabled =
+    document.getElementById("toggleHeatMorphMin")?.checked ??
+    window.__gwState.heatMorphMinEnabled ??
+    false;
+  window.__gwState.heatMorphMinSize = Math.max(
+    1,
+    Math.min(999, Math.round(Number(window.__gwState.heatMorphMinSize) || 10))
+  );
   
   window.__gwState.showOsmFeatures = $("toggleOsmBuildings")?.checked ?? true;
   window.__gwState.showOsmBuildings = window.__gwState.showOsmFeatures;
@@ -342,6 +350,8 @@ function saveUIState() {
     heatZThresholdEnabled: byId("toggleHeatZThreshold")?.checked ?? window.__gwState?.heatZThresholdEnabled ?? false,
     heatZThreshold: window.__gwState?.heatZThreshold ?? 0,
     heatZThresholdDirection: window.__gwState?.heatZThresholdDirection === "below" ? "below" : "above",
+    heatMorphMinEnabled: byId("toggleHeatMorphMin")?.checked ?? window.__gwState?.heatMorphMinEnabled ?? false,
+    heatMorphMinSize: Math.max(1, Math.min(999, Math.round(Number(window.__gwState?.heatMorphMinSize) || 10))),
     dynamicINatEnabled: byId("toggleDynamicINat")?.checked ?? false,
     showShimmer: byId("toggleShimmer")?.checked ?? false,
     showFog: byId("toggleFog")?.checked ?? false,
@@ -376,6 +386,11 @@ function applySavedUIState() {
     Math.min(3, Number(s.heatZThreshold) || 0)
   );
   window.__gwState.heatZThresholdDirection = s.heatZThresholdDirection === "below" ? "below" : "above";
+  window.__gwState.heatMorphMinEnabled = s.heatMorphMinEnabled ?? false;
+  window.__gwState.heatMorphMinSize = Math.max(
+    1,
+    Math.min(999, Math.round(Number(s.heatMorphMinSize) || 10))
+  );
   if (byId("toggleHeatZThreshold")) byId("toggleHeatZThreshold").checked = window.__gwState.heatZThresholdEnabled;
   if (byId("gwHeatZThresholdInput")) byId("gwHeatZThresholdInput").value = window.__gwState.heatZThreshold.toFixed(1);
   if (byId("gwHeatZThresholdSlider")) byId("gwHeatZThresholdSlider").value = String(window.__gwState.heatZThreshold);
@@ -385,6 +400,8 @@ function applySavedUIState() {
     byId("gwHeatZThresholdDirectionBtn").setAttribute("aria-label", isBelow ? "Show heat cells below cutoff" : "Show heat cells above cutoff");
     byId("gwHeatZThresholdDirectionBtn").title = isBelow ? "Show values below cutoff" : "Show values above cutoff";
   }
+  if (byId("toggleHeatMorphMin")) byId("toggleHeatMorphMin").checked = window.__gwState.heatMorphMinEnabled;
+  if (byId("gwHeatMorphMinSizeInput")) byId("gwHeatMorphMinSizeInput").value = String(window.__gwState.heatMorphMinSize);
   if (byId("toggleDynamicINat"))  byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
   if (byId("toggleShimmer"))      byId("toggleShimmer").checked = s.showShimmer ?? false;
   if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? false;

@@ -25,6 +25,7 @@ window.__gwUser = window.__gwUser || {
     function renderMeContent() {
     return `
       ${window.GridWildAccount ? window.GridWildAccount.renderAccountCardHtml() : ""}
+      ${window.GridWildPresence ? window.GridWildPresence.renderSettingsCardHtml() : ""}
 
       <div class="gw-card">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
@@ -1205,6 +1206,14 @@ function renderInfoContent() {
   const questListHtml = window.GridWildQuests
     ? window.GridWildQuests.renderQuestListHtml()
     : `<div class="gw-muted">Quest system loading...</div>`;
+  const identifyHtml = window.GridWildIdentify
+    ? window.GridWildIdentify.renderQuestSheetPanel()
+    : `
+      <div class="gw-card">
+        <div class="gw-card-title">Identify Unknowns</div>
+        <div class="gw-muted">Identify module loading...</div>
+      </div>
+    `;
   const localNichesHtml = window.GridWildLocalNiches
     ? window.GridWildLocalNiches.renderLocalNichesHtml()
     : `
@@ -1231,6 +1240,8 @@ function renderInfoContent() {
         Explore Surveys
       </button>
     </div>
+
+    ${identifyHtml}
 
     <div id="gwLocalNichesBody">
       ${localNichesHtml}
@@ -2007,6 +2018,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       window.GridWildInventory?.bindButtons?.(document);
       window.GridWildProfile?.bindButtons?.(document);
       window.GridWildAccount?.bindButtons?.(document);
+      window.GridWildPresence?.bindSettings?.(document);
 
       window.GridWildParty?.bindSheetControls?.(document);
       window.GridWildParty?.refreshMapBeacon?.();

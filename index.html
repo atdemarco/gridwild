@@ -641,6 +641,65 @@
       min-width: 0;
     }
 
+    .gw-hud-morphology {
+      display: grid;
+      gap: 3px;
+      margin-top: 1px;
+      padding-top: 5px;
+      border-top: 1px solid rgba(215,183,116,0.18);
+      min-width: 0;
+    }
+
+    .gw-hud-morphology-title {
+      color: rgba(240,209,138,0.86);
+      font-size: 9px;
+      font-weight: 900;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+
+    .gw-hud-morphology-row {
+      display: grid;
+      grid-template-columns: 13px 24px 34px minmax(0, 1fr);
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .gw-hud-morphology-row label {
+      white-space: nowrap;
+    }
+
+    .gw-hud-morphology-size-label {
+      color: rgba(239,230,211,0.66);
+      white-space: nowrap;
+    }
+
+    .gw-hud-morphology-number {
+      width: 34px;
+      min-width: 0;
+      box-sizing: border-box;
+      border: 1px solid rgba(215,183,116,0.32);
+      border-radius: 6px;
+      padding: 2px 3px;
+      color: #f0d18a;
+      background: rgba(255,255,255,0.06);
+      font: inherit;
+      font-size: 10px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .gw-hud-morphology-number::-webkit-outer-spin-button,
+    .gw-hud-morphology-number::-webkit-inner-spin-button {
+      margin: 0;
+      -webkit-appearance: none;
+    }
+
+    .gw-hud-morphology-number {
+      -moz-appearance: textfield;
+    }
+
     @media (max-width: 420px) {
       .gw-topbar-left {
         --gw-hud-control-width: 142px;
@@ -661,6 +720,14 @@
 
       .gw-hud-zfilter {
         padding: 6px 7px;
+      }
+
+      .gw-hud-morphology-row {
+        grid-template-columns: 13px 23px 32px minmax(0, 1fr);
+      }
+
+      .gw-hud-morphology-number {
+        width: 32px;
       }
 
       .gw-hud-legend-lines {
@@ -2177,6 +2244,15 @@
           <input class="gw-hud-zfilter-slider" id="gwHeatZThresholdSlider" type="range" min="-3" max="3" step="0.1" value="0" />
           <input class="gw-hud-zfilter-number" id="gwHeatZThresholdInput" type="number" min="-3" max="3" step="0.1" value="0" />
         </div>
+        <div class="gw-hud-morphology" aria-label="Heat cutoff morphology controls">
+          <div class="gw-hud-morphology-title">Morphology</div>
+          <div class="gw-hud-morphology-row" title="Drop connected heat components smaller than this size">
+            <input type="checkbox" id="toggleHeatMorphMin" />
+            <label for="toggleHeatMorphMin">Min</label>
+            <input class="gw-hud-morphology-number" id="gwHeatMorphMinSizeInput" type="number" min="1" max="999" step="1" value="10" aria-label="Minimum component size" />
+            <span class="gw-hud-morphology-size-label">Size</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -2557,6 +2633,7 @@
   <script src="js/inatscatter.js"></script>
   <!-- <script src="js/osmoverlay.js"></script> -->
   <script src="js/gw-metrics.js"></script>
+  <script src="js/gw-pyrite-lake.js"></script>
   <script src="js/gw-lenses.js"></script>
   <script src="js/gw-here-panel.js"></script>
   <script src="js/location.js"></script>
@@ -2564,6 +2641,8 @@
   <script src="js/sidebar.js"></script>
   
   <script src="js/gw-inat-auth.js"></script>
+  <script src="js/gw-identify-service.js"></script>
+  <script src="js/gw-identify.js"></script>
   <script src="js/gw-draft-observations.js"></script>
   <script src="js/gw-observation-editor.js"></script>
 
@@ -2579,6 +2658,7 @@
   <script src="js/gw-inventory.js"></script>
   <script src="js/gw-profile.js"></script>
   <script src="js/gw-account.js"></script>
+  <script src="js/gw-presence.js"></script>
 
   <script src="js/gw-quests.js"></script>
   <script src="js/gw-local-niches.js"></script>
@@ -2588,6 +2668,9 @@
   <script src="js/gw-quest-layer.js"></script>
   <script src="js/gw-onboarding.js"></script>
   <script src="js/gw-genus-codex.js"></script>
+  <script src="js/gw-field-marks.js"></script>
+  <script src="js/gw-classroom.js"></script>
+  <script src="js/gw-classroom-loop.js"></script>
   <script src="js/gw-party.js"></script>
   <script src="js/gw-party-live.js"></script>
   <script src="js/mobilepanels.js"></script>
@@ -3472,6 +3555,9 @@ window.refreshQuestBadge = refreshQuestBadge;
     window.GridWildHudCoarseHeatControl.bind();
 
     window.GridWildHudZThresholdControl = (function () {
+      const DEFAULT_MIN_SIZE = 10;
+      const MAX_MORPH_SIZE = 999;
+
       function checkbox() {
         return document.getElementById("toggleHeatZThreshold");
       }
@@ -3488,10 +3574,24 @@ window.refreshQuestBadge = refreshQuestBadge;
         return document.getElementById("gwHeatZThresholdDirectionBtn");
       }
 
+      function minCheckbox() {
+        return document.getElementById("toggleHeatMorphMin");
+      }
+
+      function minSizeInput() {
+        return document.getElementById("gwHeatMorphMinSizeInput");
+      }
+
       function clampZ(value) {
         const raw = Number(value);
         if (!Number.isFinite(raw)) return 0;
         return Math.max(-3, Math.min(3, raw));
+      }
+
+      function clampMorphSize(value, fallback) {
+        const raw = Number(value);
+        const next = Number.isFinite(raw) ? raw : fallback;
+        return Math.max(1, Math.min(MAX_MORPH_SIZE, Math.round(next)));
       }
 
       function normalizeDirection(value) {
@@ -3504,6 +3604,8 @@ window.refreshQuestBadge = refreshQuestBadge;
           state.heatZThresholdEnabled = window.__gwState?.heatZThresholdEnabled === true;
           state.heatZThreshold = window.__gwState?.heatZThreshold ?? 0;
           state.heatZThresholdDirection = normalizeDirection(window.__gwState?.heatZThresholdDirection);
+          state.heatMorphMinEnabled = window.__gwState?.heatMorphMinEnabled === true;
+          state.heatMorphMinSize = clampMorphSize(window.__gwState?.heatMorphMinSize, DEFAULT_MIN_SIZE);
           localStorage.setItem("gw_ui_state", JSON.stringify(state));
         } catch {}
       }
@@ -3518,9 +3620,14 @@ window.refreshQuestBadge = refreshQuestBadge;
         const num = numberInput();
         const range = slider();
         const dirBtn = directionButton();
+        const minCb = minCheckbox();
+        const minSize = minSizeInput();
+        const morphMinEnabled = window.__gwState.heatMorphMinEnabled === true;
+        const morphMinSize = clampMorphSize(window.__gwState.heatMorphMinSize, DEFAULT_MIN_SIZE);
 
         window.__gwState.heatZThreshold = z;
         window.__gwState.heatZThresholdDirection = direction;
+        window.__gwState.heatMorphMinSize = morphMinSize;
         if (cb) cb.checked = enabled;
         if (num) num.value = z.toFixed(1);
         if (range) range.value = String(z);
@@ -3530,6 +3637,15 @@ window.refreshQuestBadge = refreshQuestBadge;
           dirBtn.setAttribute("aria-label", isBelow ? "Show heat cells below cutoff" : "Show heat cells above cutoff");
           dirBtn.title = isBelow ? "Show values below cutoff" : "Show values above cutoff";
         }
+        if (minCb) minCb.checked = morphMinEnabled;
+        if (minSize) minSize.value = String(morphMinSize);
+      }
+
+      function applyMorphChange(detail) {
+        sync();
+        save();
+        if (typeof window.updateGrid === "function") window.updateGrid();
+        window.dispatchEvent(new CustomEvent("gridwild:heatchange", { detail }));
       }
 
       function applyValue(value) {
@@ -3566,11 +3682,27 @@ window.refreshQuestBadge = refreshQuestBadge;
         }));
       }
 
+      function applyMinEnabled(value) {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.heatMorphMinEnabled = value === true;
+        applyMorphChange({
+          heatMorphMinEnabled: window.__gwState.heatMorphMinEnabled === true
+        });
+      }
+
+      function applyMinSize(value) {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.heatMorphMinSize = clampMorphSize(value, DEFAULT_MIN_SIZE);
+        applyMorphChange({ heatMorphMinSize: window.__gwState.heatMorphMinSize });
+      }
+
       function bind() {
         const cb = checkbox();
         const num = numberInput();
         const range = slider();
         const dirBtn = directionButton();
+        const minCb = minCheckbox();
+        const minSize = minSizeInput();
         if (!cb || cb.dataset.bound === "true") return;
 
         cb.dataset.bound = "true";
@@ -3578,6 +3710,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         num?.addEventListener("change", () => applyValue(num.value));
         range?.addEventListener("input", () => applyValue(range.value));
         dirBtn?.addEventListener("click", toggleDirection);
+        minCb?.addEventListener("change", () => applyMinEnabled(minCb.checked));
+        minSize?.addEventListener("change", () => applyMinSize(minSize.value));
 
         setTimeout(sync, 0);
       }
@@ -3741,6 +3875,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         window.__gwState.playerEquipment = data.player_equipment || null;
 
         window.__gwState.playerAchievements = data.player_achievements || [];
+        window.__gwState.playerPresence = data.player_presence || null;
         window.__gwState.homeNicheId = data.home_niche_id || null;
         window.__gwState.homeNiche = data.home_niche || null;
 
@@ -3753,7 +3888,7 @@ window.refreshQuestBadge = refreshQuestBadge;
         window.GridWildCharacter?.renderSummary?.();
 
         window.dispatchEvent(new CustomEvent("gwBootstrapReady", {
-          detail: { player: data.player }
+          detail: { player: data.player, playerPresence: data.player_presence || null }
         }));
 
         await window.GridWildPartyLive?.loadParty?.();

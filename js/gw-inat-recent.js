@@ -14,6 +14,7 @@
   const MAX_PAGES = 30;
   const MORE_OBS_TARGET = 2000;
   const MORE_OBS_MAX_PAGES = 120;
+  const BOUNDS_OBS_MAX_PAGES = 120;
   const PHOTO_CACHE_KEEP_COUNT = 120;
   const PHOTO_BACKFILL_BATCH_SIZE = 20;
 
@@ -388,6 +389,29 @@ function getPhotoUrls(obs) {
 
   function sortObservationsNewestFirst(observations) {
     return observations.slice().sort((a, b) => observationSortTime(b) - observationSortTime(a));
+  }
+
+  function normalizeLatLngBounds(bounds) {
+    const sw = typeof bounds?.getSouthWest === "function"
+      ? bounds.getSouthWest()
+      : bounds?.sw || bounds?.southWest || bounds;
+    const ne = typeof bounds?.getNorthEast === "function"
+      ? bounds.getNorthEast()
+      : bounds?.ne || bounds?.northEast || bounds;
+
+    const swlat = Number(bounds?.swlat ?? bounds?.south ?? sw?.lat);
+    const swlng = Number(bounds?.swlng ?? bounds?.west ?? sw?.lng ?? sw?.lon);
+    const nelat = Number(bounds?.nelat ?? bounds?.north ?? ne?.lat);
+    const nelng = Number(bounds?.nelng ?? bounds?.east ?? ne?.lng ?? ne?.lon);
+
+    if (![swlat, swlng, nelat, nelng].every(Number.isFinite)) return null;
+
+    return {
+      swlat: Math.min(swlat, nelat),
+      swlng: Math.min(swlng, nelng),
+      nelat: Math.max(swlat, nelat),
+      nelng: Math.max(swlng, nelng)
+    };
   }
 
   function getOldestCachedObservedDay() {
@@ -848,9 +872,177 @@ function getPhotoUrls(obs) {
     };
   }
 
+  async function downloadObservationsInBounds(bounds, options = {}) {
+    await storeReadyPromise;
+
+    const box = normalizeLatLngBounds(bounds);
+    if (!box) {
+      throw new Error("Selection bounds are not available.");
+    }
+
+    const username = (options.username || window.__gwUser?.username || recentObsCache?.username || "andrew2285")
+      .trim()
+      .replace(/^@+/, "");
+
+    const existing = getRecentObservations();
+    const existingIds = new Set(existing.map(obs => String(obs?.id || "")).filter(Boolean));
+    const additions = [];
+    let fetched = 0;
+    let rejected = 0;
+    let duplicates = 0;
+    let totalResults = null;
+
+    const baseUrl = new URL("https://api.inaturalist.org/v1/observations");
+    baseUrl.searchParams.set("user_login", username);
+    baseUrl.searchParams.set("order_by", "observed_on");
+    baseUrl.searchParams.set("order", "desc");
+    baseUrl.searchParams.set("geo", "true");
+    baseUrl.searchParams.set("per_page", String(PER_PAGE));
+    baseUrl.searchParams.set("swlat", String(box.swlat));
+    baseUrl.searchParams.set("swlng", String(box.swlng));
+    baseUrl.searchParams.set("nelat", String(box.nelat));
+    baseUrl.searchParams.set("nelng", String(box.nelng));
+    baseUrl.searchParams.set("geoprivacy", "open");
+    baseUrl.searchParams.set("taxon_geoprivacy", "open");
+
+    emitProgress({
+      status: "starting_bounds",
+      context: "selection",
+      username,
+      page: 0,
+      fetched,
+      accepted: 0,
+      rejected,
+      duplicates,
+      totalResults,
+      pct: 0
+    });
+
+    for (let page = 1; page <= BOUNDS_OBS_MAX_PAGES; page++) {
+      const url = new URL(baseUrl.toString());
+      url.searchParams.set("page", String(page));
+
+      emitProgress({
+        status: "fetching_bounds",
+        context: "selection",
+        username,
+        page,
+        fetched,
+        accepted: additions.length,
+        rejected,
+        duplicates,
+        totalResults,
+        pct: totalResults ? Math.min(98, (fetched / totalResults) * 100) : null
+      });
+
+      const resp = await fetch(url.toString());
+      if (!resp.ok) {
+        throw new Error(`iNaturalist request failed: HTTP ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      const results = Array.isArray(data?.results) ? data.results : [];
+
+      if (totalResults == null && Number.isFinite(Number(data?.total_results))) {
+        totalResults = Number(data.total_results);
+      }
+
+      fetched += results.length;
+
+      for (const obs of results) {
+        const id = String(obs?.id || "");
+
+        if (!id || existingIds.has(id)) {
+          duplicates++;
+          continue;
+        }
+
+        const coords = getObservationCoords(obs);
+        if (
+          !coords ||
+          coords.lat < box.swlat ||
+          coords.lat > box.nelat ||
+          coords.lng < box.swlng ||
+          coords.lng > box.nelng
+        ) {
+          rejected++;
+          continue;
+        }
+
+        const normalized = normalizeObs(obs);
+        if (!normalized || !isOpenObservation(obs) || !isPreciseEnough(obs)) {
+          rejected++;
+          continue;
+        }
+
+        existingIds.add(id);
+        additions.push(normalized);
+      }
+
+      emitProgress({
+        status: "page_done_bounds",
+        context: "selection",
+        username,
+        page,
+        fetched,
+        accepted: additions.length,
+        rejected,
+        duplicates,
+        totalResults,
+        pct: totalResults ? Math.min(98, (fetched / totalResults) * 100) : null
+      });
+
+      if (results.length < PER_PAGE) break;
+      if (totalResults != null && fetched >= totalResults) break;
+
+      await sleep(PAGE_DELAY_MS);
+    }
+
+    recentObsCache = {
+      ...recentObsCache,
+      username,
+      refreshed_at: recentObsCache?.refreshed_at || new Date().toISOString(),
+      selection_downloaded_at: new Date().toISOString(),
+      max_accuracy_m: MAX_ACCURACY_M,
+      observations: []
+    };
+
+    await persistObservations(mergeUniqueObservations(existing, additions), {
+      username,
+      replace: true
+    });
+    applyRecentObservationsToFog();
+
+    emitProgress({
+      status: "done",
+      context: "selection",
+      username,
+      fetched,
+      accepted: additions.length,
+      rejected,
+      duplicates,
+      totalResults,
+      pct: 100
+    });
+
+    window.dispatchEvent(new CustomEvent("gwRecentINatUpdated", {
+      detail: recentObsCache
+    }));
+
+    return {
+      cache: recentObsCache,
+      added: additions.length,
+      retained: getRecentObservations().length,
+      fetched,
+      rejected,
+      duplicates
+    };
+  }
+
   window.GridWildRecentINat = {
     refreshRecentObservations,
     getMoreObservations,
+    downloadObservationsInBounds,
     getRecentObservations,
     ensureObservationPhotos,
     applyRecentObservationsToFog,

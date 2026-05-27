@@ -40,10 +40,50 @@
     Zinnia: "Zinnias"
   };
   const HERE_MAP_3D_STORAGE_KEY = "gw_here_map_3d_enabled";
+  const HERE_ELEVATION_STORAGE_KEY = "gw_here_elevation_cache_v1";
+  const HERE_ELEVATION_ENDPOINT = "/.netlify/functions/get-elevation";
+  const HERE_ELEVATION_SAMPLE_CELLS = 24;
+  const HERE_ELEVATION_MAX_BATCH = 40;
+  const HERE_ELEVATION_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 120;
+  const HERE_ELEVATION_MAX_CACHE_ENTRIES = 2600;
+  const HERE_ELEVATION_MIN_FETCH_INTERVAL_MS = 1000 * 60;
+  const HERE_ELEVATION_REQUEST_COOLDOWN_MS = 1000 * 60 * 20;
+  const HERE_ELEVATION_RETRY_BASE_MS = 1000 * 60 * 10;
+  const HERE_ELEVATION_RETRY_MAX_MS = 1000 * 60 * 60 * 2;
+  const HERE_ELEVATION_QUEUE_DELAY_MS = 2500;
+  const HERE_ELEVATION_MAX_PENDING = 180;
+  const HERE_ELEVATION_LOCAL_Z_SCALE_M = 34;
+  const HERE_ELEVATION_LOCAL_Z_MIN = -0.9;
+  const HERE_ELEVATION_LOCAL_Z_MAX = 3.6;
+  const HERE_LIST_VIEWS = [
+    { id: "common", label: "Common Taxa" },
+    { id: "rare", label: "Rare Taxa" },
+    { id: "observers", label: "Top Observers" }
+  ];
   let hereMap3dEnabled = localStorage.getItem(HERE_MAP_3D_STORAGE_KEY) === "true";
   let hereMap3dExpanded = false;
   let hereMap3dYawOffsetDeg = 0;
   let hereMap3dDrag = null;
+  let hereListView = "common";
+  let hereElevationCacheLoaded = false;
+  let hereElevationFetchInFlight = false;
+  let hereElevationFetchQueued = false;
+  let hereElevationDisabledUntil = 0;
+  let hereElevationLastFetchAt = 0;
+  let hereElevationRetryDelayMs = HERE_ELEVATION_RETRY_BASE_MS;
+  const hereElevationCache = new Map();
+  const hereElevationPending = new Map();
+  const hereElevationRequestedAt = new Map();
+  const hereObservationDownload = {
+    busy: false,
+    progressText: "",
+    progressPct: 0
+  };
+  const herePyriteSeed = {
+    busy: false,
+    progressText: "",
+    progressPct: 0
+  };
   const HERE_3D_CAMERA = {
     pitchDeg: 48,
     fovDeg: 52,
@@ -355,6 +395,79 @@
         margin-top: 8px;
       }
 
+      .gw-here-list-switch {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 3px;
+        padding: 2px;
+        border-radius: 999px;
+        border: 1px solid rgba(240,209,138,0.18);
+        background: rgba(0,0,0,0.18);
+        min-width: 0;
+      }
+
+      .gw-here-list-option {
+        position: relative;
+        display: block;
+        min-width: 0;
+      }
+
+      .gw-here-list-option input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        margin: 0;
+        cursor: pointer;
+      }
+
+      .gw-here-list-pill {
+        box-sizing: border-box;
+        min-width: 0;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 0 5px;
+        color: rgba(239,230,211,0.72);
+        font-size: 7.4px;
+        line-height: 1;
+        font-weight: 950;
+        text-align: center;
+        text-transform: uppercase;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: clip;
+        user-select: none;
+      }
+
+      .gw-here-list-option input:checked + .gw-here-list-pill {
+        color: #201a14;
+        background: #f0d18a;
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.34),
+          0 5px 12px rgba(0,0,0,0.24);
+      }
+
+      .gw-here-list-option input:focus-visible + .gw-here-list-pill {
+        outline: 2px solid rgba(255,231,163,0.72);
+        outline-offset: 2px;
+      }
+
+      .gw-here-list-option:hover .gw-here-list-pill {
+        color: #f0d18a;
+      }
+
+      .gw-here-list-option:hover input:checked + .gw-here-list-pill {
+        color: #201a14;
+      }
+
+      .gw-here-list-body {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+
       .gw-here-taxa-group {
         display: grid;
         gap: 4px;
@@ -574,6 +687,94 @@
         font-weight: 850;
       }
 
+      .gw-here-download {
+        display: grid;
+        gap: 5px;
+        margin-top: 6px;
+      }
+
+      .gw-here-download.is-hidden {
+        display: none;
+      }
+
+      .gw-here-download-btn {
+        width: 100%;
+        min-height: 21px;
+        border-radius: 6px;
+        border: 1px solid rgba(240,209,138,0.18);
+        background: rgba(240,209,138,0.06);
+        color: rgba(239,230,211,0.72);
+        font-size: 8px;
+        line-height: 1;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0;
+        cursor: pointer;
+      }
+
+      .gw-here-download-btn:hover:not(:disabled) {
+        color: #f0d18a;
+        border-color: rgba(240,209,138,0.34);
+        background: rgba(240,209,138,0.10);
+      }
+
+      .gw-here-download-btn:disabled {
+        opacity: 0.48;
+        cursor: default;
+      }
+
+      .gw-here-pyrite-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 4px;
+      }
+
+      .gw-here-pyrite-actions .gw-here-download-btn {
+        min-width: 0;
+        padding: 0 5px;
+      }
+
+      .gw-here-pyrite-summary {
+        margin-top: 4px;
+        font-size: 8px;
+        line-height: 1.25;
+        color: rgba(239,230,211,0.58);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .gw-here-download-progress {
+        display: none;
+        gap: 4px;
+      }
+
+      .gw-here-download-progress.is-active {
+        display: grid;
+      }
+
+      .gw-here-download-progress-text {
+        color: rgba(239,230,211,0.56);
+        font-size: 8px;
+        line-height: 1.15;
+        font-weight: 800;
+      }
+
+      .gw-here-download-progress-track {
+        height: 12px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(215,183,116,0.16);
+      }
+
+      .gw-here-download-progress-bar {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, rgba(140,110,54,0.95), rgba(240,209,138,0.98));
+        transition: width 160ms ease;
+      }
+
       .gw-selection-rect {
         stroke: #ffe7a3;
         stroke-width: 2.4;
@@ -606,6 +807,16 @@
         .gw-here-taxa-list {
           max-height: 154px;
           overflow: auto;
+        }
+
+        .gw-here-list-switch {
+          gap: 2px;
+        }
+
+        .gw-here-list-pill {
+          height: 21px;
+          padding: 0 3px;
+          font-size: 6.4px;
         }
 
         .gw-here-stat {
@@ -698,6 +909,29 @@
       </div>
       <div class="gw-here-taxa-list" id="gwHereTaxaList"></div>
       <div class="gw-here-stats" id="gwHereStats"></div>
+      <div class="gw-here-download is-hidden" id="gwHereObservationDownload">
+        <button class="gw-here-download-btn" id="gwHereObservationDownloadBtn" type="button">Download My Observations</button>
+        <div class="gw-here-download-progress" id="gwHereObservationDownloadProgress">
+          <div class="gw-here-download-progress-text" id="gwHereObservationDownloadProgressText">Preparing download...</div>
+          <div class="gw-here-download-progress-track">
+            <div class="gw-here-download-progress-bar" id="gwHereObservationDownloadProgressBar"></div>
+          </div>
+        </div>
+      </div>
+      <div class="gw-here-download is-hidden" id="gwHerePyriteLake">
+        <div class="gw-here-pyrite-actions">
+          <button class="gw-here-download-btn" id="gwHerePyriteSeedBtn" type="button">Seed Pyrite</button>
+          <button class="gw-here-download-btn" id="gwHerePyriteToggleBtn" type="button">On</button>
+          <button class="gw-here-download-btn" id="gwHerePyriteClearBtn" type="button">Clear</button>
+        </div>
+        <div class="gw-here-download-progress" id="gwHerePyriteProgress">
+          <div class="gw-here-download-progress-text" id="gwHerePyriteProgressText">Preparing seed...</div>
+          <div class="gw-here-download-progress-track">
+            <div class="gw-here-download-progress-bar" id="gwHerePyriteProgressBar"></div>
+          </div>
+        </div>
+        <div class="gw-here-pyrite-summary" id="gwHerePyriteSummary">Pyrite: 0 obs</div>
+      </div>
     `;
     document.body.appendChild(panel);
     return panel;
@@ -979,6 +1213,338 @@
     return "service";
   }
 
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, Number(value) || 0));
+  }
+
+  function loadHereElevationCache() {
+    if (hereElevationCacheLoaded) return;
+    hereElevationCacheLoaded = true;
+
+    try {
+      const parsed = JSON.parse(localStorage.getItem(HERE_ELEVATION_STORAGE_KEY) || "null");
+      const rows = Array.isArray(parsed?.entries) ? parsed.entries : [];
+      const now = Date.now();
+
+      for (const row of rows) {
+        const key = String(row?.key || "");
+        const elevationM = Number(row?.elevation_m);
+        const fetchedAt = Number(row?.fetched_at);
+        if (!key || !Number.isFinite(elevationM) || !Number.isFinite(fetchedAt)) continue;
+        if (now - fetchedAt > HERE_ELEVATION_CACHE_TTL_MS) continue;
+        hereElevationCache.set(key, {
+          elevationM,
+          fetchedAt,
+          lastUsedAt: now
+        });
+      }
+    } catch (err) {
+      localStorage.removeItem(HERE_ELEVATION_STORAGE_KEY);
+    }
+  }
+
+  function saveHereElevationCache() {
+    loadHereElevationCache();
+
+    try {
+      const entries = Array.from(hereElevationCache.entries())
+        .sort((a, b) => (b[1].lastUsedAt || b[1].fetchedAt || 0) - (a[1].lastUsedAt || a[1].fetchedAt || 0))
+        .slice(0, HERE_ELEVATION_MAX_CACHE_ENTRIES)
+        .map(([key, entry]) => ({
+          key,
+          elevation_m: entry.elevationM,
+          fetched_at: entry.fetchedAt
+        }));
+
+      localStorage.setItem(HERE_ELEVATION_STORAGE_KEY, JSON.stringify({
+        version: 1,
+        entries
+      }));
+    } catch (err) {
+      // Terrain still renders flat if localStorage is unavailable.
+    }
+  }
+
+  function gridPointToLatLng(ix, iy) {
+    const api = gridApi();
+    const leafletMap = typeof map !== "undefined" ? map : window.map;
+    const leaflet = typeof L !== "undefined" ? L : window.L;
+    const gridSizeM = Number(api?.gridSizeM) || 1;
+    if (!leafletMap?.options?.crs?.unproject || !leaflet?.point) return null;
+    const ll = leafletMap.options.crs.unproject(leaflet.point(ix * gridSizeM, iy * gridSizeM));
+    if (!ll || !Number.isFinite(Number(ll.lat)) || !Number.isFinite(Number(ll.lng))) return null;
+    return { lat: Number(ll.lat), lng: Number(ll.lng) };
+  }
+
+  function hereElevationSampleFor(ix, iy) {
+    const q = HERE_ELEVATION_SAMPLE_CELLS;
+    const sx = Math.round((Number(ix) || 0) / q) * q;
+    const sy = Math.round((Number(iy) || 0) / q) * q;
+    const key = `${sx},${sy}`;
+    return { key, ix: sx, iy: sy };
+  }
+
+  function getHereElevationEntry(key) {
+    loadHereElevationCache();
+    const entry = hereElevationCache.get(key);
+    if (!entry) return null;
+
+    if (Date.now() - Number(entry.fetchedAt || 0) > HERE_ELEVATION_CACHE_TTL_MS) {
+      hereElevationCache.delete(key);
+      return null;
+    }
+
+    entry.lastUsedAt = Date.now();
+    return entry;
+  }
+
+  function getHereElevationMeters(ix, iy) {
+    const sample = hereElevationSampleFor(ix, iy);
+    const entry = getHereElevationEntry(sample.key);
+    return Number.isFinite(entry?.elevationM) ? entry.elevationM : null;
+  }
+
+  function addHereElevationSample(samples, ix, iy) {
+    const sample = hereElevationSampleFor(ix, iy);
+    if (samples.has(sample.key) || getHereElevationEntry(sample.key)) return sample;
+
+    const ll = gridPointToLatLng(sample.ix, sample.iy);
+    if (!ll) return sample;
+
+    samples.set(sample.key, {
+      ...sample,
+      lat: ll.lat,
+      lng: ll.lng
+    });
+    return sample;
+  }
+
+  function parseRetryAfterMs(value) {
+    const seconds = Number(value);
+    if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+
+    const dateMs = Date.parse(value || "");
+    if (Number.isFinite(dateMs)) return Math.max(0, dateMs - Date.now());
+
+    return 0;
+  }
+
+  function scheduleHereElevationFlush(delayMs) {
+    if (hereElevationFetchQueued) return;
+    hereElevationFetchQueued = true;
+    setTimeout(() => {
+      hereElevationFetchQueued = false;
+      flushHereElevationQueue();
+    }, Math.max(0, Number(delayMs) || 0));
+  }
+
+  function flushHereElevationQueue() {
+    if (hereElevationFetchInFlight || !hereElevationPending.size) return;
+    const now = Date.now();
+    const nextAllowedAt = Math.max(
+      hereElevationDisabledUntil,
+      hereElevationLastFetchAt + HERE_ELEVATION_MIN_FETCH_INTERVAL_MS
+    );
+    if (now < nextAllowedAt) {
+      scheduleHereElevationFlush(nextAllowedAt - now);
+      return;
+    }
+
+    const batch = Array.from(hereElevationPending.values()).slice(0, HERE_ELEVATION_MAX_BATCH);
+    for (const point of batch) hereElevationPending.delete(point.key);
+    if (!batch.length) return;
+
+    hereElevationFetchInFlight = true;
+    hereElevationLastFetchAt = now;
+
+    fetch(HERE_ELEVATION_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json"
+      },
+      body: JSON.stringify({
+        points: batch.map(point => ({
+          key: point.key,
+          lat: point.lat,
+          lng: point.lng
+        }))
+      })
+    })
+      .then(resp => {
+        if (!resp.ok) {
+          const err = new Error(`Elevation HTTP ${resp.status}`);
+          err.status = resp.status;
+          err.retryAfterMs = parseRetryAfterMs(resp.headers?.get?.("Retry-After"));
+          throw err;
+        }
+        return resp.json();
+      })
+      .then(data => {
+        const now = Date.now();
+        hereElevationRetryDelayMs = HERE_ELEVATION_RETRY_BASE_MS;
+        for (const point of data?.points || []) {
+          const key = String(point?.key || "");
+          const elevationM = Number(point?.elevation_m);
+          if (!key || !Number.isFinite(elevationM)) continue;
+          hereElevationCache.set(key, {
+            elevationM,
+            fetchedAt: now,
+            lastUsedAt: now
+          });
+        }
+        saveHereElevationCache();
+        scheduleRefresh(40);
+      })
+      .catch(err => {
+        const retryMs = err.status === 429
+          ? Math.max(err.retryAfterMs || 0, hereElevationRetryDelayMs)
+          : Math.min(HERE_ELEVATION_RETRY_BASE_MS, 1000 * 60 * 3);
+        hereElevationDisabledUntil = Date.now() + retryMs;
+        hereElevationRetryDelayMs = Math.min(HERE_ELEVATION_RETRY_MAX_MS, hereElevationRetryDelayMs * 2);
+        if (err.status === 429) {
+          console.info("GridWild elevation lookup is rate-limited; backing off.");
+        } else {
+          console.warn("GridWild elevation lookup failed:", err);
+        }
+      })
+      .finally(() => {
+        hereElevationFetchInFlight = false;
+        if (hereElevationPending.size) {
+          scheduleHereElevationFlush(Math.max(
+            HERE_ELEVATION_MIN_FETCH_INTERVAL_MS,
+            hereElevationDisabledUntil - Date.now()
+          ));
+        }
+      });
+  }
+
+  function queueHereElevationSamples(samples) {
+    loadHereElevationCache();
+    const now = Date.now();
+    if (!samples?.size || now < hereElevationDisabledUntil || hereMap3dDrag) return;
+
+    for (const point of samples.values()) {
+      if (hereElevationPending.size >= HERE_ELEVATION_MAX_PENDING) break;
+      if (!point?.key || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) continue;
+      if (getHereElevationEntry(point.key)) continue;
+      if (now - Number(hereElevationRequestedAt.get(point.key) || 0) < HERE_ELEVATION_REQUEST_COOLDOWN_MS) continue;
+      hereElevationRequestedAt.set(point.key, now);
+      hereElevationPending.set(point.key, point);
+    }
+
+    if (!hereElevationPending.size || hereElevationFetchQueued) return;
+    scheduleHereElevationFlush(HERE_ELEVATION_QUEUE_DELAY_MS);
+  }
+
+  function collectHereElevationSamples(bounds, headingRad, origin) {
+    const samples = new Map();
+    const width = bounds.maxIx - bounds.minIx + 1;
+    const height = bounds.maxIy - bounds.minIy + 1;
+    const localStep = Math.max(4, Math.ceil(Math.max(width, height) / 4));
+    const centerIx = (bounds.minIx + bounds.maxIx + 1) / 2;
+    const centerIy = (bounds.minIy + bounds.maxIy + 1) / 2;
+
+    for (let iy = bounds.minIy; iy <= bounds.maxIy; iy += localStep) {
+      for (let ix = bounds.minIx; ix <= bounds.maxIx; ix += localStep) {
+        addHereElevationSample(samples, ix + 0.5, iy + 0.5);
+      }
+    }
+
+    [
+      [bounds.minIx + 0.5, bounds.minIy + 0.5],
+      [bounds.maxIx + 0.5, bounds.minIy + 0.5],
+      [bounds.minIx + 0.5, bounds.maxIy + 0.5],
+      [bounds.maxIx + 0.5, bounds.maxIy + 0.5],
+      [centerIx, centerIy],
+      [origin.ix + 0.5, origin.iy + 0.5]
+    ].forEach(point => addHereElevationSample(samples, point[0], point[1]));
+
+    const cos = Math.cos(headingRad);
+    const sin = Math.sin(headingRad);
+    const ringDistances = hereMap3dExpanded
+      ? [90, 220, 520, 1100]
+      : [110, 300, 700];
+    const sampleCounts = hereMap3dExpanded
+      ? [9, 11, 13, 15]
+      : [7, 9, 11];
+    const fovRad = HERE_3D_CAMERA.fovDeg * Math.PI / 180;
+    const ridgeBands = [];
+
+    ringDistances.forEach((forward, ringIndex) => {
+      const count = sampleCounts[ringIndex] || 15;
+      const bandSamples = [];
+      const lateralMax = Math.tan(fovRad * 0.62) * forward;
+
+      for (let i = 0; i < count; i++) {
+        const t = count <= 1 ? 0 : (i / (count - 1)) * 2 - 1;
+        const right = t * lateralMax;
+        const dx = right * cos + forward * sin;
+        const dy = -right * sin + forward * cos;
+        const sample = addHereElevationSample(samples, origin.ix + dx, origin.iy + dy);
+        bandSamples.push(sample);
+      }
+
+      ridgeBands.push({
+        ringIndex,
+        distanceCells: forward,
+        samples: bandSamples
+      });
+    });
+
+    return { samples, ridgeBands };
+  }
+
+  function buildHereElevationModel(bounds, headingRad, cameraCell, centerCell) {
+    const origin = cameraCell || centerCell || {
+      ix: (bounds.minIx + bounds.maxIx) / 2,
+      iy: (bounds.minIy + bounds.maxIy) / 2
+    };
+    const { samples, ridgeBands } = collectHereElevationSamples(bounds, headingRad, origin);
+    queueHereElevationSamples(samples);
+
+    const originM = getHereElevationMeters(origin.ix + 0.5, origin.iy + 0.5);
+    const localElevations = [
+      [origin.ix + 0.5, origin.iy + 0.5],
+      [(bounds.minIx + bounds.maxIx + 1) / 2, (bounds.minIy + bounds.maxIy + 1) / 2],
+      [bounds.minIx + 0.5, bounds.minIy + 0.5],
+      [bounds.maxIx + 0.5, bounds.maxIy + 0.5],
+      [bounds.minIx + 0.5, bounds.maxIy + 0.5],
+      [bounds.maxIx + 0.5, bounds.minIy + 0.5]
+    ]
+      .map(point => getHereElevationMeters(point[0], point[1]))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+
+    const baseM = Number.isFinite(originM)
+      ? originM
+      : localElevations.length
+        ? localElevations[Math.floor(localElevations.length / 2)]
+        : null;
+
+    function metersAt(ix, iy) {
+      return getHereElevationMeters(ix, iy);
+    }
+
+    function zAt(ix, iy) {
+      const elevationM = metersAt(ix, iy);
+      if (!Number.isFinite(baseM) || !Number.isFinite(elevationM)) return 0;
+      return clamp(
+        (elevationM - baseM) / HERE_ELEVATION_LOCAL_Z_SCALE_M,
+        HERE_ELEVATION_LOCAL_Z_MIN,
+        HERE_ELEVATION_LOCAL_Z_MAX
+      );
+    }
+
+    return {
+      baseM,
+      metersAt,
+      zAt,
+      ridgeBands,
+      hasElevation: Number.isFinite(baseM)
+    };
+  }
+
   function renderHereViewport3d(bounds, selectedBounds) {
     const api = gridApi();
     if (!api) return "";
@@ -1005,6 +1571,8 @@
         cellInfo.iy >= bounds.minIy &&
         cellInfo.iy <= bounds.maxIy;
     }
+
+    const elevationModel = buildHereElevationModel(bounds, headingRad, cameraCell, centerCell);
 
     function worldToCamera(ix, iy, z = 0) {
       const origin = cameraCell || {
@@ -1048,6 +1616,21 @@
       ];
     }
 
+    function terrainZAt(ix, iy, lift = 0) {
+      return elevationModel.zAt(ix, iy) + lift;
+    }
+
+    function terrainCellPolygon(ix, iy, inset = 0.04, lift = 0) {
+      const a = inset;
+      const b = 1 - inset;
+      return [
+        project(ix + a, iy + a, terrainZAt(ix + a, iy + a, lift)),
+        project(ix + b, iy + a, terrainZAt(ix + b, iy + a, lift)),
+        project(ix + b, iy + b, terrainZAt(ix + b, iy + b, lift)),
+        project(ix + a, iy + b, terrainZAt(ix + a, iy + b, lift))
+      ];
+    }
+
     function pointsAttr(points) {
       return points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
     }
@@ -1061,8 +1644,8 @@
     }
 
     const sorted = cells.slice().sort((a, b) =>
-      worldToCamera(a.ix + 0.5, a.iy + 0.5).forward -
-      worldToCamera(b.ix + 0.5, b.iy + 0.5).forward
+      worldToCamera(a.ix + 0.5, a.iy + 0.5, terrainZAt(a.ix + 0.5, a.iy + 0.5)).forward -
+      worldToCamera(b.ix + 0.5, b.iy + 0.5, terrainZAt(b.ix + 0.5, b.iy + 0.5)).forward
     );
 
     const heatStats = buildHereHeatZStats(cells);
@@ -1099,11 +1682,11 @@
             const clipped = clipSegmentToCellBounds(points[i - 1], points[i], bounds);
             if (!clipped) continue;
 
-            const groundA = project(clipped.a.ix, clipped.a.iy, 0.05);
-            const groundB = project(clipped.b.ix, clipped.b.iy, 0.05);
             const lift = cls === "trail" ? 0.33 : cls === "major" ? 0.52 : 0.43;
-            const raisedA = project(clipped.a.ix, clipped.a.iy, lift);
-            const raisedB = project(clipped.b.ix, clipped.b.iy, lift);
+            const groundA = project(clipped.a.ix, clipped.a.iy, terrainZAt(clipped.a.ix, clipped.a.iy, 0.04));
+            const groundB = project(clipped.b.ix, clipped.b.iy, terrainZAt(clipped.b.ix, clipped.b.iy, 0.04));
+            const raisedA = project(clipped.a.ix, clipped.a.iy, terrainZAt(clipped.a.ix, clipped.a.iy, lift));
+            const raisedB = project(clipped.b.ix, clipped.b.iy, terrainZAt(clipped.b.ix, clipped.b.iy, lift));
             if (!isVisibleLine([groundA, groundB, raisedA, raisedB])) continue;
 
             const width = cls === "major" ? 2.7 : cls === "street" ? 2.1 : cls === "trail" ? 1.35 : 1.75;
@@ -1137,13 +1720,79 @@
         .join("");
     }
 
+    function renderElevationRidges() {
+      if (!elevationModel.hasElevation) return "";
+
+      const gridSizeM = Number(api.gridSizeM) || 1;
+      const maxRingIndex = Math.max(1, elevationModel.ridgeBands.length - 1);
+      return elevationModel.ridgeBands
+        .slice()
+        .reverse()
+        .map((band, bandIndex) => {
+          const points = band.samples
+            .map((sample, index) => {
+              const elevationM = elevationModel.metersAt(sample.ix, sample.iy);
+              if (!Number.isFinite(elevationM)) return null;
+              return {
+                index,
+                elevationM
+              };
+            })
+            .filter(Boolean);
+
+          if (points.length < Math.max(5, Math.floor(band.samples.length * 0.45))) return "";
+
+          const elevations = points.map(point => point.elevationM);
+          const minM = Math.min(...elevations);
+          const maxM = Math.max(...elevations);
+          const maxRelM = maxM - elevationModel.baseM;
+          const reliefM = maxM - minM;
+          if (maxRelM < 55 && reliefM < 65) return "";
+
+          const distanceM = Math.max(80, band.distanceCells * gridSizeM);
+          const farFactor = clamp((Number(band.ringIndex) || 0) / maxRingIndex, 0, 1);
+          const baseY = h * (0.405 - farFactor * 0.075);
+          const bottomY = h * (0.58 - farFactor * 0.08);
+          const topPoints = points.map(point => {
+            const x = band.samples.length <= 1
+              ? w / 2
+              : (point.index / (band.samples.length - 1)) * w;
+            const relativeM = clamp(point.elevationM - elevationModel.baseM, -500, 2400);
+            const angleDeg = Math.atan2(relativeM, distanceM) * 180 / Math.PI;
+            const reliefLift = clamp((point.elevationM - minM) * 0.014, 0, 18);
+            const y = clamp(baseY - angleDeg * 2.35 - reliefLift, 8, h * 0.56);
+            return { x, y };
+          });
+
+          const path = [
+            `M0 ${bottomY.toFixed(1)}`,
+            ...topPoints.map(point => `L${point.x.toFixed(1)} ${point.y.toFixed(1)}`),
+            `L${w} ${bottomY.toFixed(1)}`,
+            "Z"
+          ].join(" ");
+          const ridgeLine = topPoints
+            .map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+            .join(" ");
+          const opacity = 0.09 + (1 - farFactor) * 0.13;
+          const strokeOpacity = 0.12 + (1 - farFactor) * 0.20;
+
+          return `
+            <g data-layer="elevation-ridge">
+              <path d="${path}" fill="rgba(63,91,84,${opacity.toFixed(3)})"></path>
+              <path d="${ridgeLine}" fill="none" stroke="rgba(209,231,203,${strokeOpacity.toFixed(3)})" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"></path>
+            </g>
+          `;
+        })
+        .join("");
+    }
+
     const terrain = sorted.map(item => {
       const count = Number(item.metrics?.count) || 0;
       const style = hereHeatStyleForCell(item, heatStats);
       const osm = osmByKey.get(item.key);
       const fill = style.fillColor || "rgba(239,230,211,0.14)";
       const alpha = Math.max(style.heatVisible ? 0.18 : 0.06, Math.min(0.92, Number(style.fillOpacity || 0.2)));
-      const poly = cellPolygon(item.ix, item.iy);
+      const poly = terrainCellPolygon(item.ix, item.iy);
       if (!isVisiblePoly(poly)) return "";
       const selected = selectedBounds &&
         item.ix >= selectedBounds.minIx &&
@@ -1163,25 +1812,36 @@
         grass: "rgba(126,174,83,0.16)",
         water: "rgba(60,138,178,0.28)"
       }[osm?.landuseClass] || "";
+      const elevationM = elevationModel.metersAt(item.ix + 0.5, item.iy + 0.5);
+      const elevationDeltaM = Number.isFinite(elevationM) && Number.isFinite(elevationModel.baseM)
+        ? elevationM - elevationModel.baseM
+        : 0;
+      const elevationTint = elevationDeltaM > 25
+        ? `<polygon points="${pointsAttr(poly)}" fill="rgba(255,232,176,${clamp(elevationDeltaM / 1800, 0, 0.14).toFixed(3)})"></polygon>`
+        : elevationDeltaM < -18
+          ? `<polygon points="${pointsAttr(poly)}" fill="rgba(48,96,126,${clamp(Math.abs(elevationDeltaM) / 900, 0, 0.12).toFixed(3)})"></polygon>`
+          : "";
 
       return `
         <g data-layer="terrain">
           <polygon points="${pointsAttr(poly)}" fill="${colorWithAlpha(fill, alpha)}" stroke="${selected ? "#ffe7a3" : "rgba(255,255,255,0.14)"}" stroke-width="${selected ? 1.2 : 0.35}"></polygon>
+          ${elevationTint}
           ${landTint ? `<polygon points="${pointsAttr(poly)}" fill="${landTint}"></polygon>` : ""}
-          ${style.heatVisible && count > 0 ? `<polygon points="${pointsAttr(cellPolygon(item.ix, item.iy, Math.sqrt(count / maxCount) * 0.18))}" fill="rgba(255,255,255,0.05)"></polygon>` : ""}
+          ${style.heatVisible && count > 0 ? `<polygon points="${pointsAttr(terrainCellPolygon(item.ix, item.iy, 0.04, Math.sqrt(count / maxCount) * 0.18))}" fill="rgba(255,255,255,0.05)"></polygon>` : ""}
           ${fogAlpha ? `<polygon points="${pointsAttr(poly)}" fill="rgba(9,12,14,${fogAlpha})"></polygon>` : ""}
         </g>
       `;
     }).join("");
 
     const osmLines = renderRaisedOsmLines();
+    const elevationRidges = renderElevationRidges();
 
     const buildings = sorted.map(item => {
       const osm = osmByKey.get(item.key);
       if (!osm?.insideBuilding) return "";
       const stories = 1 + (stableHash(item.key) % 3);
-      const top = cellPolygon(item.ix, item.iy, stories * 0.9);
-      const base = cellPolygon(item.ix, item.iy);
+      const top = terrainCellPolygon(item.ix, item.iy, 0.04, stories * 0.9);
+      const base = terrainCellPolygon(item.ix, item.iy);
       if (!isVisiblePoly(top)) return "";
       return `
         <g data-layer="buildings">
@@ -1196,7 +1856,7 @@
       const osm = osmByKey.get(item.key);
       if (!(osm?.landuseClass === "wood" || osm?.landuseClass === "park")) return "";
       if (stableHash(item.key) % 3 === 0) return "";
-      const p = project(item.ix + 0.5, item.iy + 0.5, 0.7);
+      const p = project(item.ix + 0.5, item.iy + 0.5, terrainZAt(item.ix + 0.5, item.iy + 0.5, 0.7));
       if (p.x < -20 || p.x > w + 20 || p.y < -20 || p.y > h + 20) return "";
       const r = Math.max(2.2, Math.min(5.8, p.scale * 0.19));
       return `
@@ -1209,7 +1869,7 @@
 
     const niches = overlappingNiches(bounds).slice(0, 4).map((entry, index) => {
       const polys = entry.cells.slice(0, 90).map(cell => {
-        const poly = cellPolygon(cell.ix, cell.iy, 0.72 + index * 0.12, 0.02);
+        const poly = terrainCellPolygon(cell.ix, cell.iy, 0.02, 0.72 + index * 0.12);
         if (!isVisiblePoly(poly)) return "";
         return `<polygon points="${pointsAttr(poly)}" fill="rgba(118,231,191,0.13)" stroke="rgba(118,231,191,0.38)" stroke-width="0.5"></polygon>`;
       }).join("");
@@ -1233,7 +1893,9 @@
         ) {
           return "";
         }
-        const p = project(Number(questTarget.ix) + 0.5, Number(questTarget.iy) + 0.5, 0.25);
+        const qx = Number(questTarget.ix) + 0.5;
+        const qy = Number(questTarget.iy) + 0.5;
+        const p = project(qx, qy, terrainZAt(qx, qy, 0.25));
         return `
           <g data-layer="quest">
             <line x1="${p.x}" y1="${p.y - 62}" x2="${p.x}" y2="${p.y + 3}" stroke="url(#gwHereQuestBeam)" stroke-width="8" stroke-linecap="round"></line>
@@ -1244,7 +1906,9 @@
       : "";
 
     const userAvatar = inBounds(userCell) ? (() => {
-      const p = project(userCell.ix + 0.5, userCell.iy + 0.5, 1.05);
+      const ux = userCell.ix + 0.5;
+      const uy = userCell.iy + 0.5;
+      const p = project(ux, uy, terrainZAt(ux, uy, 1.05));
       return `
         <g aria-label="Avatar in viewport">
           <ellipse cx="${p.x}" cy="${avatarY + 10}" rx="6.4" ry="2.4" fill="rgba(0,0,0,0.34)"></ellipse>
@@ -1256,12 +1920,15 @@
     })() : "";
 
     const centerMarker = inBounds(centerCell) ? (() => {
-      const p = project(centerCell.ix + 0.5, centerCell.iy + 0.5, 0.45);
+      const cx = centerCell.ix + 0.5;
+      const cy = centerCell.iy + 0.5;
+      const p = project(cx, cy, terrainZAt(cx, cy, 0.45));
       return `<circle cx="${p.x}" cy="${p.y}" r="2.7" fill="none" stroke="#f0d18a" stroke-width="1.2"></circle>`;
     })() : "";
 
     return `
       <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Here 3D viewport">
+        <title>Here 3D viewport with Copernicus DEM GLO-90 elevation via Open-Meteo</title>
         <defs>
           <radialGradient id="gwHereViewportVignette" cx="50%" cy="54%" r="66%">
             <stop offset="58%" stop-color="rgba(6,8,8,0)"></stop>
@@ -1275,6 +1942,7 @@
         </defs>
         <rect x="0" y="0" width="${w}" height="${h}" fill="rgba(6,8,8,0.58)"></rect>
         <path d="M0 ${h * 0.34} C56 ${h * 0.20} 150 ${h * 0.20} ${w} ${h * 0.34} L${w} 0 L0 0 Z" fill="rgba(149,196,184,0.08)"></path>
+        ${elevationRidges}
         ${terrain}
         ${osmLines}
         ${niches}
@@ -1284,6 +1952,7 @@
         ${centerMarker}
         ${userAvatar}
         <rect x="0" y="0" width="${w}" height="${h}" fill="url(#gwHereViewportVignette)"></rect>
+        ${elevationModel.hasElevation ? `<text x="${w - 4}" y="${h - 4}" text-anchor="end" font-size="5.2" fill="rgba(239,230,211,0.34)">Copernicus DEM</text>` : ""}
         <path d="M0 0 H${w} V${h} H0 Z" fill="none" stroke="rgba(240,209,138,0.15)" stroke-width="1"></path>
       </svg>
     `;
@@ -1544,13 +2213,30 @@
     return Array.from(byGenus.values());
   }
 
-  function renderTaxaList() {
+  function normalizeHereListView(value) {
+    return HERE_LIST_VIEWS.some(option => option.id === value) ? value : "common";
+  }
+
+  function renderHereListSwitcher() {
+    const activeView = normalizeHereListView(hereListView);
+    return `
+      <div class="gw-here-list-switch" role="radiogroup" aria-label="Here detail list">
+        ${HERE_LIST_VIEWS.map(option => {
+          const checked = option.id === activeView ? "checked" : "";
+          return `
+            <label class="gw-here-list-option" for="gwHereListView_${esc(option.id)}">
+              <input id="gwHereListView_${esc(option.id)}" type="radio" name="gwHereListView" value="${esc(option.id)}" ${checked}>
+              <span class="gw-here-list-pill">${esc(option.label)}</span>
+            </label>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  function currentTaxaListContext() {
     const node = currentPieNode();
     const genera = aggregateGeneraFromRows(node?.rows || []);
-    if (!genera.length) {
-      return `<div class="gw-here-taxa-heading">No genus-level taxa in this context</div>`;
-    }
-
     const common = genera
       .slice()
       .sort((a, b) => (b.count - a.count) || a.genus.localeCompare(b.genus))
@@ -1571,30 +2257,43 @@
     const nodeLabel = node?.rank === "root" ? "" : ` - ${taxonDisplayName(node.name)}`;
     const taxaMaxCount = Math.max(...genera.map(row => Number(row.count) || 0), 1);
 
-    function section(title, rows) {
-      return `
-        <div class="gw-here-taxa-group">
-          <div class="gw-here-taxa-heading">${title}${esc(nodeLabel)}</div>
-          <div class="gw-here-inline-list">
-          ${rows.map((row, index) => {
-            const label = taxonListLabel(row);
-            const titleText = label.sub
-              ? `${label.main} (${label.sub})`
-              : label.main;
-            const fontSize = scaledListFontSize(row.count, taxaMaxCount);
-            return `
-              <span class="gw-here-inline-item" style="font-size:${fontSize}px">
-                <button class="gw-here-inline-link" type="button" data-genus="${esc(row.genus)}" title="${esc(titleText)} - ${esc(row.family || row.order || row.iconic || row.genus)}">${esc(label.main)}</button>
-                <span class="gw-here-inline-count">${row.count}</span>${inlineComma(index, rows.length)}
-              </span>
-            `;
-          }).join("")}
-          </div>
+    return { common, genera, nodeLabel, rare, taxaMaxCount };
+  }
+
+  function renderTaxaSection(title, rows, context) {
+    return `
+      <div class="gw-here-taxa-group">
+        <div class="gw-here-taxa-heading">${title}${esc(context.nodeLabel)}</div>
+        <div class="gw-here-inline-list">
+        ${rows.map((row, index) => {
+          const label = taxonListLabel(row);
+          const titleText = label.sub
+            ? `${label.main} (${label.sub})`
+            : label.main;
+          const fontSize = scaledListFontSize(row.count, context.taxaMaxCount);
+          return `
+            <span class="gw-here-inline-item" style="font-size:${fontSize}px">
+              <button class="gw-here-inline-link" type="button" data-genus="${esc(row.genus)}" title="${esc(titleText)} - ${esc(row.family || row.order || row.iconic || row.genus)}">${esc(label.main)}</button>
+              <span class="gw-here-inline-count">${row.count}</span>${inlineComma(index, rows.length)}
+            </span>
+          `;
+        }).join("")}
         </div>
-      `;
+      </div>
+    `;
+  }
+
+  function renderTaxaList(view = "common") {
+    const context = currentTaxaListContext();
+    if (!context.genera.length) {
+      return `<div class="gw-here-taxa-heading">No genus-level taxa in this context</div>`;
     }
 
-    return `${section("Common taxa", common)}${section("Rare taxa", rare)}`;
+    if (view === "rare") {
+      return renderTaxaSection("Rare taxa", context.rare, context);
+    }
+
+    return renderTaxaSection("Common taxa", context.common, context);
   }
 
   function renderTopObserversList(record, observerDict) {
@@ -1653,8 +2352,23 @@
     `;
   }
 
-  function renderContextLists(previewNote = "") {
-    return `${previewNote}${renderTaxaList()}${renderTopObserversList(herePieState.record, herePieState.observerDict)}`;
+  function renderActiveContextList() {
+    const activeView = normalizeHereListView(hereListView);
+    if (activeView === "rare") return renderTaxaList("rare");
+    if (activeView === "observers") {
+      return renderTopObserversList(herePieState.record, herePieState.observerDict);
+    }
+    return renderTaxaList("common");
+  }
+
+  function renderContextLists(previewNote = "", bodyHtml = null) {
+    const body = bodyHtml == null ? renderActiveContextList() : bodyHtml;
+    return `
+      ${renderHereListSwitcher()}
+      <div class="gw-here-list-body">
+        ${previewNote}${body}
+      </div>
+    `;
   }
 
   function summarizeCells(bounds) {
@@ -1778,6 +2492,213 @@
     rerenderTaxaListOnly();
   }
 
+  function setHereDownloadProgress(detail = {}) {
+    if (detail.context !== "selection") return;
+
+    const pct = Number.isFinite(Number(detail.pct))
+      ? Math.max(0, Math.min(100, Number(detail.pct)))
+      : Math.min(95, (Number(detail.page || 0) / 10) * 100);
+
+    hereObservationDownload.progressPct = pct;
+    hereObservationDownload.progressText =
+      `Page ${detail.page || 0} - accepted ${detail.accepted || 0} - rejected ${detail.rejected || 0}` +
+      (detail.duplicates ? ` - cached ${detail.duplicates}` : "");
+
+    syncHereDownloadControl();
+  }
+
+  function syncHereDownloadControl(selection = window.GridWildSelectionTool?.getSelection?.() || null) {
+    const wrap = document.getElementById("gwHereObservationDownload");
+    const btn = document.getElementById("gwHereObservationDownloadBtn");
+    const progress = document.getElementById("gwHereObservationDownloadProgress");
+    const progressText = document.getElementById("gwHereObservationDownloadProgressText");
+    const progressBar = document.getElementById("gwHereObservationDownloadProgressBar");
+    if (!wrap || !btn || !progress || !progressText || !progressBar) return;
+
+    const hasSelection = !!selection?.bounds;
+    wrap.classList.toggle("is-hidden", !hasSelection && !hereObservationDownload.busy);
+
+    btn.disabled = !hasSelection || hereObservationDownload.busy;
+    btn.textContent = hereObservationDownload.busy ? "Downloading..." : "Download My Observations";
+    btn.title = hasSelection
+      ? "Add your iNaturalist observations inside this selection to the local cache"
+      : "Select cells first";
+
+    progress.classList.toggle("is-active", hereObservationDownload.busy);
+    progressText.textContent = hereObservationDownload.progressText || "Preparing download...";
+    progressBar.style.width = `${Math.max(0, Math.min(100, hereObservationDownload.progressPct || 0))}%`;
+  }
+
+  function setHerePyriteProgress(detail = {}) {
+    if (detail.context !== "selection") return;
+
+    const pct = Number.isFinite(Number(detail.pct))
+      ? Math.max(0, Math.min(100, Number(detail.pct)))
+      : Math.min(95, (Number(detail.page || 0) / 10) * 100);
+
+    herePyriteSeed.progressPct = pct;
+    const stats =
+      `Page ${detail.page || 0} - accepted ${detail.accepted || 0} - rejected ${detail.rejected || 0}` +
+      (detail.duplicates ? ` - cached ${detail.duplicates}` : "");
+    herePyriteSeed.progressText = detail.message
+      ? `${stats} - ${detail.message}`
+      : stats;
+
+    syncHerePyriteControl();
+  }
+
+  function syncHerePyriteControl(selection = window.GridWildSelectionTool?.getSelection?.() || null) {
+    const wrap = document.getElementById("gwHerePyriteLake");
+    const seedBtn = document.getElementById("gwHerePyriteSeedBtn");
+    const toggleBtn = document.getElementById("gwHerePyriteToggleBtn");
+    const clearBtn = document.getElementById("gwHerePyriteClearBtn");
+    const progress = document.getElementById("gwHerePyriteProgress");
+    const progressText = document.getElementById("gwHerePyriteProgressText");
+    const progressBar = document.getElementById("gwHerePyriteProgressBar");
+    const summaryEl = document.getElementById("gwHerePyriteSummary");
+    if (!wrap || !seedBtn || !toggleBtn || !clearBtn || !progress || !progressText || !progressBar || !summaryEl) return;
+
+    const state = window.GridWildPyriteLake?.getState?.() || { enabled: false, hasData: false, summary: {} };
+    const hasSelection = !!selection?.bounds;
+    const hasData = state.hasData === true;
+    const isEnabled = state.enabled === true && hasData;
+    const s = state.summary || {};
+
+    wrap.classList.toggle("is-hidden", !hasSelection && !herePyriteSeed.busy && !hasData);
+
+    seedBtn.disabled = !hasSelection || herePyriteSeed.busy || !window.GridWildPyriteLake?.seedFromBounds;
+    seedBtn.textContent = herePyriteSeed.busy ? "Seeding..." : "Seed Pyrite";
+    seedBtn.title = "Add public iNaturalist observations inside this selection to the local pyrite lake";
+
+    toggleBtn.disabled = !hasData || herePyriteSeed.busy;
+    toggleBtn.textContent = isEnabled ? "On" : "Off";
+    toggleBtn.title = isEnabled ? "Hide pyrite lake heat" : "Show pyrite lake heat";
+
+    clearBtn.disabled = !hasData || herePyriteSeed.busy;
+    clearBtn.textContent = "Clear";
+    clearBtn.title = "Clear local pyrite lake data";
+
+    progress.classList.toggle("is-active", herePyriteSeed.busy);
+    progressText.textContent = herePyriteSeed.progressText || "Preparing seed...";
+    progressBar.style.width = `${Math.max(0, Math.min(100, herePyriteSeed.progressPct || 0))}%`;
+
+    summaryEl.textContent = hasData
+      ? `Pyrite: ${compactStatNumber(s.observations)} obs - ${compactStatNumber(s.cells)} cells - ${isEnabled ? "on" : "off"}`
+      : "Pyrite: 0 obs";
+  }
+
+  function latLngBoxForCellBounds(bounds) {
+    const latLngBounds = gridApi()?.boundsToLatLngBounds?.(bounds);
+    const sw = latLngBounds?.getSouthWest?.();
+    const ne = latLngBounds?.getNorthEast?.();
+    if (!sw || !ne) return null;
+
+    return {
+      swlat: sw.lat,
+      swlng: sw.lng,
+      nelat: ne.lat,
+      nelng: ne.lng
+    };
+  }
+
+  async function downloadSelectionObservations() {
+    const selection = window.GridWildSelectionTool?.getSelection?.() || null;
+    const bounds = selection?.bounds;
+    if (!bounds) {
+      toast("Select cells first");
+      return;
+    }
+
+    if (!window.GridWildRecentINat?.downloadObservationsInBounds) {
+      toast("Observation download is not loaded yet");
+      return;
+    }
+
+    const latLngBox = latLngBoxForCellBounds(bounds);
+    if (!latLngBox) {
+      toast("Selection bounds are not available");
+      return;
+    }
+
+    hereObservationDownload.busy = true;
+    hereObservationDownload.progressPct = 0;
+    hereObservationDownload.progressText = "Preparing download...";
+    syncHereDownloadControl(selection);
+
+    try {
+      const result = await window.GridWildRecentINat.downloadObservationsInBounds(latLngBox, {
+        username: window.__gwUser?.username || ""
+      });
+      hereObservationDownload.progressPct = 100;
+      hereObservationDownload.progressText = `${result?.added || 0} added - ${result?.duplicates || 0} cached`;
+      toast(`Cache updated: ${result?.added || 0} observations added`);
+    } catch (err) {
+      console.warn("Selection observation download failed:", err);
+      toast(`Could not download observations: ${err.message}`);
+    } finally {
+      hereObservationDownload.busy = false;
+      syncHereDownloadControl(window.GridWildSelectionTool?.getSelection?.() || null);
+    }
+  }
+
+  async function seedSelectionPyriteLake() {
+    const selection = window.GridWildSelectionTool?.getSelection?.() || null;
+    const bounds = selection?.bounds;
+    if (!bounds) {
+      toast("Select cells first");
+      return;
+    }
+
+    if (!window.GridWildPyriteLake?.seedFromBounds) {
+      toast("Pyrite lake is not loaded yet");
+      return;
+    }
+
+    const latLngBox = latLngBoxForCellBounds(bounds);
+    if (!latLngBox) {
+      toast("Selection bounds are not available");
+      return;
+    }
+
+    herePyriteSeed.busy = true;
+    herePyriteSeed.progressPct = 0;
+    herePyriteSeed.progressText = "Preparing seed...";
+    syncHerePyriteControl(selection);
+
+    try {
+      const result = await window.GridWildPyriteLake.seedFromBounds(latLngBox);
+      herePyriteSeed.progressPct = 100;
+      herePyriteSeed.progressText = result?.stoppedEarly
+        ? `${result?.added || 0} added - stopped at page ${result.stoppedEarly.page}`
+        : `${result?.added || 0} added - ${result?.duplicates || 0} cached`;
+      toast(result?.stoppedEarly
+        ? `Pyrite lake saved partial seed: ${result?.added || 0} observations added`
+        : `Pyrite lake seeded: ${result?.added || 0} observations added`);
+    } catch (err) {
+      console.warn("Pyrite lake seed failed:", err);
+      toast(`Could not seed pyrite lake: ${err.message}`);
+    } finally {
+      herePyriteSeed.busy = false;
+      syncHerePyriteControl(window.GridWildSelectionTool?.getSelection?.() || null);
+    }
+  }
+
+  async function togglePyriteLake() {
+    if (!window.GridWildPyriteLake?.setEnabled) return;
+    const state = window.GridWildPyriteLake.getState?.() || {};
+    await window.GridWildPyriteLake.setEnabled(!(state.enabled === true));
+    syncHerePyriteControl();
+  }
+
+  async function clearPyriteLake() {
+    if (!window.GridWildPyriteLake?.clear) return;
+    await window.GridWildPyriteLake.clear();
+    herePyriteSeed.progressPct = 0;
+    herePyriteSeed.progressText = "";
+    syncHerePyriteControl();
+    toast("Pyrite lake cleared");
+  }
+
   function zoomPieTo(path) {
     const node = findPieNode(herePieState.tree, path);
     if (!node) return;
@@ -1843,6 +2764,7 @@
   function endHere3dDrag(evt) {
     if (!hereMap3dDrag || evt.pointerId !== hereMap3dDrag.pointerId) return;
     hereMap3dDrag = null;
+    scheduleRefresh(120);
   }
 
   function bindHerePanelInteractions() {
@@ -1851,6 +2773,38 @@
     panel.dataset.interactionsBound = "true";
 
     panel.addEventListener("click", evt => {
+      const downloadBtn = evt.target.closest?.("#gwHereObservationDownloadBtn");
+      if (downloadBtn) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (!downloadBtn.disabled) downloadSelectionObservations();
+        return;
+      }
+
+      const pyriteSeedBtn = evt.target.closest?.("#gwHerePyriteSeedBtn");
+      if (pyriteSeedBtn) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (!pyriteSeedBtn.disabled) seedSelectionPyriteLake();
+        return;
+      }
+
+      const pyriteToggleBtn = evt.target.closest?.("#gwHerePyriteToggleBtn");
+      if (pyriteToggleBtn) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (!pyriteToggleBtn.disabled) togglePyriteLake();
+        return;
+      }
+
+      const pyriteClearBtn = evt.target.closest?.("#gwHerePyriteClearBtn");
+      if (pyriteClearBtn) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (!pyriteClearBtn.disabled) clearPyriteLake();
+        return;
+      }
+
       const home = evt.target.closest?.("#gwHerePieHome");
       if (home) {
         evt.preventDefault();
@@ -1925,6 +2879,17 @@
       }
     });
 
+    panel.addEventListener("change", evt => {
+      const input = evt.target.closest?.("input[name='gwHereListView']");
+      if (!input) return;
+
+      const nextView = normalizeHereListView(input.value);
+      if (nextView === hereListView) return;
+
+      hereListView = nextView;
+      rerenderTaxaListOnly();
+    });
+
     panel.addEventListener("pointerdown", startHere3dDrag);
     panel.addEventListener("pointermove", moveHere3dDrag);
     panel.addEventListener("pointerup", endHere3dDrag);
@@ -1981,6 +2946,8 @@
         <div class="gw-here-stat" title="${summary.active} active cells of ${summary.cells} cells"><b>${compactStatNumber(summary.active)}/${compactStatNumber(summary.cells)}</b><span>Cells</span></div>
       `;
     }
+    syncHereDownloadControl(selection);
+    syncHerePyriteControl(selection);
 
     if (pieChartEl) {
       pieChartEl.innerHTML = `
@@ -1990,7 +2957,7 @@
       `;
     }
     if (taxaListEl) {
-      taxaListEl.innerHTML = `<div class="gw-here-taxa-heading">Reading taxa...</div>`;
+      taxaListEl.innerHTML = renderContextLists("", `<div class="gw-here-taxa-heading">Reading taxa...</div>`);
     }
 
     const [record, observerDict] = await Promise.all([
@@ -2352,6 +3319,9 @@
     window.addEventListener("gridwild:heatchange", () => scheduleRefresh(10));
     window.addEventListener("gwOsmFeaturesUpdated", () => scheduleRefresh(40));
     window.addEventListener("gwRecentINatUpdated", () => scheduleRefresh(80));
+    window.addEventListener("gwRecentINatProgress", evt => setHereDownloadProgress(evt.detail || {}));
+    window.addEventListener("gwPyriteLakeUpdated", () => scheduleRefresh(40));
+    window.addEventListener("gwPyriteLakeProgress", evt => setHerePyriteProgress(evt.detail || {}));
     document.addEventListener("change", evt => {
       if (evt.target?.matches?.("[data-iconic], #taxaChecklist input, #toggleHeat, #toggleHeatZThreshold, input[name='heatMetric'], #gwHeatZThresholdInput")) {
         scheduleRefresh(10);

@@ -76,6 +76,12 @@
   }
 
   function signOut() {
+    try {
+      window.GridWildPresence?.markOffline?.({ keepalive: true });
+    } catch {
+      // Presence is best-effort during sign-out.
+    }
+
     localStorage.removeItem(ACCOUNT_KEY);
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(PLAYER_KEY);

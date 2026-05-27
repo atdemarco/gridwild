@@ -94,6 +94,24 @@ exports.handler = async function (event) {
 
     if (achievementsResult.error) throw achievementsResult.error;
 
+    let playerPresence = null;
+    const presenceResult = await supabase
+      .from("player_presence")
+      .select("*")
+      .eq("player_id", player.id)
+      .maybeSingle();
+
+    if (presenceResult.error) {
+      if (
+        presenceResult.error.code !== "42P01" &&
+        !String(presenceResult.error.message || "").includes("schema cache")
+      ) {
+        throw presenceResult.error;
+      }
+    } else {
+      playerPresence = presenceResult.data || null;
+    }
+
     let homeNicheId = null;
     let homeNiche = null;
     const homeNicheResult = await supabase
@@ -164,6 +182,7 @@ exports.handler = async function (event) {
         player_inventory: inventoryResult.data || [],
         player_equipment: equipmentResult.data || null,
         player_achievements: achievementsResult.data || [],
+        player_presence: playerPresence,
         home_niche_id: homeNicheId,
         home_niche: homeNiche,
         surveys,
