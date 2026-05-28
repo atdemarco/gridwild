@@ -1,21 +1,29 @@
 # GridWild Asset Publishing
 
-This workflow publishes generated GridWild biodiversity assets to Supabase:
+This workflow publishes generated GridWild biodiversity assets:
 
-- Supabase Storage holds the actual CSV and JSON files.
+- Cloudflare R2 can hold the actual CSV and JSON files for CDN delivery.
+- Supabase Storage can still be used as the legacy/default blob backend.
 - Supabase Postgres holds build and superchunk metadata for lookup.
 - The `service_role` key is used only from local scripts or CI, never browser code.
 
-## 1. Create the Storage Bucket
+## 1. Create the Blob Storage Bucket
 
-In the Supabase dashboard:
+### Cloudflare R2
 
-1. Open your project.
-2. Go to Storage.
-3. Create a new bucket named `gridwild-assets`.
-4. Make it public.
+In the Cloudflare dashboard:
 
-For now, a public bucket is the simplest fit because these are public map assets. Public files can later be fetched by the Netlify frontend without signed URLs.
+1. Go to R2 Object Storage.
+2. Create a bucket named `gridwild-assets`.
+3. Connect a custom domain such as `assets.gridwild.com`.
+4. Add a CORS policy that allows `https://gridwild.com`, `https://www.gridwild.com`, and local development origins.
+5. Add a cache rule for `assets.gridwild.com` so JSON and CSV files are eligible for cache.
+
+R2 is the preferred backend for large public assets because it avoids sending public asset bandwidth through Supabase Storage.
+
+### Supabase Storage Legacy Backend
+
+If you want to publish blobs to Supabase Storage instead, create a public bucket named `gridwild-assets` in the Supabase dashboard. This is still supported by leaving `GRIDWILD_STORAGE_BACKEND` unset or setting it to `supabase`.
 
 ## 2. Create the Postgres Tables
 
@@ -40,7 +48,7 @@ Find these values in Supabase Project Settings:
 
 Do not expose the `service_role` key in frontend code.
 
-For deployed Netlify functions, also add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and optionally `GRIDWILD_STORAGE_BUCKET` in Netlify Site configuration > Environment variables. The local `.env` file is only read by local scripts and local Netlify development.
+For deployed Netlify functions, add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `GRIDWILD_ASSET_PUBLIC_BASE` in Netlify Site configuration > Environment variables. The local `.env` file is only read by local scripts and local Netlify development.
 
 You can create a local `.env` file:
 
@@ -48,10 +56,26 @@ You can create a local `.env` file:
 SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
 GRIDWILD_ASSET_DIR=C:\Users\ad1470\Documents\GRIDWILD_ASSETS
-GRIDWILD_STORAGE_BUCKET=gridwild-assets
+
+GRIDWILD_STORAGE_BACKEND=r2
+GRIDWILD_R2_BUCKET=gridwild-assets
+GRIDWILD_ASSET_PUBLIC_BASE=https://assets.gridwild.com
+CLOUDFLARE_ACCOUNT_ID=YOUR_CLOUDFLARE_ACCOUNT_ID
+R2_ACCESS_KEY_ID=YOUR_R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY=YOUR_R2_SECRET_ACCESS_KEY
 ```
 
-`GRIDWILD_STORAGE_BUCKET` is optional and defaults to `gridwild-assets`.
+`GRIDWILD_STORAGE_BACKEND` defaults to `supabase` for backward compatibility. Use `r2` to upload blobs to Cloudflare R2 while keeping Supabase Postgres as the metadata store.
+
+`GRIDWILD_R2_BUCKET` and `GRIDWILD_STORAGE_BUCKET` both default to `gridwild-assets`.
+
+`GRIDWILD_ASSET_PUBLIC_BASE` is used by the Netlify function to return CDN URLs. For production, also set it in Netlify:
+
+```env
+GRIDWILD_ASSET_PUBLIC_BASE=https://assets.gridwild.com
+```
+
+Do not commit `.env`; it contains service keys.
 
 ## 4. Publish Assets
 
@@ -61,6 +85,12 @@ From PowerShell:
 $env:SUPABASE_URL="https://YOUR_PROJECT_ID.supabase.co"
 $env:SUPABASE_SERVICE_ROLE_KEY="YOUR_SERVICE_ROLE_KEY"
 $env:GRIDWILD_ASSET_DIR="C:\Users\ad1470\Documents\GRIDWILD_ASSETS"
+$env:GRIDWILD_STORAGE_BACKEND="r2"
+$env:GRIDWILD_R2_BUCKET="gridwild-assets"
+$env:GRIDWILD_ASSET_PUBLIC_BASE="https://assets.gridwild.com"
+$env:CLOUDFLARE_ACCOUNT_ID="YOUR_CLOUDFLARE_ACCOUNT_ID"
+$env:R2_ACCESS_KEY_ID="YOUR_R2_ACCESS_KEY_ID"
+$env:R2_SECRET_ACCESS_KEY="YOUR_R2_SECRET_ACCESS_KEY"
 npm.cmd run publish:grid-assets
 ```
 
@@ -70,6 +100,12 @@ From Git Bash:
 SUPABASE_URL="https://YOUR_PROJECT_ID.supabase.co" \
 SUPABASE_SERVICE_ROLE_KEY="YOUR_SERVICE_ROLE_KEY" \
 GRIDWILD_ASSET_DIR="/c/Users/ad1470/Documents/GRIDWILD_ASSETS" \
+GRIDWILD_STORAGE_BACKEND="r2" \
+GRIDWILD_R2_BUCKET="gridwild-assets" \
+GRIDWILD_ASSET_PUBLIC_BASE="https://assets.gridwild.com" \
+CLOUDFLARE_ACCOUNT_ID="YOUR_CLOUDFLARE_ACCOUNT_ID" \
+R2_ACCESS_KEY_ID="YOUR_R2_ACCESS_KEY_ID" \
+R2_SECRET_ACCESS_KEY="YOUR_R2_SECRET_ACCESS_KEY" \
 npm run publish:grid-assets
 ```
 
@@ -89,7 +125,7 @@ builds/<manifest.build_id>/squares_genus_summary.json
 builds/<manifest.build_id>/square_genera_superchunks/super_123_456.json
 ```
 
-The script is safe to rerun for the same build. It overwrites Storage objects and upserts Postgres rows.
+The script is safe to rerun for the same build. It overwrites Storage/R2 objects and upserts Postgres rows.
 
 ## 5. Verify
 
@@ -118,16 +154,18 @@ You should see:
 - One row in `gw_asset_builds` for the published build.
 - One row in `gw_superchunks` per manifest superchunk.
 - Exactly one current build with `is_current = true`.
-- Files in Storage under `gridwild-assets/builds/<build_id>/`.
+- Files in R2 or Storage under `gridwild-assets/builds/<build_id>/`.
+- Public CDN URLs under `https://assets.gridwild.com/builds/<build_id>/` when using R2.
 
 ## Notes
 
-- Keep only a few recent builds on the free Supabase plan. The current asset set is roughly 122 MB per build.
+- Keep only a few recent builds on the free Supabase plan if using Supabase Storage. The current asset set is roughly 122 MB per build.
+- R2 object paths are build-versioned, so long-lived caching is safe as long as published build contents are immutable.
 - Do not upload `square_genera_chunks/` unless the runtime needs it. The publish workflow uses the manifest's `superchunks` list.
 
 ## Frontend Runtime
 
-The frontend loads the current build through `/.netlify/functions/get-grid-assets-build`. That function uses the server-side `SUPABASE_SERVICE_ROLE_KEY` to read `gw_asset_builds`, then returns public Storage URLs for:
+The frontend loads the current build through `/.netlify/functions/get-grid-assets-build`. That function uses the server-side `SUPABASE_SERVICE_ROLE_KEY` to read `gw_asset_builds`, then returns public URLs for:
 
 - `manifest.json`
 - `dc_heat.csv`
@@ -135,7 +173,9 @@ The frontend loads the current build through `/.netlify/functions/get-grid-asset
 - `squares_genus_summary.json`
 - `square_genera_superchunks/`
 
-The browser never receives the `service_role` key.
+If `GRIDWILD_ASSET_PUBLIC_BASE` is set, those URLs point to Cloudflare R2/CDN. Otherwise, they fall back to Supabase Storage public URLs.
+
+The browser never receives the `service_role` key or R2 write credentials.
 
 By default the browser uses Supabase assets and falls back to local `assets/` files if the catalog function is unavailable. For local development, you can force a mode with:
 

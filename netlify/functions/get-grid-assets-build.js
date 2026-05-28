@@ -7,9 +7,22 @@ const supabase = createClient(
 );
 
 const bucket = process.env.GRIDWILD_STORAGE_BUCKET || "gridwild-assets";
+const publicAssetBase = process.env.GRIDWILD_ASSET_PUBLIC_BASE;
+
+function joinPublicUrl(base, storagePath) {
+  return [
+    String(base || "").replace(/\/+$/g, ""),
+    String(storagePath || "").replace(/^\/+/g, ""),
+  ].filter(Boolean).join("/");
+}
 
 function publicUrl(storagePath) {
   if (!storagePath) return null;
+
+  if (publicAssetBase) {
+    return joinPublicUrl(publicAssetBase, storagePath);
+  }
+
   const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath);
   return data?.publicUrl || null;
 }
@@ -54,6 +67,7 @@ exports.handler = async function () {
       },
       body: JSON.stringify({
         bucket,
+        publicAssetBase: publicAssetBase || null,
         build,
         urls: {
           manifest: publicUrl(`${build.asset_root}/manifest.json`),

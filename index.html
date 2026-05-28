@@ -2056,7 +2056,7 @@
       </label>
 
       <label class="gw-row">
-      <input type="checkbox" id="toggleOsmBuildings" />
+      <input type="checkbox" id="toggleOsmBuildings" checked />
       <span>Show OSM structures</span>
       </label>
 
@@ -3414,9 +3414,9 @@ window.refreshQuestBadge = refreshQuestBadge;
       function loadSaved() {
         try {
           const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
-          return state.highContrastLensEnabled === true;
+          return state.highContrastLensEnabled !== false;
         } catch {
-          return false;
+          return true;
         }
       }
 
@@ -3875,6 +3875,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         window.__gwState.playerEquipment = data.player_equipment || null;
 
         window.__gwState.playerAchievements = data.player_achievements || [];
+        window.__gwState.identificationClaims = data.identification_claims || [];
+        window.GridWildIdentificationEvidence?.mergeServerClaims?.(data.identification_claims || []);
         window.__gwState.playerPresence = data.player_presence || null;
         window.__gwState.homeNicheId = data.home_niche_id || null;
         window.__gwState.homeNiche = data.home_niche || null;

@@ -1912,6 +1912,11 @@
     rerenderQuestSheetPanel();
   });
 
+  window.addEventListener("gwIdentificationClaimsChanged", () => {
+    rerenderActiveModal();
+    rerenderQuestSheetPanel();
+  });
+
   injectStyles();
 
   window.GridWildIdentify = {

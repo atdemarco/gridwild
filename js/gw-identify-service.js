@@ -42,6 +42,95 @@
     window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
   }
 
+  function claimKey(claim) {
+    return [
+      claim?.questId || "",
+      claim?.observationId || ""
+    ].join("::");
+  }
+
+  function sortClaims(claims) {
+    return (claims || [])
+      .slice()
+      .sort((a, b) => String(b.claimedAt || "").localeCompare(String(a.claimedAt || "")));
+  }
+
+  function upsertLocalClaim(claim) {
+    const key = claimKey(claim);
+    const next = loadClaims().filter(row => claimKey(row) !== key);
+    saveClaims(sortClaims([claim, ...next]));
+  }
+
+  function normalizeServerClaim(row) {
+    if (!row) return null;
+
+    const observationIdValue = row.observation_id ?? row.observationId;
+    const taxonIdValue = Number(row.taxon_id ?? row.taxonId);
+    if (!observationIdValue || !Number.isFinite(taxonIdValue)) return null;
+
+    const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
+
+    return {
+      id: row.id || row.id === 0 ? String(row.id) : row.localId || `ident_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      serverId: row.id ? String(row.id) : row.serverId || null,
+      questId: row.quest_id ?? row.questId ?? null,
+      observationId: String(observationIdValue),
+      observationUri: row.observation_uri ?? row.observationUri ?? null,
+      taxonId: taxonIdValue,
+      taxonName: row.taxon_name ?? row.taxonName ?? "",
+      taxonCommonName: row.taxon_common_name ?? row.taxonCommonName ?? "",
+      confidence: row.confidence || "coarse",
+      source: "identification",
+      evidenceType: "identification",
+      status: row.status || "claimed",
+      mocked: Boolean(payload.mocked ?? row.mocked),
+      pendingRealSubmit: Boolean(payload.pending_real_submit ?? row.pendingRealSubmit),
+      externalId: row.external_identification_id ?? row.externalId ?? null,
+      submittedAt: row.submitted_at ?? row.submittedAt ?? null,
+      claimedAt: row.claimed_at ?? row.claimedAt ?? nowISO(),
+      user: payload.user || row.user || window.GridWildINatAuth?.getUsername?.() || "mock-identifier",
+      serverSynced: !!row.id
+    };
+  }
+
+  function mergeServerClaims(rows = []) {
+    const normalized = (Array.isArray(rows) ? rows : [])
+      .map(normalizeServerClaim)
+      .filter(Boolean);
+    if (!normalized.length) return loadClaims();
+
+    const merged = new Map(loadClaims().map(claim => [claimKey(claim), claim]));
+    normalized.forEach(claim => {
+      const previous = merged.get(claimKey(claim)) || {};
+      merged.set(claimKey(claim), {
+        ...previous,
+        ...claim,
+        localId: previous.localId || previous.id || null
+      });
+    });
+
+    const next = sortClaims([...merged.values()]);
+    saveClaims(next);
+    return next;
+  }
+
+  function mergeQuestEvidence(evidenceRow) {
+    if (!evidenceRow?.quest_id || !evidenceRow?.obs_id) return;
+
+    window.__gwState = window.__gwState || {};
+    const rows = window.__gwState.questEvidence || [];
+    const next = rows.filter(row =>
+      !(
+        String(row.quest_id) === String(evidenceRow.quest_id) &&
+        String(row.obs_id) === String(evidenceRow.obs_id) &&
+        String(row.source || row.evidence_type || "") === "identification"
+      )
+    );
+
+    window.__gwState.questEvidence = [evidenceRow, ...next];
+    window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
+  }
+
   function loadSkips() {
     return readArray(SKIP_STORAGE_KEY);
   }
@@ -128,6 +217,52 @@
     };
   }
 
+  function serverClaimPayload(input, submission, claim) {
+    const obs = input.observation || {};
+    const taxon = input.taxon || {};
+
+    return {
+      quest_id: claim.questId || null,
+      observation_id: claim.observationId,
+      observation_uri: claim.observationUri || null,
+      taxon_id: claim.taxonId,
+      taxon_name: claim.taxonName,
+      taxon_common_name: claim.taxonCommonName,
+      confidence: claim.confidence || "coarse",
+      source: "gridwild_identify",
+      status: "claimed",
+      external_identification_id: submission.externalId || null,
+      submitted_at: submission.submittedAt || null,
+      claimed_at: claim.claimedAt,
+      payload: {
+        user: claim.user,
+        mocked: !!submission.mocked,
+        pending_real_submit: !!submission.pendingRealSubmit,
+        observation: {
+          id: claim.observationId,
+          uri: claim.observationUri || null,
+          lat: obs.lat ?? null,
+          lng: obs.lng ?? null,
+          observed_on: obs.observedOn || obs.observed_on || null,
+          place: obs.place || "",
+          user: obs.user || ""
+        },
+        taxon: {
+          id: claim.taxonId,
+          name: claim.taxonName,
+          common_name: claim.taxonCommonName,
+          rank: taxon.rank || null
+        },
+        submission: {
+          mocked: !!submission.mocked,
+          pending_real_submit: !!submission.pendingRealSubmit,
+          external_id: submission.externalId || null,
+          submitted_at: submission.submittedAt || null
+        }
+      }
+    };
+  }
+
   async function submitIdentification(input = {}) {
     const token = window.GridWildINatAuth?.getToken?.() || "";
     const adapter = window.GridWildINatIdentificationAdapter;
@@ -174,11 +309,45 @@
       };
     }
 
-    const claim = makeLocalClaim(input, submission);
-    saveClaims([claim, ...loadClaims()]);
+    let claim = makeLocalClaim(input, submission);
+    let serverResult = null;
+
+    if (window.GridWildAPI?.claimIdentificationEvidence && window.GridWildAPI?.getPlayerId?.()) {
+      try {
+        serverResult = await window.GridWildAPI.claimIdentificationEvidence(
+          serverClaimPayload(input, submission, claim)
+        );
+        const serverClaim = normalizeServerClaim(serverResult?.claim);
+        if (serverClaim) {
+          claim = {
+            ...claim,
+            ...serverClaim,
+            localId: claim.id,
+            serverSynced: true
+          };
+        }
+        mergeQuestEvidence(serverResult?.evidence);
+      } catch (err) {
+        console.warn("GridWild identification claim saved locally but not synced:", err);
+        claim = {
+          ...claim,
+          serverSynced: false,
+          syncError: err.message || "Server sync failed"
+        };
+      }
+    }
+
+    upsertLocalClaim(claim);
     clearSkip(obs);
 
-    return { ok: true, claim, submission };
+    return {
+      ok: true,
+      claim,
+      submission: {
+        ...submission,
+        serverSynced: !!serverResult?.claim
+      }
+    };
   }
 
   function getStats() {
@@ -191,6 +360,7 @@
   window.GridWildIdentificationEvidence = {
     loadClaims,
     saveClaims,
+    mergeServerClaims,
     loadSkips,
     saveSkips,
     skipObservation,

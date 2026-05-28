@@ -7,6 +7,7 @@ const path = require("path");
 const { createClient } = require("@supabase/supabase-js");
 
 const DEFAULT_BUCKET = "gridwild-assets";
+const DEFAULT_STORAGE_BACKEND = "supabase";
 const SUPERCHUNK_UPSERT_BATCH_SIZE = 500;
 const UPLOAD_PROGRESS_EVERY = 250;
 const UPLOAD_MAX_ATTEMPTS = 5;
@@ -42,6 +43,21 @@ function contentTypeFor(filePath) {
   if (extension === ".json") return "application/json";
   if (extension === ".csv") return "text/csv";
   return "application/octet-stream";
+}
+
+function cacheControlForStorage(backend) {
+  if (process.env.GRIDWILD_ASSET_CACHE_CONTROL) {
+    return process.env.GRIDWILD_ASSET_CACHE_CONTROL;
+  }
+
+  if (backend === "supabase") return "31536000";
+  return "public, max-age=31536000, immutable";
+}
+
+function uploadConcurrencyFor(backend) {
+  const raw = Number.parseInt(process.env.GRIDWILD_UPLOAD_CONCURRENCY || "", 10);
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  return backend === "r2" ? 16 : 1;
 }
 
 async function readJson(filePath) {
@@ -105,28 +121,140 @@ function validateManifest(manifest) {
   });
 }
 
-async function uploadFile({ supabase, bucket, localPath, storagePath, label }) {
-  const body = await fs.readFile(localPath);
+function requireAwsSdk() {
+  try {
+    return require("@aws-sdk/client-s3");
+  } catch (error) {
+    if (error.code === "MODULE_NOT_FOUND") {
+      throw new Error("Missing @aws-sdk/client-s3. Run `npm install @aws-sdk/client-s3` before publishing to R2.");
+    }
+    throw error;
+  }
+}
 
-  for (let attempt = 1; attempt <= UPLOAD_MAX_ATTEMPTS; attempt += 1) {
-    const { error } = await supabase.storage.from(bucket).upload(storagePath, body, {
-      cacheControl: "3600",
-      contentType: contentTypeFor(localPath),
-      upsert: true,
-    });
+function getR2Endpoint() {
+  if (process.env.R2_ENDPOINT) return process.env.R2_ENDPOINT;
+  if (process.env.CLOUDFLARE_R2_ENDPOINT) return process.env.CLOUDFLARE_R2_ENDPOINT;
 
-    if (!error) return;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!accountId) {
+    throw new Error("Missing CLOUDFLARE_ACCOUNT_ID or R2_ENDPOINT for R2 publishing.");
+  }
 
-    if (attempt === UPLOAD_MAX_ATTEMPTS) {
-      throw new Error(`Failed to upload ${label} to ${storagePath}: ${error.message}`);
+  return `https://${accountId}.r2.cloudflarestorage.com`;
+}
+
+async function createStorageUploader({ backend, supabase, bucket }) {
+  if (backend === "supabase") {
+    const { error: bucketError } = await supabase.storage.getBucket(bucket);
+    if (bucketError) {
+      throw new Error(`Could not access Supabase Storage bucket "${bucket}": ${bucketError.message}`);
     }
 
-    const delayMs = UPLOAD_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1));
-    console.warn(
-      `Upload failed for ${label} (${error.message}). Retrying ${attempt + 1}/${UPLOAD_MAX_ATTEMPTS} in ${delayMs}ms...`,
-    );
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    return {
+      backend,
+      bucket,
+      async upload({ localPath, storagePath }) {
+        const body = await fs.readFile(localPath);
+        const { error } = await supabase.storage.from(bucket).upload(storagePath, body, {
+          cacheControl: cacheControlForStorage(backend),
+          contentType: contentTypeFor(localPath),
+          upsert: true,
+        });
+
+        if (error) throw error;
+      },
+    };
   }
+
+  if (backend === "r2") {
+    const accessKeyId = process.env.R2_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+
+    if (!accessKeyId) throw new Error("Missing R2_ACCESS_KEY_ID for R2 publishing.");
+    if (!secretAccessKey) throw new Error("Missing R2_SECRET_ACCESS_KEY for R2 publishing.");
+
+    const { S3Client, HeadBucketCommand, PutObjectCommand } = requireAwsSdk();
+    const client = new S3Client({
+      region: "auto",
+      endpoint: getR2Endpoint(),
+      credentials: { accessKeyId, secretAccessKey },
+      forcePathStyle: true,
+    });
+
+    await client.send(new HeadBucketCommand({ Bucket: bucket }));
+
+    return {
+      backend,
+      bucket,
+      async upload({ localPath, storagePath }) {
+        const body = await fs.readFile(localPath);
+        await client.send(new PutObjectCommand({
+          Bucket: bucket,
+          Key: storagePath,
+          Body: body,
+          CacheControl: cacheControlForStorage(backend),
+          ContentType: contentTypeFor(localPath),
+        }));
+      },
+    };
+  }
+
+  throw new Error(`Unsupported GRIDWILD_STORAGE_BACKEND "${backend}". Use "supabase" or "r2".`);
+}
+
+async function uploadFile({ uploader, localPath, storagePath, label }) {
+  for (let attempt = 1; attempt <= UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await uploader.upload({ localPath, storagePath });
+      return;
+    } catch (error) {
+      if (attempt === UPLOAD_MAX_ATTEMPTS) {
+        throw new Error(`Failed to upload ${label} to ${storagePath}: ${error.message}`);
+      }
+
+      const delayMs = UPLOAD_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1));
+      console.warn(
+        `Upload failed for ${label} (${error.message}). Retrying ${attempt + 1}/${UPLOAD_MAX_ATTEMPTS} in ${delayMs}ms...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
+async function uploadSuperchunks({ uploader, assetDir, superchunks, buildPrefix }) {
+  const concurrency = uploadConcurrencyFor(uploader.backend);
+  let nextIndex = 0;
+  let uploaded = 0;
+
+  console.log(`Upload concurrency: ${concurrency}`);
+
+  async function worker() {
+    while (nextIndex < superchunks.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+
+      const superchunk = superchunks[index];
+      const localPath = path.join(assetDir, superchunk.file);
+      const storagePath = joinStoragePath(buildPrefix, superchunk.file);
+
+      await uploadFile({
+        uploader,
+        localPath,
+        storagePath,
+        label: `superchunk ${superchunk.superchunk_id}`,
+      });
+
+      uploaded += 1;
+      if (uploaded % UPLOAD_PROGRESS_EVERY === 0 || uploaded === superchunks.length) {
+        console.log(`Uploaded ${uploaded}/${superchunks.length} superchunks`);
+      }
+    }
+  }
+
+  const workerCount = Math.min(concurrency, superchunks.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return uploaded;
 }
 
 function buildMetadataRow(manifest, buildPrefix) {
@@ -199,7 +327,10 @@ async function main() {
   const supabaseUrl = requiredEnv("SUPABASE_URL");
   const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
   const assetDir = requiredEnv("GRIDWILD_ASSET_DIR");
-  const bucket = process.env.GRIDWILD_STORAGE_BUCKET || DEFAULT_BUCKET;
+  const backend = (process.env.GRIDWILD_STORAGE_BACKEND || DEFAULT_STORAGE_BACKEND).toLowerCase();
+  const bucket = backend === "r2"
+    ? process.env.GRIDWILD_R2_BUCKET || process.env.GRIDWILD_STORAGE_BUCKET || DEFAULT_BUCKET
+    : process.env.GRIDWILD_STORAGE_BUCKET || DEFAULT_BUCKET;
 
   const manifestPath = path.join(assetDir, "manifest.json");
   const manifest = await readJson(manifestPath);
@@ -223,6 +354,7 @@ async function main() {
   console.log(`GridWild asset publish`);
   console.log(`Build: ${manifest.build_id}`);
   console.log(`Asset dir: ${assetDir}`);
+  console.log(`Storage backend: ${backend}`);
   console.log(`Bucket: ${bucket}`);
   console.log(`Storage prefix: ${buildPrefix}`);
   console.log(`Superchunks expected: ${manifest.superchunks.length}`);
@@ -231,10 +363,7 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { error: bucketError } = await supabase.storage.getBucket(bucket);
-  if (bucketError) {
-    throw new Error(`Could not access storage bucket "${bucket}": ${bucketError.message}`);
-  }
+  const uploader = await createStorageUploader({ backend, supabase, bucket });
 
   const normalizedSuperchunks = manifest.superchunks.map((superchunk) => ({
     ...superchunk,
@@ -278,28 +407,17 @@ async function main() {
     const file = normalizeAssetPath(asset.file || manifest[asset.manifestKey] || asset.fallback);
     const localPath = path.join(assetDir, file);
     const storagePath = joinStoragePath(buildPrefix, file);
-    await uploadFile({ supabase, bucket, localPath, storagePath, label: asset.label });
+    await uploadFile({ uploader, localPath, storagePath, label: asset.label });
     console.log(`Uploaded ${asset.label}: ${storagePath}`);
   }
 
   console.log("Uploading superchunks...");
-  let uploadedSuperchunks = 0;
-  for (const superchunk of normalizedSuperchunks) {
-    const localPath = path.join(assetDir, superchunk.file);
-    const storagePath = joinStoragePath(buildPrefix, superchunk.file);
-    await uploadFile({
-      supabase,
-      bucket,
-      localPath,
-      storagePath,
-      label: `superchunk ${superchunk.superchunk_id}`,
-    });
-
-    uploadedSuperchunks += 1;
-    if (uploadedSuperchunks % UPLOAD_PROGRESS_EVERY === 0 || uploadedSuperchunks === normalizedSuperchunks.length) {
-      console.log(`Uploaded ${uploadedSuperchunks}/${normalizedSuperchunks.length} superchunks`);
-    }
-  }
+  const uploadedSuperchunks = await uploadSuperchunks({
+    uploader,
+    assetDir,
+    superchunks: normalizedSuperchunks,
+    buildPrefix,
+  });
 
   console.log("Upserting superchunk metadata...");
   const superchunkRows = normalizedSuperchunks.map((superchunk) => buildSuperchunkRow(manifest, superchunk, buildPrefix));

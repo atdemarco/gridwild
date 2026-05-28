@@ -31,7 +31,14 @@ exports.handler = async function (event) {
     obs_id,
     source,
     status,
-    claimed_at
+    claimed_at,
+    evidence_type,
+    target_type,
+    target_id,
+    external_id,
+    confidence,
+    verification_status,
+    payload
   )
 `)
       .eq("is_active", true)

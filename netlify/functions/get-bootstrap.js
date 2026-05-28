@@ -94,6 +94,25 @@ exports.handler = async function (event) {
 
     if (achievementsResult.error) throw achievementsResult.error;
 
+    let identificationClaims = [];
+    const identificationClaimsResult = await supabase
+      .from("identification_claims")
+      .select("*")
+      .eq("player_id", player.id)
+      .order("claimed_at", { ascending: false })
+      .limit(200);
+
+    if (identificationClaimsResult.error) {
+      if (
+        identificationClaimsResult.error.code !== "42P01" &&
+        !String(identificationClaimsResult.error.message || "").includes("schema cache")
+      ) {
+        throw identificationClaimsResult.error;
+      }
+    } else {
+      identificationClaims = identificationClaimsResult.data || [];
+    }
+
     let playerPresence = null;
     const presenceResult = await supabase
       .from("player_presence")
@@ -182,6 +201,7 @@ exports.handler = async function (event) {
         player_inventory: inventoryResult.data || [],
         player_equipment: equipmentResult.data || null,
         player_achievements: achievementsResult.data || [],
+        identification_claims: identificationClaims,
         player_presence: playerPresence,
         home_niche_id: homeNicheId,
         home_niche: homeNiche,

@@ -47,7 +47,7 @@
     }
 
     return {
-      source: "supabase",
+      source: data.publicAssetBase ? "r2" : "supabase",
       build: data.build || null,
       urls: data.urls,
     };
@@ -67,7 +67,7 @@
 
       try {
         state.catalog = await fetchSupabaseCatalog();
-        console.info("GridWild assets loaded from Supabase Storage.", state.catalog.build);
+        console.info(`GridWild assets loaded from ${state.catalog.source}.`, state.catalog.build);
         return state.catalog;
       } catch (err) {
         if (mode === "supabase") throw err;

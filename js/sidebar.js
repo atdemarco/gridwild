@@ -405,11 +405,11 @@ function applySavedUIState() {
   if (byId("toggleDynamicINat"))  byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
   if (byId("toggleShimmer"))      byId("toggleShimmer").checked = s.showShimmer ?? false;
   if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? false;
-  window.__gwState.highContrastLensEnabled = s.highContrastLensEnabled === true;
+  window.__gwState.highContrastLensEnabled = s.highContrastLensEnabled ?? true;
   if (byId("toggleGodsEye"))      byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
   if (byId("toggleFogSmoothing")) byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? false;
-  if (byId("toggleOsmBuildings")) byId("toggleOsmBuildings").checked = s.showOsmBuildings ?? false;
+  if (byId("toggleOsmBuildings")) byId("toggleOsmBuildings").checked = s.showOsmBuildings ?? true;
   window.__gwFilters = window.__gwFilters || {};
   window.__gwFilters.onlyMe = s.onlyMeFilterEnabled === true;
   window.__gwState.onlyMeFilterEnabled = window.__gwFilters.onlyMe;

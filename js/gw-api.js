@@ -163,6 +163,21 @@ async claimQuestEvidence(questId, obsId, source = "observation") {
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 },
+async claimIdentificationEvidence(claim = {}) {
+  const playerId = this.getPlayerId();
+
+  const res = await fetch("/.netlify/functions/claim-identification", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...claim,
+      player_id: playerId
+    })
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+},
 async updatePlayer(patch = {}) {
   const playerId = this.getPlayerId();
 
