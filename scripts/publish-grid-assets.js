@@ -4,6 +4,8 @@ require("dotenv").config();
 
 const fs = require("fs/promises");
 const path = require("path");
+const zlib = require("zlib");
+const { promisify } = require("util");
 const { createClient } = require("@supabase/supabase-js");
 
 const DEFAULT_BUCKET = "gridwild-assets";
@@ -12,6 +14,7 @@ const SUPERCHUNK_UPSERT_BATCH_SIZE = 500;
 const UPLOAD_PROGRESS_EVERY = 250;
 const UPLOAD_MAX_ATTEMPTS = 5;
 const UPLOAD_RETRY_BASE_DELAY_MS = 1000;
+const gzipAsync = promisify(zlib.gzip);
 
 function requiredEnv(name) {
   const value = process.env[name];
@@ -43,6 +46,27 @@ function contentTypeFor(filePath) {
   if (extension === ".json") return "application/json";
   if (extension === ".csv") return "text/csv";
   return "application/octet-stream";
+}
+
+function shouldGzipForStorage(backend, filePath) {
+  if (backend !== "r2") return false;
+  if (String(process.env.GRIDWILD_R2_GZIP || "true").toLowerCase() === "false") return false;
+
+  const extension = path.extname(filePath).toLowerCase();
+  return extension === ".csv" || extension === ".json";
+}
+
+async function readStorageBody({ backend, localPath }) {
+  const body = await fs.readFile(localPath);
+
+  if (!shouldGzipForStorage(backend, localPath)) {
+    return { body, contentEncoding: null };
+  }
+
+  return {
+    body: await gzipAsync(body, { level: 9 }),
+    contentEncoding: "gzip",
+  };
 }
 
 function cacheControlForStorage(backend) {
@@ -155,7 +179,7 @@ async function createStorageUploader({ backend, supabase, bucket }) {
       backend,
       bucket,
       async upload({ localPath, storagePath }) {
-        const body = await fs.readFile(localPath);
+        const { body } = await readStorageBody({ backend, localPath });
         const { error } = await supabase.storage.from(bucket).upload(storagePath, body, {
           cacheControl: cacheControlForStorage(backend),
           contentType: contentTypeFor(localPath),
@@ -188,13 +212,14 @@ async function createStorageUploader({ backend, supabase, bucket }) {
       backend,
       bucket,
       async upload({ localPath, storagePath }) {
-        const body = await fs.readFile(localPath);
+        const { body, contentEncoding } = await readStorageBody({ backend, localPath });
         await client.send(new PutObjectCommand({
           Bucket: bucket,
           Key: storagePath,
           Body: body,
           CacheControl: cacheControlForStorage(backend),
           ContentType: contentTypeFor(localPath),
+          ContentEncoding: contentEncoding || undefined,
         }));
       },
     };

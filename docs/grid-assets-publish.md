@@ -69,6 +69,8 @@ R2_SECRET_ACCESS_KEY=YOUR_R2_SECRET_ACCESS_KEY
 
 `GRIDWILD_R2_BUCKET` and `GRIDWILD_STORAGE_BUCKET` both default to `gridwild-assets`.
 
+R2 publishes `.csv` and `.json` objects with `Content-Encoding: gzip` by default while keeping the same public URLs. Set `GRIDWILD_R2_GZIP=false` only for debugging.
+
 `GRIDWILD_ASSET_PUBLIC_BASE` is used by the Netlify function to return CDN URLs. For production, also set it in Netlify:
 
 ```env
