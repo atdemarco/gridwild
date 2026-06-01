@@ -5,14 +5,7 @@
 (function () {
   const STORAGE_KEY = "gw_quests_v1";
 
-  const TAXON_FLAVORS = {
-    Any:       { label: "Any life", icon: "🌎" },
-    Insecta:  { label: "Insects", icon: "🐛" },
-    Plantae:  { label: "Plants", icon: "🌿" },
-    Fungi:    { label: "Fungi", icon: "🍄" },
-    Aves:     { label: "Birds", icon: "🐦" },
-    Mammalia: { label: "Mammals", icon: "🦝" }
-  };
+  const TAXON_FLAVORS = window.GridWildTaxonomy?.questTaxa || {};
 
   const OBJECTIVES = {
     any_observation: {

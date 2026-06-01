@@ -24,6 +24,33 @@ function updateUserMarkerHeading(headingDeg = 0) {
   }
 }
 
+function gpsCircleEnabled() {
+  return window.__gwState?.showGpsCircle === true;
+}
+
+function removeGpsAccuracyCircle() {
+  if (!accuracyCircle) return;
+  map.removeLayer(accuracyCircle);
+  accuracyCircle = null;
+}
+
+function syncGpsAccuracyCircle(latlng, accuracyMeters) {
+  if (!gpsCircleEnabled()) {
+    removeGpsAccuracyCircle();
+    return;
+  }
+
+  if (!accuracyCircle) {
+    accuracyCircle = L.circle(latlng, {
+      radius: Math.max(accuracyMeters || 0, 5)
+    }).addTo(map);
+    return;
+  }
+
+  accuracyCircle.setLatLng(latlng);
+  accuracyCircle.setRadius(Math.max(accuracyMeters || 0, 5));
+}
+
 function setUserLocation(lat, lng, accuracyMeters) {
       window.__gwLastUserLocation = {
         lat: Number(lat),
@@ -44,14 +71,7 @@ function setUserLocation(lat, lng, accuracyMeters) {
         updateUserMarkerHeading(lastHeading ?? 0);
       }
 
-      if (!accuracyCircle) {
-        accuracyCircle = L.circle(latlng, {
-          radius: Math.max(accuracyMeters || 0, 5)
-        }).addTo(map);
-      } else {
-        accuracyCircle.setLatLng(latlng);
-        accuracyCircle.setRadius(Math.max(accuracyMeters || 0, 5));
-      }
+      syncGpsAccuracyCircle(latlng, accuracyMeters);
 
       const zoom = map.getZoom();
       const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
@@ -59,12 +79,16 @@ function setUserLocation(lat, lng, accuracyMeters) {
       const metersPerPixel = getMapResolution();
       const cellMeters = 20 * 0.3048; // same constant used in grid code
       const cellPixels = (cellMeters / metersPerPixel).toFixed(0);
+      const accuracyLabel = window.GridWildUnits?.formatDistance?.(accuracyMeters) ||
+        `${Math.round(accuracyMeters)} m`;
+      const resolutionLabel = window.GridWildUnits?.formatDistance?.(metersPerPixel) ||
+        `${metersPerPixel.toFixed(2)} m`;
 
       hud.innerHTML =
-        `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (±${Math.round(accuracyMeters)} m)
-        <span style="opacity:.65"> <br>Zoom ×${zoomMultiplier}
-        • ${metersPerPixel.toFixed(2)} m/px
-        • cell ≈ ${cellPixels}px
+        `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (&plusmn;${accuracyLabel})
+        <span style="opacity:.65"> <br>Zoom x${zoomMultiplier}
+        &bull; ${resolutionLabel}/px
+        &bull; cell approx ${cellPixels}px
         </span>`;
 
         if (window.GridWildOverviewMap) {
@@ -778,6 +802,93 @@ function getMapResolution() {
 
   return metersPerPixel;
 }
+
+const GW_SCALE_TARGET_PX = 78;
+const GW_SCALE_MIN_PX = 44;
+const GW_SCALE_MAX_PX = 118;
+
+function scaleDistanceCandidates() {
+  if (window.GridWildUnits?.metricEnabled?.()) {
+    return [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+  }
+
+  return [
+    10 / 3.280839895,
+    25 / 3.280839895,
+    50 / 3.280839895,
+    100 / 3.280839895,
+    200 / 3.280839895,
+    100 / 1.0936132983,
+    200 / 1.0936132983,
+    0.25 / 0.0006213711922,
+    0.5 / 0.0006213711922,
+    1 / 0.0006213711922
+  ];
+}
+
+function chooseScaleDistance(metersPerPixel) {
+  const candidates = scaleDistanceCandidates()
+    .map(meters => ({ meters, px: meters / metersPerPixel }))
+    .filter(entry => entry.px >= GW_SCALE_MIN_PX && entry.px <= GW_SCALE_MAX_PX);
+
+  if (candidates.length) {
+    return candidates.sort((a, b) =>
+      Math.abs(a.px - GW_SCALE_TARGET_PX) - Math.abs(b.px - GW_SCALE_TARGET_PX)
+    )[0];
+  }
+
+  return scaleDistanceCandidates()
+    .map(meters => ({ meters, px: meters / metersPerPixel }))
+    .sort((a, b) =>
+      Math.abs(a.px - GW_SCALE_TARGET_PX) - Math.abs(b.px - GW_SCALE_TARGET_PX)
+    )[0];
+}
+
+function formatZoomMultiplier() {
+  const multiplier = Math.pow(2, map.getZoom() - 17);
+  if (!Number.isFinite(multiplier) || multiplier <= 0) return "x1";
+
+  if (multiplier >= 10) return `x${multiplier.toFixed(0)}`;
+  if (multiplier >= 1) return `x${multiplier.toFixed(2).replace(/\.?0+$/, "")}`;
+  return `x${multiplier.toFixed(2)}`;
+}
+
+let scaleHatchRaf = null;
+
+function updateMapScaleHatch() {
+  const hatch = document.getElementById("gwMapScaleHatch");
+  const label = document.getElementById("gwMapScaleHatchLabel");
+  if (!hatch || !label) return;
+
+  const scale = chooseScaleDistance(getMapResolution());
+  if (!scale) return;
+
+  hatch.style.width = `${Math.round(scale.px)}px`;
+  const distanceLabel = window.GridWildUnits?.formatDistance?.(scale.meters) ||
+    `${Math.round(scale.meters)} m`;
+  label.textContent = `${distanceLabel} ${formatZoomMultiplier()}`;
+}
+
+function scheduleMapScaleHatch() {
+  if (scaleHatchRaf) return;
+  scaleHatchRaf = requestAnimationFrame(() => {
+    scaleHatchRaf = null;
+    updateMapScaleHatch();
+  });
+}
+
+map.on("zoom zoomend move moveend resize", scheduleMapScaleHatch);
+window.addEventListener("gridwild:unitschange", scheduleMapScaleHatch);
+setTimeout(scheduleMapScaleHatch, 0);
+
+window.addEventListener("gridwild:gpscirclechange", () => {
+  if (!lastFix) {
+    removeGpsAccuracyCircle();
+    return;
+  }
+
+  setUserLocation(lastFix.latitude, lastFix.longitude, lastFix.accuracy);
+});
 
 window.enableLocationLock = enableLocationLock;
 window.cycleLocationLock = cycleLocationLock;

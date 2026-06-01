@@ -45,6 +45,10 @@
       pointer-events: none !important;
     }
 
+    .leaflet-control-zoom {
+      display: none !important;
+    }
+
     #sheetLensBody > .gw-card{
       margin-bottom:14px;
     }
@@ -240,6 +244,39 @@
       margin-top: 7px;
     }
 
+    .gw-map-scale-hatch {
+      position: absolute;
+      left: 14px;
+      bottom: max(100px, calc(env(safe-area-inset-bottom) + 90px));
+      z-index: 1200;
+      width: 78px;
+      pointer-events: none;
+      color: rgba(22,24,20,0.82);
+      text-shadow:
+        0 1px 0 rgba(255,255,255,0.88),
+        0 0 4px rgba(255,255,255,0.72);
+      opacity: 0.9;
+    }
+
+    .gw-map-scale-hatch-line {
+      position: relative;
+      height: 8px;
+      border-left: 2px solid rgba(22,24,20,0.72);
+      border-right: 2px solid rgba(22,24,20,0.72);
+      border-bottom: 2px solid rgba(22,24,20,0.78);
+      filter: drop-shadow(0 1px 0 rgba(255,255,255,0.9));
+    }
+
+    .gw-map-scale-hatch-label {
+      margin-top: 3px;
+      font-size: 10px;
+      font-weight: 850;
+      line-height: 1;
+      text-align: center;
+      white-space: nowrap;
+      color: rgba(22,24,20,0.84);
+    }
+
     #gwHudLegend {
       display: none;
     }
@@ -394,6 +431,16 @@
       letter-spacing: 0;
     }
 
+    #gwHudNicheLayerToggle {
+      display: none !important;
+    }
+
+    .gw-hud-sparkle-btn {
+      color: rgba(255, 234, 176, 0.78);
+      filter: none;
+      opacity: 0.86;
+    }
+
     .gw-hud-blast-btn {
       position: relative;
       color: rgba(255, 224, 142, 0.78);
@@ -498,6 +545,13 @@
       background:
         radial-gradient(circle at 50% 38%, rgba(139,211,168,0.34), rgba(64,144,94,0.12) 58%, rgba(255,255,255,0.04) 100%);
       box-shadow: inset 0 0 0 1px rgba(139,211,168,0.42), 0 0 8px rgba(139,211,168,0.18);
+    }
+
+    .gw-hud-sparkle-btn.is-on {
+      color: #fff4c8;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(255,234,176,0.36), rgba(128,198,154,0.13) 58%, rgba(255,255,255,0.04) 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,234,176,0.42), 0 0 8px rgba(255,234,176,0.18);
     }
 
     .gw-hud-blast-btn.is-ready.is-on {
@@ -2213,7 +2267,7 @@
           <path d="m8 12.5 2.7 2.7L16.5 9"></path>
         </svg>
       </button>
-      <button class="gw-hud-taxa-btn gw-hud-heat-btn" id="gwHudHeatToggle" type="button" data-gw-hud-heat aria-label="Toggle heat overlay" title="Heat overlay">
+      <button class="gw-hud-taxa-btn gw-hud-heat-btn" id="gwHudHeatToggle" type="button" data-gw-hud-heat aria-label="Toggle heat overlay" title="Heat overlay" onclick="setTimeout(function(){ window.reconcileGridWildHudHeat && window.reconcileGridWildHudHeat(); }, 0)">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M8.5 14.5a3.5 3.5 0 1 0 7 0c0-1.5-.8-2.5-1.8-3.7-.8-1-1.7-2.1-1.7-3.8-2.1 1.4-3.5 3.5-3.5 7.5z"></path>
           <path d="M12 18a1.7 1.7 0 0 0 1.7-1.7c0-.8-.4-1.3-1-1.9-.4-.5-.7-1-.7-1.7-1 .8-1.7 1.9-1.7 3.6A1.7 1.7 0 0 0 12 18z"></path>
@@ -2227,6 +2281,12 @@
         </svg>
       </button>
       <button class="gw-hud-taxa-btn gw-hud-niche-btn" id="gwHudNicheLayerToggle" type="button" aria-label="Toggle local niches layer" title="Local niches">N</button>
+      <button class="gw-hud-taxa-btn gw-hud-sparkle-btn" id="gwHudNicheSparkleToggle" type="button" aria-label="Toggle Niche Sparkle" title="Niche Sparkle">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 3.8 13.8 9l5.4 1.2-4.1 3.7.5 5.5L12 16.6l-3.6 2.8.5-5.5-4.1-3.7L10.2 9 12 3.8z"></path>
+          <path d="M19.5 3.8v3.4M17.8 5.5h3.4M4.5 17.2v3M3 18.7h3"></path>
+        </svg>
+      </button>
     </div>
     <div class="gw-hud-geometry-foldout" id="gwHudGeometryFoldout" hidden>
       <label class="gw-hud-coarse" title="Render the heat overlay as local median bins">
@@ -2271,6 +2331,11 @@
         <span id="gpsHealthIcon" class="gps-health gps-unknown">?</span>
       </button>
     </div>
+  </div>
+
+  <div class="gw-map-scale-hatch" id="gwMapScaleHatch" aria-hidden="true">
+    <div class="gw-map-scale-hatch-line"></div>
+    <div class="gw-map-scale-hatch-label" id="gwMapScaleHatchLabel"></div>
   </div>
 
   <!-- Backdrop -->
@@ -2606,6 +2671,7 @@
   </script>
 
   <script src="js/gw-api.js"></script>
+  <script src="js/gw-taxonomy.js"></script>
   <script src="js/gw-player-ui.js"></script>
 
   <script src="js/mapinit.js"></script>
@@ -2662,6 +2728,7 @@
 
   <script src="js/gw-quests.js"></script>
   <script src="js/gw-local-niches.js"></script>
+  <script src="js/gw-cell-seeded-niches.js"></script>
   
   <script src="js/gw-campaign-designer.js"></script>
   <script src="js/gw-campaign-layer.js"></script>
@@ -2669,6 +2736,7 @@
   <script src="js/gw-onboarding.js"></script>
   <script src="js/gw-genus-codex.js"></script>
   <script src="js/gw-field-marks.js"></script>
+  <script src="js/gw-field-guide-book.js"></script>
   <script src="js/gw-classroom.js"></script>
   <script src="js/gw-classroom-loop.js"></script>
   <script src="js/gw-party.js"></script>
@@ -3157,8 +3225,33 @@ window.refreshQuestBadge = refreshQuestBadge;
         return `${name} ${enabled ? "on" : "off"}`;
       }
 
+      function invalidateHeatCaches() {
+        window.GridWildMeOverlayFilter?.invalidate?.();
+        window.GridWildCoarseHeatCache?.invalidate?.();
+        window.GridWildCoarseHeatTileCache?.invalidate?.();
+      }
+
+      function saveUiState() {
+        if (typeof saveUIState === "function") saveUIState();
+      }
+
+      function updateGridNow() {
+        if (typeof window.updateGrid === "function") {
+          window.updateGrid();
+        } else if (typeof updateGrid === "function") {
+          updateGrid();
+        }
+      }
+
       function realCheckbox(iconic) {
         return document.querySelector(`input[data-iconic="${iconic}"]`);
+      }
+
+      function selectedIconicTaxa() {
+        return Array.from(document.querySelectorAll("input[data-iconic]"))
+          .filter(input => input.checked)
+          .map(input => input.dataset.iconic)
+          .filter(Boolean);
       }
 
       function fogCheckbox() {
@@ -3193,13 +3286,101 @@ window.refreshQuestBadge = refreshQuestBadge;
         return document.getElementById("gwHudNicheLayerToggle");
       }
 
+      function sparkleButton() {
+        return document.getElementById("gwHudNicheSparkleToggle");
+      }
+
       function meButton() {
         return document.getElementById("gwHudMeToggle");
       }
 
+      function applyIconicFilterChange() {
+        window.__gwFilters = window.__gwFilters || {};
+        window.__gwFilters.iconicTaxa = selectedIconicTaxa();
+
+        invalidateHeatCaches();
+        window.dispatchEvent(new CustomEvent("gridwild:filterschange", {
+          detail: { iconicTaxa: window.__gwFilters.iconicTaxa }
+        }));
+        saveUiState();
+        updateGridNow();
+
+        if (window.__gwState?.dynamicINatEnabled &&
+            typeof window.maybeRefreshDynamicINat === "function") {
+          window.maybeRefreshDynamicINat(true);
+        }
+      }
+
+      function applyFogChange(checked) {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.showFog = checked === true;
+        saveUiState();
+        updateGridNow();
+        window.GridWildFogCanvas?.render?.();
+        window.GridWildFogCanvas?.scheduleRender?.();
+        window.GridWildHudCompactLegend?.refresh?.();
+      }
+
+      function applyOsmChange(checked) {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.showOsmFeatures = checked === true;
+        window.__gwState.showOsmBuildings = checked === true;
+        saveUiState();
+        window.GridWildOsmFeaturesLayer?.setFeatureVisible?.("buildings", checked === true);
+        window.GridWildOsmFeaturesLayer?.render?.();
+        window.GridWildOsmFeaturesLayer?.scheduleRender?.();
+        window.GridWildOsmPriorsLayer?.render?.();
+        window.GridWildOsmPriorsLayer?.scheduleRender?.();
+        updateGridNow();
+      }
+
+      function applyHeatChange(checked) {
+        const enabled = checked === true;
+        window.__gwFilters = window.__gwFilters || {};
+        window.__gwFilters.showHeat = enabled;
+        saveUiState();
+
+        if (typeof window.applyGridWildHeatVisibility === "function") {
+          window.applyGridWildHeatVisibility(enabled);
+        } else if (typeof window.setHeatVisible === "function") {
+          window.setHeatVisible(enabled);
+        } else {
+          updateGridNow();
+        }
+
+        const heatPane = window.map?.getPane?.("gridHeatPane");
+        if (heatPane) {
+          if (enabled) heatPane.style.removeProperty("display");
+          else heatPane.style.setProperty("display", "none", "important");
+        }
+
+        const heatCanvas = document.getElementById("gwGridHeatCanvas");
+        if (heatCanvas) {
+          heatCanvas.style.setProperty("display", enabled ? "block" : "none", "important");
+        }
+
+        const heat = heatButton();
+        if (heat) heat.dataset.gwHeatEnabled = enabled ? "true" : "false";
+      }
+
+      window.reconcileGridWildHudHeat = function reconcileGridWildHudHeat() {
+        applyHeatChange(heatCheckbox()?.checked === true);
+        sync();
+      };
+
       const BLAST_COOLDOWN_MS = 60000;
       let blastCooldownTimer = null;
       let blastReadyAt = 0;
+      let suppressMirroredChange = false;
+
+      function dispatchMirroredChange(el) {
+        suppressMirroredChange = true;
+        try {
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        } finally {
+          suppressMirroredChange = false;
+        }
+      }
 
       function sync() {
         buttons().forEach(btn => {
@@ -3239,6 +3420,14 @@ window.refreshQuestBadge = refreshQuestBadge;
           niche.setAttribute("aria-pressed", nicheChecked ? "true" : "false");
         }
 
+        const sparkle = sparkleButton();
+        const sparkleChecked = window.GridWildCellSeededNiches?.sparklesVisible?.() ??
+          (window.__gwState?.showNicheSparkles === true);
+        if (sparkle) {
+          sparkle.classList.toggle("is-on", sparkleChecked);
+          sparkle.setAttribute("aria-pressed", sparkleChecked ? "true" : "false");
+        }
+
         const me = meButton();
         const meChecked = window.__gwFilters?.onlyMe === true;
         if (me) {
@@ -3252,7 +3441,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         if (!real) return;
 
         real.checked = !real.checked;
-        real.dispatchEvent(new Event("change", { bubbles: true }));
+        dispatchMirroredChange(real);
+        applyIconicFilterChange();
         sync();
         const label = document.querySelector(`[data-gw-hud-iconic="${iconic}"]`)?.title || iconic;
         toast(stateLabel(label, real.checked));
@@ -3263,7 +3453,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         if (!real) return;
 
         real.checked = !real.checked;
-        real.dispatchEvent(new Event("change", { bubbles: true }));
+        dispatchMirroredChange(real);
+        applyFogChange(real.checked);
         sync();
         toast(stateLabel("Fog", real.checked));
       }
@@ -3273,7 +3464,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         if (!real) return;
 
         real.checked = !real.checked;
-        real.dispatchEvent(new Event("change", { bubbles: true }));
+        dispatchMirroredChange(real);
+        applyOsmChange(real.checked);
         sync();
         toast(stateLabel("House layer", real.checked));
       }
@@ -3283,7 +3475,8 @@ window.refreshQuestBadge = refreshQuestBadge;
         if (!real) return;
 
         real.checked = !real.checked;
-        real.dispatchEvent(new Event("change", { bubbles: true }));
+        dispatchMirroredChange(real);
+        applyHeatChange(real.checked);
         sync();
         toast(stateLabel("Heat", real.checked));
       }
@@ -3344,6 +3537,16 @@ window.refreshQuestBadge = refreshQuestBadge;
         toast(stateLabel("Local niches", next));
       }
 
+      function toggleNicheSparkles() {
+        window.__gwState = window.__gwState || {};
+        const next = window.GridWildCellSeededNiches?.toggleSparkles?.({ silent: true }) ??
+          (window.__gwState.showNicheSparkles = window.__gwState.showNicheSparkles !== true);
+
+        if (typeof saveUIState === "function") saveUIState();
+        sync();
+        toast(stateLabel("Niche Sparkle", next));
+      }
+
       function toggleMe() {
         window.__gwFilters = window.__gwFilters || {};
         window.__gwFilters.onlyMe = window.__gwFilters.onlyMe !== true;
@@ -3351,6 +3554,7 @@ window.refreshQuestBadge = refreshQuestBadge;
 
         window.GridWildMeOverlayFilter?.invalidate?.();
         window.GridWildCoarseHeatCache?.invalidate?.();
+        window.GridWildCoarseHeatTileCache?.invalidate?.();
         window.dispatchEvent(new CustomEvent("gridwild:filterschange", {
           detail: { onlyMe: window.__gwFilters.onlyMe === true }
         }));
@@ -3378,24 +3582,37 @@ window.refreshQuestBadge = refreshQuestBadge;
         });
         meButton()?.addEventListener("click", toggleMe);
         heatButton()?.addEventListener("click", toggleHeat);
+        heatButton()?.addEventListener("click", () => {
+          setTimeout(() => {
+            applyHeatChange(heatCheckbox()?.checked === true);
+            sync();
+          }, 0);
+        });
         blastButton()?.addEventListener("click", triggerVisionBlast);
         nicheButton()?.addEventListener("click", toggleNicheLayer);
+        sparkleButton()?.addEventListener("click", toggleNicheSparkles);
         syncBlastButton();
 
         document.addEventListener("change", evt => {
           if (evt.target?.matches?.('input[data-iconic]')) {
-            window.GridWildMeOverlayFilter?.invalidate?.();
-            window.GridWildCoarseHeatCache?.invalidate?.();
+            if (!suppressMirroredChange) applyIconicFilterChange();
             sync();
           }
           if (evt.target?.id === "toggleFog") {
+            if (!suppressMirroredChange) applyFogChange(evt.target.checked);
             sync();
-            window.GridWildHudCompactLegend?.refresh?.();
           }
-          if (evt.target?.id === "toggleOsmBuildings") sync();
-          if (evt.target?.id === "toggleHeat") sync();
+          if (evt.target?.id === "toggleOsmBuildings") {
+            if (!suppressMirroredChange) applyOsmChange(evt.target.checked);
+            sync();
+          }
+          if (evt.target?.id === "toggleHeat") {
+            if (!suppressMirroredChange) applyHeatChange(evt.target.checked);
+            sync();
+          }
         });
 
+        window.addEventListener("gridwild:nichesparklechange", sync);
         window.addEventListener("DOMContentLoaded", () => setTimeout(sync, 0));
         setTimeout(sync, 0);
       }
@@ -3403,6 +3620,63 @@ window.refreshQuestBadge = refreshQuestBadge;
       return { bind, sync };
     })();
     window.GridWildHudTaxaFilter.bind();
+
+    (function bindGridWildHudHeatVisibilityFallback() {
+      const root = document.documentElement;
+      if (root.dataset.gwHudHeatVisibilityFallbackBound === "true") return;
+      root.dataset.gwHudHeatVisibilityFallbackBound = "true";
+
+      function saveHeatPreference(enabled) {
+        try {
+          const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+          state.showHeat = enabled === true;
+          localStorage.setItem("gw_ui_state", JSON.stringify(state));
+        } catch {}
+      }
+
+      function apply(enabled) {
+        window.__gwFilters = window.__gwFilters || {};
+        window.__gwFilters.showHeat = enabled === true;
+        saveHeatPreference(enabled === true);
+
+        const pane = window.map?.getPane?.("gridHeatPane");
+        if (pane) {
+          if (enabled) pane.style.removeProperty("display");
+          else pane.style.setProperty("display", "none", "important");
+        }
+
+        const canvas = document.getElementById("gwGridHeatCanvas");
+        if (canvas) {
+          canvas.style.setProperty("display", enabled ? "block" : "none", "important");
+        }
+
+        const btn = document.getElementById("gwHudHeatToggle");
+        if (btn) {
+          btn.dataset.gwHeatEnabled = enabled ? "true" : "false";
+          btn.classList.toggle("is-on", enabled);
+          btn.setAttribute("aria-pressed", enabled ? "true" : "false");
+        }
+      }
+
+      function reconcile() {
+        const checkbox = document.getElementById("toggleHeat");
+        apply(checkbox ? checkbox.checked === true : true);
+      }
+
+      document.addEventListener("click", evt => {
+        if (evt.target?.closest?.("#gwHudHeatToggle")) {
+          setTimeout(reconcile, 0);
+        }
+      }, true);
+
+      document.addEventListener("change", evt => {
+        if (evt.target?.id === "toggleHeat") {
+          setTimeout(reconcile, 0);
+        }
+      }, true);
+
+      setTimeout(reconcile, 0);
+    })();
 
     // Compact HUD high-contrast lens toggle. Remove #gwHudHighContrastToggle
     // plus this module and the GWLenses.applyHighContrast helper to undo it.
@@ -3495,6 +3769,9 @@ window.refreshQuestBadge = refreshQuestBadge;
       }
 
       function getBinSize() {
+        const state = window.getGridWildCoarseHeatState?.();
+        if (state) return state.effectiveBinSize;
+
         const raw = Number(window.__gwState?.coarseHeatBinSize);
         if (!Number.isFinite(raw)) return 8;
         return Math.max(2, Math.min(64, Math.round(raw)));
@@ -3516,6 +3793,11 @@ window.refreshQuestBadge = refreshQuestBadge;
       }
 
       function sync() {
+        if (typeof window.syncGridWildCoarseHeatControls === "function") {
+          window.syncGridWildCoarseHeatControls();
+          return;
+        }
+
         const real = realCheckbox();
         const hud = hudCheckbox();
         const btn = binButton();

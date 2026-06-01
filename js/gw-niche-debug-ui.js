@@ -371,8 +371,7 @@
 
   function init() {
     injectCss();
-    makeButton();
-    makePanel();
+    $("gwNicheDebugToggle")?.remove();
     window.addEventListener("gwNicheDebugUpdated", evt => updateStatus(evt.detail || {}));
   }
 

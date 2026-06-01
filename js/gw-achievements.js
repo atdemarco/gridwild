@@ -10,18 +10,7 @@
   const RANKS = ["Novice", "Apprentice", "Adept", "Master", "Grandmaster", "Legend"];
   let pendingBootstrapSync = false;
 
-  const TAXON_LINES = [
-    { key: "leafhopper", label: "Leafhopper", terms: ["leafhopper", "cicadellidae"], icon: "🟩" },
-    { key: "fern", label: "Fern", terms: ["fern", "polypodiopsida"], icon: "🌿" },
-    { key: "moss", label: "Moss", terms: ["moss", "bryophyta"], icon: "🟢" },
-    { key: "fungus", label: "Fungus", terms: ["fungi", "mushroom"], icon: "🍄" },
-    { key: "bee", label: "Bee", terms: ["bee", "apidae"], icon: "🐝" },
-    { key: "fly", label: "Fly", terms: ["fly", "diptera"], icon: "🪰" },
-    { key: "beetle", label: "Beetle", terms: ["beetle", "coleoptera"], icon: "🪲" },
-    { key: "bird", label: "Bird", terms: ["aves", "bird"], icon: "🐦" },
-    { key: "tree", label: "Tree", terms: ["tree", "quercus", "acer"], icon: "🌳" },
-    { key: "lichen", label: "Lichen", terms: ["lichen"], icon: "🪨" }
-  ];
+  const TAXON_LINES = window.GridWildTaxonomy?.taxonLines || [];
 
   const DEFINITIONS = buildDefinitions();
 
@@ -399,7 +388,10 @@ function saveStore(store) {
 
       for (const line of TAXON_LINES) {
         const hay = `${r.scientific} ${r.common} ${r.iconic}`.toLowerCase();
-        if (line.terms.some(t => hay.includes(t))) {
+        const matchesLine = window.GridWildTaxonomy?.matchesTaxonLine
+          ? window.GridWildTaxonomy.matchesTaxonLine(line, hay)
+          : line.terms.some(t => hay.includes(t));
+        if (matchesLine) {
           taxonLineCounts[line.key]++;
           if (r.genus) taxonLineGenera[line.key].add(r.genus);
         }

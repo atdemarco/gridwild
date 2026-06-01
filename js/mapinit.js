@@ -1,6 +1,6 @@
     // Map init
   window.map = L.map("map", {
-     zoomControl: true,
+     zoomControl: false,
      attributionControl: true
   });
   const map = window.map; // local alias
@@ -39,12 +39,51 @@ window.__gwState = {
   showOsmBuildings: true,
   showOsmWater: true,
   showOsmRoads: true,
+  showNicheSparkles: false,
   osmPriorsEnabled: false,
   osmPriorsMode: "path-adjacency",
   lockZoomMode: "close",
   lockZoom: 19,
+  metricUnitsEnabled: false,
+  showGpsCircle: false,
   activeLens: "classic"
 };
+
+window.GridWildUnits = window.GridWildUnits || (function () {
+  const FT_PER_M = 3.280839895;
+  const YD_PER_M = 1.0936132983;
+  const MI_PER_M = 0.0006213711922;
+
+  function metricEnabled() {
+    return window.__gwState?.metricUnitsEnabled === true;
+  }
+
+  function formatDistance(meters, options = {}) {
+    const value = Number(meters);
+    if (!Number.isFinite(value)) return options.fallback || "-";
+
+    if (metricEnabled()) {
+      if (value < 1) return `${value.toFixed(1)} m`;
+      if (value < 1000) return `${Math.round(value)} m`;
+      return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} km`;
+    }
+
+    const feet = value * FT_PER_M;
+    if (value < 91.44) return `${feet < 10 ? feet.toFixed(1) : Math.round(feet)} ft`;
+    if (value < 1609.344) return `${Math.round(value * YD_PER_M)} yd`;
+    return `${(value * MI_PER_M).toFixed(value < 16093.44 ? 1 : 0)} mi`;
+  }
+
+  function setMetricEnabled(enabled) {
+    window.__gwState = window.__gwState || {};
+    window.__gwState.metricUnitsEnabled = enabled === true;
+    window.dispatchEvent(new CustomEvent("gridwild:unitschange", {
+      detail: { metricUnitsEnabled: window.__gwState.metricUnitsEnabled }
+    }));
+  }
+
+  return { formatDistance, metricEnabled, setMetricEnabled };
+})();
 
   L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
     maxZoom: 20,

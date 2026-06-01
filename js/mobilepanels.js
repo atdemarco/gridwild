@@ -1278,7 +1278,7 @@ function renderInfoContent() {
         </button>
       </div>
 
-      <div class="gw-card">
+      <div class="gw-card" hidden>
         <div class="gw-legend-title">How to read the overlay</div>
         <div class="gw-legend-subtitle">
           Hue = observers • vividness = species • opacity = observations
@@ -1371,21 +1371,40 @@ function renderInfoContent() {
             <input type="checkbox" id="toggleLockLocation_clone" checked />
             <span>Lock to current location</span>
           </label>
-        </div>
 
-        <div class="gw-card-title" style="margin-top:14px;">Heat metric</div>
-        <div class="gw-togglegrid">
           <label class="gw-toggleline">
-            <input type="radio" name="heatMetric_clone" value="count" checked />
-            <span>n observations</span>
+            <input type="checkbox" id="toggleHighContrast_clone" />
+            <span>Contrast</span>
           </label>
+
           <label class="gw-toggleline">
-            <input type="radio" name="heatMetric_clone" value="species" />
-            <span>n species</span>
+            <input type="checkbox" id="toggleLocalNiches_clone" />
+            <span>Niches</span>
           </label>
+
           <label class="gw-toggleline">
-            <input type="radio" name="heatMetric_clone" value="observers" />
-            <span>n observers</span>
+            <input type="checkbox" id="toggleNicheSparkles_clone" />
+            <span>Niche Sparkle</span>
+          </label>
+
+          <label class="gw-toggleline">
+            <input type="checkbox" id="toggleMeFilter_clone" />
+            <span>Me</span>
+          </label>
+
+          <label class="gw-toggleline">
+            <input type="checkbox" id="toggleHaptics_clone" checked />
+            <span>Haptic enabled</span>
+          </label>
+
+          <label class="gw-toggleline">
+            <input type="checkbox" id="toggleMetricUnits_clone" />
+            <span>Metric</span>
+          </label>
+
+          <label class="gw-toggleline">
+            <input type="checkbox" id="toggleGpsCircle_clone" />
+            <span>Show GPS circle</span>
           </label>
         </div>
 
@@ -1872,6 +1891,210 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     syncCloneFromReal();
   }
 
+  function localNichesEnabled() {
+    return window.GridWildLocalNiches?.isVisible?.() ??
+      window.__gwState?.showLocalNiches !== false;
+  }
+
+  function nicheSparklesEnabled() {
+    return window.GridWildCellSeededNiches?.sparklesVisible?.() ??
+      (window.__gwState?.showNicheSparkles === true);
+  }
+
+  function hapticsEnabled() {
+    return window.__gwState?.hapticsEnabled !== false;
+  }
+
+  function metricUnitsEnabled() {
+    return window.__gwState?.metricUnitsEnabled === true;
+  }
+
+  function gpsCircleEnabled() {
+    return window.__gwState?.showGpsCircle === true;
+  }
+
+  function saveHapticsPreference() {
+    try {
+      const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+      state.hapticsEnabled = hapticsEnabled();
+      localStorage.setItem("gw_ui_state", JSON.stringify(state));
+    } catch {}
+  }
+
+  function saveMetricUnitsPreference() {
+    try {
+      const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+      state.metricUnitsEnabled = metricUnitsEnabled();
+      localStorage.setItem("gw_ui_state", JSON.stringify(state));
+    } catch {}
+  }
+
+  function saveGpsCirclePreference() {
+    try {
+      const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+      state.showGpsCircle = gpsCircleEnabled();
+      localStorage.setItem("gw_ui_state", JSON.stringify(state));
+    } catch {}
+  }
+
+  function saveNicheSparklePreference() {
+    try {
+      const state = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+      state.showNicheSparkles = nicheSparklesEnabled();
+      localStorage.setItem("gw_ui_state", JSON.stringify(state));
+    } catch {}
+  }
+
+  function syncHudOptionCloneControls() {
+    const contrast = $("toggleHighContrast_clone");
+    const niches = $("toggleLocalNiches_clone");
+    const sparkles = $("toggleNicheSparkles_clone");
+    const me = $("toggleMeFilter_clone");
+    const haptics = $("toggleHaptics_clone");
+    const metric = $("toggleMetricUnits_clone");
+    const gpsCircle = $("toggleGpsCircle_clone");
+
+    if (contrast) contrast.checked = window.__gwState?.highContrastLensEnabled === true;
+    if (niches) niches.checked = localNichesEnabled();
+    if (sparkles) sparkles.checked = nicheSparklesEnabled();
+    if (me) me.checked = window.__gwFilters?.onlyMe === true;
+    if (haptics) haptics.checked = hapticsEnabled();
+    if (metric) metric.checked = metricUnitsEnabled();
+    if (gpsCircle) gpsCircle.checked = gpsCircleEnabled();
+  }
+
+  function clickHudToggleIfNeeded(buttonId, desired, current) {
+    if (desired === current) return true;
+    const btn = document.getElementById(buttonId);
+    if (!btn) return false;
+    btn.click();
+    setTimeout(syncHudOptionCloneControls, 0);
+    return true;
+  }
+
+  function bindHudOptionCloneControls() {
+    const contrast = $("toggleHighContrast_clone");
+    const niches = $("toggleLocalNiches_clone");
+    const sparkles = $("toggleNicheSparkles_clone");
+    const me = $("toggleMeFilter_clone");
+    const haptics = $("toggleHaptics_clone");
+    const metric = $("toggleMetricUnits_clone");
+    const gpsCircle = $("toggleGpsCircle_clone");
+
+    if (contrast && contrast.dataset.bound !== "true") {
+      contrast.dataset.bound = "true";
+      contrast.addEventListener("change", () => {
+        if (window.GridWildHudHighContrast?.apply) {
+          window.GridWildHudHighContrast.apply(contrast.checked);
+        } else {
+          window.__gwState = window.__gwState || {};
+          window.__gwState.highContrastLensEnabled = contrast.checked;
+          if (typeof window.updateGrid === "function") window.updateGrid();
+        }
+        syncHudOptionCloneControls();
+      });
+    }
+
+    if (niches && niches.dataset.bound !== "true") {
+      niches.dataset.bound = "true";
+      niches.addEventListener("change", () => {
+        if (!clickHudToggleIfNeeded("gwHudNicheLayerToggle", niches.checked, localNichesEnabled())) {
+          window.__gwState = window.__gwState || {};
+          window.__gwState.showLocalNiches = niches.checked;
+          window.GridWildLocalNiches?.drawNicheLayer?.();
+        }
+        syncHudOptionCloneControls();
+      });
+    }
+
+    if (sparkles && sparkles.dataset.bound !== "true") {
+      sparkles.dataset.bound = "true";
+      sparkles.addEventListener("change", () => {
+        if (!clickHudToggleIfNeeded("gwHudNicheSparkleToggle", sparkles.checked, nicheSparklesEnabled())) {
+          window.__gwState = window.__gwState || {};
+          window.__gwState.showNicheSparkles = sparkles.checked;
+          window.GridWildCellSeededNiches?.setSparklesVisible?.(sparkles.checked, { silent: true });
+        }
+        saveNicheSparklePreference();
+        syncHudOptionCloneControls();
+      });
+    }
+
+    if (me && me.dataset.bound !== "true") {
+      me.dataset.bound = "true";
+      me.addEventListener("change", () => {
+        if (!clickHudToggleIfNeeded("gwHudMeToggle", me.checked, window.__gwFilters?.onlyMe === true)) {
+          window.__gwFilters = window.__gwFilters || {};
+          window.__gwState = window.__gwState || {};
+          window.__gwFilters.onlyMe = me.checked;
+          window.__gwState.onlyMeFilterEnabled = me.checked;
+          window.dispatchEvent(new CustomEvent("gridwild:filterschange", {
+            detail: { onlyMe: me.checked }
+          }));
+          if (typeof window.updateGrid === "function") window.updateGrid();
+        }
+        syncHudOptionCloneControls();
+      });
+    }
+
+    if (haptics && haptics.dataset.bound !== "true") {
+      haptics.dataset.bound = "true";
+      haptics.addEventListener("change", () => {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.hapticsEnabled = haptics.checked;
+        saveHapticsPreference();
+        syncHudOptionCloneControls();
+      });
+    }
+
+    if (metric && metric.dataset.bound !== "true") {
+      metric.dataset.bound = "true";
+      metric.addEventListener("change", () => {
+        if (window.GridWildUnits?.setMetricEnabled) {
+          window.GridWildUnits.setMetricEnabled(metric.checked);
+        } else {
+          window.__gwState = window.__gwState || {};
+          window.__gwState.metricUnitsEnabled = metric.checked;
+          window.dispatchEvent(new CustomEvent("gridwild:unitschange", {
+            detail: { metricUnitsEnabled: metric.checked }
+          }));
+        }
+        saveMetricUnitsPreference();
+        syncHudOptionCloneControls();
+      });
+    }
+
+    if (gpsCircle && gpsCircle.dataset.bound !== "true") {
+      gpsCircle.dataset.bound = "true";
+      gpsCircle.addEventListener("change", () => {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.showGpsCircle = gpsCircle.checked;
+        saveGpsCirclePreference();
+        window.dispatchEvent(new CustomEvent("gridwild:gpscirclechange", {
+          detail: { showGpsCircle: gpsCircle.checked }
+        }));
+        syncHudOptionCloneControls();
+      });
+    }
+
+    const root = document.documentElement;
+    if (root.dataset.gwHudOptionCloneSyncBound !== "true") {
+      root.dataset.gwHudOptionCloneSyncBound = "true";
+      document.addEventListener("click", evt => {
+        if (evt.target?.closest?.("#gwHudHighContrastToggle, #gwHudNicheLayerToggle, #gwHudMeToggle")) {
+          setTimeout(syncHudOptionCloneControls, 0);
+        }
+      });
+      window.addEventListener("gridwild:heatchange", syncHudOptionCloneControls);
+      window.addEventListener("gridwild:filterschange", syncHudOptionCloneControls);
+      window.addEventListener("gridwild:unitschange", syncHudOptionCloneControls);
+      window.addEventListener("gridwild:gpscirclechange", syncHudOptionCloneControls);
+      window.addEventListener("gridwild:nichesparklechange", syncHudOptionCloneControls);
+    }
+
+    syncHudOptionCloneControls();
+  }
+
   function buildTaxaCloneChecklist() {
     const hostReal = $("taxaChecklist");
     const hostClone = $("taxaChecklistClone");
@@ -1909,10 +2132,13 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
   }
 
   function syncCloneControlsFromReal() {
+    if (typeof window.syncGridWildCoarseHeatControls === "function") {
+      window.syncGridWildCoarseHeatControls();
+    }
+
     [
       ["togglePoints", "togglePoints_clone"],
       ["toggleHeat", "toggleHeat_clone"],
-      ["toggleSuperchunkHeat", "toggleSuperchunkHeat_clone"],
       ["toggleDynamicINat", "toggleDynamicINat_clone"],
       ["toggleShimmer", "toggleShimmer_clone"],
       ["toggleFog", "toggleFog_clone"],
@@ -1930,6 +2156,8 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     document.querySelectorAll('input[name="heatMetric_clone"]').forEach(r => {
       r.checked = (r.value === checked);
     });
+
+    syncHudOptionCloneControls();
   }
 
   // --------------------------------------------------------------------------
@@ -1960,6 +2188,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     mirrorCheckbox("toggleLockLocation", "toggleLockLocation_clone");
     mirrorCheckbox("toggleOsmBuildings", "toggleOsmBuildings_clone");
     mirrorHeatMetricRadios();
+    bindHudOptionCloneControls();
 
     setTimeout(() => {
       if (window.GridWildQuests && questBody) {

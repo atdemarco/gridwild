@@ -2,20 +2,6 @@
   const HERE_RADIUS_CELLS = 7;
   const MAX_TAXA_CELLS = 225;
   const MAX_SELECTION_TAXA_CELLS = 1600;
-  const TAXON_LABELS = {
-    Aves: "Birds",
-    Mammalia: "Mammals",
-    Plantae: "Plants",
-    Fungi: "Fungi",
-    Insecta: "Insects",
-    Reptilia: "Reptiles",
-    Amphibia: "Amphibians",
-    Arachnida: "Arachnids",
-    Mollusca: "Mollusks",
-    Actinopterygii: "Fishes",
-    Unknown: "Unknown"
-  };
-
   const TAXON_COLORS = [
     "#79c86b",
     "#e0b24d",
@@ -28,17 +14,6 @@
     "#6f9ed4"
   ];
 
-  const GENUS_COMMON_ALIASES = {
-    Acer: "Maples",
-    Aloe: "Aloes",
-    Apis: "Honey Bees",
-    Eristalis: "Drone Flies",
-    Hibiscus: "Hibiscus",
-    Mentha: "Mints",
-    Quercus: "Oaks",
-    Rudbeckia: "Black-eyed Susans",
-    Zinnia: "Zinnias"
-  };
   const HERE_MAP_3D_STORAGE_KEY = "gw_here_map_3d_enabled";
   const HERE_ELEVATION_STORAGE_KEY = "gw_here_elevation_cache_v1";
   const HERE_ELEVATION_ENDPOINT = "/.netlify/functions/get-elevation";
@@ -1990,7 +1965,7 @@
   }
 
   function taxonDisplayName(name) {
-    return TAXON_LABELS[name] || name || "Unknown";
+    return window.GridWildTaxonomy?.displayName?.("iconic_taxon", name) || name || "Unknown";
   }
 
   function makeTaxonomyTree(record) {
@@ -2164,7 +2139,7 @@
 
   function genusCommonName(genus) {
     const rec = window.GridWildGenusCodex?.genera?.[genus];
-    return formatCommonName(rec?.common || GENUS_COMMON_ALIASES[genus] || "");
+    return formatCommonName(rec?.common || window.GridWildTaxonomy?.displayName?.("genus", genus) || "");
   }
 
   function taxonListLabel(row) {

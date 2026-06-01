@@ -1,0 +1,343 @@
+⬥ Injecting environment variable values for all scopes
+⬥ Ignored project settings env var: GRIDWILD_ASSET_PUBLIC_BASE (defined in .env file)
+⬥ Ignored project settings env var: SUPABASE_SERVICE_ROLE_KEY (defined in .env file)
+⬥ Ignored project settings env var: SUPABASE_URL (defined in .env file)
+⬥ Injected .env file env vars: GRIDWILD_ASSET_PUBLIC_BASE, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, GRIDWILD_ASSET_DIR, GRIDWILD_STORAGE_BUCKET, GRIDWILD_STORAGE_BACKEND, GRIDWILD_R2_BUCKET, CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+⬥ Injected project settings env vars: INAT_CLIENT_ID, INAT_CLIENT_SECRET, INAT_REDIRECT_URI
+⬥ Using simple static server because '--dir' flag was specified
+⬥ Running static server from "gridwild"
+⬥ Setting up local dev server
+
+⬥ Static server listening to 3999
+⬥ Loaded function upsert-player-presence in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function _local-niche-utils in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function _gridwild-account-session in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function upsert-local-niches in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function upsert-player-achievements in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function update-party-evidence in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function set-player-equipment in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function unset-home-niche in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function update-player in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function test-db in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function set-player-survey-state in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function set-home-niche in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function set-active-quest in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function set-active-party in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function save-survey in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function inat-token in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function join-party in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function inat-oauth-callback in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function inat-oauth-start in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function leave-party in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-surveys in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function gridwild-account-login in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function gridwild-account-signup in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-party-route in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-party in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-survey-by-id in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-nearby-parties in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-party-for-quest in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-local-niche-home-users in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-nearby-player-presence in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-quests in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-grid-assets-build in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-local-niches in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-local-niche-comments in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-elevation in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function get-bootstrap in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function end-party in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function delete-survey in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function create-sample-niche-quest in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function create-quest in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function create-player in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function create-party in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function complete-quest in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function claim-quest-evidence in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function claim-identification in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function archive-quest in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function add-party-route-point in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function add-player-inventory-item in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function add-local-niche-comment in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function add-party-evidence in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function abandon-quest in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+⬥ Loaded function accept-quest in Lambda compatibility mode (https://ntl.fyi/lambda-compat)
+
+   ╭─────────────────────── ⬥  ────────────────────────╮
+   │                                                   │
+   │   Local dev server ready: http://localhost:8888   │
+   │                                                   │
+   ╰───────────────────────────────────────────────────╯
+
+Request from ::1: GET /.netlify/functions/get-grid-assets-build
+Response with status 200 in 1728 ms.
+Request from ::1: POST /.netlify/functions/get-bootstrap
+
+⬥ Function get-bootstrap has returned an error: Task timed out after 30.00 seconds
+    at new TimeoutError (C:\Users\ad1470\AppData\Roaming\npm\node_modules\netlify-cli\node_modules\lambda-local\build\lib\utils.js:119:28)
+    at Context.<anonymous> (C:\Users\ad1470\AppData\Roaming\npm\node_modules\netlify-cli\node_modules\lambda-local\build\lib\context.js:113:19)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+
+Response with status 500 in 30155 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 492 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 850 ms.
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 4582 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 1074 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 1556 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 1498 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 1356 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 2327 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 993 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 1728 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 12466 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 2043 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 1779 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 1890 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 2466 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 1661 ms.
+Request from ::1: GET /.netlify/functions/get-grid-assets-build
+Response with status 200 in 1797 ms.
+Request from ::1: POST /.netlify/functions/get-bootstrap
+Response with status 200 in 6305 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 167 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 485 ms.
+Response with status 200 in 1915 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 154 ms.
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 2105 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 638 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 547 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 302 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 716 ms.
+Request from ::1: GET /.netlify/functions/get-grid-assets-build
+Request from ::1: POST /.netlify/functions/get-bootstrap
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 494 ms.
+Response with status 200 in 209 ms.
+Response with status 200 in 1115 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 35 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 36 ms.
+Response with status 200 in 94 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 36 ms.
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 119 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 35 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 113 ms.
+Request from ::1: GET /.netlify/functions/get-grid-assets-build
+Request from ::1: POST /.netlify/functions/get-bootstrap
+Response with status 200 in 736 ms.
+Response with status 200 in 1334 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 38 ms.
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 116 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 49 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 42 ms.
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 90 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 551 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 120 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 132 ms.
+Request from ::1: GET /.netlify/functions/get-grid-assets-build
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Request from ::1: POST /.netlify/functions/get-bootstrap
+Response with status 200 in 720 ms.
+Response with status 200 in 784 ms.
+Response with status 200 in 1435 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 30 ms.
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 95 ms.
+Response with status 200 in 109 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 106 ms.
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 118 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 743 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 106 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 128 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 62 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 251 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 90 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 144 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 233 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 88 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 156 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 167 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 53 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 563 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 62 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 105 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 405 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 94 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 150 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 131 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 141 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 79 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 141 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 130 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 362 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 231 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 72 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 157 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 119 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 51 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 126 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 110 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 48 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 308 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 90 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 111 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 516 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 148 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 56 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 124 ms.
+Request from ::1: GET /.netlify/functions/get-grid-assets-build
+Response with status 200 in 968 ms.
+Request from ::1: GET /.netlify/functions/get-grid-assets-build
+Response with status 200 in 268 ms.
+Request from ::1: POST /.netlify/functions/get-bootstrap
+Response with status 200 in 3655 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 89 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 301 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 1125 ms.
+Response with status 200 in 63 ms.
+Request from ::1: POST /.netlify/functions/get-bootstrap
+Response with status 200 in 1179 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 52 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 157 ms.
+Response with status 200 in 1216 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 79 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 527 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 122 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 54 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 129 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 149 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 47 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 95 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 70 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 57 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 187 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 79 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 134 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 277 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 100 ms.
+Request from ::1: POST /.netlify/functions/get-elevation
+Response with status 200 in 568 ms.
+Request from ::1: POST /.netlify/functions/get-elevation
+Response with status 200 in 554 ms.
+Request from ::1: POST /.netlify/functions/get-elevation
+Response with status 200 in 528 ms.
+Request from ::1: POST /.netlify/functions/get-elevation
+Response with status 200 in 497 ms.
+Request from ::1: POST /.netlify/functions/get-elevation
+Response with status 200 in 563 ms.
+Request from ::1: GET /.netlify/functions/get-grid-assets-build
+Request from ::1: POST /.netlify/functions/get-bootstrap
+Response with status 200 in 782 ms.
+Response with status 200 in 2193 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Request from ::1: POST /.netlify/functions/upsert-player-achievements
+Response with status 200 in 203 ms.
+Request from ::1: POST /.netlify/functions/get-nearby-parties
+Response with status 200 in 81 ms.
+Response with status 200 in 224 ms.
+Request from ::1: POST /.netlify/functions/get-party
+Response with status 200 in 63 ms.

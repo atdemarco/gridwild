@@ -11,6 +11,15 @@
 
   function $(id) { return document.getElementById(id); }
 
+  function readManualCoarseHeatEnabled() {
+    const coarseToggle = $("toggleSuperchunkHeat");
+    if (!coarseToggle) return window.__gwState?.coarseHeatEnabled === true;
+    if (coarseToggle.dataset.gwAutoCoarse === "true") {
+      return window.__gwState?.coarseHeatEnabled === true;
+    }
+    return coarseToggle.checked === true;
+  }
+
   function getSelectedIconicTaxa() {
     const selected = [];
     for (const opt of TAXA_OPTIONS) {
@@ -29,7 +38,7 @@
 
   window.__gwFilters.showPoints = $("togglePoints")?.checked ?? false;
   window.__gwFilters.showHeat = $("toggleHeat")?.checked ?? true;
-  window.__gwState.coarseHeatEnabled = $("toggleSuperchunkHeat")?.checked ?? false;
+  window.__gwState.coarseHeatEnabled = readManualCoarseHeatEnabled();
   window.__gwState.coarseHeatBinSize = Math.max(
     2,
     Math.min(64, Math.round(Number(window.__gwState.coarseHeatBinSize) || 8))
@@ -66,6 +75,9 @@
   window.__gwState.showShimmer = $("toggleShimmer")?.checked ?? false;
   window.__gwState.showFog = $("toggleFog")?.checked ?? false;
   window.__gwState.highContrastLensEnabled = window.__gwState.highContrastLensEnabled === true;
+  window.__gwState.metricUnitsEnabled = window.__gwState.metricUnitsEnabled === true;
+  window.__gwState.showGpsCircle = window.__gwState.showGpsCircle === true;
+  window.__gwState.showNicheSparkles = window.__gwState.showNicheSparkles === true;
   window.__gwState.fogSmoothingEnabled = $("toggleFogSmoothing")?.checked ?? true;
   window.__gwState.godsEyeEnabled = $("toggleGodsEye")?.checked ?? false;
   window.__gwState.lockToLocation = $("toggleLockLocation")?.checked ?? true;
@@ -74,6 +86,9 @@
  saveUIState();
   if (typeof paintLegendFromHeatFunction === "function") {
   paintLegendFromHeatFunction();
+}
+if (typeof window.syncGridWildCoarseHeatControls === "function") {
+  window.syncGridWildCoarseHeatControls();
 }
 }
 
@@ -90,6 +105,32 @@
       window.fetchINatObservationsNearCenter();
     }
   }
+
+  function applyHeatOverlayVisibility(visible) {
+    const enabled = visible === true;
+    window.__gwFilters = window.__gwFilters || {};
+    window.__gwFilters.showHeat = enabled;
+
+    if (typeof window.setHeatVisible === "function") {
+      window.setHeatVisible(enabled);
+    }
+
+    const heatPane =
+      typeof map !== "undefined" && map?.getPane
+        ? map.getPane("gridHeatPane")
+        : null;
+    if (heatPane) {
+      if (enabled) heatPane.style.removeProperty("display");
+      else heatPane.style.setProperty("display", "none", "important");
+    }
+
+    const heatCanvas = document.getElementById("gwGridHeatCanvas");
+    if (heatCanvas) {
+      heatCanvas.style.setProperty("display", enabled ? "block" : "none", "important");
+    }
+  }
+
+  window.applyGridWildHeatVisibility = applyHeatOverlayVisibility;
 
   // Build checklist UI
   function buildChecklist() {
@@ -121,9 +162,7 @@
     }
 
     // Heat overlay (initgrid exposes window.setHeatVisible below)
-    if (typeof window.setHeatVisible === "function") {
-      window.setHeatVisible(window.__gwFilters?.showHeat ?? true);
-    }
+    applyHeatOverlayVisibility(window.__gwFilters?.showHeat ?? true);
 
     // Shimmer layer if applicable...
     if (typeof window.setShimmerVisible === "function") {
@@ -345,7 +384,7 @@ function saveUIState() {
   const state = {
     showPoints: byId("togglePoints")?.checked ?? false,
     showHeat: byId("toggleHeat")?.checked ?? true,
-    coarseHeatEnabled: byId("toggleSuperchunkHeat")?.checked ?? false,
+    coarseHeatEnabled: readManualCoarseHeatEnabled(),
     coarseHeatBinSize: window.__gwState?.coarseHeatBinSize ?? 8,
     heatZThresholdEnabled: byId("toggleHeatZThreshold")?.checked ?? window.__gwState?.heatZThresholdEnabled ?? false,
     heatZThreshold: window.__gwState?.heatZThreshold ?? 0,
@@ -356,6 +395,10 @@ function saveUIState() {
     showShimmer: byId("toggleShimmer")?.checked ?? false,
     showFog: byId("toggleFog")?.checked ?? false,
     highContrastLensEnabled: window.__gwState?.highContrastLensEnabled === true,
+    hapticsEnabled: window.__gwState?.hapticsEnabled !== false,
+    metricUnitsEnabled: window.__gwState?.metricUnitsEnabled === true,
+    showGpsCircle: window.__gwState?.showGpsCircle === true,
+    showNicheSparkles: window.__gwState?.showNicheSparkles === true,
     fogSmoothingEnabled: byId("toggleFogSmoothing")?.checked ?? true,
     godsEyeEnabled: byId("toggleGodsEye")?.checked ?? false,
     lockToLocation: byId("toggleLockLocation")?.checked ?? true,
@@ -406,6 +449,10 @@ function applySavedUIState() {
   if (byId("toggleShimmer"))      byId("toggleShimmer").checked = s.showShimmer ?? false;
   if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? false;
   window.__gwState.highContrastLensEnabled = s.highContrastLensEnabled ?? true;
+  window.__gwState.hapticsEnabled = s.hapticsEnabled ?? true;
+  window.__gwState.metricUnitsEnabled = s.metricUnitsEnabled === true;
+  window.__gwState.showGpsCircle = s.showGpsCircle === true;
+  window.__gwState.showNicheSparkles = s.showNicheSparkles === true;
   if (byId("toggleGodsEye"))      byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
   if (byId("toggleFogSmoothing")) byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? false;

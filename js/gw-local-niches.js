@@ -46,6 +46,7 @@
     osmMaxCellsPerNiche: 60000,
     osmVectorVisualGapPx: 1
   };
+  const CELL_SEEDED_NICHE_ALGORITHM = "cell_seeded_niche_v1";
   const CONSTRAINED_GEOMETRY_RULES = [
     { scale: "micro", scaleClass: "micro-niche", sigma: 0.65, peakFactor: 0.34, floorFactor: 0.18, suppressCells: 3, maxRadiusCells: 3, minCells: 1, maxCells: 4, maxElongation: 3.2, maxComplexity: 2.7, quantCells: 3 },
     { scale: "patch", scaleClass: "patch niche", sigma: 1.05, peakFactor: 0.30, floorFactor: 0.14, suppressCells: 5, maxRadiusCells: 7, minCells: 5, maxCells: 32, maxElongation: 3.1, maxComplexity: 3.1, quantCells: 5 },
@@ -207,6 +208,11 @@
   function isCorridorNiche(niche) {
     return ["trail_corridor_niche_v1", "heat_tendril_niche_v1"]
       .includes(String(niche?.metrics?.algorithm || ""));
+  }
+
+  function isCellSeededNiche(niche) {
+    return String(niche?.metrics?.algorithm || "") === CELL_SEEDED_NICHE_ALGORITHM ||
+      String(niche?.generated_by || "").includes("cell_seeded_niche");
   }
 
   function homeIconSvg() {
@@ -1842,6 +1848,17 @@
     if (niche.metrics?.algorithm === GROW_LOCAL_NICHE_RULE.version) {
       return focus ? `Grow ${focus}` : "Grow local life";
     }
+    if (niche.metrics?.algorithm === CELL_SEEDED_NICHE_ALGORITHM) {
+      const metrics = niche.metrics || {};
+      if (metrics.quiet_seed) return "Mark quiet cell";
+      if (Number(metrics.water_boundary_score || 0) >= 0.36 || Number(metrics.wet_edge_cells || 0) > 0) {
+        return focus ? `Trace wet-edge ${focus}` : "Trace wet-edge life";
+      }
+      if (Number(metrics.road_bounded_cells || 0) > 0 || Number(metrics.blocked_edges?.road || 0) > 0) {
+        return focus ? `Sample road-bounded ${focus}` : "Sample road-bounded life";
+      }
+      return focus ? `Sample cell-seeded ${focus}` : "Sample cell-seeded life";
+    }
     if (type === "edge_habitat_niche" || theme.includes("wet")) return "Sample wet-edge plants";
     if (type === "taxon_specific_hotspot") return focus ? `Look for ${focus}` : "Look for focal taxa";
     if (type === "seasonal_hotspot") return focus ? `Revisit seasonal ${focus}` : "Revisit seasonal life";
@@ -1871,6 +1888,7 @@
     const heatTendril = metrics.algorithm === "heat_tendril_niche_v1";
     const thresholdSubdivide = metrics.algorithm === THRESHOLD_SUBDIVIDE_RULE.version;
     const growLocal = metrics.algorithm === GROW_LOCAL_NICHE_RULE.version;
+    const cellSeeded = metrics.algorithm === CELL_SEEDED_NICHE_ALGORITHM;
     if (growLocal) {
       const tileCells = Number(metrics.grow_tile_cells || GROW_LOCAL_NICHE_RULE.defaultTileCells);
       const tileCount = Math.max(1, Number(metrics.grow_tile_count || 1));
@@ -1878,6 +1896,16 @@
       facts.push(`This temporary niche is ${tilePhrase} with ${Number(metrics.grow_occupied_pct || 0).toFixed(1)}% occupied evidence squares.`);
       if (Number(metrics.grow_structure_clip?.clipped_cells || 0) > 0) {
         facts.push(`${Math.round(Number(metrics.grow_structure_clip.clipped_cells || 0))} grid cells overlapping cached OSM building outlines were clipped before tile merging.`);
+      }
+    }
+    if (cellSeeded) {
+      facts.push(`This niche was computed at runtime from clicked global 20 ft cell ${metrics.clicked_cell || "unknown"}; the parsed seed was the strongest cell within ${Number(metrics.seed_search_radius_cells || 5)} cells.`);
+      facts.push(`The growth algorithm linked ${Number(metrics.component_cell_count || metrics.totalCells || 1)} contiguous biodiversity squares, with diagonal links weighted weakly.`);
+      if (Number(metrics.blocked_edges?.road || 0) > 0 || Number(metrics.blocked_edges?.structure || 0) > 0) {
+        facts.push("Cached OSM roads and structures cut off attempted expansion edges.");
+      }
+      if (Number(metrics.water_boundary_score || 0) > 0) {
+        facts.push("OSM water-boundary interpretation shaped the biodiversity growth score.");
       }
     }
     if (Number(metrics.lensPeakAbsZ) > 0) {
@@ -6224,6 +6252,31 @@
     });
   }
 
+  function addRuntimeNiche(niche, options = {}) {
+    if (!niche) return null;
+    state.niches = mergeNiches(state.niches, [niche]);
+    updateNicheDistances();
+
+    const key = nicheKey(niche) || niche.source_key || niche.id;
+    if (options.select !== false && key) {
+      state.selectedId = String(key);
+    }
+
+    if (!state.layerVisible) {
+      state.layerVisible = true;
+      saveLayerVisible();
+    }
+
+    drawNicheLayer();
+    renderIntoPage();
+
+    const current = key ? nicheByKey(key) || niche : niche;
+    if (options.openDetail === true && key) {
+      openNicheDetail(key);
+    }
+    return current;
+  }
+
   function samplingModeConfig(mode = "niches") {
     if (mode === "corridors") {
       return {
@@ -7375,6 +7428,8 @@
     Stratiomyidae: "Soldier flies"
   });
 
+  window.GridWildTaxonomy?.registerCommonNames?.(TAXON_COMMON_ALIASES);
+
   function titleCaseTaxonLabel(value) {
     return String(value || "")
       .replace(/[_-]+/g, " ")
@@ -7394,6 +7449,9 @@
 
   function taxonDisplayEntry(entry, rank) {
     const scientific = String(entry?.name || "Unknown").trim() || "Unknown";
+    if (window.GridWildTaxonomy?.displayEntry) {
+      return window.GridWildTaxonomy.displayEntry({ name: scientific, count: entry?.count }, rank);
+    }
     const aliases = TAXON_COMMON_ALIASES[rank] || {};
     const common = aliases[scientific] || (rank === "genus" ? genusCodexCommonName(scientific) : "");
     return {
@@ -8193,29 +8251,15 @@
 
   function renderLocalNichesHtml() {
     injectStyles();
-    const rows = state.niches || [];
-    const samplingNiches = state.loading && state.loadingAction === "niches";
-    const generatingCorridors = state.loading && state.loadingAction === "corridors";
-    const growingNiches = state.loading && state.loadingAction === "grow";
+    const rows = (state.niches || []).filter(isCellSeededNiche);
 
     return `
       <div class="gw-card gw-local-niches-card">
         <div class="gw-card-title">Local Niches</div>
-        ${renderControlsHtml()}
-        ${renderGrowControlsHtml()}
-        <div class="gw-niche-actions">
-          <button class="gw-mini-btn" id="gwRefreshNichesBtn" type="button" ${state.loading ? "disabled" : ""}>
-            ${samplingNiches ? "Sampling..." : "Sample Niches"}
-          </button>
-          <button class="gw-mini-btn" id="gwGenerateCorridorsBtn" type="button" ${state.loading ? "disabled" : ""}>
-            ${generatingCorridors ? "Generating..." : "Generate Corridors"}
-          </button>
-          ${state.persistWarning ? `<span class="gw-muted gw-niche-warning">${esc(state.persistWarning)}</span>` : ""}
-        </div>
+        ${state.persistWarning ? `<div class="gw-muted gw-niche-warning">${esc(state.persistWarning)}</div>` : ""}
         <div id="gwLocalNicheList">
-          ${state.loading ? `<div class="gw-muted">${growingNiches ? "Growing active-lens tile niches..." : generatingCorridors ? "Building corridor niche objects..." : "Building constrained niche objects..."}</div>` : ""}
-          ${!state.loading && !rows.length ? `<div class="gw-muted">No local niches loaded yet.</div>` : ""}
-          ${!state.loading && rows.length ? `
+          ${!rows.length ? `<div class="gw-muted">No seeded niches yet.</div>` : ""}
+          ${rows.length ? `
             <div class="gw-list">
               ${rows.map((niche) => `
                 <div class="gw-rowline gw-niche-row ${isHomeNiche(niche) ? "is-home-niche" : ""} ${isSelectedNiche(niche) ? "is-selected-niche" : ""} ${isCorridorNiche(niche) ? "is-heat-tendril" : ""}" data-niche-key="${esc(nicheKey(niche))}">
@@ -9500,7 +9544,7 @@
       const baseColor = home ? "#ffe66f" : componentColor(niche.metrics?.component_id || niche.source_key);
       const visual = nicheVisualStyle(niche, baseColor);
       const color = home ? baseColor : visual.baseColor;
-      const constrainedGeometry = ["constrained_geometry_niche_v1", "trail_corridor_niche_v1", "heat_tendril_niche_v1", THRESHOLD_SUBDIVIDE_RULE.version].includes(niche.metrics?.algorithm);
+      const constrainedGeometry = ["constrained_geometry_niche_v1", "trail_corridor_niche_v1", "heat_tendril_niche_v1", THRESHOLD_SUBDIVIDE_RULE.version, CELL_SEEDED_NICHE_ALGORITHM].includes(niche.metrics?.algorithm);
       const growLocal = niche.metrics?.algorithm === GROW_LOCAL_NICHE_RULE.version;
       const vectorFace = growLocal ? growVectorFaceForNiche(niche) : null;
       const structureCutouts = growLocal ? growStructureCutoutPathsForNiche(niche) : [];
@@ -10673,6 +10717,7 @@
   }
 
   window.GridWildLocalNiches = {
+    addRuntimeNiche,
     buildNicheDisplayTitle,
     bindLocalNicheControls,
     drawNicheLayer,
@@ -10682,6 +10727,7 @@
     getNiches: () => state.niches.slice(),
     growLocalNiches,
     isVisible: () => state.layerVisible,
+    openNicheDetail,
     refreshLocalNiches,
     renderLocalNichesHtml,
     renderIntoPage,

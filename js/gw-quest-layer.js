@@ -435,6 +435,7 @@
   }
 
   function formatMeters(m) {
+    if (window.GridWildUnits?.formatDistance) return window.GridWildUnits.formatDistance(m);
     if (!Number.isFinite(m)) return "—";
     if (m < 1000) return `${Math.round(m)}m`;
     return `${(m / 1000).toFixed(1)}km`;
@@ -666,6 +667,7 @@
   }
 
   map.on("move zoom moveend zoomend", updateTetherAndHud);
+  window.addEventListener("gridwild:unitschange", updateTetherAndHud);
 
   window.addEventListener("gwQuestStarted", evt => {
     // Do not auto-embark newly created quests; user explicitly chooses Embark.
