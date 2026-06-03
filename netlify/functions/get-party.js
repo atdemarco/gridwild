@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { applyPartyTiming } = require("./_party-duration");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -35,13 +36,28 @@ if (!activePartyId) {
       };
     }
 
-    const { data: party, error: partyError } = await supabase
+    let { data: party, error: partyError } = await supabase
       .from("parties")
       .select("*")
       .eq("id", activePartyId)
       .single();
 
     if (partyError) throw partyError;
+
+    const timing = await applyPartyTiming(supabase, party, { playerId: player_id });
+    party = timing.party;
+
+    if (party?.status === "ended" && player_id && party.id === activePartyId) {
+      await supabase
+        .from("player_state")
+        .upsert({
+          player_id,
+          active_party_id: null,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: "player_id"
+        });
+    }
 
     const { data: members, error: membersError } = await supabase
       .from("party_members")
@@ -68,6 +84,8 @@ if (!activePartyId) {
 
     if (evidenceError) throw evidenceError;
 
+    const progress = (evidence || []).filter(row => row.status !== "excluded").length;
+
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -75,7 +93,7 @@ if (!activePartyId) {
         members: members || [],
         events: events || [],
         evidence: evidence || [],
-        progress: (evidence || []).length
+        progress
       })
     };
   } catch (err) {

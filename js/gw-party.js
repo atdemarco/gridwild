@@ -1,18 +1,12 @@
 // -----------------------------------------------------------------------------
 // GridWild Party System
-// Local prototype: parties, joining, scheduled events, QR cover screen, map beacon
+// Online-backed parties, QR cover screen, recaps, route/evidence display, map beacon
 // -----------------------------------------------------------------------------
 
 (function () {
-  const STORAGE_KEY = "gw_parties_v1";
-  const ACTIVE_KEY = "gw_active_party_id_v1";
   const PANE = "gwPartyPane";
-  const PARTY_EVIDENCE_KEY = "gw_party_evidence_links_v1";
-  const PARTY_ROUTE_KEY = "gw_party_routes_v1";
-  const PARTY_MEMBERS_KEY = "gw_party_members_v1";
-  const PARTY_ACTIVITY_KEY = "gw_party_activity_v1";
-
-
+  const PARTY_ROUTE_THROTTLE_MS = 8000;
+  const PARTY_ROUTE_MAX_ACCURACY_M = 60;
 
   let partyLayer = null;
 
@@ -24,60 +18,6 @@
     { key: "plants", emoji: "🌿", label: "Plant Survey", title: "Plant Survey", goalType: "plants", target: 20, durationMinutes: 60 },
     { key: "any", emoji: "🌎", label: "Bioblitz", title: "Mini Bioblitz", goalType: "any", target: 50, durationMinutes: 120 }
     ];
-
-  const MOCK_PARTIES = [
-    {
-      id: "mock_ant_sweep",
-      title: "Pollinator Garden Ant Sweep",
-      host: "Mia",
-      mode: "live",
-      visibility: "public",
-      goalType: "ants",
-      goalLabel: "Find 10 ant observations",
-      progress: 3,
-      target: 10,
-      memberCount: 4,
-      distanceLabel: "0.2 mi",
-      startsAt: new Date().toISOString(),
-      locationLabel: "Georgetown Pollinator Garden",
-      lat: 38.911325,
-      lng: -77.076678
-    },
-    {
-      id: "mock_bird_walk",
-      title: "Lunch Bird Walk",
-      host: "Theo",
-      mode: "live",
-      visibility: "public",
-      goalType: "birds",
-      goalLabel: "Detect 20 bird species",
-      progress: 8,
-      target: 20,
-      memberCount: 6,
-      distanceLabel: "0.6 mi",
-      startsAt: new Date().toISOString(),
-      locationLabel: "Canal trail",
-      lat: 38.9104,
-      lng: -77.0736
-    },
-    {
-      id: "mock_moth_sheet",
-      title: "Friday Night Moth Sheet",
-      host: "Rina",
-      mode: "upcoming",
-      visibility: "public",
-      goalType: "insects",
-      goalLabel: "Document 25 nocturnal insects",
-      progress: 0,
-      target: 25,
-      memberCount: 9,
-      distanceLabel: "1.1 mi",
-      startsAt: nextDateAt(5, 21, 0),
-      locationLabel: "Rock Creek edge",
-      lat: 38.9196,
-      lng: -77.0451
-    }
-  ];
 
   function $(id) {
     return document.getElementById(id);
@@ -96,17 +36,6 @@
     return new Date().toISOString();
   }
 
-  function makeId() {
-    return `party_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
-  }
-
-  function nextDateAt(dayOffset, hour, minute) {
-    const d = new Date();
-    d.setDate(d.getDate() + Number(dayOffset || 0));
-    d.setHours(hour, minute, 0, 0);
-    return d.toISOString();
-  }
-
   function formatWhen(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "time TBD";
@@ -120,10 +49,7 @@
     });
   }
 
-    function loadParties() { return []; }
-
-
-function saveParties() {}
+    function loadParties() { return getAllParties(); }
 
  function getActivePartyId() {
   return window.GridWildPartyLive?.getActivePartyId?.() || "";
@@ -142,6 +68,8 @@ function normalizeDbPartyForLegacy(p) {
 
   const locationConfig = p.location_config || {};
   const locationMode = p.location_mode || locationConfig.locationMode || "anywhere";
+  const isActiveParty = p.id === window.__gwState?.party?.id;
+  const activeMembers = window.__gwState?.partyMembers || [];
   const mode = p.status === "ended"
     ? "ended"
     : p.status === "scheduled" || (p.starts_at && new Date(p.starts_at) > new Date())
@@ -161,12 +89,12 @@ function normalizeDbPartyForLegacy(p) {
     host: "Online",
     mode,
     status: p.status || "active",
-    visibility: "public",
+    visibility: p.visibility || "public",
     goalType: "any",
     goalLabel: "Open field party",
-    progress: Number(window.__gwState?.partyProgress || 0),
+    progress: Number(p.progress ?? (isActiveParty ? window.__gwState?.partyProgress : 0) ?? 0),
     target: Number(p.target || 10),
-    memberCount: Number(window.__gwState?.partyMembers?.length || 1),
+    memberCount: Number(p.member_count || p.memberCount || (isActiveParty ? activeMembers.length : 1) || 1),
     distanceLabel: "online",
     startsAt: p.starts_at || p.created_at || new Date().toISOString(),
     durationMinutes: Number(p.duration_minutes || 60),
@@ -203,26 +131,11 @@ function getAllParties() {
 
   nearbyParties.forEach(addParty);
 
-  MOCK_PARTIES.forEach(addParty);
-
   return rows;
 }
 
   function getParty(id) {
     return getAllParties().find(p => p.id === id) || null;
-  }
-
-  function getMyPartyIds() {
-    try {
-      const ids = JSON.parse(localStorage.getItem("gw_my_party_ids_v1") || "[]");
-      return Array.isArray(ids) ? ids : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function saveMyPartyIds(ids) {
-    localStorage.setItem("gw_my_party_ids_v1", JSON.stringify(Array.from(new Set(ids))));
   }
 
   function isJoined(id) {
@@ -377,51 +290,31 @@ function getPartyMapLatLng(p) {
 }
 
 function loadPartyMembers() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(PARTY_MEMBERS_KEY) || "{}");
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
+  const activeId = window.__gwState?.party?.id;
+  return activeId ? { [activeId]: getPartyMembers(activeId) } : {};
 }
 
-function savePartyMembers(store) {
-  localStorage.setItem(PARTY_MEMBERS_KEY, JSON.stringify(store || {}));
+function savePartyMembers() {
+  return false;
 }
 
 function loadPartyActivity() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(PARTY_ACTIVITY_KEY) || "{}");
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
+  const activeId = window.__gwState?.party?.id;
+  return activeId ? { [activeId]: getPartyActivity(activeId) } : {};
 }
 
-function savePartyActivity(store) {
-  localStorage.setItem(PARTY_ACTIVITY_KEY, JSON.stringify(store || {}));
+function savePartyActivity() {
+  return false;
 }
 
 function addPartyActivity(partyId, type, text, meta = {}) {
-  if (!partyId) return;
+  if (!partyId) return false;
 
-  // DB-backed parties use party_events from Supabase.
-  if (!String(partyId).startsWith("mock_")) return;
+  window.dispatchEvent(new CustomEvent("gwPartyActivityRequested", {
+    detail: { partyId, type, text, meta }
+  }));
 
-  const store = loadPartyActivity();
-  store[partyId] = store[partyId] || [];
-
-  store[partyId].unshift({
-    id: makeId(),
-    type,
-    text,
-    actor: meta.actor || getCurrentUserName(),
-    t: nowISO(),
-    meta
-  });
-
-  store[partyId] = store[partyId].slice(0, 80);
-  savePartyActivity(store);
+  return false;
 }
 
 function getPartyActivity(partyId) {
@@ -443,56 +336,7 @@ function getPartyActivity(partyId) {
 
 function ensurePartyMembers(party) {
   if (!party?.id) return [];
-  if (party?.dbBacked) return [];
-
-  const store = loadPartyMembers();
-  store[party.id] = store[party.id] || [];
-
-  const existing = store[party.id];
-  const names = new Set(existing.map(m => m.name));
-
-  if (!names.has(party.host || "Host")) {
-    existing.push({
-      id: `host_${party.id}`,
-      name: party.host || "Host",
-      role: "host",
-      joinedAt: party.createdAt || party.startsAt || nowISO(),
-      isLocal: false
-    });
-  }
-
-  if (isJoined(party.id) && !names.has(getCurrentUserName())) {
-    existing.push({
-      id: "you",
-      name: getCurrentUserName(),
-      role: "observer",
-      joinedAt: nowISO(),
-      isLocal: true
-    });
-  }
-
-  // Local/demo flavor for mock parties only.
-  if (String(party.id).startsWith("mock_")) {
-    [
-      { name: "Mia", role: "scout" },
-      { name: "Theo", role: "identifier" },
-      { name: "Rina", role: "observer" }
-    ].forEach(m => {
-      if (!existing.some(x => x.name === m.name)) {
-        existing.push({
-          id: `mock_${party.id}_${m.name}`,
-          name: m.name,
-          role: m.role,
-          joinedAt: party.startsAt || nowISO(),
-          isLocal: false
-        });
-      }
-    });
-  }
-
-  store[party.id] = existing;
-  savePartyMembers(store);
-  return existing;
+  return getPartyMembers(party.id);
 }
 
 function getPartyMembers(partyId) {
@@ -509,15 +353,15 @@ function getPartyMembers(partyId) {
     }));
   }
 
-  // Keep mock parties working for now.
-  const party = getParty(partyId);
-  return String(partyId || "").startsWith("mock_") && party
-    ? ensurePartyMembers(party)
-    : [];
+  return [];
 }
 
 function memberRoleLabel(role) {
   return {
+    leader: "Leader",
+    owner: "Leader",
+    creator: "Leader",
+    member: "Member",
     host: "Host",
     scout: "Scout",
     identifier: "Identifier",
@@ -581,9 +425,48 @@ function activityIcon(type) {
   }[type] || "•";
 }
 
-function loadPartyEvidence() { return {}; }
-function savePartyEvidence() {}
-function setPartyEvidenceStatus() { return false; }
+function loadPartyEvidence() {
+  return (window.__gwState?.partyEvidence || []).reduce((acc, e) => {
+    if (!e.party_id || !e.draft_id) return acc;
+
+    acc[`${e.party_id}::${e.draft_id}`] = {
+      partyId: e.party_id,
+      draftId: e.draft_id,
+      status: e.status || "counted",
+      taxon: e.taxon || e.iconic_taxon || "Observation",
+      cellKey: e.cell_key || null,
+      lat: e.lat || null,
+      lng: e.lng || null,
+      countedAt: e.created_at,
+      updatedAt: e.updated_at || e.created_at
+    };
+
+    return acc;
+  }, {});
+}
+
+function savePartyEvidence() {
+  return false;
+}
+
+function setPartyEvidenceStatus(partyId, draftId, status) {
+  if (!partyId || !draftId) return false;
+  if (!["counted", "excluded"].includes(status)) return false;
+  if (!window.GridWildAPI?.updatePartyEvidenceStatus) return false;
+
+  window.GridWildAPI.updatePartyEvidenceStatus(partyId, draftId, status)
+    .then(async () => {
+      await window.GridWildPartyLive?.loadParty?.();
+      window.GridWildPartyLive?.refreshPartySheet?.();
+      refreshMapBeacon();
+      scheduleActivePartyHudRender();
+    })
+    .catch(err => {
+      console.warn("Could not update party evidence status:", err);
+    });
+
+  return true;
+}
 
 function draftHasUsableEvidence(draft) {
   return !!draft?.id && Array.isArray(draft.photos) && draft.photos.length > 0;
@@ -613,32 +496,145 @@ function loadPartyRoutes() {
   };
 }
 
+function getPartyRouteCellKey(lat, lng) {
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return "";
+
+  if (typeof window.getCellKeyForLatLng === "function") {
+    try {
+      return window.getCellKeyForLatLng(latNum, lngNum) || "";
+    } catch (err) {
+      console.warn("Could not calculate party route cell:", err);
+    }
+  }
+
+  const cell = window.GridWildGrid?.latLngToCell?.([latNum, lngNum]);
+  if (cell && Number.isFinite(Number(cell.ix)) && Number.isFinite(Number(cell.iy))) {
+    return window.GridWildGrid?.cellKey?.(cell.ix, cell.iy) || `${cell.ix},${cell.iy}`;
+  }
+
+  return "";
+}
+
+function rememberPartyRouteCell(partyId, cellKey) {
+  if (!partyId || !cellKey) return;
+
+  window.__gwState = window.__gwState || {};
+  window.__gwState.lastPartyRouteCellByParty = window.__gwState.lastPartyRouteCellByParty || {};
+  window.__gwState.lastPartyRouteCellByParty[partyId] = cellKey;
+  window.__gwState.lastPartyRouteCellKey = cellKey;
+}
+
+function getLastRecordedPartyRouteCell(partyId) {
+  window.__gwState = window.__gwState || {};
+  window.__gwState.lastPartyRouteCellByParty = window.__gwState.lastPartyRouteCellByParty || {};
+
+  const remembered = window.__gwState.lastPartyRouteCellByParty[partyId];
+  if (remembered) return remembered;
+
+  const route = window.__gwState.partyRoute || [];
+  for (let i = route.length - 1; i >= 0; i--) {
+    const row = route[i];
+    if (row?.party_id && row.party_id !== partyId) continue;
+    const cellKey = row?.cell_key || getPartyRouteCellKey(row?.lat, row?.lng);
+    if (cellKey) {
+      rememberPartyRouteCell(partyId, cellKey);
+      return cellKey;
+    }
+  }
+
+  return "";
+}
+
+function appendOptimisticPartyRoutePoint(partyId, lat, lng, accuracyMeters, cellKey, createdAt) {
+  window.__gwState = window.__gwState || {};
+  const route = Array.isArray(window.__gwState.partyRoute)
+    ? window.__gwState.partyRoute
+    : [];
+
+  window.__gwState.partyRoute = route;
+
+  const optimisticId = `local_route_${partyId}_${Date.now()}`;
+  route.push({
+    id: optimisticId,
+    party_id: partyId,
+    player_id: window.GridWildAPI?.getPlayerId?.() || null,
+    lat,
+    lng,
+    accuracy_meters: Number.isFinite(Number(accuracyMeters)) ? Number(accuracyMeters) : null,
+    cell_key: cellKey || null,
+    created_at: createdAt,
+    _optimistic: true
+  });
+
+  if (route.length > 5000) {
+    route.splice(0, route.length - 5000);
+  }
+
+  return optimisticId;
+}
+
+function replaceOptimisticPartyRoutePoint(optimisticId, point) {
+  if (!optimisticId || !point || !Array.isArray(window.__gwState?.partyRoute)) return;
+
+  const idx = window.__gwState.partyRoute.findIndex(row => row?.id === optimisticId);
+  if (idx >= 0) {
+    window.__gwState.partyRoute[idx] = point;
+  }
+}
+
 function recordPartyPosition(lat, lng, accuracyMeters) {
   const partyId = getActivePartyId();
   if (!partyId) return;
 
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return;
+
   const acc = Number(accuracyMeters);
-  if (Number.isFinite(acc) && acc > 60) return;
+  if (Number.isFinite(acc) && acc > PARTY_ROUTE_MAX_ACCURACY_M) return;
 
-  // Avoid sending too many route points.
   window.__gwState = window.__gwState || {};
+  window.__gwState.lastPartyRoutePointAtByParty = window.__gwState.lastPartyRoutePointAtByParty || {};
+
+  const cellKey = getPartyRouteCellKey(latNum, lngNum);
+  const lastCellKey = getLastRecordedPartyRouteCell(partyId);
+  const enteredNewCell = Boolean(cellKey && cellKey !== lastCellKey);
   const now = Date.now();
-  const lastTime = Number(window.__gwState.lastPartyRoutePointAt || 0);
+  const lastTime = Number(window.__gwState.lastPartyRoutePointAtByParty[partyId] || 0);
 
-  if (now - lastTime < 8000) return;
+  if (!enteredNewCell && now - lastTime < PARTY_ROUTE_THROTTLE_MS) return;
+
+  window.__gwState.lastPartyRoutePointAtByParty[partyId] = now;
   window.__gwState.lastPartyRoutePointAt = now;
+  rememberPartyRouteCell(partyId, cellKey);
 
-  window.GridWildAPI?.addPartyRoutePoint?.(
+  const createdAt = new Date(now).toISOString();
+  const optimisticId = appendOptimisticPartyRoutePoint(
     partyId,
-    Number(lat),
-    Number(lng),
-    Number.isFinite(acc) ? acc : null
-  ).catch(err => {
-    console.warn("Could not sync party route point:", err);
-  });
+    latNum,
+    lngNum,
+    Number.isFinite(acc) ? acc : null,
+    cellKey,
+    createdAt
+  );
 
   scheduleActivePartyHudRender();
   refreshMapBeacon();
+
+  window.GridWildAPI?.addPartyRoutePoint?.(
+    partyId,
+    latNum,
+    lngNum,
+    Number.isFinite(acc) ? acc : null
+  )
+    .then(result => {
+      replaceOptimisticPartyRoutePoint(optimisticId, result?.point);
+    })
+    .catch(err => {
+      console.warn("Could not sync party route point:", err);
+    });
 }
 
 function getPartyEvidenceRows(partyId) {
@@ -783,36 +779,29 @@ function formatDistance(meters) {
   return `${(m / 1000).toFixed(2)} km`;
 }
 
-function endPartyLocalOnly(id) {
-  if (getActivePartyId() === id) setActivePartyId("");
-
-  toast("🏁 Party ended");
-  addPartyActivity(id, "ended", `${getCurrentUserName()} ended the party`);
-  rerenderPartySheet();
-}
-
 function endParty(id) {
+  if (!id) return;
 
-  if (window.GridWildAPI?.endParty && !String(id).startsWith("mock_")) {
-    window.GridWildAPI.endParty(id)
-      .then(async () => {
-        window.GridWildPartyLive?.setActivePartyId?.(null);
-        await window.GridWildPartyLive?.loadParty?.();
-        await window.GridWildPartyLive?.refreshPartySheet?.();
-
-        endPartyLocalOnly(id);
-        toast("🏁 Online party ended");
-      })
-      .catch(err => {
-        console.error("DB end failed:", err);
-        toast("Could not end online party");
-      });
-
+  if (!window.GridWildAPI?.endParty) {
+    toast("Party service unavailable");
     return;
   }
 
-  // fallback
-  endPartyLocalOnly(id);
+  window.GridWildAPI.endParty(id)
+    .then(async () => {
+      window.GridWildPartyLive?.setActivePartyId?.(null);
+      await window.GridWildPartyLive?.loadParty?.();
+      window.GridWildPartyLive?.refreshPartySheet?.();
+      refreshMapBeacon();
+      scheduleActivePartyHudRender();
+      toast("Online party ended");
+    })
+    .catch(err => {
+      console.error("DB end failed:", err);
+      toast("Could not end online party");
+    });
+
+  return;
 }
 
 function shareParty(id) {
@@ -964,14 +953,6 @@ window.GridWildAPI?.addPartyEvidence?.({
     console.warn("Could not sync party evidence:", err);
   });
 
-
-    addPartyActivity(
-    partyId,
-    "counted",
-    `${getCurrentUserName()} counted ${taxon || "an observation"}`,
-    { draftId: draft.id }
-    );
-
     refreshMapBeacon();
 
     const questClaim = autoClaimDraftForLinkedQuest(party, draft);
@@ -1009,78 +990,59 @@ function scanDraftsForActiveParty() {
 function refreshStoredPartyProgress() {}
 
 function joinParty(id) {
+  if (!id) return;
 
-  if (window.GridWildAPI?.joinParty && !String(id).startsWith("mock_")) {
-    window.GridWildAPI.joinParty(id)
-      .then(async () => {
-        window.GridWildPartyLive?.setActivePartyId?.(id);
-
-        await window.GridWildPartyLive?.loadParty?.();
-        window.GridWildPartyLive?.refreshPartySheet?.();
-
-        setActivePartyId(id);
-        addPartyActivity(id, "joined", `${getCurrentUserName()} joined the party`);
-
-        toast("👥 Joined online party");
-        rerenderPartySheet();
-        openPartyCover(id);
-      })
-      .catch(err => {
-        console.error("DB join failed:", err);
-        toast("Could not join online party");
-      });
-
+  if (!window.GridWildAPI?.joinParty) {
+    toast("Party service unavailable");
     return;
   }
 
-  // fallback
-  joinPartyLocalOnly(id);
-}
+  window.GridWildAPI.joinParty(id)
+    .then(async () => {
+      setActivePartyId(id);
 
+      await window.GridWildPartyLive?.loadParty?.();
+      window.GridWildPartyLive?.refreshPartySheet?.();
 
-  function joinPartyLocalOnly(id) {   
-    const ids = getMyPartyIds();
-    if (!ids.includes(id)) ids.push(id);
-    saveMyPartyIds(ids);
-    setActivePartyId(id);
-    ensurePartyMembers(getParty(id));
-    addPartyActivity(id, "joined", `${getCurrentUserName()} joined the party`);
+      toast("Joined online party");
+      rerenderPartySheet();
+      openPartyCover(id);
+    })
+    .catch(err => {
+      console.error("DB join failed:", err);
+      toast("Could not join online party");
+    });
 
-    toast("👥 Joined party");
-    rerenderPartySheet();
-    openPartyCover(id);
-  }
-
-  function leavePartyLocalOnly(id) {
-  
-  if (getActivePartyId() === id) setActivePartyId("");
-
-  toast("Left party");
-  rerenderPartySheet();
+  return;
 }
 
 function leaveParty(id) {
-  if (window.GridWildAPI?.leaveParty && !String(id).startsWith("mock_")) {
-    window.GridWildAPI.leaveParty(id)
-      .then(async () => {
-        window.GridWildPartyLive?.setActivePartyId?.(null);
+  if (!id) return;
 
-        await window.GridWildPartyLive?.loadParty?.();
-        window.GridWildPartyLive?.refreshPartySheet?.();
-
-        leavePartyLocalOnly(id);
-        toast("Left online party");
-
-      })
-      .catch(err => {
-          console.error("DB leave failed:", err);
-          toast("Could not leave online party");
-      });
-
+  if (!window.GridWildAPI?.leaveParty) {
+    toast("Party service unavailable");
     return;
   }
 
-  leavePartyLocalOnly(id);
+  window.GridWildAPI.leaveParty(id)
+    .then(async () => {
+      if (getActivePartyId() === id) {
+        window.GridWildPartyLive?.setActivePartyId?.(null);
+      }
+
+      await window.GridWildPartyLive?.loadParty?.();
+      window.GridWildPartyLive?.refreshPartySheet?.();
+      refreshMapBeacon();
+      scheduleActivePartyHudRender();
+      toast("Left online party");
+      rerenderPartySheet();
+    })
+    .catch(err => {
+        console.error("DB leave failed:", err);
+        toast("Could not leave online party");
+    });
+
+  return;
 }
 
   function goalTypeFromQuestRecipe(recipe = {}) {
@@ -1137,96 +1099,22 @@ function createPartyFromQuest(quest) {
       locationLabel: form.locationLabel || locationResolution.locationLabel
     };
 
-    if (window.GridWildPartyLive?.createDbPartyFromLegacyForm && !form.__localOnly) {
-    window.GridWildPartyLive.createDbPartyFromLegacyForm(form)
-        .then(dbParty => {
-        toast("🎉 Online party started");
-        rerenderPartySheet();
+    if (!window.GridWildPartyLive?.createDbPartyFromLegacyForm) {
+      toast("Party service unavailable");
+      return null;
+    }
 
-        // For now, do not open the old cover for DB parties unless they are mirrored locally.
-        // Next patch will normalize DB party objects into old cover format.
-        })
+    window.GridWildPartyLive.createDbPartyFromLegacyForm(form)
+      .then(() => {
+        toast("Online party started");
+        rerenderPartySheet();
+      })
       .catch(err => {
         console.error("DB party create failed:", err);
         toast("Could not start online party");
-        });
+      });
 
     return null;
-    }
-
-    const center = window.map?.getCenter?.();
-    const mapLocation = locationResolution.resolvedLocation;
-
-    const party = {
-      id: makeId(),
-      title: form.title || autoTitle(form.goalType),
-      host: window.__gwUser?.username || "You",
-      mode: form.mode || "live",
-      visibility: form.visibility || "public",
-      goalType: form.goalType || "any",
-      goalLabel: goalLabel(form.goalType, form.target),
-      progress: 0,
-      target: Number(form.target || 10),
-      memberCount: 1,
-      distanceLabel: "here",
-      startsAt: form.mode === "scheduled" && form.startsAt
-        ? new Date(form.startsAt).toISOString()
-        : nowISO(),
-      durationMinutes: Number(form.durationMinutes || 60),
-      locationMode: form.locationMode || "anywhere",
-      locationUserId: form.locationUserId || null,
-      location: form.location || null,
-      resolvedLocation: form.resolvedLocation || null,
-      locationLabel: form.locationLabel || "Anywhere",
-      lat: Number(mapLocation?.lat || center?.lat || 38.911325),
-      lng: Number(mapLocation?.lng || center?.lng || -77.076678),
-      createdAt: nowISO(),
-      linkedQuestId: form.linkedQuestId || null,
-      linkedQuestTitle: form.linkedQuestTitle || "",
-      linkedQuestRecipe: form.linkedQuestRecipe || null
-    };
-
-    const parties = loadParties();
-    parties.unshift(party);
-    saveParties(parties);
-
-    const myIds = getMyPartyIds();
-    myIds.push(party.id);
-    saveMyPartyIds(myIds);
-
-    ensurePartyMembers(party);
-    addPartyActivity(party.id, "started", `${getCurrentUserName()} started the party`);
-
-    setActivePartyId(party.id);
-    toast("🎉 Party started");
-    rerenderPartySheet();
-    openPartyCover(party.id);
-
-    return party;
-  }
-
-  function autoTitle(goalType) {
-    return {
-      ants: "Ant Hunt",
-      birds: "Bird Walk",
-      insects: "Insect Sweep",
-      plants: "Plant Survey",
-      fungi: "Fungus Foray",
-      any: "Biodiversity Party"
-    }[goalType] || "GridWild Party";
-  }
-
-  function goalLabel(goalType, target) {
-    const n = Number(target || 10);
-
-    return {
-      ants: `Find ${n} ant observations`,
-      birds: `Detect ${n} bird species`,
-      insects: `Document ${n} insect observations`,
-      plants: `Document ${n} plant observations`,
-      fungi: `Find ${n} fungi / lichens`,
-      any: `Make ${n} useful observations`
-    }[goalType] || `Complete ${n} observations`;
   }
 
 
@@ -1388,7 +1276,7 @@ function partyReportUrl(id) {
     );
     const upcoming = all.filter(p => p.mode === "upcoming" || p.mode === "scheduled");
     const activeId = getActivePartyId();
-    const mine = all.filter(p => p.id === activeId || p.dbBacked);
+    const mine = all.filter(p => p.id === activeId);
     
     return `
       <div class="gw-card gw-party-hero-card">
@@ -1473,7 +1361,7 @@ function partyReportUrl(id) {
     const activeId = getActivePartyId();
 
     const rows = all
-    .filter(p => p.id === activeId || p.dbBacked)
+    .filter(p => p.id === activeId)
     .filter(p => p.endedAt || p.completedAt || countEvidenceForParty(p.id) > 0)
     .sort((a, b) =>
       new Date(b.endedAt || b.completedAt || b.startsAt || b.createdAt || 0) -
@@ -2076,6 +1964,9 @@ function drawPartyRecapMap(id) {
 
   if (type === "party_created") return "Party created";
   if (type === "player_joined") return "Player joined";
+  if (type === "player_left") return "Player left";
+  if (type === "party_ended") return "Party ended";
+  if (type === "evidence_counted") return "Observation counted";
 
   return type.replaceAll("_", " ");
 }

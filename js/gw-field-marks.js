@@ -1220,6 +1220,149 @@ Gall shape on plant
     return "organism";
   }
 
+  function uniq(values) {
+    return [...new Set(values.filter(Boolean))];
+  }
+
+  function exemplarFamiliesFor(mark, category) {
+    const text = String(mark?.label || "").toLowerCase();
+    const lane = category?.lane || mark?.lane;
+    const key = category?.key || mark?.category || "";
+    const families = [];
+    const add = (...names) => families.push(...names);
+
+    if (lane === "plant") {
+      if (key === "plant_form") {
+        if (hasAny(text, ["tree", "bark", "woody old", "deciduous"])) add("Fagaceae", "Betulaceae", "Sapindaceae", "Platanaceae");
+        if (hasAny(text, ["shrub", "branching bushy"])) add("Rosaceae", "Ericaceae", "Caprifoliaceae", "Rhamnaceae");
+        if (hasAny(text, ["herb", "non-woody", "annual", "weedy"])) add("Asteraceae", "Brassicaceae", "Plantaginaceae", "Amaranthaceae");
+        if (hasAny(text, ["vine", "climber", "twining", "tendril", "trailing"])) add("Vitaceae", "Convolvulaceae", "Fabaceae", "Cucurbitaceae");
+        if (hasAny(text, ["grass-like", "tussock", "clumping"])) add("Poaceae", "Cyperaceae", "Juncaceae");
+        if (hasAny(text, ["fern-like", "fronds"])) add("Polypodiaceae", "Dryopteridaceae", "Pteridaceae");
+        if (hasAny(text, ["moss-like", "mat-forming", "creeping"])) add("Bryaceae", "Polytrichaceae", "Caryophyllaceae", "Crassulaceae");
+        if (hasAny(text, ["aquatic", "emergent"])) add("Nymphaeaceae", "Alismataceae", "Araceae", "Typhaceae");
+        if (hasAny(text, ["rosette"])) add("Asteraceae", "Plantaginaceae", "Brassicaceae", "Crassulaceae");
+        if (hasAny(text, ["single stem", "upright"])) add("Apiaceae", "Asteraceae", "Poaceae");
+        if (hasAny(text, ["hollow stem"])) add("Apiaceae", "Poaceae", "Polygonaceae");
+        if (hasAny(text, ["square stem", "aromatic", "odor"])) add("Lamiaceae", "Rutaceae", "Apiaceae", "Myrtaceae");
+        if (hasAny(text, ["milky", "sap"])) add("Apocynaceae", "Euphorbiaceae", "Moraceae", "Papaveraceae");
+        if (hasAny(text, ["thorny", "spiny"])) add("Rosaceae", "Cactaceae", "Berberidaceae", "Rhamnaceae");
+        if (hasAny(text, ["succulent", "fleshy"])) add("Crassulaceae", "Cactaceae", "Aizoaceae");
+        if (hasAny(text, ["evergreen", "needle", "scale-like"])) add("Pinaceae", "Cupressaceae", "Taxaceae", "Ericaceae");
+      } else if (key === "leaf_arrangement") {
+        if (hasAny(text, ["opposite", "paired"])) add("Lamiaceae", "Rubiaceae", "Caprifoliaceae", "Oleaceae", "Sapindaceae");
+        if (hasAny(text, ["alternate", "spiral"])) add("Fagaceae", "Rosaceae", "Betulaceae", "Salicaceae", "Ericaceae");
+        if (hasAny(text, ["whorled"])) add("Rubiaceae", "Apocynaceae", "Gentianaceae", "Plantaginaceae");
+        if (hasAny(text, ["basal"])) add("Plantaginaceae", "Asteraceae", "Brassicaceae", "Primulaceae");
+        if (hasAny(text, ["branch tips", "clustered"])) add("Ericaceae", "Theaceae", "Aquifoliaceae", "Pinaceae");
+        if (hasAny(text, ["two-ranked"])) add("Poaceae", "Orchidaceae", "Taxaceae", "Ulmaceae");
+        if (hasAny(text, ["changes up stem"])) add("Araceae", "Ranunculaceae", "Asteraceae", "Brassicaceae");
+        if (hasAny(text, ["dense overlapping", "scale-like"])) add("Cupressaceae", "Selaginellaceae", "Lycopodiaceae");
+      } else if (key === "leaf_shape") {
+        if (hasAny(text, ["simple leaf"])) add("Fagaceae", "Betulaceae", "Salicaceae", "Rosaceae", "Ericaceae");
+        if (hasAny(text, ["compound", "leaflet"])) add("Fabaceae", "Sapindaceae", "Anacardiaceae", "Juglandaceae", "Rosaceae");
+        if (hasAny(text, ["pinnately"])) add("Fabaceae", "Rosaceae", "Juglandaceae", "Anacardiaceae");
+        if (hasAny(text, ["palmately"])) add("Sapindaceae", "Araliaceae", "Vitaceae", "Malvaceae");
+        if (hasAny(text, ["trifoliate"])) add("Fabaceae", "Rutaceae", "Anacardiaceae", "Oxalidaceae");
+        if (hasAny(text, ["needle", "bundle"])) add("Pinaceae", "Taxaceae", "Cupressaceae");
+        if (hasAny(text, ["scale-like"])) add("Cupressaceae", "Selaginellaceae", "Lycopodiaceae");
+        if (hasAny(text, ["strap", "linear"])) add("Poaceae", "Cyperaceae", "Iridaceae", "Orchidaceae", "Amaryllidaceae");
+        if (hasAny(text, ["heart-shaped", "kidney-shaped"])) add("Malvaceae", "Violaceae", "Aristolochiaceae", "Menispermaceae");
+        if (hasAny(text, ["oval", "elliptic", "lance"])) add("Rosaceae", "Ericaceae", "Salicaceae", "Lauraceae");
+        if (hasAny(text, ["lobed", "deeply divided"])) add("Sapindaceae", "Fagaceae", "Ranunculaceae", "Araliaceae");
+        if (hasAny(text, ["fan-shaped"])) add("Ginkgoaceae", "Arecaceae");
+        if (hasAny(text, ["spoon-shaped"])) add("Plantaginaceae", "Asteraceae", "Crassulaceae");
+        if (hasAny(text, ["arrowhead"])) add("Alismataceae", "Araceae");
+        if (hasAny(text, ["round leaf"])) add("Nymphaeaceae", "Tropaeolaceae", "Araliaceae");
+        if (hasAny(text, ["asymmetric"])) add("Ulmaceae", "Begoniaceae", "Cannabaceae");
+        if (hasAny(text, ["juvenile", "adult"])) add("Araceae", "Moraceae", "Euphorbiaceae");
+      } else if (key === "leaf_surface") {
+        if (hasAny(text, ["smooth leaf margin"])) add("Cornaceae", "Magnoliaceae", "Ericaceae", "Lauraceae");
+        if (hasAny(text, ["serrated", "toothed", "double-toothed"])) add("Rosaceae", "Betulaceae", "Ulmaceae", "Salicaceae");
+        if (hasAny(text, ["wavy"])) add("Fagaceae", "Ericaceae", "Polygonaceae");
+        if (hasAny(text, ["lobed margin"])) add("Fagaceae", "Sapindaceae", "Ranunculaceae");
+        if (hasAny(text, ["spiny margin"])) add("Aquifoliaceae", "Cactaceae", "Berberidaceae");
+        if (hasAny(text, ["rolled-under"])) add("Ericaceae", "Rosaceae");
+        if (hasAny(text, ["pointed", "drip-tip"])) add("Lauraceae", "Magnoliaceae", "Araceae");
+        if (hasAny(text, ["rounded", "notched"])) add("Ericaceae", "Rosaceae", "Malvaceae");
+        if (hasAny(text, ["heart-shaped leaf base", "tapered", "unequal"])) add("Malvaceae", "Ulmaceae", "Aristolochiaceae");
+        if (hasAny(text, ["hairy", "fuzzy"])) add("Boraginaceae", "Lamiaceae", "Asteraceae", "Malvaceae");
+        if (hasAny(text, ["glabrous", "waxy", "glossy"])) add("Lauraceae", "Magnoliaceae", "Aquifoliaceae", "Araceae");
+        if (hasAny(text, ["rough", "sandpapery"])) add("Ulmaceae", "Boraginaceae", "Cannabaceae");
+        if (hasAny(text, ["silvery"])) add("Elaeagnaceae", "Asteraceae", "Salicaceae");
+        if (hasAny(text, ["parallel veins"])) add("Poaceae", "Orchidaceae", "Iridaceae", "Araceae");
+        if (hasAny(text, ["net-like", "pinnate veins", "strong midrib"])) add("Fagaceae", "Rosaceae", "Salicaceae");
+        if (hasAny(text, ["palmate veins"])) add("Malvaceae", "Vitaceae", "Sapindaceae");
+        if (hasAny(text, ["translucent dots", "glands"])) add("Rutaceae", "Hypericaceae", "Myrtaceae");
+        if (hasAny(text, ["stipules"])) add("Rosaceae", "Rubiaceae", "Polygonaceae");
+        if (hasAny(text, ["sheathing", "petiole"])) add("Poaceae", "Cyperaceae", "Apiaceae", "Araceae");
+      } else if (key === "flowers") {
+        if (hasAny(text, ["radial"])) add("Rosaceae", "Ranunculaceae", "Caryophyllaceae");
+        if (hasAny(text, ["bilateral", "irregular", "lip"])) add("Fabaceae", "Lamiaceae", "Orchidaceae", "Plantaginaceae");
+        if (hasAny(text, ["number of petals", "petals separate"])) add("Rosaceae", "Brassicaceae", "Caryophyllaceae");
+        if (hasAny(text, ["fused", "tubular"])) add("Solanaceae", "Ericaceae", "Convolvulaceae", "Lamiaceae");
+        if (hasAny(text, ["bell-shaped"])) add("Ericaceae", "Campanulaceae", "Solanaceae");
+        if (hasAny(text, ["pea-shaped"])) add("Fabaceae");
+        if (hasAny(text, ["daisy-like", "composite"])) add("Asteraceae");
+        if (hasAny(text, ["umbel"])) add("Apiaceae", "Araliaceae", "Amaryllidaceae");
+        if (hasAny(text, ["spike", "raceme", "panicle"])) add("Plantaginaceae", "Brassicaceae", "Poaceae", "Polygonaceae");
+        if (hasAny(text, ["catkin"])) add("Betulaceae", "Fagaceae", "Salicaceae", "Juglandaceae");
+        if (hasAny(text, ["cone-like"])) add("Asteraceae", "Pinaceae", "Cupressaceae");
+        if (hasAny(text, ["bracts"])) add("Euphorbiaceae", "Nyctaginaceae", "Cornaceae");
+        if (hasAny(text, ["spur"])) add("Ranunculaceae", "Violaceae", "Orchidaceae", "Tropaeolaceae");
+        if (hasAny(text, ["stamens"])) add("Myrtaceae", "Rosaceae", "Hypericaceae");
+        if (hasAny(text, ["separate male", "female"])) add("Cucurbitaceae", "Fagaceae", "Betulaceae", "Euphorbiaceae");
+        if (hasAny(text, ["fragrant", "color", "season", "solitary", "clustered", "leaf axils", "stem tips", "tiny"])) add("Rosaceae", "Asteraceae", "Lamiaceae", "Ericaceae", "Orchidaceae");
+      } else if (key === "fruits") {
+        if (hasAny(text, ["berry"])) add("Ericaceae", "Solanaceae", "Vitaceae", "Caprifoliaceae");
+        if (hasAny(text, ["capsule"])) add("Papaveraceae", "Onagraceae", "Plantaginaceae", "Malvaceae");
+        if (hasAny(text, ["pod", "legume"])) add("Fabaceae", "Brassicaceae", "Apocynaceae");
+        if (hasAny(text, ["samara", "winged"])) add("Sapindaceae", "Oleaceae", "Ulmaceae");
+        if (hasAny(text, ["acorn", "nut"])) add("Fagaceae", "Juglandaceae", "Betulaceae");
+        if (hasAny(text, ["cone"])) add("Pinaceae", "Cupressaceae");
+        if (hasAny(text, ["drupe"])) add("Rosaceae", "Anacardiaceae", "Oleaceae", "Lauraceae");
+        if (hasAny(text, ["aggregate"])) add("Rosaceae", "Ranunculaceae");
+        if (hasAny(text, ["multiple fruit"])) add("Moraceae", "Bromeliaceae");
+        if (hasAny(text, ["burr", "hooks"])) add("Asteraceae", "Boraginaceae", "Rosaceae");
+        if (hasAny(text, ["parachute"])) add("Asteraceae", "Apocynaceae");
+        if (hasAny(text, ["silky"])) add("Apocynaceae", "Salicaceae");
+        if (hasAny(text, ["persistent", "beak", "awn"])) add("Geraniaceae", "Poaceae", "Ranunculaceae", "Asteraceae");
+        if (hasAny(text, ["fruit color", "upright", "dangling", "clusters", "season", "splitting"])) add("Rosaceae", "Ericaceae", "Fabaceae", "Sapindaceae");
+      } else if (key === "grass_like") {
+        if (hasAny(text, ["sedge", "triangular", "flat sedge"])) add("Cyperaceae");
+        if (hasAny(text, ["rush", "round rush"])) add("Juncaceae");
+        if (hasAny(text, ["grass", "jointed", "ligule", "auricle", "sheath", "spikelet", "awn", "feathery", "bristly"])) add("Poaceae");
+        if (hasAny(text, ["wetland"])) add("Cyperaceae", "Juncaceae", "Typhaceae", "Poaceae");
+        if (!families.length) add("Poaceae", "Cyperaceae", "Juncaceae");
+      }
+      add("Rosaceae", "Fabaceae", "Asteraceae", "Lamiaceae", "Poaceae", "Fagaceae");
+    } else if (lane === "cryptogam") {
+      if (hasAny(text, ["fern", "sori", "indusium", "fiddlehead", "frond"])) add("Polypodiaceae", "Dryopteridaceae", "Pteridaceae", "Thelypteridaceae", "Osmundaceae", "Aspleniaceae");
+      if (hasAny(text, ["moss", "capsule", "hairpoint", "costa", "liverwort"])) add("Bryaceae", "Polytrichaceae", "Sphagnaceae", "Mniaceae", "Marchantiaceae", "Brachytheciaceae");
+      if (hasAny(text, ["lichen", "crustose", "foliose", "fruticose", "apothecia", "soredia"])) add("Parmeliaceae", "Physciaceae", "Cladoniaceae", "Teloschistaceae", "Lecanoraceae", "Peltigeraceae");
+      if (!families.length) add("Parmeliaceae", "Bryaceae", "Polypodiaceae", "Cladoniaceae", "Dryopteridaceae", "Sphagnaceae");
+    } else if (lane === "fungus") {
+      add("Agaricaceae", "Amanitaceae", "Boletaceae", "Polyporaceae", "Russulaceae", "Cortinariaceae");
+      if (hasAny(text, ["gill", "stalk", "ring", "volva", "cap"])) add("Mycenaceae", "Amanitaceae", "Pluteaceae");
+      if (hasAny(text, ["pore", "shelf", "bracket", "wood"])) add("Fomitopsidaceae", "Ganodermataceae", "Meripilaceae");
+      if (hasAny(text, ["puffball"])) add("Lycoperdaceae");
+      if (hasAny(text, ["jelly"])) add("Tremellaceae", "Auriculariaceae");
+      if (hasAny(text, ["coral", "teeth", "spines"])) add("Clavariaceae", "Hydnaceae", "Hericiaceae");
+    } else if (lane === "insect") {
+      add("Apidae", "Formicidae", "Vespidae", "Coccinellidae", "Nymphalidae", "Syrphidae");
+      if (hasAny(text, ["elytra", "beetle", "hard wing"])) add("Carabidae", "Cerambycidae", "Scarabaeidae");
+      if (hasAny(text, ["hemelytra", "piercing", "beak", "true bug"])) add("Pentatomidae", "Coreidae", "Reduviidae", "Miridae");
+      if (hasAny(text, ["scaly", "butterfly", "moth", "proboscis", "caterpillar"])) add("Papilionidae", "Noctuidae", "Geometridae", "Sphingidae");
+      if (hasAny(text, ["dragonfly", "damselfly"])) add("Libellulidae", "Coenagrionidae", "Aeshnidae");
+      if (hasAny(text, ["halteres", "fly", "sponge"])) add("Muscidae", "Tachinidae", "Tipulidae");
+      if (hasAny(text, ["lacewing", "caddisfly", "mayfly"])) add("Chrysopidae", "Limnephilidae", "Baetidae");
+      if (hasAny(text, ["jumping", "raptorial", "swimming", "pollen", "spiny legs", "stilt"])) add("Acrididae", "Mantidae", "Dytiscidae", "Tettigoniidae");
+      if (hasAny(text, ["leaf-mining", "gall", "case-bearing"])) add("Gracillariidae", "Cynipidae", "Psychidae");
+    }
+
+    return uniq(families).slice(0, 8);
+  }
+
   function inferSayIt(label, category) {
     const parts = definitionsForContrast(label).filter(row => row.definition);
     if (parts.length > 1) {
@@ -1245,6 +1388,7 @@ Gall shape on plant
       caution: inferCaution(mark.label, category),
       sayIt: inferSayIt(mark.label, category),
       schematic: buildSchematic(mark, category),
+      exemplarFamilies: exemplarFamiliesFor(mark, category),
       codexStatus: "Codex link pending",
       directions
     };
@@ -1315,7 +1459,20 @@ Gall shape on plant
   function infoSheet(markOrId) {
     const mark = typeof markOrId === "string" ? get(markOrId) : markOrId;
     if (!mark) return null;
-    return mark.infoSheet || buildInfoSheet(mark, CATEGORY_BY_KEY[mark.category] || { title: mark.categoryLabel || "Field marks" });
+    return mark.infoSheet || buildInfoSheet(mark, CATEGORY_BY_KEY[mark.category] || {
+      title: mark.categoryLabel || "Field marks",
+      lane: mark.lane
+    });
+  }
+
+  function exemplarFamilies(markOrId) {
+    const mark = typeof markOrId === "string" ? get(markOrId) : markOrId;
+    if (!mark) return [];
+    const category = CATEGORY_BY_KEY[mark.category] || {
+      title: mark.categoryLabel || "Field marks",
+      lane: mark.lane
+    };
+    return mark.infoSheet?.exemplarFamilies || exemplarFamiliesFor(mark, category);
   }
 
   function infoSheets(options = {}) {
@@ -1387,6 +1544,7 @@ Gall shape on plant
     get,
     infoSheet,
     infoSheets,
+    exemplarFamilies,
     search,
     categories,
     suggestionsFor,

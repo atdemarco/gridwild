@@ -5,8 +5,13 @@
 
 (function () {
   const STORAGE_KEY = "gw_surveys_v1";
+  const PUCK_POS_KEY = "gw_survey_designer_puck_pos_v1";
 
   let designerRoot = null;
+  let designerPuck = null;
+  let designerMinimized = false;
+  let suppressNextPuckClick = false;
+  let puckResizeBound = false;
   let activeTool = "select";
   let selectedLayer = null;
 
@@ -18,6 +23,7 @@
     exclusions: null,
     denseZones: null,
     assets: null,
+    locality: null,
     taxonHeat: null
   };
 
@@ -94,6 +100,7 @@ function refreshFormFromDraft() {
       timeRange: "permanent",
       targetTaxon: "Any",
       publicMode: "private",
+      locality: null,
       geometries: {
         boundary: [],
         paths: [],
@@ -113,6 +120,49 @@ function refreshFormFromDraft() {
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#39;");
+  }
+
+  function showDesignerToast(message) {
+    if (typeof window.showGridWildToast === "function") {
+      window.showGridWildToast(message);
+      return;
+    }
+
+    let toast = document.getElementById("gwSurveyDesignerToast");
+
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "gwSurveyDesignerToast";
+      Object.assign(toast.style, {
+        position: "fixed",
+        left: "50%",
+        bottom: "118px",
+        zIndex: "999999",
+        transform: "translateX(-50%) translateY(10px)",
+        padding: "10px 14px",
+        borderRadius: "999px",
+        color: "#efe6d3",
+        background: "rgba(20,17,15,0.94)",
+        border: "1px solid rgba(215,183,116,0.34)",
+        boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
+        fontSize: "13px",
+        fontWeight: "800",
+        pointerEvents: "none",
+        opacity: "0",
+        transition: "opacity 180ms ease, transform 180ms ease"
+      });
+      document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.style.opacity = "1";
+    toast.style.transform = "translateX(-50%) translateY(0)";
+
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(-50%) translateY(10px)";
+    }, 1800);
   }
 
   function injectStyles() {
@@ -175,6 +225,10 @@ function refreshFormFromDraft() {
         backdrop-filter: blur(4px);
       }
 
+      .gw-survey-designer.is-minimized {
+        display: none;
+      }
+
       .gw-cd-panel {
         position: relative;
         z-index: 5;
@@ -230,11 +284,39 @@ function refreshFormFromDraft() {
         pointer-events: none;
       }
 
+      .gw-cd-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
       .gw-cd-title {
         font-size: 22px;
         font-weight: 950;
         color: #f0d18a;
         margin-bottom: 5px;
+      }
+
+      .gw-cd-icon-btn {
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        border: 1px solid rgba(215,183,116,0.32);
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: rgba(255,255,255,0.08);
+        color: #f0d18a;
+        font-size: 18px;
+        font-weight: 950;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .gw-cd-icon-btn:hover {
+        background: rgba(255,224,130,0.16);
+        border-color: rgba(240,209,138,0.58);
       }
 
       .gw-cd-sub {
@@ -295,6 +377,12 @@ function refreshFormFromDraft() {
         gap: 8px;
       }
 
+      .gw-cd-tool-span,
+      .gw-cd-btn.wide {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+
       .gw-cd-btn {
         border: 1px solid rgba(215,183,116,0.28);
         border-radius: 999px;
@@ -353,6 +441,20 @@ function refreshFormFromDraft() {
         font-size: 12px;
       }
 
+      .gw-cd-local-section {
+        margin-top: auto;
+      }
+
+      .gw-cd-local-readout {
+        margin-bottom: 10px;
+        border-radius: 12px;
+        padding: 10px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(215,183,116,0.16);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
         #gwSurveyDesignerMap.gw-cd-tool-select { cursor: default; }
 #gwSurveyDesignerMap.gw-cd-tool-boundary { cursor: crosshair; }
 #gwSurveyDesignerMap.gw-cd-tool-path { cursor: cell; }
@@ -378,6 +480,100 @@ function refreshFormFromDraft() {
   color: #ffd8d2;
   font-weight: 900;
   cursor: pointer;
+}
+
+.gw-cd-puck {
+  position: fixed;
+  z-index: 99994;
+  width: 126px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 999px;
+  color: #efe6d3;
+  background: linear-gradient(180deg, rgba(39,35,30,0.96), rgba(17,16,14,0.98));
+  border: 1px solid rgba(122,211,230,0.42);
+  box-shadow: 0 18px 42px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.08);
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.gw-cd-puck[hidden] {
+  display: none;
+}
+
+.gw-cd-puck.is-dragging {
+  cursor: grabbing;
+}
+
+.gw-cd-puck-main,
+.gw-cd-puck-close {
+  appearance: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.gw-cd-puck-main {
+  min-width: 0;
+  flex: 1;
+  height: 36px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px 0 4px;
+  background: rgba(255,255,255,0.06);
+}
+
+.gw-cd-puck-main:hover {
+  background: rgba(122,211,230,0.14);
+}
+
+.gw-cd-puck-mark {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #102421;
+  background: #76e7bf;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.gw-cd-puck-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(239,230,211,0.88);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.gw-cd-puck-close {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(170,55,45,0.28);
+  color: #ffd8d2;
+  font-size: 17px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.gw-cd-puck-close:hover {
+  background: rgba(210,72,58,0.42);
 }
 
       @media (max-width: 900px) {
@@ -878,7 +1074,7 @@ function addCurrentViewBoundary() {
   refreshRightPanel();
 }
 
-  function addMapCenterAsset() {
+function addMapCenterAsset() {
     ensureLayers();
 
     const c = designerMap ? designerMap.getCenter() : map.getCenter();
@@ -895,6 +1091,73 @@ function addCurrentViewBoundary() {
     redrawSurveyDraft();
     refreshRightPanel();
   }
+
+function normalizePickedLocation(location) {
+  const lat = Number(location?.lat);
+  const lng = Number(location?.lng);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  return {
+    lat,
+    lng,
+    label: String(location?.label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`),
+    source: String(location?.source || "location-picker"),
+    selectedAt: new Date().toISOString()
+  };
+}
+
+function formatLocalityReadout() {
+  const loc = normalizePickedLocation(draft.locality);
+  if (!loc) return "No designer locality selected.";
+
+  const coords = `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`;
+  if (!loc.label || loc.label === coords) return esc(coords);
+  return `${esc(loc.label)}<br><span class="gw-cd-muted">${esc(coords)}</span>`;
+}
+
+function applyDesignerLocality(location) {
+  const loc = normalizePickedLocation(location);
+
+  if (!loc) {
+    alert("Could not use that location.");
+    return;
+  }
+
+  pushUndoState();
+  draft.locality = loc;
+
+  if (designerMap) {
+    designerMap.setView([loc.lat, loc.lng], Math.max(designerMap.getZoom(), 18), {
+      animate: true
+    });
+  }
+
+  redrawSurveyDraft();
+  refreshRightPanel();
+}
+
+function openDesignerLocationPicker() {
+  if (!window.GridWildLocationPicker?.open) {
+    alert("Location Picker is not loaded.");
+    return;
+  }
+
+  const center = designerMap?.getCenter?.() || window.map?.getCenter?.();
+  const location = normalizePickedLocation(draft.locality) ||
+    (center ? {
+      lat: center.lat,
+      lng: center.lng,
+      label: `${center.lat.toFixed(5)}, ${center.lng.toFixed(5)}`,
+      source: "designer-map-center"
+    } : null);
+
+  window.GridWildLocationPicker.open({
+    location,
+    selectButtonLabel: "Use in Designer",
+    onSelect: applyDesignerLocality
+  });
+}
 
 function addDemoPath() {
   const dm = getDesignMap();
@@ -1079,7 +1342,7 @@ async function saveDraft() {
 
     window.GridWildSurveyLayer?.render?.();
 
-    alert("Survey saved online.");
+    showDesignerToast("Survey saved to GridWild");
     refreshRightPanel();
   } catch (err) {
     console.warn("Could not save survey online:", err);
@@ -1091,7 +1354,7 @@ async function saveDraft() {
     else surveys.unshift(draft);
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(surveys || []));
-    alert("Survey saved locally only.");
+    showDesignerToast("Survey saved locally");
     refreshRightPanel();
   }
 }
@@ -1401,6 +1664,12 @@ function placeAssetAt(latlng) {
         <div class="gw-cd-section-title">Saved surveys</div>
         <div class="gw-cd-muted">${loadSurveys().length} survey(s) available.</div>
       </div>
+
+      <div class="gw-cd-section gw-cd-local-section">
+        <div class="gw-cd-section-title">Local Picker</div>
+        <div class="gw-cd-local-readout">${formatLocalityReadout()}</div>
+        <button class="gw-cd-btn primary wide" id="gwCdPickLocal" type="button">Pick Location for Designer</button>
+      </div>
     `;
   }
 
@@ -1411,6 +1680,21 @@ function placeAssetAt(latlng) {
 
     ensureGeometryStyles();
     ensureGeometryLabels();
+
+    const locality = normalizePickedLocation(draft.locality);
+    if (locality && dl.locality) {
+      L.circleMarker([locality.lat, locality.lng], {
+        radius: 8,
+        color: "#f0d18a",
+        weight: 2,
+        fillColor: "#76e7bf",
+        fillOpacity: 0.72,
+        interactive: false
+      }).bindTooltip(locality.label || "Designer locality", {
+        permanent: false,
+        direction: "top"
+      }).addTo(dl.locality);
+    }
 
     if (draft.geometries.boundary?.length) {
       const s = getGeometryStyle("boundary", 0);
@@ -1540,11 +1824,205 @@ function placeAssetAt(latlng) {
 
     el.querySelector("#gwCdUndo")?.addEventListener("click", undoDesignerAction);
     el.querySelector("#gwCdRedo")?.addEventListener("click", redoDesignerAction);
+    el.querySelector("#gwCdPickLocal")?.addEventListener("click", openDesignerLocationPicker);
 
     updateUndoRedoButtons();
     }
 
+function defaultPuckPosition() {
+  const top = Math.max(92, Math.min(window.innerHeight - 76, 260));
+  return { left: 18, top };
+}
+
+function loadPuckPosition() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PUCK_POS_KEY) || "null");
+    if (Number.isFinite(Number(parsed?.left)) && Number.isFinite(Number(parsed?.top))) {
+      return {
+        left: Number(parsed.left),
+        top: Number(parsed.top)
+      };
+    }
+  } catch {}
+
+  return defaultPuckPosition();
+}
+
+function clampPuckPosition(pos) {
+  const margin = 10;
+  const width = designerPuck?.offsetWidth || 126;
+  const height = designerPuck?.offsetHeight || 46;
+
+  return {
+    left: Math.max(margin, Math.min(window.innerWidth - width - margin, Number(pos?.left) || margin)),
+    top: Math.max(margin, Math.min(window.innerHeight - height - margin, Number(pos?.top) || margin))
+  };
+}
+
+function positionDesignerPuck(pos) {
+  if (!designerPuck) return;
+
+  const next = clampPuckPosition(pos || loadPuckPosition());
+  designerPuck.style.left = `${next.left}px`;
+  designerPuck.style.top = `${next.top}px`;
+}
+
+function savePuckPosition() {
+  if (!designerPuck) return;
+
+  try {
+    localStorage.setItem(PUCK_POS_KEY, JSON.stringify({
+      left: Number.parseFloat(designerPuck.style.left) || 18,
+      top: Number.parseFloat(designerPuck.style.top) || 92
+    }));
+  } catch {}
+}
+
+function bindPuckResize() {
+  if (puckResizeBound) return;
+  puckResizeBound = true;
+
+  window.addEventListener("resize", () => {
+    if (!designerPuck || designerPuck.hidden) return;
+    positionDesignerPuck({
+      left: Number.parseFloat(designerPuck.style.left) || 18,
+      top: Number.parseFloat(designerPuck.style.top) || 92
+    });
+    savePuckPosition();
+  });
+}
+
+function removeDesignerPuck() {
+  designerPuck?.remove();
+  designerPuck = null;
+  suppressNextPuckClick = false;
+}
+
+function ensureDesignerPuck() {
+  if (designerPuck) return designerPuck;
+
+  designerPuck = document.createElement("div");
+  designerPuck.className = "gw-cd-puck";
+  designerPuck.hidden = true;
+  designerPuck.innerHTML = `
+    <button class="gw-cd-puck-main" type="button" aria-label="Restore Survey Designer" title="Restore Survey Designer">
+      <span class="gw-cd-puck-mark">SD</span>
+      <span class="gw-cd-puck-text">Designer</span>
+    </button>
+    <button class="gw-cd-puck-close" type="button" aria-label="Close Survey Designer" title="Close Survey Designer">&times;</button>
+  `;
+
+  let drag = null;
+
+  designerPuck.addEventListener("pointerdown", evt => {
+    if (evt.pointerType === "mouse" && evt.button !== 0) return;
+    if (evt.target.closest(".gw-cd-puck-close")) return;
+
+    const startLeft = Number.parseFloat(designerPuck.style.left) || loadPuckPosition().left;
+    const startTop = Number.parseFloat(designerPuck.style.top) || loadPuckPosition().top;
+
+    drag = {
+      pointerId: evt.pointerId,
+      startX: evt.clientX,
+      startY: evt.clientY,
+      startLeft,
+      startTop,
+      moved: false
+    };
+
+    designerPuck.setPointerCapture?.(evt.pointerId);
+  });
+
+  designerPuck.addEventListener("pointermove", evt => {
+    if (!drag || drag.pointerId !== evt.pointerId) return;
+
+    const dx = evt.clientX - drag.startX;
+    const dy = evt.clientY - drag.startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) drag.moved = true;
+    if (!drag.moved) return;
+
+    evt.preventDefault();
+    designerPuck.classList.add("is-dragging");
+    positionDesignerPuck({
+      left: drag.startLeft + dx,
+      top: drag.startTop + dy
+    });
+  });
+
+  designerPuck.addEventListener("pointerup", evt => {
+    if (!drag || drag.pointerId !== evt.pointerId) return;
+
+    suppressNextPuckClick = drag.moved;
+    drag = null;
+    designerPuck.classList.remove("is-dragging");
+    designerPuck.releasePointerCapture?.(evt.pointerId);
+    savePuckPosition();
+  });
+
+  designerPuck.addEventListener("pointercancel", evt => {
+    if (drag?.pointerId === evt.pointerId) {
+      drag = null;
+      designerPuck.classList.remove("is-dragging");
+    }
+  });
+
+  designerPuck.addEventListener("click", evt => {
+    if (evt.target.closest(".gw-cd-puck-close")) return;
+
+    if (suppressNextPuckClick) {
+      suppressNextPuckClick = false;
+      return;
+    }
+
+    restoreDesigner();
+  });
+
+  designerPuck.querySelector(".gw-cd-puck-close")?.addEventListener("click", evt => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    close();
+  });
+
+  document.body.appendChild(designerPuck);
+  positionDesignerPuck(loadPuckPosition());
+  bindPuckResize();
+
+  return designerPuck;
+}
+
+function minimizeDesigner() {
+  if (!designerRoot) return;
+
+  syncDraftFromForm?.();
+  hideSurveyContextMenu();
+  designerMinimized = true;
+  designerRoot.classList.add("is-minimized");
+
+  const puck = ensureDesignerPuck();
+  positionDesignerPuck(loadPuckPosition());
+  puck.hidden = false;
+}
+
+function restoreDesigner() {
+  if (!designerRoot) return;
+
+  designerMinimized = false;
+  designerRoot.classList.remove("is-minimized");
+
+  if (designerPuck) {
+    designerPuck.hidden = true;
+  }
+
+  setTimeout(() => {
+    designerMap?.invalidateSize?.();
+    redrawSurveyDraft();
+    refreshRightPanel();
+  }, 80);
+}
+
     function close() {
+    designerMinimized = false;
+    removeDesignerPuck();
     clearLayers();
 
     if (designerMap) {
@@ -1583,6 +2061,7 @@ function placeAssetAt(latlng) {
     exclusions: L.layerGroup().addTo(designerMap),
     denseZones: L.layerGroup().addTo(designerMap),
     assets: L.layerGroup().addTo(designerMap),
+    locality: L.layerGroup().addTo(designerMap),
     taxonHeat: L.layerGroup().addTo(designerMap)
   };
 
@@ -1694,7 +2173,7 @@ function getCurrentDraftBounds() {
     injectStyles();
     ensureLayers();
 
-    if (designerRoot) designerRoot.remove();
+    if (designerRoot || designerMap) close();
 
     draft = existingDraft
   ? normalizeSurveyForEdit(existingDraft)
@@ -1707,7 +2186,10 @@ function getCurrentDraftBounds() {
     designerRoot.className = "gw-survey-designer";
     designerRoot.innerHTML = `
       <aside class="gw-cd-panel gw-cd-left">
-        <div class="gw-cd-title">Survey Designer</div>
+        <div class="gw-cd-header">
+          <div class="gw-cd-title">Survey Designer</div>
+          <button class="gw-cd-icon-btn" id="gwCdMinimize" type="button" aria-label="Minimize Survey Designer" title="Minimize">&minus;</button>
+        </div>
         <div class="gw-cd-sub">
           Fullscreen planning mode for survey boundaries, paths, exclusion zones,
           dense sampling zones, assets, and target taxa.
@@ -1765,18 +2247,7 @@ function getCurrentDraftBounds() {
             <button class="gw-cd-btn gw-cd-tool-btn" data-tool="exclusion">Exclusion</button>
             <button class="gw-cd-btn gw-cd-tool-btn" data-tool="dense">Dense Zone</button>
             <button class="gw-cd-btn gw-cd-tool-btn" data-tool="asset">Asset</button>
-          </div>
-        </div>
-
-        <div class="gw-cd-section">
-          <div class="gw-cd-section-title">Fast placeholder actions</div>
-          <div class="gw-cd-tools">
-            <button class="gw-cd-btn" id="gwCdUseView">Use View as Boundary</button>
-            <button class="gw-cd-btn" id="gwCdAddPath">Add Demo Path</button>
-            <button class="gw-cd-btn" id="gwCdAddExclusion">Add Exclusion</button>
-            <button class="gw-cd-btn" id="gwCdAddDense">Add Dense Zone</button>
-            <button class="gw-cd-btn" id="gwCdTaxonHeat">Show Taxon Heat</button>
-            <button class="gw-cd-btn danger" id="gwCdClear">Clear Layers</button>
+            <button class="gw-cd-btn danger gw-cd-tool-span" id="gwCdClear">Clear Layers</button>
           </div>
         </div>
 
@@ -1850,20 +2321,25 @@ function getCurrentDraftBounds() {
   }
 
   function bind() {
+    const onClick = (selector, handler) => {
+      designerRoot.querySelector(selector)?.addEventListener("click", handler);
+    };
+
     designerRoot.querySelectorAll(".gw-cd-tool-btn").forEach(btn => {
       btn.onclick = () => setTool(btn.dataset.tool);
     });
 
-    designerRoot.querySelector("#gwCdUndo").onclick = undoDesignerAction;
-    designerRoot.querySelector("#gwCdRedo").onclick = redoDesignerAction;
+    onClick("#gwCdUndo", undoDesignerAction);
+    onClick("#gwCdRedo", redoDesignerAction);
 
-    designerRoot.querySelector("#gwCdUseView").onclick = () => { pushUndoState(); addCurrentViewBoundary(); };
-    designerRoot.querySelector("#gwCdAddPath").onclick = () => { pushUndoState(); addDemoPath(); };
-    designerRoot.querySelector("#gwCdAddExclusion").onclick = () => { pushUndoState(); addDemoExclusion(); };
-    designerRoot.querySelector("#gwCdAddDense").onclick = () => { pushUndoState(); addDemoDenseZone(); };
-    designerRoot.querySelector("#gwCdAddAsset").onclick = () => { pushUndoState(); addMapCenterAsset(); };
+    onClick("#gwCdUseView", () => { pushUndoState(); addCurrentViewBoundary(); });
+    onClick("#gwCdAddPath", () => { pushUndoState(); addDemoPath(); });
+    onClick("#gwCdAddExclusion", () => { pushUndoState(); addDemoExclusion(); });
+    onClick("#gwCdAddDense", () => { pushUndoState(); addDemoDenseZone(); });
+    onClick("#gwCdAddAsset", () => { pushUndoState(); addMapCenterAsset(); });
+    onClick("#gwCdMinimize", minimizeDesigner);
 
-    designerRoot.querySelector("#gwCdClear").onclick = () => {
+    onClick("#gwCdClear", () => {
         pushUndoState();
         clearLayers();
         draft.geometries = {
@@ -1873,9 +2349,10 @@ function getCurrentDraftBounds() {
             denseZones: [],
             assets: []
         };
+        redrawSurveyDraft();
         refreshRightPanel();
         updateUndoRedoButtons();
-    };
+    });
 
     designerRoot.querySelector("#gwCdClose").onclick = (evt) => {
     evt.preventDefault();
@@ -1987,6 +2464,9 @@ function getCurrentDraftBounds() {
     open,
     openExisting,
     close,
+    minimize: minimizeDesigner,
+    restore: restoreDesigner,
+    isMinimized: () => designerMinimized === true,
     loadSurveys,
     saveSurveys,
     deleteSurvey,

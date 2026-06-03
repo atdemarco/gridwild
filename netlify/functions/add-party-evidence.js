@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { applyPartyTiming } = require("./_party-duration");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -21,6 +22,19 @@ exports.handler = async function (event) {
     if (!party_id) throw new Error("party_id is required");
     if (!player_id) throw new Error("player_id is required");
     if (!draft_id) throw new Error("draft_id is required");
+
+    const { data: party, error: partyError } = await supabase
+      .from("parties")
+      .select("*")
+      .eq("id", party_id)
+      .single();
+
+    if (partyError) throw partyError;
+
+    const timing = await applyPartyTiming(supabase, party, { playerId: player_id });
+    if (timing.party?.status === "ended") {
+      throw new Error("This party has ended.");
+    }
 
     const { data, error } = await supabase
       .from("party_evidence")

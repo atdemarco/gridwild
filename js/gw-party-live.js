@@ -62,9 +62,15 @@ async function loadPartyNow(options = {}) {
       options.forceNearby ||
       !lastNearbyPartiesLoadedAt ||
       now - lastNearbyPartiesLoadedAt >= NEARBY_PARTIES_REFRESH_MS;
+    let party = data?.party || null;
+
+    if (activeId && (!party || party.status === "ended")) {
+      setActivePartyId(null);
+      party = null;
+    }
 
     window.__gwState = window.__gwState || {};
-    window.__gwState.party = data.party;
+    window.__gwState.party = party;
     window.__gwState.partyMembers = data.members || [];
     window.__gwState.partyEvents = data.events || [];
     window.__gwState.partyEvidence = data.evidence || [];
@@ -73,9 +79,9 @@ async function loadPartyNow(options = {}) {
 
     window.__gwState.partyRoute = [];
 
-    if (data.party?.id) {
+    if (party?.id) {
       try {
-        const routeData = await window.GridWildAPI.getPartyRoute(data.party.id);
+        const routeData = await window.GridWildAPI.getPartyRoute(party.id);
         window.__gwState.partyRoute = routeData.route || [];
       } catch (err) {
         console.warn("Could not load party route:", err);
@@ -83,8 +89,8 @@ async function loadPartyNow(options = {}) {
       }
     }
 
-    if (data.party?.id && data.party.id !== getActivePartyId()) {
-      setActivePartyId(data.party.id);
+    if (party?.id && party.id !== getActivePartyId()) {
+      setActivePartyId(party.id);
     }
 
     if (shouldRefreshNearby) {

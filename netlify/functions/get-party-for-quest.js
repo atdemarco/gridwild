@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { applyPartyTimingToRows } = require("./_party-duration");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -38,9 +39,11 @@ exports.handler = async function(event) {
 
     if (partiesError) throw partiesError;
 
-    const party = (parties || []).find(p =>
-      p.visibility === "public" ||
-      p.created_by === player_id
+    const timedParties = await applyPartyTimingToRows(supabase, parties || [], { playerId: player_id });
+
+    const party = timedParties.find(p =>
+      p.status !== "ended" &&
+      (p.visibility === "public" || p.created_by === player_id)
     ) || null;
 
     if (!party) {
@@ -75,6 +78,8 @@ exports.handler = async function(event) {
 
     if (evidenceError) throw evidenceError;
 
+    const progress = (evidence || []).filter(row => row.status !== "excluded").length;
+
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -82,7 +87,7 @@ exports.handler = async function(event) {
         members: members || [],
         events: partyEvents || [],
         evidence: evidence || [],
-        progress: (evidence || []).length
+        progress
       })
     };
   } catch (err) {

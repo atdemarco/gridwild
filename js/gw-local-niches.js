@@ -6,6 +6,8 @@
 (function () {
   const STORAGE_KEY = "gw_local_niche_controls_v1";
   const LAYER_VISIBLE_KEY = "gw_local_niche_layer_visible";
+  const BOOKMARKS_STORAGE_KEY = "gw_local_niche_bookmarks_v1";
+  const BOOKMARKS_VERSION = 1;
   const CONTROLS_VERSION = 2;
   const PANE = "gwLocalNichePane";
   const LABEL_PANE = "gwLocalNicheLabelPane";
@@ -123,8 +125,9 @@
     thresholdSubdivideApproach: false
   };
 
+  const initialBookmarkedNiches = loadBookmarkedNiches();
   const state = {
-    niches: [],
+    niches: initialBookmarkedNiches.slice(),
     selectedId: null,
     loading: false,
     loadingAction: null,
@@ -136,7 +139,8 @@
     layerVisible: loadLayerVisible(),
     detectorDebug: null,
     constrainedGeometryDebug: null,
-    samplingToast: null
+    samplingToast: null,
+    bookmarkedNiches: initialBookmarkedNiches
   };
 
   function esc(s) {
@@ -152,6 +156,188 @@
     const id = String(niche?.id || "");
     const homeId = String(window.__gwState?.homeNicheId || "");
     return Boolean(niche?.is_home_niche || (id && homeId && id === homeId));
+  }
+
+  function bookmarkIconSvg() {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M7 4h10a1 1 0 0 1 1 1v16l-6-3.6L6 21V5a1 1 0 0 1 1-1Z"></path>
+      </svg>
+    `;
+  }
+
+  function plainClone(value) {
+    try {
+      return JSON.parse(JSON.stringify(value || null));
+    } catch {
+      return null;
+    }
+  }
+
+  function bookmarkStorageKey() {
+    try {
+      const playerId = localStorage.getItem("gwPlayerId");
+      return playerId ? `${BOOKMARKS_STORAGE_KEY}:${playerId}` : BOOKMARKS_STORAGE_KEY;
+    } catch {
+      return BOOKMARKS_STORAGE_KEY;
+    }
+  }
+
+  function nicheIdentifiers(nicheOrKey) {
+    if (typeof nicheOrKey === "string" || typeof nicheOrKey === "number") {
+      const value = String(nicheOrKey || "").trim();
+      return value ? [value] : [];
+    }
+
+    const values = [
+      nicheOrKey?.id,
+      nicheOrKey?.source_key,
+      nicheOrKey?.metrics?.source_key
+    ]
+      .map(value => String(value || "").trim())
+      .filter(Boolean);
+
+    return [...new Set(values)];
+  }
+
+  function bookmarkMatches(a, b) {
+    const aIds = nicheIdentifiers(a);
+    const bIds = nicheIdentifiers(b);
+    return Boolean(aIds.length && bIds.length && aIds.some(id => bIds.includes(id)));
+  }
+
+  function sanitizeBookmarkedNiche(niche, bookmarkedAt = "") {
+    const snapshot = plainClone(niche);
+    if (!snapshot) return null;
+
+    const lat = Number(snapshot.centroid_lat);
+    const lng = Number(snapshot.centroid_lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    if (snapshot.metrics && typeof snapshot.metrics === "object") {
+      snapshot.metrics = { ...snapshot.metrics };
+      if (snapshot.metrics.taxonomy_summary && typeof snapshot.metrics.taxonomy_summary === "object") {
+        snapshot.metrics.taxonomy_summary = { ...snapshot.metrics.taxonomy_summary };
+        delete snapshot.metrics.taxonomy_summary.tree;
+      }
+      delete snapshot.metrics.taxonomy_tree;
+    }
+
+    snapshot.centroid_lat = lat;
+    snapshot.centroid_lng = lng;
+    snapshot._bookmarked_niche = true;
+    snapshot._bookmark_only = true;
+    snapshot.bookmarked_at = bookmarkedAt || snapshot.bookmarked_at || new Date().toISOString();
+    return snapshot;
+  }
+
+  function loadBookmarkedNiches() {
+    try {
+      const keys = [...new Set([bookmarkStorageKey(), BOOKMARKS_STORAGE_KEY])];
+      const raw = keys.map(key => localStorage.getItem(key)).find(Boolean);
+      const parsed = raw ? JSON.parse(raw) : null;
+      const rows = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.niches)
+          ? parsed.niches
+          : [];
+
+      return rows
+        .map(row => sanitizeBookmarkedNiche(row, row?.bookmarked_at))
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  function saveBookmarkedNiches() {
+    try {
+      const niches = state.bookmarkedNiches
+        .map(row => sanitizeBookmarkedNiche(row, row?.bookmarked_at))
+        .filter(Boolean);
+      localStorage.setItem(bookmarkStorageKey(), JSON.stringify({
+        version: BOOKMARKS_VERSION,
+        niches
+      }));
+      state.bookmarkedNiches = niches;
+      updateBookmarkedGlobalState();
+      return true;
+    } catch (err) {
+      console.warn("Could not save bookmarked local niches:", err);
+      return false;
+    }
+  }
+
+  function updateBookmarkedGlobalState() {
+    window.__gwState = window.__gwState || {};
+    window.__gwState.bookmarkedNiches = state.bookmarkedNiches.slice();
+    window.__gwState.bookmarkedNicheIds = state.bookmarkedNiches
+      .map(niche => nicheIdentifiers(niche)[0])
+      .filter(Boolean);
+  }
+
+  function savedBookmarkFor(nicheOrKey) {
+    return state.bookmarkedNiches.find(bookmark => bookmarkMatches(bookmark, nicheOrKey)) || null;
+  }
+
+  function isBookmarkedNiche(nicheOrKey) {
+    return Boolean(savedBookmarkFor(nicheOrKey));
+  }
+
+  function mergeBookmarkedNichesIntoState() {
+    if (!state.bookmarkedNiches.length) {
+      state.niches = state.niches.map(niche => ({
+        ...niche,
+        _bookmarked_niche: false,
+        _bookmark_only: false
+      }));
+      updateBookmarkedGlobalState();
+      return;
+    }
+
+    const bookmarkRows = state.bookmarkedNiches.map((bookmark) => {
+      const hasLiveMatch = state.niches.some(niche =>
+        bookmarkMatches(niche, bookmark) && niche._bookmark_only !== true
+      );
+      return {
+        ...bookmark,
+        _bookmarked_niche: true,
+        _bookmark_only: !hasLiveMatch
+      };
+    });
+
+    state.niches = mergeNiches(state.niches, bookmarkRows).map((niche) => {
+      const bookmark = savedBookmarkFor(niche);
+      return bookmark
+        ? {
+            ...niche,
+            _bookmarked_niche: true,
+            _bookmark_only: niche._bookmark_only === true
+          }
+        : {
+            ...niche,
+            _bookmarked_niche: false,
+            _bookmark_only: false
+          };
+    });
+    updateBookmarkedGlobalState();
+  }
+
+  function reloadBookmarkedNichesFromStorage() {
+    const next = loadBookmarkedNiches();
+    const before = state.bookmarkedNiches.map(niche => nicheIdentifiers(niche).join("|")).join(";");
+    const after = next.map(niche => nicheIdentifiers(niche).join("|")).join(";");
+    if (before === after) {
+      updateBookmarkedGlobalState();
+      return;
+    }
+
+    state.bookmarkedNiches = next;
+    state.niches = state.niches.filter(niche => niche._bookmark_only !== true);
+    mergeBookmarkedNichesIntoState();
+    updateNicheDistances();
+    drawNicheLayer();
+    renderIntoPage();
   }
 
   function homeUserCount(niche) {
@@ -1140,6 +1326,7 @@
   function nicheMapLabelHtml(niche) {
     const exemplarPhrase = nicheHudExemplarPhrase(niche);
     const homeClass = isHomeNiche(niche) ? " is-home-niche" : "";
+    const bookmarkClass = isBookmarkedNiche(niche) ? " is-bookmarked-niche" : "";
     const action = abbreviateMapLabel(exemplarPhrase ||
       phraseForNiche(niche || {})
         .replace(/^(Sample|Survey|Look for|Revisit|Check)\s+/i, "")
@@ -1150,11 +1337,11 @@
     }));
 
     if (!place.place) {
-      return `<span class="gw-niche-label-chip${homeClass}"><span class="gw-niche-label-main">${esc(displayNicheShortTitle(niche))}</span></span>`;
+      return `<span class="gw-niche-label-chip${homeClass}${bookmarkClass}"><span class="gw-niche-label-main">${esc(displayNicheShortTitle(niche))}</span></span>`;
     }
 
     return `
-      <span class="gw-niche-label-chip${homeClass}">
+      <span class="gw-niche-label-chip${homeClass}${bookmarkClass}">
         <span class="gw-niche-label-main">${esc(action || displayNicheShortTitle(niche))}</span>
         <span class="gw-niche-label-place"><i>${esc(place.relation)}</i><b>${esc(place.place)}</b></span>
       </span>
@@ -6206,6 +6393,9 @@
       if (current) {
         current.is_home_niche = Boolean(current.is_home_niche || niche.is_home_niche);
         current.home_user_count = Math.max(homeUserCount(current), homeUserCount(niche));
+        current._bookmarked_niche = Boolean(current._bookmarked_niche || niche._bookmarked_niche);
+        current._bookmark_only = Boolean(current._bookmark_only === true && niche._bookmark_only === true);
+        current.bookmarked_at = current.bookmarked_at || niche.bookmarked_at;
       }
       const score = Number(niche.questability_score || 0);
       const currentScore = Number(current?.questability_score || 0);
@@ -6225,7 +6415,12 @@
         byKey.set(key, {
           ...niche,
           is_home_niche: Boolean(niche.is_home_niche || current?.is_home_niche),
-          home_user_count: Math.max(homeUserCount(niche), homeUserCount(current))
+          home_user_count: Math.max(homeUserCount(niche), homeUserCount(current)),
+          _bookmarked_niche: Boolean(niche._bookmarked_niche || current?._bookmarked_niche),
+          _bookmark_only: current
+            ? Boolean(niche._bookmark_only === true && current._bookmark_only === true)
+            : Boolean(niche._bookmark_only),
+          bookmarked_at: niche.bookmarked_at || current?.bookmarked_at
         });
       }
     }
@@ -6255,6 +6450,7 @@
   function addRuntimeNiche(niche, options = {}) {
     if (!niche) return null;
     state.niches = mergeNiches(state.niches, [niche]);
+    mergeBookmarkedNichesIntoState();
     updateNicheDistances();
 
     const key = nicheKey(niche) || niche.source_key || niche.id;
@@ -6468,6 +6664,7 @@
     state.niches = state.controls.thresholdSubdivideApproach === true
       ? capThresholdSubdivideNiches(mergeNiches(serverNiches, generated))
       : mergeNiches(state.niches, serverNiches, generated);
+    mergeBookmarkedNichesIntoState();
     syncThresholdSubdivideDebugFromNiches(state.niches);
     const visibleCorridorCount = state.niches.filter(isCorridorNiche).length;
     state.loading = false;
@@ -6557,6 +6754,7 @@
 
       generated = generated.map(retitleNiche);
       state.niches = mergeNiches(generated);
+      mergeBookmarkedNichesIntoState();
       updateNicheDistances(origin);
       state.loading = false;
       state.loadingAction = null;
@@ -8251,7 +8449,9 @@
 
   function renderLocalNichesHtml() {
     injectStyles();
-    const rows = (state.niches || []).filter(isCellSeededNiche);
+    const rows = (state.niches || []).filter(niche =>
+      isCellSeededNiche(niche) || isBookmarkedNiche(niche)
+    );
 
     return `
       <div class="gw-card gw-local-niches-card">
@@ -8262,12 +8462,13 @@
           ${rows.length ? `
             <div class="gw-list">
               ${rows.map((niche) => `
-                <div class="gw-rowline gw-niche-row ${isHomeNiche(niche) ? "is-home-niche" : ""} ${isSelectedNiche(niche) ? "is-selected-niche" : ""} ${isCorridorNiche(niche) ? "is-heat-tendril" : ""}" data-niche-key="${esc(nicheKey(niche))}">
+                <div class="gw-rowline gw-niche-row ${isHomeNiche(niche) ? "is-home-niche" : ""} ${isBookmarkedNiche(niche) ? "is-bookmarked-niche" : ""} ${isSelectedNiche(niche) ? "is-selected-niche" : ""} ${isCorridorNiche(niche) ? "is-heat-tendril" : ""}" data-niche-key="${esc(nicheKey(niche))}">
                   <span class="gw-niche-row-main">
                     <span class="gw-niche-icon">${esc(iconForNiche(niche))}</span>
                     <span class="gw-niche-row-text">
                       <span class="gw-niche-title">
                         ${isHomeNiche(niche) ? `<span class="gw-niche-home-mark" aria-hidden="true">${homeIconSvg()}</span>` : ""}
+                        ${isBookmarkedNiche(niche) ? `<span class="gw-niche-bookmark-mark" aria-hidden="true">${bookmarkIconSvg()}</span>` : ""}
                         ${esc(displayNicheTitle(niche))}
                       </span>
                       <span class="gw-muted gw-niche-sub">
@@ -8307,16 +8508,23 @@
   }
 
   function nicheByKey(key) {
-    return state.niches.find((n) => String(n.id || n.source_key) === String(key)) || null;
+    return state.niches.find((n) => bookmarkMatches(n, key)) || null;
   }
 
   function replaceNicheInState(nextNiche) {
-    const nextKey = String(nextNiche?.id || nextNiche?.source_key || "");
-    if (!nextKey) return;
-    const idx = state.niches.findIndex((n) => String(n.id || n.source_key) === nextKey);
+    const nextIds = nicheIdentifiers(nextNiche);
+    if (!nextIds.length) return false;
+    const idx = state.niches.findIndex((n) => bookmarkMatches(n, nextNiche));
     if (idx >= 0) {
-      state.niches[idx] = nextNiche;
+      state.niches[idx] = {
+        ...state.niches[idx],
+        ...nextNiche,
+        _bookmarked_niche: isBookmarkedNiche(nextNiche),
+        _bookmark_only: state.niches[idx]._bookmark_only === true
+      };
+      return true;
     }
+    return false;
   }
 
   function bindLocalNicheControls(root = document) {
@@ -8470,6 +8678,109 @@
     }
   }
 
+  function upsertBookmarkedSnapshot(niche) {
+    const snapshot = sanitizeBookmarkedNiche(niche, savedBookmarkFor(niche)?.bookmarked_at);
+    if (!snapshot) return false;
+
+    const idx = state.bookmarkedNiches.findIndex(bookmark => bookmarkMatches(bookmark, snapshot));
+    if (idx >= 0) {
+      state.bookmarkedNiches[idx] = {
+        ...snapshot,
+        bookmarked_at: state.bookmarkedNiches[idx].bookmarked_at || snapshot.bookmarked_at
+      };
+    } else {
+      state.bookmarkedNiches.push(snapshot);
+    }
+
+    return saveBookmarkedNiches();
+  }
+
+  function removeBookmarkedSnapshot(nicheOrKey) {
+    const before = state.bookmarkedNiches.length;
+    state.bookmarkedNiches = state.bookmarkedNiches
+      .filter(bookmark => !bookmarkMatches(bookmark, nicheOrKey));
+    const changed = state.bookmarkedNiches.length !== before;
+    if (changed) saveBookmarkedNiches();
+    return changed;
+  }
+
+  async function addBookmarkNiche(key) {
+    const original = nicheByKey(key);
+    if (!original) return null;
+
+    let bookmarkNiche = original;
+    try {
+      if (window.GridWildAPI?.upsertLocalNiches) {
+        bookmarkNiche = await ensurePersistedNiche(original);
+      }
+    } catch (err) {
+      console.warn("Could not persist bookmarked niche; keeping local bookmark snapshot:", err);
+    }
+
+    const merged = retitleNiche({
+      ...original,
+      ...bookmarkNiche,
+      id: bookmarkNiche?.id || original.id,
+      source_key: bookmarkNiche?.source_key || original.source_key,
+      _runtimeOnly: bookmarkNiche?._runtimeOnly === undefined
+        ? original._runtimeOnly
+        : bookmarkNiche._runtimeOnly
+    });
+
+    if (!replaceNicheInState(merged)) {
+      state.niches = mergeNiches(state.niches, [merged]);
+    }
+    state.selectedId = nicheKey(merged);
+
+    if (!upsertBookmarkedSnapshot(merged)) {
+      alert("Could not save bookmark in this browser.");
+      return nicheByKey(nicheKey) || merged;
+    }
+
+    mergeBookmarkedNichesIntoState();
+    updateNicheDistances();
+    if (!state.layerVisible) {
+      state.layerVisible = true;
+      saveLayerVisible();
+    }
+    drawNicheLayer();
+    renderIntoPage();
+
+    const current = nicheByKey(merged.id || merged.source_key || key) || merged;
+    showNicheToast(`Bookmark added: ${homeNicheTitle(current)}`);
+    return current;
+  }
+
+  function removeBookmarkNiche(nicheKey) {
+    const original = nicheByKey(nicheKey) || savedBookmarkFor(nicheKey);
+    if (!original) return null;
+
+    removeBookmarkedSnapshot(original);
+    state.niches = state.niches
+      .filter(row => !(bookmarkMatches(row, original) && row._bookmark_only === true))
+      .map((row) => bookmarkMatches(row, original)
+        ? {
+            ...row,
+            _bookmarked_niche: false,
+            _bookmark_only: false
+          }
+        : row);
+
+    updateNicheDistances();
+    drawNicheLayer();
+    renderIntoPage();
+    showNicheToast(`Bookmark removed: ${homeNicheTitle(original)}`);
+    return nicheByKey(nicheIdentifiers(original)[0]) || null;
+  }
+
+  async function toggleBookmarkNiche(nicheKey) {
+    const original = nicheByKey(nicheKey) || savedBookmarkFor(nicheKey);
+    if (!original) return null;
+    return isBookmarkedNiche(original)
+      ? removeBookmarkNiche(original)
+      : await addBookmarkNiche(nicheKey);
+  }
+
   function closeModals(clearSelection = true) {
     document.querySelectorAll(".gw-quest-modal-backdrop.gw-niche-detail-backdrop").forEach((el) => el.remove());
     if (clearSelection) {
@@ -8576,11 +8887,12 @@
       : [];
     const metrics = niche.metrics || {};
     const home = isHomeNiche(niche);
+    const bookmarked = isBookmarkedNiche(niche);
     const stewardCount = Math.max(homeUsers.length, homeUserCount(niche));
 
     return `
       <div class="gw-quest-modal gw-niche-detail">
-        <div class="gw-quest-modal-title ${home ? "is-home-niche" : ""}">
+        <div class="gw-quest-modal-title ${home ? "is-home-niche" : ""} ${bookmarked ? "is-bookmarked-niche" : ""}">
           ${esc(displayNicheTitle(niche))}
         </div>
         <div class="gw-quest-modal-subtitle">${esc(niche.description || reasonText(niche))}</div>
@@ -8599,6 +8911,7 @@
           <div class="gw-quest-status-line"><span>Recent validation</span><span>${esc(niche.last_validated_at ? niche.last_validated_at.slice(0, 10) : "not yet")}</span></div>
           <div class="gw-quest-status-line"><span>Home users</span><span>${esc(stewardCount)}</span></div>
           <div class="gw-quest-status-line"><span>My home niche</span><span>${home ? "yes" : "no"}</span></div>
+          <div class="gw-quest-status-line"><span>Bookmarked</span><span>${bookmarked ? "yes" : "no"}</span></div>
         </div>
 
         <div class="gw-niche-section">
@@ -8684,6 +8997,10 @@
           </button>
           ${home ? `<button class="gw-quest-btn secondary gw-niche-unset-home-btn" id="gwNicheUnsetHomeBtn" type="button">Unset Home</button>` : ""}
           <button class="gw-quest-btn secondary" id="gwNicheAddCommentBtn" type="button" ${niche.id ? "" : "disabled"}>Add Comment</button>
+          <button class="gw-quest-btn secondary gw-niche-bookmark-btn ${bookmarked ? "is-bookmarked-niche" : ""}" id="gwNicheBookmarkBtn" type="button" aria-pressed="${bookmarked ? "true" : "false"}">
+            ${bookmarkIconSvg()}
+            <span>${bookmarked ? "Remove Bookmark" : "Add Bookmark"}</span>
+          </button>
           <button class="gw-quest-btn primary" id="gwNicheStartQuestBtn" type="button">Start Quest</button>
         </div>
       </div>
@@ -8713,6 +9030,23 @@
 
     root.querySelector("#gwNicheUnsetHomeBtn")?.addEventListener("click", () => {
       unsetHomeNiche(niche.id || niche.source_key);
+    });
+
+    root.querySelector("#gwNicheBookmarkBtn")?.addEventListener("click", async () => {
+      const btn = root.querySelector("#gwNicheBookmarkBtn");
+      if (btn) btn.disabled = true;
+      try {
+        const current = await toggleBookmarkNiche(niche.id || niche.source_key);
+        if (current) {
+          openNicheDetail(current.id || current.source_key);
+        } else {
+          root.remove();
+        }
+      } catch (err) {
+        console.error("Could not toggle niche bookmark:", err);
+        alert(`Could not update bookmark: ${err.message}`);
+        if (btn) btn.disabled = false;
+      }
     });
 
     root.querySelector("#gwNicheAddCommentBtn")?.addEventListener("click", async () => {
@@ -9540,10 +9874,11 @@
       const componentCells = Number(niche.metrics?.component_cell_count || niche.metrics?.componentCellCount || 0);
       const weight = Math.max(2, Math.min(6, 1.6 + Math.log1p(componentCells || 1) * 0.7));
       const home = isHomeNiche(niche);
+      const bookmarked = isBookmarkedNiche(niche);
       const selected = selectedId && selectedId === nicheKey(niche);
-      const baseColor = home ? "#ffe66f" : componentColor(niche.metrics?.component_id || niche.source_key);
+      const baseColor = home ? "#ffe66f" : bookmarked ? "#f0d18a" : componentColor(niche.metrics?.component_id || niche.source_key);
       const visual = nicheVisualStyle(niche, baseColor);
-      const color = home ? baseColor : visual.baseColor;
+      const color = home ? baseColor : bookmarked ? baseColor : visual.baseColor;
       const constrainedGeometry = ["constrained_geometry_niche_v1", "trail_corridor_niche_v1", "heat_tendril_niche_v1", THRESHOLD_SUBDIVIDE_RULE.version, CELL_SEEDED_NICHE_ALGORITHM].includes(niche.metrics?.algorithm);
       const growLocal = niche.metrics?.algorithm === GROW_LOCAL_NICHE_RULE.version;
       const vectorFace = growLocal ? growVectorFaceForNiche(niche) : null;
@@ -9568,12 +9903,12 @@
         opacity: home ? 0.96 : (softOutlines ? 0.72 : 0.88),
         haloColor: !home && specialCorridor ? visual.haloColor : undefined,
         haloWeight: home ? 6.4 : (softOutlines ? 5.0 + visual.haloBoost : 3.8),
-        haloOpacity: home ? 0.62 : (specialCorridor ? 0.52 : (softOutlines ? 0.26 : 0.48)),
+        haloOpacity: home ? 0.62 : bookmarked ? 0.46 : (specialCorridor ? 0.52 : (softOutlines ? 0.26 : 0.48)),
         lineCap: softOutlines ? "round" : "square",
         lineJoin: softOutlines ? "round" : "miter",
-        dashArray: !home ? visual.dashArray : null,
-        className: `${specialCorridor && !home ? visual.outlineClass : (softOutlines ? "gw-niche-visible-component-outline is-soft" : "gw-niche-visible-component-outline")}${home ? " is-home-niche" : ""}`,
-        haloClassName: `${specialCorridor && !home ? visual.haloClass : (softOutlines ? "gw-niche-visible-component-outline-halo is-soft" : "gw-niche-visible-component-outline-halo")}${home ? " is-home-niche" : ""}`
+        dashArray: !home && !bookmarked ? visual.dashArray : null,
+        className: `${specialCorridor && !home && !bookmarked ? visual.outlineClass : (softOutlines ? "gw-niche-visible-component-outline is-soft" : "gw-niche-visible-component-outline")}${home ? " is-home-niche" : ""}${bookmarked && !home ? " is-bookmarked-niche" : ""}`,
+        haloClassName: `${specialCorridor && !home && !bookmarked ? visual.haloClass : (softOutlines ? "gw-niche-visible-component-outline-halo is-soft" : "gw-niche-visible-component-outline-halo")}${home ? " is-home-niche" : ""}${bookmarked && !home ? " is-bookmarked-niche" : ""}`
       };
       if (vectorFace) {
         drawGrowVectorFaceBoundary(layer, vectorFace, home ? strongerComponentColor(color) : visual.outlineColor, outlineOptions);
@@ -9603,14 +9938,14 @@
         color,
         weight: selected
           ? (home ? Math.max(weight, 4.4) : weight)
-          : 2.2,
-        opacity: selected ? (home ? 1 : 0.82) : 0.82,
+          : bookmarked ? 2.8 : 2.2,
+        opacity: selected ? (home ? 1 : 0.9) : bookmarked ? 0.92 : 0.82,
         fillColor: color,
         fillOpacity: selected
           ? (home ? 0.34 : Math.max(0.1, Math.min(0.26, 0.08 + Math.log1p(componentCells || 1) * 0.03)))
-          : (specialCorridor ? 0.2 : 0.12),
+          : bookmarked ? 0.18 : (specialCorridor ? 0.2 : 0.12),
         interactive: true,
-        className: `${home ? "gw-niche-home-circle" : ""}${visual.circleClass ? ` ${visual.circleClass}` : ""}${selected ? " is-selected-niche" : " is-unselected-niche"}`
+        className: `${home ? "gw-niche-home-circle" : ""}${bookmarked && !home ? " gw-niche-bookmarked-circle" : ""}${visual.circleClass && !bookmarked ? ` ${visual.circleClass}` : ""}${selected ? " is-selected-niche" : " is-unselected-niche"}`
       }).addTo(layer);
 
       const coreCell = String(niche.metrics?.core_cell || niche.metrics?.peak_cell || "").split(",").map(Number);
@@ -9694,6 +10029,9 @@
     state.layerVisible = show === true;
     saveLayerVisible();
     drawNicheLayer();
+    window.dispatchEvent(new CustomEvent("gridwild:localnicheschange", {
+      detail: { visible: state.layerVisible }
+    }));
     return state.layerVisible;
   }
 
@@ -9959,6 +10297,26 @@
           0 0 20px rgba(255,230,111,0.26);
       }
 
+      .gw-niche-name-label .gw-niche-label-chip.is-bookmarked-niche {
+        color: #f8df9a;
+        border-color: rgba(240,209,138,0.82);
+        background: rgba(35,28,17,0.92);
+        box-shadow:
+          0 0 0 2px rgba(240,209,138,0.16),
+          0 10px 20px rgba(0,0,0,0.34),
+          0 0 18px rgba(240,209,138,0.18);
+      }
+
+      .gw-niche-name-label .gw-niche-label-chip.is-home-niche.is-bookmarked-niche {
+        color: #fff4a8;
+        border-color: rgba(255,230,111,0.92);
+        background: rgba(36,31,14,0.94);
+        box-shadow:
+          0 0 0 2px rgba(255,230,111,0.22),
+          0 10px 22px rgba(0,0,0,0.38),
+          0 0 20px rgba(255,230,111,0.26);
+      }
+
       .gw-niche-core-marker {
         filter: drop-shadow(0 0 7px rgba(255,247,209,0.34));
       }
@@ -9979,6 +10337,12 @@
         filter: drop-shadow(0 0 10px rgba(0,216,255,0.52));
       }
 
+      .gw-niche-visible-component-outline.is-bookmarked-niche,
+      .gw-niche-visible-component-outline-halo.is-bookmarked-niche,
+      .gw-niche-bookmarked-circle {
+        filter: drop-shadow(0 0 9px rgba(240,209,138,0.42));
+      }
+
       .gw-niche-label-main {
         display: block;
         max-width: 162px;
@@ -9995,7 +10359,25 @@
         text-shadow: 0 0 10px rgba(255,230,111,0.44);
       }
 
+      .gw-niche-label-chip.is-bookmarked-niche .gw-niche-label-main {
+        color: #f8df9a;
+        text-shadow: 0 0 9px rgba(240,209,138,0.30);
+      }
+
+      .gw-niche-label-chip.is-home-niche.is-bookmarked-niche .gw-niche-label-main {
+        color: #fff4a8;
+        text-shadow: 0 0 10px rgba(255,230,111,0.44);
+      }
+
       .gw-niche-label-chip.is-home-niche .gw-niche-label-place b {
+        color: rgba(255,245,183,0.94);
+      }
+
+      .gw-niche-label-chip.is-bookmarked-niche .gw-niche-label-place b {
+        color: rgba(248,223,154,0.90);
+      }
+
+      .gw-niche-label-chip.is-home-niche.is-bookmarked-niche .gw-niche-label-place b {
         color: rgba(255,245,183,0.94);
       }
 
@@ -10070,6 +10452,19 @@
         background: rgba(255,230,111,0.08);
       }
 
+      .gw-niche-row.is-bookmarked-niche {
+        margin: 0 -6px;
+        padding: 10px 6px;
+        border-radius: 8px;
+        border: 1px solid rgba(240,209,138,0.38);
+        background: rgba(240,209,138,0.07);
+      }
+
+      .gw-niche-row.is-home-niche.is-bookmarked-niche {
+        border-color: rgba(255,230,111,0.42);
+        background: rgba(255,230,111,0.08);
+      }
+
       .gw-niche-row.is-selected-niche {
         box-shadow: inset 3px 0 0 rgba(125,220,255,0.76);
       }
@@ -10137,6 +10532,18 @@
         text-shadow: 0 0 12px rgba(255,230,111,0.34);
       }
 
+      .gw-niche-row.is-bookmarked-niche .gw-niche-title,
+      .gw-niche-detail .gw-quest-modal-title.is-bookmarked-niche {
+        color: #f8df9a;
+        text-shadow: 0 0 10px rgba(240,209,138,0.24);
+      }
+
+      .gw-niche-row.is-home-niche.is-bookmarked-niche .gw-niche-title,
+      .gw-niche-detail .gw-quest-modal-title.is-home-niche.is-bookmarked-niche {
+        color: #fff0a1;
+        text-shadow: 0 0 12px rgba(255,230,111,0.34);
+      }
+
       .gw-niche-home-mark {
         display: inline-grid;
         width: 14px;
@@ -10144,8 +10551,17 @@
         color: #ffe66f;
       }
 
+      .gw-niche-bookmark-mark {
+        display: inline-grid;
+        width: 13px;
+        height: 13px;
+        color: #f0d18a;
+      }
+
       .gw-niche-home-mark svg,
-      .gw-niche-home-btn svg {
+      .gw-niche-bookmark-mark svg,
+      .gw-niche-home-btn svg,
+      .gw-niche-bookmark-btn svg {
         width: 100%;
         height: 100%;
         fill: none;
@@ -10301,6 +10717,34 @@
         border-color: rgba(255,230,111,0.96);
         background: linear-gradient(180deg, #fff4a8, #ffe66f);
         box-shadow: 0 0 18px rgba(255,230,111,0.28);
+      }
+
+      .gw-niche-bookmark-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .gw-niche-bookmark-btn span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .gw-niche-bookmark-btn svg {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+      }
+
+      .gw-niche-bookmark-btn.is-bookmarked-niche {
+        color: #1f271d;
+        border-color: rgba(240,209,138,0.96);
+        background: linear-gradient(180deg, #f9e4ad, #f0d18a);
+        box-shadow: 0 0 16px rgba(240,209,138,0.24);
       }
 
       .gw-niche-evidence-line {
@@ -10718,22 +11162,27 @@
 
   window.GridWildLocalNiches = {
     addRuntimeNiche,
+    addBookmarkNiche,
     buildNicheDisplayTitle,
     bindLocalNicheControls,
     drawNicheLayer,
     generateGrowLocalNicheCandidates,
     generateLocalCandidates,
     getHomeNiche: currentHomeNiche,
+    getBookmarkedNiches: () => state.bookmarkedNiches.slice(),
     getNiches: () => state.niches.slice(),
     growLocalNiches,
+    isBookmarkedNiche,
     isVisible: () => state.layerVisible,
     openNicheDetail,
     refreshLocalNiches,
     renderLocalNichesHtml,
     renderIntoPage,
+    removeBookmarkNiche,
     setHomeNiche,
     setVisible,
     startNicheQuest,
+    toggleBookmarkNiche,
     toggleVisible,
     unsetHomeNiche
   };
@@ -10741,11 +11190,18 @@
   document.addEventListener("DOMContentLoaded", () => {
     injectStyles();
     saveLayerVisible();
+    mergeBookmarkedNichesIntoState();
+    updateNicheDistances();
     setTimeout(() => {
       if (document.getElementById("gwLocalNichesBody")) {
         renderIntoPage();
       }
+      drawNicheLayer();
     }, 0);
+  });
+
+  window.addEventListener("gwBootstrapReady", () => {
+    reloadBookmarkedNichesFromStorage();
   });
 
   window.addEventListener("gwUserLocationUpdated", () => {

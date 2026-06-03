@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { applyPartyTiming } = require("./_party-duration");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -18,6 +19,19 @@ exports.handler = async function (event) {
 
     if (!Number.isFinite(latNum)) throw new Error("lat is required");
     if (!Number.isFinite(lngNum)) throw new Error("lng is required");
+
+    const { data: party, error: partyError } = await supabase
+      .from("parties")
+      .select("*")
+      .eq("id", party_id)
+      .single();
+
+    if (partyError) throw partyError;
+
+    const timing = await applyPartyTiming(supabase, party, { playerId: player_id });
+    if (timing.party?.status === "ended") {
+      throw new Error("This party has ended.");
+    }
 
     const { data, error } = await supabase
       .from("party_route_points")

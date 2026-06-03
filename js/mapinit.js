@@ -5,9 +5,29 @@
   });
   const map = window.map; // local alias
 
+const GRIDWILD_BASE_MAP_STORAGE_KEY = "gridwildBaseMap";
+
+function normalizeGridWildBaseMapChoice(value) {
+  return value === "terrain" ? "terrain" : "street";
+}
+
+function readSavedGridWildBaseMapChoice() {
+  try {
+    const uiState = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+    if (uiState.baseMap) return normalizeGridWildBaseMapChoice(uiState.baseMap);
+  } catch {}
+
+  try {
+    return normalizeGridWildBaseMapChoice(localStorage.getItem(GRIDWILD_BASE_MAP_STORAGE_KEY));
+  } catch {
+    return "street";
+  }
+}
+
     // Global GridWild state // yikes -- 3/8/26 
 window.__gwState = {
   lockToLocation: true,
+  baseMap: readSavedGridWildBaseMapChoice(),
   showPoints: false, // off by default...
   showHeat: true,
   showFog: false,
@@ -85,12 +105,104 @@ window.GridWildUnits = window.GridWildUnits || (function () {
   return { formatDistance, metricEnabled, setMetricEnabled };
 })();
 
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+function createStreetBaseLayer() {
+  return L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
     maxZoom: 20,
     attribution:
       '&copy; OpenStreetMap contributors &copy; CARTO'
+  });
+}
+
+function createTerrainBaseLayer() {
+  return L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    maxNativeZoom: 17,
+    maxZoom: 20,
+    attribution:
+      'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap'
+  });
+}
+
+const streetBaseLayer = createStreetBaseLayer();
+const terrainBaseLayer = createTerrainBaseLayer();
+const gridWildBaseLayers = {
+  street: streetBaseLayer,
+  terrain: terrainBaseLayer
+};
+let currentGridWildBaseLayer = null;
+
+function persistGridWildBaseMapChoice(choice) {
+  try {
+    localStorage.setItem(GRIDWILD_BASE_MAP_STORAGE_KEY, choice);
+  } catch {}
+
+  try {
+    const uiState = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+    uiState.baseMap = choice;
+    localStorage.setItem("gw_ui_state", JSON.stringify(uiState));
+  } catch {}
+}
+
+function syncGridWildBaseMapControls(choice) {
+  document.querySelectorAll('input[name="gwBaseMap"]').forEach(input => {
+    input.checked = input.value === choice;
+  });
+}
+
+function setGridWildBaseMap(choice, options = {}) {
+  const baseMap = normalizeGridWildBaseMapChoice(choice);
+  const nextLayer = gridWildBaseLayers[baseMap];
+  if (!nextLayer) return window.__gwState?.baseMap || "street";
+
+  if (
+    currentGridWildBaseLayer &&
+    currentGridWildBaseLayer !== nextLayer &&
+    map.hasLayer(currentGridWildBaseLayer)
+  ) {
+    map.removeLayer(currentGridWildBaseLayer);
   }
-  ).addTo(map);
+
+  Object.entries(gridWildBaseLayers).forEach(([key, layer]) => {
+    if (key !== baseMap && map.hasLayer(layer)) {
+      map.removeLayer(layer);
+    }
+  });
+
+  if (!map.hasLayer(nextLayer)) {
+    nextLayer.addTo(map);
+  }
+
+  currentGridWildBaseLayer = nextLayer;
+  window.__gwState = window.__gwState || {};
+  window.__gwState.baseMap = baseMap;
+
+  if (options.persist !== false) {
+    persistGridWildBaseMapChoice(baseMap);
+  }
+
+  if (options.syncControls !== false) {
+    syncGridWildBaseMapControls(baseMap);
+  }
+
+  window.dispatchEvent(new CustomEvent("gridwild:basemapchange", {
+    detail: { baseMap }
+  }));
+
+  return baseMap;
+}
+
+window.createStreetBaseLayer = createStreetBaseLayer;
+window.createTerrainBaseLayer = createTerrainBaseLayer;
+window.streetBaseLayer = streetBaseLayer;
+window.terrainBaseLayer = terrainBaseLayer;
+window.GridWildBaseMaps = {
+  getBaseMap: () => window.__gwState?.baseMap || "street",
+  setBaseMap: setGridWildBaseMap,
+  syncControls: () => syncGridWildBaseMapControls(window.__gwState?.baseMap || "street"),
+  normalizeChoice: normalizeGridWildBaseMapChoice,
+  layers: gridWildBaseLayers
+};
+
+setGridWildBaseMap(window.__gwState.baseMap, { persist: false });
 
 
     // Default view (in case location fails)

@@ -64,6 +64,7 @@
   
   window.__gwState.showOsmFeatures = $("toggleOsmBuildings")?.checked ?? true;
   window.__gwState.showOsmBuildings = window.__gwState.showOsmFeatures;
+  window.__gwState.showSurveyView = $("toggleSurveyView")?.checked ?? true;
 
   window.__gwState.heatMetric = getSelectedHeatMetric();
   window.__gwFilters.iconicTaxa = getSelectedIconicTaxa();
@@ -168,6 +169,8 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
     if (typeof window.setShimmerVisible === "function") {
       window.setShimmerVisible(window.__gwState?.showShimmer ?? false);
     }
+
+    window.GridWildSurveyLayer?.render?.();
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -207,7 +210,8 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
   "toggleFogSmoothing",
   "toggleGodsEye",
   "toggleLockLocation",
-  "toggleOsmBuildings"
+  "toggleOsmBuildings",
+  "toggleSurveyView"
 ].forEach(id => {
   $(id)?.addEventListener("change", () => {
     syncStateFromUI();
@@ -240,6 +244,17 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
       "buildings",
       window.__gwState.showOsmBuildings
     );
+  }
+
+  if (id === "toggleSurveyView") {
+    if (window.GridWildSurveyLayer?.setSurveyViewEnabled) {
+      window.GridWildSurveyLayer.setSurveyViewEnabled(window.__gwState.showSurveyView === true);
+    } else {
+      window.GridWildSurveyLayer?.render?.();
+      window.dispatchEvent(new CustomEvent("gridwild:surveyviewchange", {
+        detail: { showSurveyView: window.__gwState.showSurveyView === true }
+      }));
+    }
   }
 
     if (id === "toggleDynamicINat" && window.__gwState.dynamicINatEnabled) {
@@ -368,6 +383,13 @@ window.initJumpToGpsControl = function initJumpToGpsControl() {
   return selected?.value || "count";
 }
 
+function getSelectedBaseMap() {
+  if (window.GridWildBaseMaps?.getBaseMap) {
+    return window.GridWildBaseMaps.getBaseMap();
+  }
+  return window.__gwState?.baseMap === "terrain" ? "terrain" : "street";
+}
+
 // below for state-based 
 function loadUIState() {
   try {
@@ -380,11 +402,19 @@ function loadUIState() {
 
 function saveUIState() {
   const byId = (id) => document.getElementById(id);
+  const readCoarseHeatEnabled = () => {
+    const coarseToggle = byId("toggleSuperchunkHeat");
+    if (!coarseToggle) return window.__gwState?.coarseHeatEnabled === true;
+    if (coarseToggle.dataset.gwAutoCoarse === "true") {
+      return window.__gwState?.coarseHeatEnabled === true;
+    }
+    return coarseToggle.checked === true;
+  };
 
   const state = {
     showPoints: byId("togglePoints")?.checked ?? false,
     showHeat: byId("toggleHeat")?.checked ?? true,
-    coarseHeatEnabled: readManualCoarseHeatEnabled(),
+    coarseHeatEnabled: readCoarseHeatEnabled(),
     coarseHeatBinSize: window.__gwState?.coarseHeatBinSize ?? 8,
     heatZThresholdEnabled: byId("toggleHeatZThreshold")?.checked ?? window.__gwState?.heatZThresholdEnabled ?? false,
     heatZThreshold: window.__gwState?.heatZThreshold ?? 0,
@@ -403,8 +433,10 @@ function saveUIState() {
     godsEyeEnabled: byId("toggleGodsEye")?.checked ?? false,
     lockToLocation: byId("toggleLockLocation")?.checked ?? true,
     heatMetric: getSelectedHeatMetric(),
+    baseMap: getSelectedBaseMap(),
     onlyMeFilterEnabled: window.__gwFilters?.onlyMe === true,
-    showOsmBuildings: byId("toggleOsmBuildings")?.checked ?? true
+    showOsmBuildings: byId("toggleOsmBuildings")?.checked ?? true,
+    showSurveyView: byId("toggleSurveyView")?.checked ?? true
     };
 
   localStorage.setItem("gw_ui_state", JSON.stringify(state));
@@ -418,6 +450,9 @@ function applySavedUIState() {
   if (byId("toggleHeat"))         byId("toggleHeat").checked = s.showHeat ?? true;
   if (byId("toggleSuperchunkHeat")) byId("toggleSuperchunkHeat").checked = s.coarseHeatEnabled ?? s.superchunkHeatEnabled ?? false;
   window.__gwState = window.__gwState || {};
+  const savedBaseMap = s.baseMap ?? localStorage.getItem("gridwildBaseMap");
+  window.__gwState.baseMap = savedBaseMap === "terrain" ? "terrain" : "street";
+  window.GridWildBaseMaps?.setBaseMap?.(window.__gwState.baseMap, { persist: false });
   const savedCoarseBinSize = s.coarseHeatBinSize ?? localStorage.getItem("gwCoarseHeatBinSize");
   window.__gwState.coarseHeatBinSize = Math.max(
     2,
@@ -457,6 +492,8 @@ function applySavedUIState() {
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
   if (byId("toggleFogSmoothing")) byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? false;
   if (byId("toggleOsmBuildings")) byId("toggleOsmBuildings").checked = s.showOsmBuildings ?? true;
+  if (byId("toggleSurveyView")) byId("toggleSurveyView").checked = s.showSurveyView ?? true;
+  window.__gwState.showSurveyView = s.showSurveyView ?? true;
   window.__gwFilters = window.__gwFilters || {};
   window.__gwFilters.onlyMe = s.onlyMeFilterEnabled === true;
   window.__gwState.onlyMeFilterEnabled = window.__gwFilters.onlyMe;

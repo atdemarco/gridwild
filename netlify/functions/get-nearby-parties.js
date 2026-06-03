@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { applyPartyTimingToRows } = require("./_party-duration");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -17,9 +18,12 @@ exports.handler = async function () {
 
     if (error) throw error;
 
+    const timedParties = await applyPartyTimingToRows(supabase, data || []);
+    const visibleParties = timedParties.filter(p => p?.status !== "ended");
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ parties: data || [] })
+      body: JSON.stringify({ parties: visibleParties })
     };
   } catch (err) {
     return {

@@ -16,6 +16,9 @@
   let selectedLane = LANES[0]?.[0] || "";
   let selectedCategory = "";
   let activeMarkId = "";
+  const exemplarCache = new Map();
+  const familyTaxonCache = new Map();
+  let exemplarLoadSeq = 0;
 
   function $(id) {
     return document.getElementById(id);
@@ -410,6 +413,63 @@
         background: rgba(255,255,255,0.035);
       }
 
+      .gw-field-book-thumb-plate {
+        margin: 10px 0 8px;
+        display: grid;
+        gap: 6px;
+      }
+
+      .gw-field-book-thumb-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 4px;
+      }
+
+      .gw-field-book-thumb-cell {
+        position: relative;
+        min-width: 0;
+        aspect-ratio: 1;
+        overflow: hidden;
+        border: 1px solid rgba(215,183,116,0.16);
+        border-radius: 5px;
+        background: rgba(255,255,255,0.055);
+      }
+
+      .gw-field-book-thumb-cell img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+      }
+
+      .gw-field-book-thumb-cell.is-empty {
+        background:
+          linear-gradient(135deg, rgba(243,213,143,0.09), rgba(255,255,255,0.035)),
+          rgba(255,255,255,0.035);
+      }
+
+      .gw-field-book-thumb-cell.is-loading::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(243,213,143,0.12), transparent);
+        animation: gwFieldBookThumbLoad 1.2s linear infinite;
+        transform: translateX(-100%);
+      }
+
+      .gw-field-book-thumb-note {
+        color: rgba(239,230,211,0.52);
+        font-size: 9.5px;
+        font-weight: 850;
+        line-height: 1.25;
+      }
+
+      @keyframes gwFieldBookThumbLoad {
+        to {
+          transform: translateX(100%);
+        }
+      }
+
       .gw-field-book-guide-section {
         display: grid;
         gap: 3px;
@@ -455,13 +515,22 @@
         font-weight: 850;
       }
 
-      @media (max-width: 720px) {
+      @media (max-width: 860px), (pointer: coarse) {
+        .gw-field-book-backdrop {
+          align-items: stretch;
+          justify-items: stretch;
+          padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+        }
+
         .gw-field-book-head {
           grid-template-columns: 1fr auto;
+          align-items: start;
+          padding: 9px;
         }
 
         .gw-field-book-title {
           font-size: 14px;
+          align-self: center;
         }
 
         .gw-field-book-search {
@@ -470,26 +539,117 @@
         }
 
         .gw-field-book-panel {
-          height: calc(100vh - 20px);
-          width: calc(100vw - 20px);
+          width: 100%;
+          max-width: 100%;
+          height: calc(100vh - 12px);
+          height: calc(100dvh - 12px);
+          min-height: 0;
         }
 
-        .gw-field-book-radio-grid,
+        .gw-field-book-scroll {
+          overflow: auto;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+        }
+
+        .gw-field-book-body {
+          display: block;
+          min-height: 0;
+        }
+
+        .gw-field-book-filters {
+          padding: 9px;
+        }
+
+        .gw-field-book-radio-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
         .gw-field-book-heading-grid {
           grid-template-columns: 1fr;
+        }
+
+        .gw-field-book-radio {
+          min-height: 36px;
+          padding: 7px;
+        }
+
+        .gw-field-book-list {
+          overflow: visible;
         }
 
         .gw-field-book-list-head {
           align-items: flex-start;
           flex-direction: column;
+          position: sticky;
+          top: 0;
+        }
+
+        .gw-field-book-table {
+          min-width: 0;
+          table-layout: auto;
+        }
+
+        .gw-field-book-table,
+        .gw-field-book-table tbody,
+        .gw-field-book-table tr,
+        .gw-field-book-table td {
+          display: block;
+          width: 100%;
+          box-sizing: border-box;
+        }
+
+        .gw-field-book-table thead {
+          display: none;
+        }
+
+        .gw-field-book-table tr {
+          padding: 8px 9px;
+          border-bottom: 1px solid rgba(215,183,116,0.12);
+        }
+
+        .gw-field-book-table td {
+          padding: 0;
+          border-bottom: 0;
+        }
+
+        .gw-field-book-table td + td {
+          margin-top: 4px;
+        }
+
+        .gw-field-book-mark {
+          min-height: 30px;
+          display: inline-flex;
+          align-items: center;
+          font-size: 12.5px;
+        }
+
+        .gw-field-book-cue {
+          font-size: 11px;
         }
 
         .gw-field-book-guide-card {
-          right: 10px;
-          left: 10px;
-          bottom: 10px;
+          position: fixed;
+          inset: auto max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
           width: auto;
-          max-height: min(70vh, calc(100% - 84px));
+          max-height: min(78vh, calc(100vh - 24px));
+          max-height: min(78dvh, calc(100dvh - 24px));
+          padding: 12px;
+          overscroll-behavior: contain;
+        }
+
+        .gw-field-book-schematic svg {
+          max-height: 150px;
+        }
+
+        .gw-field-book-thumb-grid {
+          gap: 3px;
+        }
+      }
+
+      @media (max-width: 420px) {
+        .gw-field-book-radio-grid {
+          grid-template-columns: 1fr;
         }
       }
     `;
@@ -619,6 +779,201 @@
     `;
   }
 
+  function photoUrl(photo) {
+    const raw = String(photo?.url || photo?.square_url || photo?.medium_url || "").trim();
+    if (!raw) return "";
+    return raw.replace(/\/(small|medium|large|original)\./, "/square.");
+  }
+
+  function hashString(value) {
+    return String(value || "").split("").reduce((hash, char) => {
+      return ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+    }, 0);
+  }
+
+  async function fetchJson(url) {
+    const response = await fetch(String(url), { credentials: "omit" });
+    if (!response.ok) throw new Error(`iNat request failed: ${response.status}`);
+    return response.json();
+  }
+
+  function exemplarFamiliesForMark(mark, sheet) {
+    const fromSheet = Array.isArray(sheet?.exemplarFamilies) ? sheet.exemplarFamilies : [];
+    if (fromSheet.length) return fromSheet.filter(Boolean);
+
+    const api = window.GridWildFieldMarks;
+    const fromApi = api?.exemplarFamilies?.(mark?.id);
+    return Array.isArray(fromApi) ? fromApi.filter(Boolean) : [];
+  }
+
+  function resolveFamilyTaxonId(familyName) {
+    if (familyTaxonCache.has(familyName)) return familyTaxonCache.get(familyName);
+
+    const promise = (async () => {
+      try {
+        const url = new URL("https://api.inaturalist.org/v1/taxa");
+        url.searchParams.set("q", familyName);
+        url.searchParams.set("rank", "family");
+        url.searchParams.set("per_page", "5");
+        const data = await fetchJson(url);
+        const results = Array.isArray(data?.results) ? data.results : [];
+        const exact = results.find(taxon => String(taxon?.name || "").toLowerCase() === familyName.toLowerCase());
+        const family = exact || results.find(taxon => taxon?.rank === "family");
+        return family?.id || null;
+      } catch (error) {
+        familyTaxonCache.delete(familyName);
+        return null;
+      }
+    })();
+
+    familyTaxonCache.set(familyName, promise);
+    return promise;
+  }
+
+  async function fetchFamilyObservations(familyName, markId = "", familyIndex = 0, perFamily = 3) {
+    const taxonId = await resolveFamilyTaxonId(familyName);
+    if (!taxonId) return [];
+
+    const preferredPage = (Math.abs(hashString(`${markId}:${familyName}:${familyIndex}`)) % 3) + 1;
+    const loadPage = page => {
+      const url = new URL("https://api.inaturalist.org/v1/observations");
+      url.searchParams.set("taxon_id", String(taxonId));
+      url.searchParams.set("photos", "true");
+      url.searchParams.set("quality_grade", "research");
+      url.searchParams.set("verifiable", "true");
+      url.searchParams.set("order", "desc");
+      url.searchParams.set("order_by", "created_at");
+      url.searchParams.set("per_page", String(perFamily));
+      if (page > 1) url.searchParams.set("page", String(page));
+      return fetchJson(url);
+    };
+
+    let data = await loadPage(preferredPage);
+    let observations = Array.isArray(data?.results) ? data.results : [];
+    if (!observations.length && preferredPage !== 1) {
+      data = await loadPage(1);
+      observations = Array.isArray(data?.results) ? data.results : [];
+    }
+    return observations.map(observation => {
+      const photos = Array.isArray(observation?.photos) ? observation.photos : [];
+      const photo = photos.find(item => photoUrl(item));
+      const url = photoUrl(photo);
+      if (!url) return null;
+      const taxon = observation?.taxon || {};
+      const label = taxon.preferred_common_name || taxon.name || familyName;
+      return {
+        id: String(observation?.id || `${familyName}-${url}`),
+        family: familyName,
+        href: observation?.uri || `https://www.inaturalist.org/observations/${observation?.id || ""}`,
+        label,
+        url
+      };
+    }).filter(Boolean);
+  }
+
+  function loadExemplarsForMark(markId) {
+    if (!markId || exemplarCache.get(markId)?.status === "loading" || exemplarCache.get(markId)?.status === "ready") return;
+
+    const api = window.GridWildFieldMarks;
+    const mark = api?.get?.(markId);
+    if (!mark || typeof fetch !== "function") return;
+
+    const sheet = api?.infoSheet?.(markId) || mark.infoSheet || fallbackInfoSheet(mark);
+    const families = exemplarFamiliesForMark(mark, sheet).slice(0, 8);
+    if (!families.length) {
+      exemplarCache.set(markId, { status: "ready", items: [], families });
+      return;
+    }
+
+    const seq = ++exemplarLoadSeq;
+    exemplarCache.set(markId, { status: "loading", items: [], families, seq });
+
+    Promise.allSettled(families.map((family, index) => fetchFamilyObservations(family, markId, index, 3)))
+      .then(results => {
+        const seen = new Set();
+        const items = [];
+        results.forEach(result => {
+          if (result.status !== "fulfilled") return;
+          result.value.forEach(item => {
+            const key = item.id || item.url;
+            if (seen.has(key)) return;
+            seen.add(key);
+            items.push(item);
+          });
+        });
+        const status = items.length || results.every(result => result.status === "fulfilled") ? "ready" : "error";
+        exemplarCache.set(markId, { status, items: items.slice(0, 16), families, seq });
+        if (activeMarkId === markId) renderMatrix();
+      })
+      .catch(error => {
+        exemplarCache.set(markId, { status: "error", items: [], families, error, seq });
+        if (activeMarkId === markId) renderMatrix();
+      });
+  }
+
+  function renderThumbCells(items = [], status = "ready") {
+    const cells = Array.from({ length: 16 }, (_, index) => items[index] || null);
+    return cells.map((item, index) => {
+      if (!item) {
+        const loadingClass = status === "loading" ? " is-loading" : "";
+        return `<div class="gw-field-book-thumb-cell is-empty${loadingClass}" aria-hidden="true"></div>`;
+      }
+      const label = `${item.label || "iNat observation"} (${item.family || "family exemplar"})`;
+      return `
+        <a class="gw-field-book-thumb-cell" href="${esc(item.href)}" target="_blank" rel="noopener noreferrer" title="${esc(label)}" aria-label="${esc(label)}">
+          <img src="${esc(item.url)}" alt="${esc(label)}" loading="lazy" referrerpolicy="no-referrer" />
+        </a>
+      `;
+    }).join("");
+  }
+
+  function renderExemplarFallback(sheet, note) {
+    if (!sheet?.schematic) {
+      return `
+        <div class="gw-field-book-thumb-plate">
+          <div class="gw-field-book-thumb-grid">${renderThumbCells([], "empty")}</div>
+          <div class="gw-field-book-thumb-note">${esc(note)}</div>
+        </div>
+      `;
+    }
+    return `
+      <div class="gw-field-book-thumb-plate">
+        <div class="gw-field-book-schematic">${sheet.schematic}</div>
+        <div class="gw-field-book-thumb-note">${esc(note)}</div>
+      </div>
+    `;
+  }
+
+  function renderExemplarPlate(mark, sheet) {
+    const families = exemplarFamiliesForMark(mark, sheet);
+    if (!families.length) return renderExemplarFallback(sheet, "No iNat exemplar families are mapped yet.");
+
+    const cached = exemplarCache.get(mark.id);
+    if (!cached || cached.status === "loading") {
+      return `
+        <div class="gw-field-book-thumb-plate" aria-label="iNaturalist exemplar thumbnails">
+          <div class="gw-field-book-thumb-grid">${renderThumbCells([], "loading")}</div>
+          <div class="gw-field-book-thumb-note">Loading iNat exemplars from ${esc(families.slice(0, 4).join(", "))}${families.length > 4 ? "..." : ""}</div>
+        </div>
+      `;
+    }
+
+    if (cached.status === "ready" && cached.items.length) {
+      return `
+        <div class="gw-field-book-thumb-plate" aria-label="iNaturalist exemplar thumbnails">
+          <div class="gw-field-book-thumb-grid">${renderThumbCells(cached.items, "ready")}</div>
+          <div class="gw-field-book-thumb-note">iNat exemplar observations from ${esc(cached.families.slice(0, 4).join(", "))}${cached.families.length > 4 ? "..." : ""}</div>
+        </div>
+      `;
+    }
+
+    if (cached.status === "ready") {
+      return renderExemplarFallback(sheet, "iNat returned no photo exemplars for the mapped families.");
+    }
+
+    return renderExemplarFallback(sheet, "iNat thumbnails are unavailable right now; showing the schematic fallback.");
+  }
+
   function renderGuideCard() {
     if (!activeMarkId) return "";
     const api = window.GridWildFieldMarks;
@@ -637,7 +992,7 @@
           </div>
           <button class="gw-field-book-guide-close" type="button" data-gw-field-card-close>Close</button>
         </div>
-        ${sheet.schematic ? `<div class="gw-field-book-schematic">${sheet.schematic}</div>` : ""}
+        ${renderExemplarPlate(mark, sheet)}
         <div class="gw-field-book-guide-summary">${esc(sheet.summary || mark.explanation || "")}</div>
         ${renderInfoSection("Why It Matters", sheet.why)}
         ${renderInfoSection("Look For", sheet.lookFor)}
@@ -765,6 +1120,7 @@
       const markBtn = evt.target?.closest?.("[data-gw-fieldmark-id]");
       if (!markBtn) return;
       activeMarkId = markBtn.dataset.gwFieldmarkId || "";
+      loadExemplarsForMark(activeMarkId);
       renderMatrix();
     });
     $("gwFieldBookMatrix")?.addEventListener("change", evt => {
@@ -798,6 +1154,7 @@
     btn?.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
     btn?.classList.toggle("is-on", !panel.hidden);
     if (!panel.hidden) {
+      loadExemplarsForMark(activeMarkId);
       renderMatrix();
       $("gwFieldBookSearch")?.focus();
     }

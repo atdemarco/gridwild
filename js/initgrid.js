@@ -67,6 +67,10 @@ const COARSE_HEAT_AUTO_STEPS = [
 const COARSE_HEAT_TILE_BINS = 32;
 const COARSE_HEAT_TILE_CACHE_MAX = 96;
 const COARSE_HEAT_TILE_MAX_PX = 1200;
+const COARSE_HEAT_SOURCE_LOOKUP_CACHE_MAX = 50000;
+const COARSE_HEAT_RENDER_BIN_BUDGET = 64000;
+const COARSE_HEAT_RENDER_TILE_BUDGET = 160;
+const COARSE_HEAT_BIN_PIXEL_OVERLAP = 0;
 const COARSE_HEAT_RICH_VIEW_CELL_BUDGET = 700;
 const COARSE_HEAT_RICH_VIEW_SUPERCHUNK_BUDGET = 32;
 const COARSE_HEAT_RICH_SUPERCHUNK_CONCURRENCY = 4;
@@ -4407,7 +4411,12 @@ function makeCoarseHeatSourceLookup(options = {}) {
 
   function readEntry(ix, iy) {
     const key = `${ix},${iy}`;
-    if (cache.has(key)) return cache.get(key);
+    if (cache.has(key)) {
+      const entry = cache.get(key);
+      cache.delete(key);
+      cache.set(key, entry);
+      return entry;
+    }
 
     const richMetrics = window.__richGridMetrics?.get(key) || null;
     const baseMetrics =
@@ -4431,6 +4440,10 @@ function makeCoarseHeatSourceLookup(options = {}) {
     };
 
     cache.set(key, entry);
+    while (cache.size > COARSE_HEAT_SOURCE_LOOKUP_CACHE_MAX) {
+      const oldestKey = cache.keys().next().value;
+      cache.delete(oldestKey);
+    }
     return entry;
   }
 
@@ -4498,6 +4511,37 @@ function getCachedCoarseMedianMetrics(anchorIx, anchorIy, binSize, sourceLookup,
   }
 
   return getCoarseMedianMetrics(anchorIx, anchorIy, binSize, sourceLookup);
+}
+
+function getCoarseHeatBinSpan(startAnchorX, endAnchorX, startAnchorY, endAnchorY, binSize) {
+  if (
+    !Number.isFinite(startAnchorX) ||
+    !Number.isFinite(endAnchorX) ||
+    !Number.isFinite(startAnchorY) ||
+    !Number.isFinite(endAnchorY) ||
+    !Number.isFinite(binSize) ||
+    binSize <= 0
+  ) {
+    return { cols: 0, rows: 0, total: 0, safe: false };
+  }
+
+  const cols = Math.max(0, Math.floor((endAnchorX - startAnchorX) / binSize) + 1);
+  const rows = Math.max(0, Math.floor((endAnchorY - startAnchorY) / binSize) + 1);
+  const total = cols * rows;
+
+  return {
+    cols,
+    rows,
+    total,
+    safe: total > 0 && total <= COARSE_HEAT_RENDER_BIN_BUDGET
+  };
+}
+
+function warnCoarseHeatBudgetExceeded(reason, detail = {}) {
+  const now = Date.now();
+  if (now - (warnCoarseHeatBudgetExceeded.lastAt || 0) < 5000) return;
+  warnCoarseHeatBudgetExceeded.lastAt = now;
+  console.warn("GridWild coarse heat render skipped:", reason, detail);
 }
 
 function mergeCoarseLensMetricFields(target, metrics) {
@@ -4621,6 +4665,23 @@ function gridMetersRectLayerBounds(x0, y0, x1, y1) {
   };
 }
 
+function coarseHeatPaintRect(bounds, originBounds = null) {
+  const originX = originBounds?.x ?? 0;
+  const originY = originBounds?.y ?? 0;
+  const x0 = Math.round(bounds.x - originX);
+  const y0 = Math.round(bounds.y - originY);
+  const x1 = Math.round(bounds.x + bounds.w - originX);
+  const y1 = Math.round(bounds.y + bounds.h - originY);
+  const overlap = COARSE_HEAT_BIN_PIXEL_OVERLAP;
+
+  return {
+    x: x0 - overlap,
+    y: y0 - overlap,
+    w: Math.max(1, x1 - x0) + overlap * 2,
+    h: Math.max(1, y1 - y0) + overlap * 2
+  };
+}
+
 function getCoarseHeatTileFineCells(binSize) {
   return binSize * COARSE_HEAT_TILE_BINS;
 }
@@ -4677,8 +4738,8 @@ function renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSigna
   const tileFineCells = getCoarseHeatTileFineCells(binSize);
   const { minIx, minIy, maxIx, maxIy, layerBounds: tileBounds } =
     coarseHeatTileBounds(tileIx, tileIy, tileFineCells);
-  const canvasW = Math.max(1, Math.ceil(tileBounds.w) + 2);
-  const canvasH = Math.max(1, Math.ceil(tileBounds.h) + 2);
+  const canvasW = Math.max(1, Math.round(tileBounds.w));
+  const canvasH = Math.max(1, Math.round(tileBounds.h));
 
   if (canvasW > COARSE_HEAT_TILE_MAX_PX || canvasH > COARSE_HEAT_TILE_MAX_PX) {
     return null;
@@ -4713,14 +4774,11 @@ function renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSigna
       const x1 = x0 + binSize * GRID_SIZE_M;
       const y1 = y0 + binSize * GRID_SIZE_M;
       const binBounds = gridMetersRectLayerBounds(x0, y0, x1, y1);
-      const pxX = Math.floor(binBounds.x - tileBounds.x) + 1;
-      const pxY = Math.floor(binBounds.y - tileBounds.y) + 1;
-      const pxW = Math.ceil(binBounds.w);
-      const pxH = Math.ceil(binBounds.h);
+      const pxRect = coarseHeatPaintRect(binBounds, tileBounds);
 
       ctx.globalAlpha = Math.min(0.82, Number(baseStyle.fillOpacity || 0.25));
       ctx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
-      ctx.fillRect(pxX - 1, pxY - 1, Math.max(1, pxW + 2), Math.max(1, pxH + 2));
+      ctx.fillRect(pxRect.x, pxRect.y, pxRect.w, pxRect.h);
       painted++;
     }
   }
@@ -4741,11 +4799,23 @@ function renderCoarseTiledHeatCanvas() {
   const endAnchorX = Math.floor((endX - GRID_SIZE_M) / binSizeM) * binSize;
   const startAnchorY = Math.floor(startY / binSizeM) * binSize;
   const endAnchorY = Math.floor((endY - GRID_SIZE_M) / binSizeM) * binSize;
+  const span = getCoarseHeatBinSpan(startAnchorX, endAnchorX, startAnchorY, endAnchorY, binSize);
+  if (!span.safe) {
+    warnCoarseHeatBudgetExceeded("tiled bin budget", { ...span, binSize });
+    return 0;
+  }
   const tileFineCells = getCoarseHeatTileFineCells(binSize);
   const startTileIx = Math.floor(startAnchorX / tileFineCells);
   const endTileIx = Math.floor(endAnchorX / tileFineCells);
   const startTileIy = Math.floor(startAnchorY / tileFineCells);
   const endTileIy = Math.floor(endAnchorY / tileFineCells);
+  const tileCols = Math.max(0, endTileIx - startTileIx + 1);
+  const tileRows = Math.max(0, endTileIy - startTileIy + 1);
+  const tileCount = tileCols * tileRows;
+  if (!Number.isFinite(tileCount) || tileCount <= 0 || tileCount > COARSE_HEAT_RENDER_TILE_BUDGET) {
+    warnCoarseHeatBudgetExceeded("tile budget", { tileCols, tileRows, tileCount, binSize });
+    return 0;
+  }
   const hydrationScope = makeCoarseRichHydrationScope(
     binSize,
     startAnchorX,
@@ -4783,8 +4853,8 @@ function renderCoarseTiledHeatCanvas() {
     gridHeatCtx.globalAlpha = 1;
     gridHeatCtx.drawImage(
       tile.canvas,
-      tileBounds.x - 1,
-      tileBounds.y - 1,
+      tileBounds.x,
+      tileBounds.y,
       tile.canvas.width,
       tile.canvas.height
     );
@@ -5299,6 +5369,11 @@ function renderCoarseMedianHeatCanvasDirect() {
   const endAnchorX = Math.floor((endX - GRID_SIZE_M) / binSizeM) * binSize;
   const startAnchorY = Math.floor(startY / binSizeM) * binSize;
   const endAnchorY = Math.floor((endY - GRID_SIZE_M) / binSizeM) * binSize;
+  const span = getCoarseHeatBinSpan(startAnchorX, endAnchorX, startAnchorY, endAnchorY, binSize);
+  if (!span.safe) {
+    warnCoarseHeatBudgetExceeded("direct bin budget", { ...span, binSize });
+    return 0;
+  }
   let painted = 0;
   const items = [];
   const hydrationScope = makeCoarseRichHydrationScope(
@@ -5347,18 +5422,15 @@ function renderCoarseMedianHeatCanvasDirect() {
       const baseStyle = metricsToFill(metrics);
       if (!baseStyle) continue;
 
-      const { sw, ne } = coarseCellBoundsLL(ix, iy, binSize);
-      const nwPx = gridHeatLayerPoint(L.latLng(ne.lat, sw.lng));
-      const sePx = gridHeatLayerPoint(L.latLng(sw.lat, ne.lng));
-
-      const pxX = Math.floor(nwPx.x);
-      const pxY = Math.floor(nwPx.y);
-      const pxW = Math.ceil(sePx.x - nwPx.x);
-      const pxH = Math.ceil(sePx.y - nwPx.y);
+      const x0 = ix * GRID_SIZE_M;
+      const y0 = iy * GRID_SIZE_M;
+      const x1 = x0 + binSize * GRID_SIZE_M;
+      const y1 = y0 + binSize * GRID_SIZE_M;
+      const pxRect = coarseHeatPaintRect(gridMetersRectLayerBounds(x0, y0, x1, y1));
 
       gridHeatCtx.globalAlpha = Math.min(0.82, Number(baseStyle.fillOpacity || 0.25));
       gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
-      gridHeatCtx.fillRect(pxX - 1, pxY - 1, Math.max(1, pxW + 2), Math.max(1, pxH + 2));
+      gridHeatCtx.fillRect(pxRect.x, pxRect.y, pxRect.w, pxRect.h);
       painted++;
   }
 

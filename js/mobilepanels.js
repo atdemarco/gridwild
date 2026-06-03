@@ -1316,6 +1316,18 @@ function renderInfoContent() {
       <div class="gw-card">
         <div class="gw-card-title">Layer controls</div>
 
+        <div class="gw-basemap-toggle" role="radiogroup" aria-label="Base map">
+          <span class="gw-basemap-label">Base map</span>
+          <label class="gw-basemap-option">
+            <input type="radio" name="gwBaseMap" value="street" checked />
+            <span>Street</span>
+          </label>
+          <label class="gw-basemap-option">
+            <input type="radio" name="gwBaseMap" value="terrain" />
+            <span>Terrain</span>
+          </label>
+        </div>
+
         
         <div class="gw-togglegrid">
           <label class="gw-toggleline">
@@ -1336,6 +1348,11 @@ function renderInfoContent() {
           <label class="gw-toggleline">
           <input type="checkbox" id="toggleOsmBuildings_clone" checked />
           <span>Buildings / Roofs</span>
+          </label>
+
+          <label class="gw-toggleline">
+            <input type="checkbox" id="toggleSurveyView_clone" checked />
+            <span>Survey view</span>
           </label>
 
           <label class="gw-toggleline">
@@ -1377,10 +1394,14 @@ function renderInfoContent() {
             <span>Contrast</span>
           </label>
 
-          <label class="gw-toggleline">
-            <input type="checkbox" id="toggleLocalNiches_clone" />
-            <span>Niches</span>
-          </label>
+          <div class="gw-toggleline gw-hud-menu-pill-line">
+            <input class="gw-hud-menu-hidden-check" type="checkbox" id="toggleLocalNiches_clone" tabindex="-1" aria-hidden="true" />
+            <button class="gw-hud-menu-pill-toggle" id="gwNicheViewMenuToggle" type="button" aria-pressed="true">
+              <span class="gw-hud-menu-pill">N</span>
+              <span class="gw-hud-menu-label">Niche view</span>
+              <span class="gw-hud-menu-check" aria-hidden="true">&#10003;</span>
+            </button>
+          </div>
 
           <label class="gw-toggleline">
             <input type="checkbox" id="toggleNicheSparkles_clone" />
@@ -1891,6 +1912,42 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     syncCloneFromReal();
   }
 
+  function normalizedBaseMapChoice(choice) {
+    if (window.GridWildBaseMaps?.normalizeChoice) {
+      return window.GridWildBaseMaps.normalizeChoice(choice);
+    }
+    return choice === "terrain" ? "terrain" : "street";
+  }
+
+  function syncBaseMapControls() {
+    const choice = normalizedBaseMapChoice(
+      window.GridWildBaseMaps?.getBaseMap?.() || window.__gwState?.baseMap
+    );
+
+    document.querySelectorAll('input[name="gwBaseMap"]').forEach(radio => {
+      radio.checked = radio.value === choice;
+    });
+  }
+
+  function bindBaseMapControls() {
+    document.querySelectorAll('input[name="gwBaseMap"]').forEach(radio => {
+      if (radio.dataset.gwBaseMapBound === "true") return;
+      radio.dataset.gwBaseMapBound = "true";
+      radio.addEventListener("change", () => {
+        if (!radio.checked) return;
+        window.GridWildBaseMaps?.setBaseMap?.(radio.value);
+        syncBaseMapControls();
+      });
+    });
+
+    if (bindBaseMapControls.syncBound !== true) {
+      bindBaseMapControls.syncBound = true;
+      window.addEventListener("gridwild:basemapchange", syncBaseMapControls);
+    }
+
+    syncBaseMapControls();
+  }
+
   function localNichesEnabled() {
     return window.GridWildLocalNiches?.isVisible?.() ??
       window.__gwState?.showLocalNiches !== false;
@@ -1945,9 +2002,23 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     } catch {}
   }
 
+  function setLocalNichesVisible(show) {
+    const desired = show === true;
+    if (window.GridWildLocalNiches?.setVisible) {
+      window.GridWildLocalNiches.setVisible(desired);
+      return true;
+    }
+
+    window.__gwState = window.__gwState || {};
+    window.__gwState.showLocalNiches = desired;
+    window.GridWildLocalNiches?.drawNicheLayer?.();
+    return false;
+  }
+
   function syncHudOptionCloneControls() {
     const contrast = $("toggleHighContrast_clone");
     const niches = $("toggleLocalNiches_clone");
+    const nicheMenu = $("gwNicheViewMenuToggle");
     const sparkles = $("toggleNicheSparkles_clone");
     const me = $("toggleMeFilter_clone");
     const haptics = $("toggleHaptics_clone");
@@ -1955,7 +2026,12 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     const gpsCircle = $("toggleGpsCircle_clone");
 
     if (contrast) contrast.checked = window.__gwState?.highContrastLensEnabled === true;
-    if (niches) niches.checked = localNichesEnabled();
+    const nicheEnabled = localNichesEnabled();
+    if (niches) niches.checked = nicheEnabled;
+    if (nicheMenu) {
+      nicheMenu.classList.toggle("is-on", nicheEnabled);
+      nicheMenu.setAttribute("aria-pressed", nicheEnabled ? "true" : "false");
+    }
     if (sparkles) sparkles.checked = nicheSparklesEnabled();
     if (me) me.checked = window.__gwFilters?.onlyMe === true;
     if (haptics) haptics.checked = hapticsEnabled();
@@ -1975,6 +2051,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
   function bindHudOptionCloneControls() {
     const contrast = $("toggleHighContrast_clone");
     const niches = $("toggleLocalNiches_clone");
+    const nicheMenu = $("gwNicheViewMenuToggle");
     const sparkles = $("toggleNicheSparkles_clone");
     const me = $("toggleMeFilter_clone");
     const haptics = $("toggleHaptics_clone");
@@ -1995,15 +2072,26 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       });
     }
 
+    const applyNicheMenuChange = (desired) => {
+      if (!clickHudToggleIfNeeded("gwHudNicheLayerToggle", desired, localNichesEnabled())) {
+        setLocalNichesVisible(desired);
+      }
+      syncHudOptionCloneControls();
+    };
+
     if (niches && niches.dataset.bound !== "true") {
       niches.dataset.bound = "true";
       niches.addEventListener("change", () => {
-        if (!clickHudToggleIfNeeded("gwHudNicheLayerToggle", niches.checked, localNichesEnabled())) {
-          window.__gwState = window.__gwState || {};
-          window.__gwState.showLocalNiches = niches.checked;
-          window.GridWildLocalNiches?.drawNicheLayer?.();
-        }
-        syncHudOptionCloneControls();
+        applyNicheMenuChange(niches.checked);
+      });
+    }
+
+    if (nicheMenu && nicheMenu.dataset.bound !== "true") {
+      nicheMenu.dataset.bound = "true";
+      nicheMenu.addEventListener("click", () => {
+        const next = !localNichesEnabled();
+        if (niches) niches.checked = next;
+        applyNicheMenuChange(next);
       });
     }
 
@@ -2089,10 +2177,12 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       window.addEventListener("gridwild:filterschange", syncHudOptionCloneControls);
       window.addEventListener("gridwild:unitschange", syncHudOptionCloneControls);
       window.addEventListener("gridwild:gpscirclechange", syncHudOptionCloneControls);
+      window.addEventListener("gridwild:localnicheschange", syncHudOptionCloneControls);
       window.addEventListener("gridwild:nichesparklechange", syncHudOptionCloneControls);
     }
 
     syncHudOptionCloneControls();
+    syncBaseMapControls();
   }
 
   function buildTaxaCloneChecklist() {
@@ -2145,7 +2235,8 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       ["toggleFogSmoothing", "toggleFogSmoothing_clone"],
       ["toggleGodsEye", "toggleGodsEye_clone"],
       ["toggleLockLocation", "toggleLockLocation_clone"],
-      ["toggleOsmBuildings", "toggleOsmBuildings_clone"]
+      ["toggleOsmBuildings", "toggleOsmBuildings_clone"],
+      ["toggleSurveyView", "toggleSurveyView_clone"]
     ].forEach(([realId, cloneId]) => {
       const real = $(realId);
       const clone = $(cloneId);
@@ -2187,8 +2278,10 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     mirrorCheckbox("toggleGodsEye", "toggleGodsEye_clone");
     mirrorCheckbox("toggleLockLocation", "toggleLockLocation_clone");
     mirrorCheckbox("toggleOsmBuildings", "toggleOsmBuildings_clone");
+    mirrorCheckbox("toggleSurveyView", "toggleSurveyView_clone");
     mirrorHeatMetricRadios();
     bindHudOptionCloneControls();
+    bindBaseMapControls();
 
     setTimeout(() => {
       if (window.GridWildQuests && questBody) {
