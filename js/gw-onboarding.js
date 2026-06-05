@@ -44,8 +44,8 @@
     },
     {
       selector: "#btnInfo",
-      title: "Inspect the center",
-      body: "Scan opens details for the center square: summary stats, local observers, taxonomy structure, and recent activity.",
+      title: "Field context",
+      body: "Field manages niches, patches, joined surveys, and the Center Square readout.",
       arrow: "bottom-left"
     },
     {

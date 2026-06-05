@@ -745,6 +745,8 @@ function getMapPanePosition(mapPane) {
 }
 
 function setMapPaneHeadingTransform() {
+  if (!MAP_HEADING_ROTATION_ENABLED) return;
+
   const mapPane = map.getPane("mapPane");
   if (!mapPane) return;
 
@@ -752,7 +754,7 @@ function setMapPaneHeadingTransform() {
   const size = map.getSize();
   const originX = (size.x / 2) - pos.x;
   const originY = (size.y / 2) - pos.y;
-  const rotationDeg = MAP_HEADING_ROTATION_ENABLED && window.__gwState?.lockToLocation
+  const rotationDeg = window.__gwState?.lockToLocation
     ? -mapHeadingDeg
     : 0;
 
@@ -764,18 +766,29 @@ function setMapPaneHeadingTransform() {
 }
 
 function scheduleMapHeadingTransform() {
+  if (!MAP_HEADING_ROTATION_ENABLED) return;
   if (mapHeadingRaf) return;
 
-  mapHeadingRaf = requestAnimationFrame(() => {
+  const run = () => {
     mapHeadingRaf = null;
     setMapPaneHeadingTransform();
-  });
+  };
+
+  if (window.GridWildMapMotionQueue?.requestFrame) {
+    mapHeadingRaf = true;
+    window.GridWildMapMotionQueue.requestFrame("map-heading", run);
+  } else {
+    mapHeadingRaf = requestAnimationFrame(run);
+  }
 }
 
 function applyMapRotation(headingDeg = 0) {
-  mapHeadingDeg = MAP_HEADING_ROTATION_ENABLED
-    ? normalizeHeading(Number(headingDeg) || 0)
-    : 0;
+  if (!MAP_HEADING_ROTATION_ENABLED) {
+    mapHeadingDeg = 0;
+    return;
+  }
+
+  mapHeadingDeg = normalizeHeading(Number(headingDeg) || 0);
 
   scheduleMapHeadingTransform();
 }
@@ -784,7 +797,13 @@ function enableDeviceOrientation() {
   return startCompassTracking({ requestPermission: true });
 }
 
-map.on("move zoom resize viewreset moveend zoomend", scheduleMapHeadingTransform);
+if (MAP_HEADING_ROTATION_ENABLED) {
+  if (window.GridWildMapMotionQueue?.subscribe) {
+    window.GridWildMapMotionQueue.subscribe("map-heading-motion", scheduleMapHeadingTransform);
+  } else {
+    map.on("move zoom resize viewreset moveend zoomend", scheduleMapHeadingTransform);
+  }
+}
 
 map.on("zoomend", () => {
   if (!lastFix) return;
@@ -871,13 +890,26 @@ function updateMapScaleHatch() {
 
 function scheduleMapScaleHatch() {
   if (scaleHatchRaf) return;
-  scaleHatchRaf = requestAnimationFrame(() => {
+  const run = () => {
     scaleHatchRaf = null;
     updateMapScaleHatch();
-  });
+  };
+
+  if (window.GridWildMapMotionQueue?.requestFrame) {
+    scaleHatchRaf = true;
+    window.GridWildMapMotionQueue.requestFrame("map-scale-hatch", run);
+  } else {
+    scaleHatchRaf = requestAnimationFrame(run);
+  }
 }
 
-map.on("zoom zoomend move moveend resize", scheduleMapScaleHatch);
+if (window.GridWildMapMotionQueue?.subscribe) {
+  window.GridWildMapMotionQueue.subscribe("map-scale-hatch-motion", scheduleMapScaleHatch, {
+    events: "zoom zoomend move moveend resize"
+  });
+} else {
+  map.on("zoom zoomend move moveend resize", scheduleMapScaleHatch);
+}
 window.addEventListener("gridwild:unitschange", scheduleMapScaleHatch);
 setTimeout(scheduleMapScaleHatch, 0);
 

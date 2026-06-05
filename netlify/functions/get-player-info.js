@@ -71,6 +71,7 @@ exports.handler = async function (event) {
 
     let homeNicheId = null;
     let homeNiche = null;
+    let activeParty = null;
     const homeNicheResult = await supabase
       .from("local_niche_stewards")
       .select("niche_id")
@@ -97,11 +98,33 @@ exports.handler = async function (event) {
       }
     }
 
+    const activePartyStateResult = await supabase
+      .from("player_state")
+      .select("active_party_id")
+      .eq("player_id", targetPlayerId)
+      .maybeSingle();
+
+    if (activePartyStateResult.error) throw activePartyStateResult.error;
+
+    if (activePartyStateResult.data?.active_party_id) {
+      const activePartyResult = await supabase
+        .from("parties")
+        .select("id, name, visibility, status, created_by")
+        .eq("id", activePartyStateResult.data.active_party_id)
+        .maybeSingle();
+
+      if (activePartyResult.error) throw activePartyResult.error;
+      if (activePartyResult.data?.status !== "ended") {
+        activeParty = activePartyResult.data || null;
+      }
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify({
         player: playerResult.data,
         equipment: equipmentResult.data || null,
+        active_party: activeParty,
         home_niche_id: homeNicheId,
         home_niche: homeNiche,
         stats: {

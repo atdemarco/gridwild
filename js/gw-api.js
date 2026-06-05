@@ -296,6 +296,39 @@ window.GridWildAPI = {
     });
   },
 
+  async getPlayerInteractions() {
+    return postFunction("get-player-interactions", {
+      player_id: this.getPlayerId(),
+      session_token: this.getPlayerSessionToken()
+    });
+  },
+
+  async createPlayerInteraction(payload = {}) {
+    return postFunction("create-player-interaction", {
+      player_id: this.getPlayerId(),
+      session_token: this.getPlayerSessionToken(),
+      ...payload
+    });
+  },
+
+  async respondPlayerInteraction(interactionId, response) {
+    return postFunction("respond-player-interaction", {
+      player_id: this.getPlayerId(),
+      session_token: this.getPlayerSessionToken(),
+      interaction_id: interactionId,
+      response
+    });
+  },
+
+  async blockPlayer(targetPlayerId) {
+    return postFunction("create-player-interaction", {
+      player_id: this.getPlayerId(),
+      session_token: this.getPlayerSessionToken(),
+      type: "block",
+      target_player_id: targetPlayerId
+    });
+  },
+
   async updatePartyEvidenceStatus(partyId, draftId, status) {
     return postFunction("update-party-evidence", {
       player_id: this.getPlayerId(),

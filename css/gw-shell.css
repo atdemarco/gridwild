@@ -1786,6 +1786,55 @@
   pointer-events: none;
 }
 
+.gw-hud-raise-tab {
+  --gw-raise-tab-left: 50%;
+  --gw-raise-tab-bottom: calc(max(10px, env(safe-area-inset-bottom)) + 66px);
+  position: fixed;
+  left: var(--gw-raise-tab-left);
+  bottom: var(--gw-raise-tab-bottom);
+  transform: translateX(-50%);
+  z-index: 1499;
+  width: 52px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: start center;
+  padding-top: 7px;
+  border-radius: 17px 17px 12px 12px;
+  border: 1px solid rgba(255,224,130,0.62);
+  border-bottom-color: rgba(143,103,39,0.16);
+  color: #ffe59a;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(255,236,163,0.32), transparent 42%),
+    linear-gradient(180deg, rgba(255,213,94,0.34), rgba(119,79,25,0.88) 58%, rgba(35,28,22,0.96));
+  box-shadow:
+    0 -2px 16px rgba(255,215,99,0.32),
+    0 0 26px rgba(255,205,77,0.22),
+    0 8px 22px rgba(0,0,0,0.38),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gw-hud-raise-tab svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter:
+    drop-shadow(0 0 6px rgba(255,224,130,0.70))
+    drop-shadow(0 1px 0 rgba(0,0,0,0.45));
+}
+
+.gw-hud-raise-tab:active {
+  transform: translateX(-50%) translateY(1px);
+}
+
 .gw-navbtn {
   color: #b39a6a;   /* darker brass */
   text-shadow:
@@ -2328,4 +2377,3 @@
   .gw-hud-geometry-foldout[hidden] {
     display: none;
   }
-

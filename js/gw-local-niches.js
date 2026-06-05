@@ -9016,8 +9016,32 @@
       }
     });
 
+    function minimizeNicheDetail() {
+      const key = niche.id || niche.source_key;
+      const restoreSheetName = window.GridWildSheets?.getOpen?.() || null;
+      root.remove();
+      window.GridWildSheets?.closeAll?.();
+
+      if (!key || !window.GridWildInfoPuck?.minimize) return;
+
+      window.GridWildInfoPuck.minimize({
+        kind: "niche",
+        mark: "N",
+        title: displayNicheTitle(niche),
+        beforeRestore: restoreSheetName
+          ? () => window.GridWildSheets?.open?.(restoreSheetName)
+          : null,
+        restore: () => openNicheDetail(key),
+        onDismiss: () => {
+          drawNicheLayer();
+          renderIntoPage();
+        }
+      });
+    }
+
     root.querySelector("#gwNicheFocusMapBtn")?.addEventListener("click", () => {
       map.flyTo([niche.centroid_lat, niche.centroid_lng], Math.max(map.getZoom(), 18), { duration: 0.6 });
+      minimizeNicheDetail();
     });
 
     root.querySelector("#gwNicheStartQuestBtn")?.addEventListener("click", () => {

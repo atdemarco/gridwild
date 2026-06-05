@@ -16,6 +16,10 @@
   const WET_EDGE_M = 8;
   const BUILDING_ADJACENT_M = 8;
   const ROAD_NEAR_M = 12;
+  const SPATIAL_INDEX_CELL_M = 96;
+  const MAX_INDEX_CELLS_PER_ITEM = 2048;
+  const PATH_QUERY_M = 32;
+  const PLACE_QUERY_M = 300;
 
   const OSM_PRIOR_LENSES = new Map([
     ["osm-path-adjacency", "path-adjacency"],
@@ -45,8 +49,12 @@
       paths: [],
       roads: [],
       water: [],
+      waterClosed: [],
+      waterOpen: [],
       buildings: [],
       landuse: [],
+      landuseClosed: [],
+      index: emptySpatialIndexes(),
       places: []
     };
   }
@@ -111,7 +119,11 @@
 
     if (!listenersBound) {
       listenersBound = true;
-      map.on("move zoom resize viewreset zoomend moveend", scheduleRender);
+      if (window.GridWildMapMotionQueue?.subscribe) {
+        window.GridWildMapMotionQueue.subscribe("osm-priors-motion", scheduleRender);
+      } else {
+        map.on("move zoom resize viewreset zoomend moveend", scheduleRender);
+      }
       window.addEventListener("gwOsmFeaturesUpdated", () => {
         invalidate();
         scheduleRender();
@@ -170,13 +182,186 @@
     return { x: p.x, y: p.y, latlng: ll };
   }
 
-  function projectFeature(feature) {
+  function boundsForPoints(points) {
+    if (!points?.length) return null;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const p of points) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+
+    return { minX, minY, maxX, maxY };
+  }
+
+  function boundsForSegment(a, b) {
+    return {
+      minX: Math.min(a.x, b.x),
+      minY: Math.min(a.y, b.y),
+      maxX: Math.max(a.x, b.x),
+      maxY: Math.max(a.y, b.y)
+    };
+  }
+
+  function boundsAroundPoint(x, y, radiusM = 0) {
+    return {
+      minX: x - radiusM,
+      minY: y - radiusM,
+      maxX: x + radiusM,
+      maxY: y + radiusM
+    };
+  }
+
+  function projectFeature(feature, order = 0) {
+    const points = (feature.points || []).map(projectPoint);
     return {
       id: feature.id,
+      order,
+      spatialKey: `${order}:${feature.id || "feature"}`,
       tags: feature.tags || {},
       closed: feature.closed === true,
-      points: (feature.points || []).map(projectPoint)
+      points,
+      bounds: boundsForPoints(points)
     };
+  }
+
+  function createSpatialIndex() {
+    return {
+      cellSize: SPATIAL_INDEX_CELL_M,
+      cells: new Map(),
+      overflow: []
+    };
+  }
+
+  function emptySpatialIndexes() {
+    return {
+      pathSegments: createSpatialIndex(),
+      roadSegments: createSpatialIndex(),
+      waterLineSegments: createSpatialIndex(),
+      waterPolygons: createSpatialIndex(),
+      buildingPolygons: createSpatialIndex(),
+      landusePolygons: createSpatialIndex(),
+      places: createSpatialIndex()
+    };
+  }
+
+  function spatialCellRange(index, bounds) {
+    return {
+      minCx: Math.floor(bounds.minX / index.cellSize),
+      minCy: Math.floor(bounds.minY / index.cellSize),
+      maxCx: Math.floor(bounds.maxX / index.cellSize),
+      maxCy: Math.floor(bounds.maxY / index.cellSize)
+    };
+  }
+
+  function spatialCellKey(cx, cy) {
+    return `${cx},${cy}`;
+  }
+
+  function addSpatialItem(index, item, bounds) {
+    if (!bounds) return;
+
+    const range = spatialCellRange(index, bounds);
+    const cellCount = (range.maxCx - range.minCx + 1) * (range.maxCy - range.minCy + 1);
+
+    if (cellCount > MAX_INDEX_CELLS_PER_ITEM) {
+      index.overflow.push(item);
+      return;
+    }
+
+    for (let cy = range.minCy; cy <= range.maxCy; cy++) {
+      for (let cx = range.minCx; cx <= range.maxCx; cx++) {
+        const key = spatialCellKey(cx, cy);
+        let bucket = index.cells.get(key);
+        if (!bucket) {
+          bucket = [];
+          index.cells.set(key, bucket);
+        }
+        bucket.push(item);
+      }
+    }
+  }
+
+  function querySpatialIndex(index, bounds) {
+    if (!index || !bounds) return [];
+
+    const range = spatialCellRange(index, bounds);
+    const out = [];
+    const seen = new Set();
+
+    function push(item) {
+      const key = item.spatialKey;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(item);
+    }
+
+    for (const item of index.overflow) push(item);
+
+    for (let cy = range.minCy; cy <= range.maxCy; cy++) {
+      for (let cx = range.minCx; cx <= range.maxCx; cx++) {
+        const bucket = index.cells.get(spatialCellKey(cx, cy));
+        if (!bucket) continue;
+        for (const item of bucket) push(item);
+      }
+    }
+
+    return out;
+  }
+
+  function indexLineSegments(index, features) {
+    for (const feature of features) {
+      for (let i = 1; i < feature.points.length; i++) {
+        const a = feature.points[i - 1];
+        const b = feature.points[i];
+        addSpatialItem(
+          index,
+          {
+            spatialKey: `${feature.spatialKey}:seg:${i}`,
+            id: feature.id,
+            tags: feature.tags,
+            order: feature.order,
+            a,
+            b
+          },
+          boundsForSegment(a, b)
+        );
+      }
+    }
+  }
+
+  function indexPolygons(index, features) {
+    for (const feature of features) {
+      addSpatialItem(index, feature, feature.bounds);
+    }
+  }
+
+  function indexPlaces(index, features) {
+    for (const feature of features) {
+      const p = feature.points[0];
+      if (!p) continue;
+      addSpatialItem(index, feature, boundsAroundPoint(p.x, p.y));
+    }
+  }
+
+  function buildSpatialIndexes(projectedFeatures) {
+    const index = emptySpatialIndexes();
+
+    indexLineSegments(index.pathSegments, projectedFeatures.paths);
+    indexLineSegments(index.roadSegments, projectedFeatures.roads);
+    indexLineSegments(index.waterLineSegments, projectedFeatures.waterOpen);
+    indexPolygons(index.waterPolygons, projectedFeatures.waterClosed);
+    indexPolygons(index.buildingPolygons, projectedFeatures.buildings);
+    indexPolygons(index.landusePolygons, projectedFeatures.landuseClosed);
+    indexPlaces(index.places, projectedFeatures.places);
+
+    return index;
   }
 
   function landuseClassForTags(tags = {}) {
@@ -202,20 +387,27 @@
     if (version === projectedVersion) return projected;
 
     const features = source?.getFeatures?.() || {};
+    const water = (features.water || []).map((feature, order) => projectFeature(feature, order));
+    const landuse = (features.parks || []).map((feature, order) => ({
+      ...projectFeature(feature, order),
+      landuseClass: landuseClassForTags(feature.tags)
+    }));
+
     projectedVersion = version;
     projected = {
-      paths: (features.trails || []).map(projectFeature),
-      roads: (features.roads || []).map(projectFeature),
-      water: (features.water || []).map(projectFeature),
-      buildings: (features.buildings || []).map(projectFeature),
-      landuse: (features.parks || []).map(f => ({
-        ...projectFeature(f),
-        landuseClass: landuseClassForTags(f.tags)
-      })),
+      paths: (features.trails || []).map((feature, order) => projectFeature(feature, order)),
+      roads: (features.roads || []).map((feature, order) => projectFeature(feature, order)),
+      water,
+      waterClosed: water.filter(feature => feature.closed),
+      waterOpen: water.filter(feature => !feature.closed),
+      buildings: (features.buildings || []).map((feature, order) => projectFeature(feature, order)),
+      landuse,
+      landuseClosed: landuse.filter(feature => feature.closed),
       places: (features.places || [])
-        .map(projectFeature)
+        .map((feature, order) => projectFeature(feature, order))
         .filter(f => f.points.length)
     };
+    projected.index = buildSpatialIndexes(projected);
 
     return projected;
   }
@@ -251,26 +443,25 @@
     };
   }
 
-  function nearestLine(px, py, lines) {
+  function nearestIndexedLine(px, py, lineIndex, radiusM) {
+    const candidates = querySpatialIndex(lineIndex, boundsAroundPoint(px, py, radiusM));
     let best = null;
 
-    for (const f of lines) {
-      for (let i = 1; i < f.points.length; i++) {
-        const hit = distPointSegment(px, py, f.points[i - 1], f.points[i]);
-        if (!best || hit.distance < best.distance) {
-          best = {
-            id: f.id,
-            tags: f.tags,
-            distance: hit.distance,
-            side: hit.side,
-            a: f.points[i - 1],
-            b: f.points[i]
-          };
-        }
+    for (const segment of candidates) {
+      const hit = distPointSegment(px, py, segment.a, segment.b);
+      if (!best || hit.distance < best.distance) {
+        best = {
+          id: segment.id,
+          tags: segment.tags,
+          distance: hit.distance,
+          side: hit.side,
+          a: segment.a,
+          b: segment.b
+        };
       }
     }
 
-    return best;
+    return best && best.distance <= radiusM ? best : null;
   }
 
   function pointInPolygon(px, py, polygon) {
@@ -290,10 +481,11 @@
     return inside;
   }
 
-  function nearestPolygonDistance(px, py, polygons) {
+  function nearestIndexedPolygonDistance(px, py, polygonIndex, radiusM) {
+    const candidates = querySpatialIndex(polygonIndex, boundsAroundPoint(px, py, radiusM));
     let best = { distance: Infinity, feature: null, inside: false };
 
-    for (const f of polygons) {
+    for (const f of candidates) {
       if (f.points.length < 3) continue;
 
       const inside = f.closed && pointInPolygon(px, py, f);
@@ -310,14 +502,25 @@
       }
     }
 
-    return best;
+    return best.inside || best.distance <= radiusM
+      ? best
+      : { distance: Infinity, feature: null, inside: false };
   }
 
-  function nearestPlaceName(px, py, places) {
+  function findContainingPolygon(px, py, polygonIndex) {
+    const candidates = querySpatialIndex(polygonIndex, boundsAroundPoint(px, py))
+      .filter(poly => poly.closed)
+      .sort((a, b) => a.order - b.order);
+
+    return candidates.find(poly => pointInPolygon(px, py, poly)) || null;
+  }
+
+  function nearestIndexedPlaceName(px, py, placeIndex) {
+    const candidates = querySpatialIndex(placeIndex, boundsAroundPoint(px, py, PLACE_QUERY_M));
     let bestName = null;
     let bestDistance = Infinity;
 
-    for (const place of places) {
+    for (const place of candidates) {
       const p = place.points[0];
       if (!p) continue;
       const d = Math.hypot(px - p.x, py - p.y);
@@ -327,7 +530,7 @@
       }
     }
 
-    return bestDistance <= 300 ? bestName : null;
+    return bestDistance <= PLACE_QUERY_M ? bestName : null;
   }
 
   function ccw(a, b, c) {
@@ -338,7 +541,7 @@
     return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d);
   }
 
-  function roadBarrierForCell(x0, y0, x1, y1, roads, nearestRoadDistanceM) {
+  function roadBarrierForCell(x0, y0, x1, y1, roadSegments, nearestRoadDistanceM) {
     const nw = { x: x0, y: y1 };
     const ne = { x: x1, y: y1 };
     const se = { x: x1, y: y0 };
@@ -351,15 +554,11 @@
     };
     const barrier = { north: false, east: false, south: false, west: false, any: false };
 
-    for (const road of roads) {
-      for (let i = 1; i < road.points.length; i++) {
-        const a = road.points[i - 1];
-        const b = road.points[i];
-        for (const [side, line] of Object.entries(boundaries)) {
-          if (segmentsIntersect(a, b, line[0], line[1])) {
-            barrier[side] = true;
-            barrier.any = true;
-          }
+    for (const segment of roadSegments) {
+      for (const [side, line] of Object.entries(boundaries)) {
+        if (segmentsIntersect(segment.a, segment.b, line[0], line[1])) {
+          barrier[side] = true;
+          barrier.any = true;
         }
       }
     }
@@ -421,21 +620,23 @@
     const px = x0 + CELL_SIZE_M / 2;
     const py = y0 + CELL_SIZE_M / 2;
     const f = getProjectedFeatures();
+    const index = f.index;
 
-    const nearestPath = nearestLine(px, py, f.paths);
-    const nearestRoad = nearestLine(px, py, f.roads);
-    const waterPoly = nearestPolygonDistance(px, py, f.water.filter(w => w.closed));
-    const waterLine = nearestLine(px, py, f.water.filter(w => !w.closed));
+    const nearestPath = nearestIndexedLine(px, py, index.pathSegments, PATH_QUERY_M);
+    const nearestRoad = nearestIndexedLine(px, py, index.roadSegments, ROAD_NEAR_M);
+    const waterPoly = nearestIndexedPolygonDistance(px, py, index.waterPolygons, WET_EDGE_M);
+    const waterLine = nearestIndexedLine(px, py, index.waterLineSegments, WET_EDGE_M);
     const nearestWaterDistanceM = Math.min(
       waterPoly.distance,
       waterLine?.distance ?? Infinity
     );
-    const building = nearestPolygonDistance(px, py, f.buildings);
-    const landuse = f.landuse.find(poly => poly.closed && pointInPolygon(px, py, poly));
+    const building = nearestIndexedPolygonDistance(px, py, index.buildingPolygons, BUILDING_ADJACENT_M);
+    const landuse = findContainingPolygon(px, py, index.landusePolygons);
     const insideWater = waterPoly.inside === true;
     const nearestPathDistanceM = nearestPath?.distance ?? Infinity;
     const nearestRoadDistanceM = nearestRoad?.distance ?? Infinity;
-    const barrierInfo = roadBarrierForCell(x0, y0, x1, y1, f.roads, nearestRoadDistanceM);
+    const roadSegments = querySpatialIndex(index.roadSegments, { minX: x0, minY: y0, maxX: x1, maxY: y1 });
+    const barrierInfo = roadBarrierForCell(x0, y0, x1, y1, roadSegments, nearestRoadDistanceM);
     const landuseClass = insideWater
       ? "water"
       : building.inside
@@ -460,7 +661,7 @@
       insideBuilding: building.inside === true,
 
       landuseClass,
-      nearestPlaceName: nearestPlaceName(px, py, f.places),
+      nearestPlaceName: nearestIndexedPlaceName(px, py, index.places),
 
       insideWater,
       distanceToBuildingM: building.distance,
@@ -774,7 +975,12 @@
     }
 
     if (raf) return;
-    raf = requestAnimationFrame(render);
+    if (window.GridWildMapMotionQueue?.requestFrame) {
+      raf = true;
+      window.GridWildMapMotionQueue.requestFrame("osm-priors", render);
+    } else {
+      raf = requestAnimationFrame(render);
+    }
   }
 
   function handleLensChange(lens = window.__gwState?.activeLens) {

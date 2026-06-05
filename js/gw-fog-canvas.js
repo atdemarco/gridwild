@@ -7,6 +7,7 @@
   let raf = null;
   let canvasTopLeft = L.point(0, 0);
   let canvasLayout = null;
+  let meterTransform = null;
 
   //const FOG_UNKNOWN_OPACITY = 0.34;
   //  const FOG_COLOR_RGB = "38,46,42";
@@ -150,7 +151,11 @@
     ctx = canvas.getContext("2d", { alpha: true });
 
     // map.on("resize viewreset zoomend moveend", scheduleRender);
-    map.on("move zoom resize viewreset zoomend moveend", scheduleRender);
+    if (window.GridWildMapMotionQueue?.subscribe) {
+      window.GridWildMapMotionQueue.subscribe("fog-canvas-motion", scheduleRender);
+    } else {
+      map.on("move zoom resize viewreset zoomend moveend", scheduleRender);
+    }
 
     return canvas;
   }
@@ -159,10 +164,49 @@
     return map.latLngToLayerPoint(latlng).subtract(canvasTopLeft);
   }
 
+  function updateMeterTransform() {
+    const crs = map.options?.crs;
+    const transform = crs?.transformation;
+    const scale = crs?.scale?.(map.getZoom());
+    const pixelOrigin = map.getPixelOrigin?.();
+    const values = transform && Number.isFinite(scale) && pixelOrigin
+      ? {
+        a: Number(transform._a),
+        b: Number(transform._b),
+        c: Number(transform._c),
+        d: Number(transform._d),
+        scale,
+        originX: pixelOrigin.x + canvasTopLeft.x,
+        originY: pixelOrigin.y + canvasTopLeft.y
+      }
+      : null;
+
+    meterTransform = values &&
+      Number.isFinite(values.a) &&
+      Number.isFinite(values.b) &&
+      Number.isFinite(values.c) &&
+      Number.isFinite(values.d)
+      ? values
+      : null;
+  }
+
+  function pointForMeters(x, y) {
+    const t = meterTransform;
+    if (t) {
+      return {
+        x: t.scale * (t.a * x + t.b) - t.originX,
+        y: t.scale * (t.c * y + t.d) - t.originY
+      };
+    }
+
+    return layerPoint(map.options.crs.unproject(L.point(x, y)));
+  }
+
   function resizeCanvas() {
     ensureCanvas();
     canvasLayout = window.GridWildCanvasPerf.layoutPaddedCanvas(canvas, ctx, "fog");
     canvasTopLeft = canvasLayout.topLeft;
+    updateMeterTransform();
   }
 
 
@@ -244,16 +288,30 @@ function render() {
   const renderCache = makeFogRenderCache();
 
   function drawFogRect(x0, y0, x1, y1, opacity) {
-    const llA = map.options.crs.unproject(L.point(x0, y0));
-    const llB = map.options.crs.unproject(L.point(x1, y1));
+    const t = meterTransform;
+    let aX;
+    let aY;
+    let bX;
+    let bY;
 
-    const pA = layerPoint(llA);
-    const pB = layerPoint(llB);
+    if (t) {
+      aX = t.scale * (t.a * x0 + t.b) - t.originX;
+      aY = t.scale * (t.c * y1 + t.d) - t.originY;
+      bX = t.scale * (t.a * x1 + t.b) - t.originX;
+      bY = t.scale * (t.c * y0 + t.d) - t.originY;
+    } else {
+      const pA = pointForMeters(x0, y1);
+      const pB = pointForMeters(x1, y0);
+      aX = pA.x;
+      aY = pA.y;
+      bX = pB.x;
+      bY = pB.y;
+    }
 
-    const left = Math.min(pA.x, pB.x);
-    const top = Math.min(pA.y, pB.y);
-    const right = Math.max(pA.x, pB.x);
-    const bottom = Math.max(pA.y, pB.y);
+    const left = Math.min(aX, bX);
+    const top = Math.min(aY, bY);
+    const right = Math.max(aX, bX);
+    const bottom = Math.max(aY, bY);
 
     const bleedX = 0.03;//25;
     const bleedY = 0.03;//25;
@@ -278,12 +336,12 @@ function render() {
     let run = null;
 
     for (let x = startX; x < endX; x += GRID_SIZE_M) {
+      const ix = Math.floor(x / GRID_SIZE_M);
       let blockKey = null;
       let blockOpacity = null;
       let wholeBlockFogged = true;
 
       for (let y = yBlock; y < yBlockEnd; y += GRID_SIZE_M) {
-        const ix = Math.floor(x / GRID_SIZE_M);
         const iy = Math.floor(y / GRID_SIZE_M);
 
         const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
@@ -323,7 +381,6 @@ function render() {
 
         // Fallback: draw whatever individual cells in this column/block are fogged.
         for (let y = yBlock; y < yBlockEnd; y += GRID_SIZE_M) {
-          const ix = Math.floor(x / GRID_SIZE_M);
           const iy = Math.floor(y / GRID_SIZE_M);
 
           const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
@@ -444,7 +501,12 @@ function renderROW() {
     }
 
     if (raf) return;
-    raf = requestAnimationFrame(render);
+    if (window.GridWildMapMotionQueue?.requestFrame) {
+      raf = true;
+      window.GridWildMapMotionQueue.requestFrame("fog-canvas", render);
+    } else {
+      raf = requestAnimationFrame(render);
+    }
   }
 
   window.GridWildFogCanvas = {

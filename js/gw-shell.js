@@ -236,7 +236,17 @@ window.ensureGridWildSurveyDataLoaded = ensureSurveyDataLoaded;
       navButtons[name].classList.add("is-active");
     }
 
-    if (name === "info" || name === "legend") {
+    if (name === "info") {
+      window.GridWildField?.renderIntoPage?.();
+      ensureSurveyDataLoaded()
+        .catch((err) => console.warn("Could not load surveys for Field sheet.", err));
+      ensureGridWildLocalNichesLoaded()
+        .catch((err) => console.warn("Could not load Local Niches module for Field sheet.", err));
+      window.GridWildPatches?.render?.();
+      window.GridWildOsmFeaturesLayer?.scheduleFetch?.();
+    }
+
+    if (name === "legend") {
       if (typeof window.refreshGridWildMobileInfo === "function") {
         window.refreshGridWildMobileInfo();
       }
@@ -285,6 +295,12 @@ window.ensureGridWildSurveyDataLoaded = ensureSurveyDataLoaded;
       }
       return null;
     }
+
+    window.GridWildSheets = {
+      open: openSheet,
+      closeAll: closeAllSheets,
+      getOpen: getOpenSheetName
+    };
 
     function openAdjacentSheet(direction) {
       const current = getOpenSheetName();

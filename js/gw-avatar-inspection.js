@@ -486,6 +486,13 @@
             </div>
           </div>
 
+          ${window.GridWildPlayerInteractions?.renderAvatarActionsHtml?.({
+            targetPlayerId: currentView.playerId,
+            player: data.player,
+            presence: data.presence,
+            active_party: data.active_party
+          }) || ""}
+
           <div class="gw-avatar-panel-section">
             <div class="gw-avatar-section-title">Field Stats</div>
             <div class="gw-player-info-stats">
@@ -643,6 +650,16 @@
       close();
       window.GridWildInventory?.open?.();
     });
+
+    if (currentView.kind === "player") {
+      const data = currentView.data || {};
+      window.GridWildPlayerInteractions?.bindAvatarActions?.(root, {
+        targetPlayerId: currentView.playerId,
+        player: data.player,
+        presence: data.presence,
+        active_party: data.active_party
+      });
+    }
   }
 
   function bindButtons(root = document) {
@@ -656,6 +673,7 @@
   window.addEventListener("gwEconomyChanged", refreshOpen);
   window.addEventListener("gwCharacterChanged", refreshOpen);
   window.addEventListener("gwAchievementsChanged", refreshOpen);
+  window.addEventListener("gwPlayerInteractionsChanged", refreshOpen);
 
   window.GridWildAvatarInspection = {
     open,

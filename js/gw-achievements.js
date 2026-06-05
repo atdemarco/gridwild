@@ -6,6 +6,12 @@
 (function () {
   const STORAGE_KEY = "gw_user_achievements_v1";
   const PROFILE_KEY = "gw_achievement_profile_v1";
+  const ANNOUNCED_KEY = "gw_achievement_announced_v1";
+  const QUIET_EVALUATION_SOURCES = new Set([
+    "startup",
+    "codex_open",
+    "manual_recalculate"
+  ]);
 
   const RANKS = ["Novice", "Apprentice", "Adept", "Master", "Grandmaster", "Legend"];
   let pendingBootstrapSync = false;
@@ -25,6 +31,60 @@
 
   function nowISO() {
     return new Date().toISOString();
+  }
+
+  function announcementStorageKey() {
+    const playerId =
+      window.GridWildAPI?.getPlayerId?.() ||
+      window.__gwState?.player?.id ||
+      "local";
+
+    return `${ANNOUNCED_KEY}:${playerId}`;
+  }
+
+  function loadAnnouncedAchievements() {
+    try {
+      const raw = localStorage.getItem(announcementStorageKey());
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) return new Set(parsed.filter(Boolean));
+      if (parsed && typeof parsed === "object") {
+        return new Set(Object.keys(parsed).filter(id => parsed[id]));
+      }
+    } catch {
+      // If localStorage is unavailable, toasts still work for the current run.
+    }
+
+    return new Set();
+  }
+
+  function saveAnnouncedAchievements(ids) {
+    try {
+      localStorage.setItem(announcementStorageKey(), JSON.stringify([...ids]));
+    } catch {
+      // Non-critical: announcement state only controls duplicate toasts.
+    }
+  }
+
+  function markAchievementsAnnounced(achievementIds = []) {
+    const ids = achievementIds.filter(Boolean);
+    if (!ids.length) return;
+
+    const announced = loadAnnouncedAchievements();
+    ids.forEach(id => announced.add(id));
+    saveAnnouncedAchievements(announced);
+  }
+
+  function markUnlockedAchievementsAnnounced(store = loadStore()) {
+    markAchievementsAnnounced(
+      Object.entries(store || {})
+        .filter(([, state]) => state?.unlocked)
+        .map(([id]) => id)
+    );
+  }
+
+  function shouldAnnounceAwards(options = {}) {
+    if (options.announce === false || options.silent === true) return false;
+    return !QUIET_EVALUATION_SOURCES.has(String(options.source || ""));
   }
 
 function loadStore() {
@@ -474,7 +534,14 @@ function saveStore(store) {
     saveStore(store);
 
     if (newlyAwarded.length) {
-      showAwardToast(newlyAwarded[0], newlyAwarded.length);
+      const announced = loadAnnouncedAchievements();
+      const unannouncedAwards = newlyAwarded.filter(def => !announced.has(def.id));
+
+      if (shouldAnnounceAwards(options) && unannouncedAwards.length) {
+        showAwardToast(unannouncedAwards[0], unannouncedAwards.length);
+      }
+
+      markAchievementsAnnounced(newlyAwarded.map(def => def.id));
     }
 
     return { newlyAwarded, store, stats };
@@ -781,7 +848,7 @@ function saveStore(store) {
 
     root.querySelector("#gwAchCloseBtn").onclick = () => root.remove();
     root.querySelector("#gwAchEvalBtn").onclick = () => {
-      evaluateCurrent({ source: "manual_recalculate" });
+      evaluateCurrent({ source: "manual_recalculate", announce: false });
       root.remove();
       openCodex();
     };
@@ -941,6 +1008,7 @@ function refreshAchievementSummary() {
   });
 
   window.addEventListener("gwBootstrapReady", () => {
-    setTimeout(() => evaluateCurrent({ source: "startup" }), 0);
+    markUnlockedAchievementsAnnounced();
+    setTimeout(() => evaluateCurrent({ source: "startup", announce: false }), 0);
   }, { once: true });
 })();

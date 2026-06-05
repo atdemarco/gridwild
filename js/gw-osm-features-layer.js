@@ -96,7 +96,11 @@
 
     if (!listenersBound) {
       listenersBound = true;
-      map.on("move zoom resize viewreset zoomend moveend", scheduleRender);
+      if (window.GridWildMapMotionQueue?.subscribe) {
+        window.GridWildMapMotionQueue.subscribe("osm-features-motion", scheduleRender);
+      } else {
+        map.on("move zoom resize viewreset zoomend moveend", scheduleRender);
+      }
       map.on("moveend zoomend", scheduleFetch);
     }
   }
@@ -164,9 +168,11 @@
 
         way["leisure"~"park|garden|nature_reserve"](${bbox});
         relation["leisure"~"park|garden|nature_reserve"](${bbox});
+        node["leisure"~"park|garden|nature_reserve"]["name"](${bbox});
 
         way["natural"="wood"](${bbox});
         relation["natural"="wood"](${bbox});
+        node["natural"="wood"]["name"](${bbox});
 
         way["landuse"~"forest|grass|meadow|recreation_ground"](${bbox});
         relation["landuse"~"forest|grass|meadow|recreation_ground"](${bbox});
@@ -213,6 +219,14 @@
     const tags = el.tags || {};
 
     if (tags.place && tags.name) return "places";
+    if (el.type === "node" && tags.name && (
+      tags.leisure === "park" ||
+      tags.leisure === "garden" ||
+      tags.leisure === "nature_reserve" ||
+      tags.natural === "wood"
+    )) {
+      return "places";
+    }
 
     if (tags.building) return "buildings";
 
@@ -581,7 +595,12 @@
     }
 
     if (raf) return;
-    raf = requestAnimationFrame(render);
+    if (window.GridWildMapMotionQueue?.requestFrame) {
+      raf = true;
+      window.GridWildMapMotionQueue.requestFrame("osm-features", render);
+    } else {
+      raf = requestAnimationFrame(render);
+    }
   }
 
   window.GridWildOsmFeaturesLayer = {

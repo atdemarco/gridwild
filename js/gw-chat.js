@@ -620,6 +620,7 @@
     const canRead = options.canRead !== false;
     const canSend = options.canSend !== false;
     const disabledMessage = options.disabledMessage || "Join this room to use chat.";
+    const placeholder = options.placeholder || "Message party...";
 
     return `
       <section class="gw-chat-room" aria-label="${esc(options.title || "Chat")}">
@@ -632,7 +633,7 @@
         </div>
         <form class="gw-chat-composer" data-chat-composer>
           <button class="gw-chat-icon-btn" type="button" data-chat-attachment title="Add to chat" aria-label="Add to chat"${canSend ? "" : " disabled"}>+</button>
-          <input class="gw-chat-input" data-chat-input maxlength="500" autocomplete="off" placeholder="${canSend ? "Message party..." : esc(disabledMessage)}"${canSend ? "" : " disabled"}>
+          <input class="gw-chat-input" data-chat-input maxlength="500" autocomplete="off" placeholder="${canSend ? esc(placeholder) : esc(disabledMessage)}"${canSend ? "" : " disabled"}>
           <button class="gw-chat-icon-btn" type="submit" data-chat-send title="Send chat message" aria-label="Send chat message"${canSend ? "" : " disabled"}>&#9654;</button>
         </form>
       </section>
@@ -1213,7 +1214,7 @@
     const canRead = options.canRead !== false && signedIn;
     const canSend = options.canSend !== false && canRead;
     const disabledMessage = !signedIn
-      ? "Sign in to use party chat."
+      ? options.signedOutMessage || "Sign in to use party chat."
       : options.disabledMessage || "Join this party to use chat.";
 
     const normalizedOptions = {

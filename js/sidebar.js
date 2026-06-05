@@ -65,6 +65,7 @@
   window.__gwState.showOsmFeatures = $("toggleOsmBuildings")?.checked ?? true;
   window.__gwState.showOsmBuildings = window.__gwState.showOsmFeatures;
   window.__gwState.showSurveyView = $("toggleSurveyView")?.checked ?? true;
+  window.__gwState.showPatchView = $("togglePatchView")?.checked ?? true;
 
   window.__gwState.heatMetric = getSelectedHeatMetric();
   window.__gwFilters.iconicTaxa = getSelectedIconicTaxa();
@@ -213,7 +214,8 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
   "toggleGodsEye",
   "toggleLockLocation",
   "toggleOsmBuildings",
-  "toggleSurveyView"
+  "toggleSurveyView",
+  "togglePatchView"
 ].forEach(id => {
   $(id)?.addEventListener("change", () => {
     syncStateFromUI();
@@ -255,6 +257,17 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
       window.GridWildSurveyLayer?.render?.();
       window.dispatchEvent(new CustomEvent("gridwild:surveyviewchange", {
         detail: { showSurveyView: window.__gwState.showSurveyView === true }
+      }));
+    }
+  }
+
+  if (id === "togglePatchView") {
+    if (window.GridWildPatches?.setVisible) {
+      window.GridWildPatches.setVisible(window.__gwState.showPatchView === true);
+    } else {
+      window.GridWildPatches?.render?.();
+      window.dispatchEvent(new CustomEvent("gridwild:patchviewchange", {
+        detail: { visible: window.__gwState.showPatchView === true }
       }));
     }
   }
@@ -439,7 +452,8 @@ function saveUIState() {
     baseMap: getSelectedBaseMap(),
     onlyMeFilterEnabled: window.__gwFilters?.onlyMe === true,
     showOsmBuildings: byId("toggleOsmBuildings")?.checked ?? true,
-    showSurveyView: byId("toggleSurveyView")?.checked ?? true
+    showSurveyView: byId("toggleSurveyView")?.checked ?? true,
+    showPatchView: byId("togglePatchView")?.checked ?? true
     };
 
   localStorage.setItem("gw_ui_state", JSON.stringify(state));
@@ -498,7 +512,9 @@ function applySavedUIState() {
   if (byId("toggleFogSmoothing")) byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? false;
   if (byId("toggleOsmBuildings")) byId("toggleOsmBuildings").checked = s.showOsmBuildings ?? true;
   if (byId("toggleSurveyView")) byId("toggleSurveyView").checked = s.showSurveyView ?? true;
+  if (byId("togglePatchView")) byId("togglePatchView").checked = s.showPatchView ?? true;
   window.__gwState.showSurveyView = s.showSurveyView ?? true;
+  window.__gwState.showPatchView = s.showPatchView ?? true;
   window.__gwFilters = window.__gwFilters || {};
   window.__gwFilters.onlyMe = s.onlyMeFilterEnabled === true;
   window.__gwState.onlyMeFilterEnabled = window.__gwFilters.onlyMe;

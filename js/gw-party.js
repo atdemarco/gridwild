@@ -7,8 +7,11 @@
   const PANE = "gwPartyPane";
   const PARTY_ROUTE_THROTTLE_MS = 8000;
   const PARTY_ROUTE_MAX_ACCURACY_M = 60;
+  const PARTY_HUD_COLLAPSED_KEY = "gw_party_hud_collapsed";
 
   let partyLayer = null;
+  let partyHudRaiseTab = null;
+  let partyRaiseTabPositionBound = false;
 
     const PARTY_TEMPLATES = [
     { key: "birds", emoji: "🐦", label: "Bird Walk", title: "Bird Walk", goalType: "birds", target: 20, durationMinutes: 90 },
@@ -2946,6 +2949,70 @@ function addNearbyPublicPartyMarkers(layer) {
   return id ? getParty(id) : null;
 }
 
+function isPartyHudCollapsed() {
+  return localStorage.getItem(PARTY_HUD_COLLAPSED_KEY) === "1";
+}
+
+function setPartyHudCollapsed(value) {
+  localStorage.setItem(PARTY_HUD_COLLAPSED_KEY, value ? "1" : "0");
+  renderActivePartyHud();
+}
+
+function partyRaiseChevronSvg() {
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="m6.5 15.5 5.5-5.5 5.5 5.5"></path>
+      <path d="m7.5 10.5 4.5-4.5 4.5 4.5"></path>
+    </svg>
+  `;
+}
+
+function positionPartyHudRaiseTab() {
+  if (!partyHudRaiseTab) return;
+  const navBtn = document.getElementById("btnCommunity");
+  const nav = document.querySelector(".gw-bottomnav");
+  if (!navBtn || !nav) return;
+
+  const btnRect = navBtn.getBoundingClientRect();
+  const navRect = nav.getBoundingClientRect();
+  partyHudRaiseTab.style.setProperty("--gw-raise-tab-left", `${btnRect.left + btnRect.width / 2}px`);
+  partyHudRaiseTab.style.setProperty("--gw-raise-tab-bottom", `${Math.max(0, window.innerHeight - navRect.top - 10)}px`);
+}
+
+function bindPartyRaiseTabPositioning() {
+  if (partyRaiseTabPositionBound) return;
+  partyRaiseTabPositionBound = true;
+  window.addEventListener("resize", positionPartyHudRaiseTab);
+  window.addEventListener("orientationchange", () => setTimeout(positionPartyHudRaiseTab, 150));
+}
+
+function renderPartyHudRaiseTab(show) {
+  if (!show) {
+    removePartyHudRaiseTab();
+    return;
+  }
+
+  if (!partyHudRaiseTab) {
+    partyHudRaiseTab = document.createElement("button");
+    partyHudRaiseTab.className = "gw-hud-raise-tab gw-hud-raise-tab-party";
+    partyHudRaiseTab.type = "button";
+    partyHudRaiseTab.setAttribute("aria-label", "Expand party banner");
+    partyHudRaiseTab.title = "Expand party banner";
+    partyHudRaiseTab.innerHTML = partyRaiseChevronSvg();
+    partyHudRaiseTab.addEventListener("click", () => setPartyHudCollapsed(false));
+    document.body.appendChild(partyHudRaiseTab);
+    bindPartyRaiseTabPositioning();
+  }
+
+  positionPartyHudRaiseTab();
+}
+
+function removePartyHudRaiseTab() {
+  if (!partyHudRaiseTab) return;
+  partyHudRaiseTab.remove();
+  partyHudRaiseTab = null;
+}
+
 function renderActivePartyHud() {
   injectStyles();
 
@@ -2954,8 +3021,17 @@ function renderActivePartyHud() {
 
   if (!party) {
     existing?.remove();
+    removePartyHudRaiseTab();
     return;
   }
+
+  if (isPartyHudCollapsed()) {
+    existing?.remove();
+    renderPartyHudRaiseTab(true);
+    return;
+  }
+
+  renderPartyHudRaiseTab(false);
 
   const route = loadPartyRoutes()[party.id] || [];
   const evidenceCount = Math.max(
@@ -2990,6 +3066,7 @@ function renderActivePartyHud() {
     </button>
 
     <div class="gw-active-party-actions">
+      <button class="gw-active-party-btn" id="gwActivePartyCollapseBtn" type="button" aria-label="Minimize party banner" title="Minimize party banner">Hide</button>
       <button class="gw-active-party-btn" id="gwActivePartyRecapBtn" type="button">Recap</button>
       <button class="gw-active-party-btn danger" id="gwActivePartyEndBtn" type="button">End</button>
     </div>
@@ -2997,6 +3074,10 @@ function renderActivePartyHud() {
 
   hud.querySelector("#gwActivePartyOpenBtn")?.addEventListener("click", () => {
     openPartyCover(party.id);
+  });
+
+  hud.querySelector("#gwActivePartyCollapseBtn")?.addEventListener("click", () => {
+    setPartyHudCollapsed(true);
   });
 
   hud.querySelector("#gwActivePartyRecapBtn")?.addEventListener("click", () => {
@@ -4099,6 +4180,8 @@ function getDraftPartyMatchStatus(draft) {
     renderActivePartyHud,
     scheduleActivePartyHudRender,
     getActiveParty,
+    isPartyHudCollapsed,
+    setPartyHudCollapsed,
 
     // evidence for draft observations...
     getDraftPartyMatchStatus,

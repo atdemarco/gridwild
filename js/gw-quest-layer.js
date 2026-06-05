@@ -10,8 +10,12 @@
   let questLayer = null;
   let targetLayer = null;
   let tetherLayer = null;
+  let tetherLine = null;
+  let lastTetherKey = "";
   let pulseMarker = null;
   let hudChip = null;
+  let hudRaiseTab = null;
+  let raiseTabPositionBound = false;
   let activeQuest = null;
 
   function ensurePaneAndLayers() {
@@ -103,14 +107,7 @@
       }
 
       .gw-active-quest-chip.is-collapsed {
-        left: auto;
-        width: 94px;
-        min-height: 42px;
-        padding: 8px 9px;
-        border-radius: 14px;
-        justify-content: center;
-        gap: 6px;
-        cursor: pointer;
+        display: none;
       }
 
       .gw-active-quest-chip-main {
@@ -321,7 +318,7 @@
 
   function clear() {
     targetLayer?.clearLayers();
-    tetherLayer?.clearLayers();
+    clearTetherLine();
     if (pulseMarker) {
       pulseMarker.remove();
       pulseMarker = null;
@@ -330,6 +327,7 @@
       hudChip.remove();
       hudChip = null;
     }
+    removeHudRaiseTab();
   }
 
   function closeOpenSheetsAndModals() {
@@ -458,6 +456,61 @@
     syncHudCollapsed();
   }
 
+  function raiseChevronSvg() {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m6.5 15.5 5.5-5.5 5.5 5.5"></path>
+        <path d="m7.5 10.5 4.5-4.5 4.5 4.5"></path>
+      </svg>
+    `;
+  }
+
+  function positionHudRaiseTab() {
+    if (!hudRaiseTab) return;
+    const navBtn = document.getElementById("btnQuest");
+    const nav = document.querySelector(".gw-bottomnav");
+    if (!navBtn || !nav) return;
+
+    const btnRect = navBtn.getBoundingClientRect();
+    const navRect = nav.getBoundingClientRect();
+    hudRaiseTab.style.setProperty("--gw-raise-tab-left", `${btnRect.left + btnRect.width / 2}px`);
+    hudRaiseTab.style.setProperty("--gw-raise-tab-bottom", `${Math.max(0, window.innerHeight - navRect.top - 10)}px`);
+  }
+
+  function bindRaiseTabPositioning() {
+    if (raiseTabPositionBound) return;
+    raiseTabPositionBound = true;
+    window.addEventListener("resize", positionHudRaiseTab);
+    window.addEventListener("orientationchange", () => setTimeout(positionHudRaiseTab, 150));
+  }
+
+  function renderHudRaiseTab(show) {
+    if (!show) {
+      removeHudRaiseTab();
+      return;
+    }
+
+    if (!hudRaiseTab) {
+      hudRaiseTab = document.createElement("button");
+      hudRaiseTab.className = "gw-hud-raise-tab gw-hud-raise-tab-quest";
+      hudRaiseTab.type = "button";
+      hudRaiseTab.setAttribute("aria-label", "Expand quest banner");
+      hudRaiseTab.title = "Expand quest banner";
+      hudRaiseTab.innerHTML = raiseChevronSvg();
+      hudRaiseTab.addEventListener("click", () => setHudCollapsed(false));
+      document.body.appendChild(hudRaiseTab);
+      bindRaiseTabPositioning();
+    }
+
+    positionHudRaiseTab();
+  }
+
+  function removeHudRaiseTab() {
+    if (!hudRaiseTab) return;
+    hudRaiseTab.remove();
+    hudRaiseTab = null;
+  }
+
   function collapseIconSvg(collapsed) {
     return collapsed
       ? `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"></path></svg>`
@@ -471,6 +524,7 @@
     const btn = hudChip.querySelector(".gw-active-quest-collapse-btn");
 
     hudChip.classList.toggle("is-collapsed", collapsed);
+    renderHudRaiseTab(collapsed);
 
     if (btn) {
       btn.innerHTML = collapseIconSvg(collapsed);
@@ -555,6 +609,37 @@
     }).addTo(targetLayer);
   }
 
+  function tetherLatLngKey(userLL, targetLL) {
+    return `${userLL.lat},${userLL.lng}|${targetLL.lat},${targetLL.lng}`;
+  }
+
+  function clearTetherLine() {
+    tetherLayer?.clearLayers();
+    tetherLine = null;
+    lastTetherKey = "";
+  }
+
+  function updateTetherLine(userLL, targetLL) {
+    if (!tetherLayer) return;
+
+    const nextKey = tetherLatLngKey(userLL, targetLL);
+
+    if (!tetherLine) {
+      tetherLine = L.polyline([userLL, targetLL], {
+        pane: QUEST_PANE,
+        interactive: false,
+        className: "gw-quest-tether"
+      }).addTo(tetherLayer);
+      lastTetherKey = nextKey;
+      return;
+    }
+
+    if (nextKey !== lastTetherKey) {
+      tetherLine.setLatLngs([userLL, targetLL]);
+      lastTetherKey = nextKey;
+    }
+  }
+
   function updateTetherAndHud() {
     if (!activeQuest) return;
 
@@ -563,6 +648,7 @@
     const distEl = document.getElementById("gwActiveQuestDistance");
 
     if (!target || target.mode === "anywhere") {
+      clearTetherLine();
       if (distEl) distEl.textContent = "ANY";
       if (subEl) subEl.textContent = "Open-world quest · any qualifying observation";
       return;
@@ -571,9 +657,8 @@
     const userLL = getUserLatLng();
     const targetLL = L.latLng(target.lat, target.lng);
 
-    tetherLayer.clearLayers();
-
     if (!userLL) {
+      clearTetherLine();
       if (distEl) distEl.textContent = "GPS";
       if (subEl) subEl.textContent = "Waiting for GPS fix";
       return;
@@ -581,11 +666,7 @@
 
     const d = userLL.distanceTo(targetLL);
 
-    L.polyline([userLL, targetLL], {
-      pane: QUEST_PANE,
-      interactive: false,
-      className: "gw-quest-tether"
-    }).addTo(tetherLayer);
+    updateTetherLine(userLL, targetLL);
 
     if (distEl) distEl.textContent = formatMeters(d);
 
@@ -666,8 +747,8 @@
       .replaceAll("'", "&#39;");
   }
 
-  map.on("move zoom moveend zoomend", updateTetherAndHud);
   window.addEventListener("gridwild:unitschange", updateTetherAndHud);
+  window.addEventListener("gwUserLocationUpdated", updateTetherAndHud);
 
   window.addEventListener("gwQuestStarted", evt => {
     // Do not auto-embark newly created quests; user explicitly chooses Embark.

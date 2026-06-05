@@ -54,6 +54,7 @@ let gridHeatThrottleTimer = null;
 let gridHeatLastRenderAt = 0;
 let gridHeatCanvasTopLeft = L.point(0, 0);
 let gridHeatCanvasLayout = null;
+let gridHeatMeterTransform = null;
 const GRID_HEAT_INTERACTION_RENDER_INTERVAL_MS = 80;
 const COARSE_HEAT_AUTO_SCALE_PX = 118;
 const COARSE_HEAT_AUTO_STEPS = [
@@ -202,6 +203,44 @@ function gridHeatLayerPoint(latlng) {
   return map.latLngToLayerPoint(latlng).subtract(gridHeatCanvasTopLeft);
 }
 
+function updateGridHeatMeterTransform() {
+  const crs = map.options?.crs;
+  const transform = crs?.transformation;
+  const scale = crs?.scale?.(map.getZoom());
+  const pixelOrigin = map.getPixelOrigin?.();
+  const values = transform && Number.isFinite(scale) && pixelOrigin
+    ? {
+      a: Number(transform._a),
+      b: Number(transform._b),
+      c: Number(transform._c),
+      d: Number(transform._d),
+      scale,
+      originX: pixelOrigin.x + gridHeatCanvasTopLeft.x,
+      originY: pixelOrigin.y + gridHeatCanvasTopLeft.y
+    }
+    : null;
+
+  gridHeatMeterTransform = values &&
+    Number.isFinite(values.a) &&
+    Number.isFinite(values.b) &&
+    Number.isFinite(values.c) &&
+    Number.isFinite(values.d)
+    ? values
+    : null;
+}
+
+function gridHeatPointForMeters(x, y) {
+  const t = gridHeatMeterTransform;
+  if (t) {
+    return {
+      x: t.scale * (t.a * x + t.b) - t.originX,
+      y: t.scale * (t.c * y + t.d) - t.originY
+    };
+  }
+
+  return gridHeatLayerPoint(map.options.crs.unproject(L.point(x, y)));
+}
+
 function resizeGridHeatCanvas() {
   ensureGridHeatCanvas();
   gridHeatCanvasLayout = window.GridWildCanvasPerf.layoutPaddedCanvas(
@@ -210,6 +249,7 @@ function resizeGridHeatCanvas() {
     "heat"
   );
   gridHeatCanvasTopLeft = gridHeatCanvasLayout.topLeft;
+  updateGridHeatMeterTransform();
 }
 
 window.setShimmerVisible = function(show = true) {
@@ -3470,7 +3510,11 @@ function updateGrid() {
   refreshGridWildHudPanels();
 }
 
-map.on("move zoom resize viewreset zoomend moveend", scheduleGridHeatCanvasRender);
+if (window.GridWildMapMotionQueue?.subscribe) {
+  window.GridWildMapMotionQueue.subscribe("grid-heat-motion", scheduleGridHeatCanvasRender);
+} else {
+  map.on("move zoom resize viewreset zoomend moveend", scheduleGridHeatCanvasRender);
+}
 map.on("zoomend resize moveend", updateGrid);
 updateGrid();
 
@@ -4024,6 +4068,9 @@ async function loadStaticHeatmapCsvFallback(url) {
 function installStaticHeatmapCounts(counts) {
   window.__staticGridCounts = counts;
   window.GridWildCoarseHeatCache?.invalidate?.();
+  window.dispatchEvent(new CustomEvent("gridwild:staticheatloaded", {
+    detail: { count: counts?.size || 0 }
+  }));
 
   updateStaticGridHeat();
 
@@ -4833,10 +4880,8 @@ function coarseCellBoundsLL(anchorIx, anchorIy, binSize) {
 }
 
 function gridMetersRectLayerBounds(x0, y0, x1, y1) {
-  const sw = map.options.crs.unproject(L.point(x0, y0));
-  const ne = map.options.crs.unproject(L.point(x1, y1));
-  const nwPx = gridHeatLayerPoint(L.latLng(ne.lat, sw.lng));
-  const sePx = gridHeatLayerPoint(L.latLng(sw.lat, ne.lng));
+  const nwPx = gridHeatPointForMeters(x0, y1);
+  const sePx = gridHeatPointForMeters(x1, y0);
 
   return {
     x: Math.min(nwPx.x, sePx.x),
@@ -4861,6 +4906,48 @@ function coarseHeatPaintRect(bounds, originBounds = null) {
     w: Math.max(1, x1 - x0) + overlap * 2,
     h: Math.max(1, y1 - y0) + overlap * 2
   };
+}
+
+function paintFineHeatMeterRect(x0, y0, x1, y1, fillOpacity, fillColor, strokeDocumented = false) {
+  const t = gridHeatMeterTransform;
+  let nwX;
+  let nwY;
+  let seX;
+  let seY;
+
+  if (t) {
+    nwX = t.scale * (t.a * x0 + t.b) - t.originX;
+    nwY = t.scale * (t.c * y1 + t.d) - t.originY;
+    seX = t.scale * (t.a * x1 + t.b) - t.originX;
+    seY = t.scale * (t.c * y0 + t.d) - t.originY;
+  } else {
+    const nwPx = gridHeatPointForMeters(x0, y1);
+    const sePx = gridHeatPointForMeters(x1, y0);
+    nwX = nwPx.x;
+    nwY = nwPx.y;
+    seX = sePx.x;
+    seY = sePx.y;
+  }
+
+  const left = Math.min(nwX, seX);
+  const top = Math.min(nwY, seY);
+  const right = Math.max(nwX, seX);
+  const bottom = Math.max(nwY, seY);
+  const pxX = Math.floor(left);
+  const pxY = Math.floor(top);
+  const pxW = Math.max(1, Math.ceil(right) - pxX);
+  const pxH = Math.max(1, Math.ceil(bottom) - pxY);
+
+  gridHeatCtx.globalAlpha = fillOpacity;
+  gridHeatCtx.fillStyle = fillColor || "rgba(90,160,90,1)";
+  gridHeatCtx.fillRect(pxX, pxY, pxW, pxH);
+
+  if (strokeDocumented) {
+    gridHeatCtx.globalAlpha = 0.8;
+    gridHeatCtx.strokeStyle = "rgba(240, 209, 138, 0.72)";
+    gridHeatCtx.lineWidth = 1.2;
+    gridHeatCtx.strokeRect(pxX, pxY, pxW, pxH);
+  }
 }
 
 function getCoarseHeatTileFineCells(binSize) {
@@ -5294,7 +5381,12 @@ function isGridHeatSettledEvent(evt) {
 
 function requestGridHeatCanvasFrame() {
   if (gridHeatRaf) return;
-  gridHeatRaf = requestAnimationFrame(renderGridHeatCanvas);
+  if (window.GridWildMapMotionQueue?.requestFrame) {
+    gridHeatRaf = true;
+    window.GridWildMapMotionQueue.requestFrame("grid-heat", renderGridHeatCanvas);
+  } else {
+    gridHeatRaf = requestAnimationFrame(renderGridHeatCanvas);
+  }
 }
 
 function scheduleGridHeatCanvasRender(evt) {
@@ -5376,27 +5468,15 @@ function drawFineHeatItem(item, fogOn) {
 
   const x = Number.isFinite(item.x) ? item.x : ix * GRID_SIZE_M;
   const y = Number.isFinite(item.y) ? item.y : iy * GRID_SIZE_M;
-  const sw = map.options.crs.unproject(L.point(x, y));
-  const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
-
-  const nwPx = gridHeatLayerPoint(L.latLng(ne.lat, sw.lng));
-  const sePx = gridHeatLayerPoint(L.latLng(sw.lat, ne.lng));
-
-  const pxX = Math.floor(nwPx.x);
-  const pxY = Math.floor(nwPx.y);
-  const pxW = Math.ceil(sePx.x - nwPx.x);
-  const pxH = Math.ceil(sePx.y - nwPx.y);
-
-  gridHeatCtx.globalAlpha = fillOpacity;
-  gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
-  gridHeatCtx.fillRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
-
-  if (fogOn && fogState?.state === "documented") {
-    gridHeatCtx.globalAlpha = 0.8;
-    gridHeatCtx.strokeStyle = "rgba(240, 209, 138, 0.72)";
-    gridHeatCtx.lineWidth = 1.2;
-    gridHeatCtx.strokeRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
-  }
+  paintFineHeatMeterRect(
+    x,
+    y,
+    x + GRID_SIZE_M,
+    y + GRID_SIZE_M,
+    fillOpacity,
+    baseStyle.fillColor,
+    fogOn && fogState?.state === "documented"
+  );
 
   return true;
 }
@@ -5526,27 +5606,15 @@ function renderGridHeatCanvas() {
         fillOpacity = Math.min(0.92, fillOpacity + 0.12);
       }
 
-      const sw = map.options.crs.unproject(L.point(x, y));
-      const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
-
-      const nwPx = gridHeatLayerPoint(L.latLng(ne.lat, sw.lng));
-      const sePx = gridHeatLayerPoint(L.latLng(sw.lat, ne.lng));
-
-      const pxX = Math.floor(nwPx.x);
-      const pxY = Math.floor(nwPx.y);
-      const pxW = Math.ceil(sePx.x - nwPx.x);
-      const pxH = Math.ceil(sePx.y - nwPx.y);
-
-      gridHeatCtx.globalAlpha = fillOpacity;
-      gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
-      gridHeatCtx.fillRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
-
-      if (fogOn && fogState?.state === "documented") {
-        gridHeatCtx.globalAlpha = 0.8;
-        gridHeatCtx.strokeStyle = "rgba(240, 209, 138, 0.72)";
-        gridHeatCtx.lineWidth = 1.2;
-        gridHeatCtx.strokeRect(pxX, pxY, Math.max(1, pxW), Math.max(1, pxH));
-      }
+      paintFineHeatMeterRect(
+        x,
+        y,
+        x + GRID_SIZE_M,
+        y + GRID_SIZE_M,
+        fillOpacity,
+        baseStyle.fillColor,
+        fogOn && fogState?.state === "documented"
+      );
     }
   }
 

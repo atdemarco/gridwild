@@ -1,6 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const { accountTableHint, requireAccountSession } = require("./_gridwild-account-session");
 const { requireChatRoomAccess } = require("./_chat-room-access");
+const { interactionTableHint } = require("./_player-interactions");
 
 const CHAT_TABLE = "chat_messages";
 const supabase = createClient(
@@ -16,6 +17,9 @@ function httpError(statusCode, message) {
 
 function tableHint(err) {
   const message = accountTableHint(err);
+  if (message.includes("player_interactions") || message.includes("player_blocks")) {
+    return interactionTableHint({ message });
+  }
   if (message.includes(CHAT_TABLE) || message.includes("schema cache")) {
     return `${message}. Run netlify/schema/chat_messages.sql in Supabase first.`;
   }

@@ -1,5 +1,6 @@
 const { createClient } = require("@supabase/supabase-js");
 const { accountTableHint, requireAccountSession } = require("./_gridwild-account-session");
+const { interactionTableHint } = require("./_player-interactions");
 
 const PRESENCE_TABLE = "player_presence";
 const ONLINE_TIMEOUT_MS = 2 * 60 * 1000;
@@ -14,6 +15,9 @@ const supabase = createClient(
 
 function tableHint(err) {
   const message = accountTableHint(err);
+  if (message.includes("player_blocks")) {
+    return interactionTableHint({ message });
+  }
   if (message.includes(PRESENCE_TABLE) || message.includes("schema cache")) {
     return `${message}. Run netlify/schema/player_presence.sql in Supabase first.`;
   }
@@ -75,7 +79,7 @@ exports.handler = async function (event) {
 
     if (presenceResult.error) throw presenceResult.error;
 
-    const rows = (presenceResult.data || [])
+    let rows = (presenceResult.data || [])
       .filter((row) => {
         const rowLat = Number(row.lat);
         const rowLng = Number(row.lng);
@@ -95,9 +99,32 @@ exports.handler = async function (event) {
       })
       .slice(0, 50);
 
+    const candidatePlayerIds = rows.map((row) => row.player_id);
+    if (candidatePlayerIds.length) {
+      const blockIds = [playerId, ...candidatePlayerIds].map(id => String(id));
+      const blocksResult = await supabase
+        .from("player_blocks")
+        .select("blocker_player_id, blocked_player_id")
+        .in("blocker_player_id", blockIds)
+        .in("blocked_player_id", blockIds);
+
+      if (blocksResult.error) throw blocksResult.error;
+
+      const blockedPresenceIds = new Set();
+      (blocksResult.data || []).forEach((row) => {
+        const blocker = String(row.blocker_player_id || "");
+        const blocked = String(row.blocked_player_id || "");
+        if (blocker === String(playerId)) blockedPresenceIds.add(blocked);
+        if (blocked === String(playerId)) blockedPresenceIds.add(blocker);
+      });
+
+      rows = rows.filter(row => !blockedPresenceIds.has(String(row.player_id)));
+    }
+
     const playerIds = rows.map((row) => row.player_id);
     let playersById = new Map();
     let equipmentByPlayerId = new Map();
+    let activePartyByPlayerId = new Map();
 
     if (playerIds.length) {
       const playersResult = await supabase
@@ -115,6 +142,33 @@ exports.handler = async function (event) {
 
       if (equipmentResult.error) throw equipmentResult.error;
       equipmentByPlayerId = new Map((equipmentResult.data || []).map((row) => [row.player_id, row]));
+
+      const stateResult = await supabase
+        .from("player_state")
+        .select("player_id, active_party_id")
+        .in("player_id", playerIds);
+
+      if (stateResult.error) throw stateResult.error;
+
+      const stateRows = (stateResult.data || []).filter(row => row.active_party_id);
+      const partyIds = [...new Set(stateRows.map(row => row.active_party_id).filter(Boolean))];
+
+      if (partyIds.length) {
+        const partiesResult = await supabase
+          .from("parties")
+          .select("id, name, visibility, status, created_by")
+          .in("id", partyIds);
+
+        if (partiesResult.error) throw partiesResult.error;
+
+        const partiesById = new Map((partiesResult.data || []).map((party) => [party.id, party]));
+        stateRows.forEach((row) => {
+          const party = partiesById.get(row.active_party_id) || null;
+          if (party && party.status !== "ended") {
+            activePartyByPlayerId.set(row.player_id, party);
+          }
+        });
+      }
     }
 
     const presences = rows.map((row) => {
@@ -132,7 +186,8 @@ exports.handler = async function (event) {
         last_seen_at: row.last_seen_at,
         last_logout_at: row.last_logout_at,
         player,
-        equipment
+        equipment,
+        active_party: activePartyByPlayerId.get(row.player_id) || null
       };
     });
 

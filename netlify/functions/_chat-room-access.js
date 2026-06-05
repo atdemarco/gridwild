@@ -1,4 +1,5 @@
 const { applyPartyTiming } = require("./_party-duration");
+const { requireDirectRoomAccess } = require("./_player-interactions");
 
 function httpError(statusCode, message) {
   const err = new Error(message);
@@ -49,6 +50,10 @@ async function requireChatRoomAccess(supabase, options = {}) {
 
   if (roomType === "party") {
     return requirePartyRoomAccess(supabase, { roomId, playerId, write });
+  }
+
+  if (roomType === "direct") {
+    return requireDirectRoomAccess(supabase, { roomId, playerId, write });
   }
 
   throw httpError(400, `Unsupported chat room type: ${roomType}`);

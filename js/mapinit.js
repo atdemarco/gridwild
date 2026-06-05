@@ -2,9 +2,102 @@
   window.map = L.map("map", {
      zoomControl: false,
      attributionControl: true,
-     touchZoom: true
+     touchZoom: true,
+     zoomSnap: 0.25,
+     zoomDelta: 0.75,
+     wheelPxPerZoomLevel: 42,
+     wheelDebounceTime: 24,
+     inertia: true,
+     inertiaDeceleration: 2400,
+     inertiaMaxSpeed: 2200,
+     easeLinearity: 0.25
   });
   const map = window.map; // local alias
+
+window.GridWildMapMotionQueue = (function (existing = {}) {
+  const DEFAULT_EVENTS = ["move", "zoom", "resize", "viewreset", "zoomend", "moveend"];
+  const subscribers = new Map();
+  const boundEvents = new Set();
+  const frameTasks = new Map();
+  let frameRaf = null;
+
+  function normalizeEvents(events) {
+    if (Array.isArray(events)) return events.filter(Boolean);
+    if (typeof events === "string") return events.trim().split(/\s+/).filter(Boolean);
+    return DEFAULT_EVENTS;
+  }
+
+  function makeSnapshot() {
+    return {
+      at: performance.now(),
+      bounds: map.getBounds(),
+      center: map.getCenter(),
+      size: map.getSize(),
+      zoom: map.getZoom()
+    };
+  }
+
+  function flushFrameTasks() {
+    frameRaf = null;
+    const snapshot = makeSnapshot();
+    const tasks = Array.from(frameTasks.values());
+    frameTasks.clear();
+
+    for (const task of tasks) {
+      try {
+        task(snapshot);
+      } catch (err) {
+        console.warn("GridWild map motion render task failed:", err);
+      }
+    }
+  }
+
+  function requestFrame(key, callback) {
+    if (!key || typeof callback !== "function") return;
+    frameTasks.set(key, callback);
+    if (frameRaf) return;
+    frameRaf = requestAnimationFrame(flushFrameTasks);
+  }
+
+  function dispatchMapMotion(evt) {
+    for (const entry of subscribers.values()) {
+      if (!entry.events.has(evt?.type)) continue;
+      try {
+        entry.callback(evt);
+      } catch (err) {
+        console.warn("GridWild map motion subscriber failed:", err);
+      }
+    }
+  }
+
+  function ensureBound(events) {
+    for (const type of events) {
+      if (boundEvents.has(type)) continue;
+      boundEvents.add(type);
+      map.on(type, dispatchMapMotion);
+    }
+  }
+
+  function subscribe(key, callback, options = {}) {
+    if (!key || typeof callback !== "function") return () => {};
+    const events = normalizeEvents(options.events);
+    ensureBound(events);
+    subscribers.set(key, {
+      callback,
+      events: new Set(events)
+    });
+    return () => {
+      subscribers.delete(key);
+    };
+  }
+
+  return {
+    ...existing,
+    requestFrame,
+    snapshot: makeSnapshot,
+    subscribe
+  };
+})(window.GridWildMapMotionQueue);
 
 function installGridWildViewportGestureGuard() {
   if (window.__gwViewportGestureGuardInstalled) return;

@@ -135,6 +135,7 @@ window.__gwUser = window.__gwUser || {
         </div>
       </div>
 
+    ${window.GridWildPlayerInteractions ? window.GridWildPlayerInteractions.renderMessagesSectionHtml() : ""}
     ${window.GridWildAchievements ? window.GridWildAchievements.renderButtonHtml() : ""}
     `;
   }
@@ -1184,6 +1185,17 @@ function renderInfoContent() {
     `;
 }
 
+function renderFieldContent() {
+  return window.GridWildField
+    ? window.GridWildField.renderFieldSheetHtml()
+    : `
+      <div class="gw-card">
+        <div class="gw-card-title">Field</div>
+        <div class="gw-muted">Field tools loading...</div>
+      </div>
+    `;
+}
+
   function renderCommunityContent() {
     return `
   <div id="gwPartySheetBody">
@@ -1214,15 +1226,6 @@ function renderInfoContent() {
         <div class="gw-muted">Identify module loading...</div>
       </div>
     `;
-  const localNichesHtml = window.GridWildLocalNiches
-    ? window.GridWildLocalNiches.renderLocalNichesHtml()
-    : `
-      <div class="gw-card">
-        <div class="gw-card-title">Local Niches</div>
-        <div class="gw-muted">Local niches loading...</div>
-      </div>
-    `;
-
   return `
     <div class="gw-card">
       <div class="gw-card-title">Quest Generator</div>
@@ -1242,10 +1245,6 @@ function renderInfoContent() {
     </div>
 
     ${identifyHtml}
-
-    <div id="gwLocalNichesBody">
-      ${localNichesHtml}
-    </div>
 
     <div class="gw-card">
       <div class="gw-card-title">Today's Quests</div>
@@ -2263,7 +2262,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     const legendBody = $("sheetLegendBody");
 
     if (meBody)         meBody.innerHTML = renderMeContent();
-    if (infoBody)       infoBody.innerHTML = renderInfoContent();
+    if (infoBody)       infoBody.innerHTML = renderFieldContent();
     if (communityBody)  communityBody.innerHTML = renderCommunityContent();
     if (questBody)      questBody.innerHTML = renderQuestContent();
     if (legendBody)     legendBody.innerHTML = renderLegendContent();
@@ -2279,6 +2278,7 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     mirrorCheckbox("toggleLockLocation", "toggleLockLocation_clone");
     mirrorCheckbox("toggleOsmBuildings", "toggleOsmBuildings_clone");
     mirrorCheckbox("toggleSurveyView", "toggleSurveyView_clone");
+    window.GridWildField?.bind?.(infoBody);
     mirrorHeatMetricRadios();
     bindHudOptionCloneControls();
     bindBaseMapControls();
@@ -2286,9 +2286,6 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
     setTimeout(() => {
       if (window.GridWildQuests && questBody) {
         window.GridWildQuests.bindQuestSheetControls(questBody);
-      }
-      if (window.GridWildLocalNiches && questBody) {
-        window.GridWildLocalNiches.renderIntoPage();
       }
       bindUserSettingsButton();
       bindINatOAuthButton();
@@ -2341,6 +2338,8 @@ window.refreshGridWildMePanel = function refreshGridWildMePanel() {
       window.GridWildProfile?.bindButtons?.(document);
       window.GridWildAccount?.bindButtons?.(document);
       window.GridWildPresence?.bindSettings?.(document);
+      window.GridWildPlayerInteractions?.bindMessagesSection?.(document);
+      window.GridWildPlayerInteractions?.refresh?.({ quiet: true });
 
       window.GridWildParty?.bindSheetControls?.(document);
       window.GridWildParty?.refreshMapBeacon?.();
