@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest, httpError } = require("./_gridwild-player-session");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,6 +8,7 @@ const supabase = createClient(
 
 exports.handler = async function(event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
 
     const {
@@ -16,6 +18,17 @@ exports.handler = async function(event) {
 
     if (!player_id) throw new Error("player_id required");
     if (!survey?.id) throw new Error("survey.id required");
+
+    const { data: existing, error: existingError } = await supabase
+      .from("surveys")
+      .select("id, owner_player_id")
+      .eq("id", survey.id)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+    if (existing && existing.owner_player_id !== player_id) {
+      throw httpError(403, "Only the survey owner can update this survey.");
+    }
 
     const row = {
       id: survey.id,
@@ -46,7 +59,7 @@ exports.handler = async function(event) {
 
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({
         error: err.message
       })

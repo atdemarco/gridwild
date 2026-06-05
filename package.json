@@ -4,8 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "audit:economy-authority": "node scripts/audit-economy-authority.js",
+    "audit:function-auth": "node scripts/audit-function-auth.js",
+    "format": "prettier --write \"index.html\" \"css/**/*.css\" \"js/**/*.js\" \"netlify/functions/**/*.js\" \"scripts/**/*.js\" \"*.json\" \"docs/**/*.md\"",
+    "format:check": "prettier --check \"index.html\" \"css/**/*.css\" \"js/**/*.js\" \"netlify/functions/**/*.js\" \"scripts/**/*.js\" \"*.json\" \"docs/**/*.md\"",
+    "lint": "eslint \"js/**/*.js\" \"netlify/functions/**/*.js\" \"scripts/**/*.js\" \"eslint.config.mjs\"",
     "publish:grid-assets": "node scripts/publish-grid-assets.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node scripts/audit-function-auth.js && node scripts/audit-economy-authority.js"
   },
   "repository": {
     "type": "git",
@@ -23,5 +28,9 @@
     "@aws-sdk/client-s3": "^3.1055.0",
     "@supabase/supabase-js": "^2.105.3",
     "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "eslint": "^10.4.1",
+    "prettier": "^3.8.3"
   }
 }

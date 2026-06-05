@@ -1,5 +1,9 @@
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
+const {
+  requirePlayerSession,
+  revokeGuestSessions
+} = require("./_gridwild-player-session");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -86,6 +90,11 @@ exports.handler = async function (event) {
     }
 
     if (existingPlayerId) {
+      await requirePlayerSession(supabase, {
+        playerId: existingPlayerId,
+        sessionToken: body.existing_player_session_token
+      });
+
       const linked = await supabase
         .from(ACCOUNT_TABLE)
         .select("username")
@@ -154,6 +163,7 @@ exports.handler = async function (event) {
       .single();
 
     if (accountResult.error) throw accountResult.error;
+    await revokeGuestSessions(supabase, player.id);
 
     return {
       statusCode: 200,
@@ -168,7 +178,7 @@ exports.handler = async function (event) {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: accountTableHint(err) })
     };
   }

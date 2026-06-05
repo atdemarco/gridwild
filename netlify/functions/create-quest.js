@@ -1,4 +1,11 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
+const {
+  issueQuest,
+  normalizeQuestRecipe,
+  questIssuanceKey,
+  questReward
+} = require("./_quest-authority");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,35 +14,42 @@ const supabase = createClient(
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
-    const { player_id, title, description, quest_type, reward_wildpoints, recipe, source, niche_id } = body;
+    const { player_id, title, description, quest_type, recipe, source } = body;
+    const safeSource = ["manual", "today", "onboarding"].includes(source)
+      ? source
+      : "manual";
+    const safeQuestType = quest_type === "identify" ? "identify" : "explore";
 
     if (!player_id) throw new Error("player_id is required");
     if (!title) throw new Error("title is required");
 
-    const insert = {
+    const safeRecipe = normalizeQuestRecipe(recipe || {}, {
+      source: safeSource,
+      questType: safeQuestType
+    });
+    const result = await issueQuest(supabase, {
+      playerId: player_id,
       title,
-      description: description || null,
-      quest_type: quest_type || "explore",
-      reward_wildpoints: Number(reward_wildpoints || 10),
-      recipe: recipe || null,
-      source: source || "manual",
-      created_by: player_id,
-      is_active: true
+      description,
+      questType: safeQuestType,
+      recipe: safeRecipe,
+      source: safeSource,
+      rewardWildpoints: questReward(safeRecipe, safeSource),
+      issuanceKey: safeSource === "onboarding"
+        ? "onboarding:v1"
+        : questIssuanceKey(safeSource, safeQuestType, safeRecipe)
+    });
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        quest: result.quest,
+        already_issued: !!result.already_issued
+      })
     };
-
-    if (niche_id) insert.niche_id = niche_id;
-
-    const { data, error } = await supabase
-      .from("quests")
-      .insert(insert)
-      .select("*")
-      .single();
-
-    if (error) throw error;
-
-    return { statusCode: 200, body: JSON.stringify({ quest: data }) };
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return { statusCode: err.statusCode || 500, body: JSON.stringify({ error: err.message }) };
   }
 };

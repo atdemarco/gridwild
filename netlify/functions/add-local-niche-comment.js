@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -17,6 +18,7 @@ const COMMENT_TYPES = new Set([
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const { player_id, niche_id } = body;
     const commentText = String(body.comment_text || "").trim();
@@ -52,7 +54,7 @@ exports.handler = async function (event) {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

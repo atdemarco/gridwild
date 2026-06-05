@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest, httpError } = require("./_gridwild-player-session");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,6 +8,7 @@ const supabase = createClient(
 
 exports.handler = async function(event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const { player_id, survey_id } = body;
 
@@ -22,8 +24,8 @@ exports.handler = async function(event) {
     if (surveyError) throw surveyError;
     if (!survey) throw new Error("survey not found");
 
-    if (survey.owner_player_id && survey.owner_player_id !== player_id) {
-      throw new Error("only the survey owner can delete this survey");
+    if (survey.owner_player_id !== player_id) {
+      throw httpError(403, "Only the survey owner can delete this survey.");
     }
 
     const { error } = await supabase
@@ -39,7 +41,7 @@ exports.handler = async function(event) {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

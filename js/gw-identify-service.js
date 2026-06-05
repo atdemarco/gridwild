@@ -93,6 +93,12 @@
     };
   }
 
+  function isClaimedStatus(status) {
+    return ["claimed", "submitted", "verified", "counted"].includes(
+      String(status || "").toLowerCase()
+    );
+  }
+
   function mergeServerClaims(rows = []) {
     const normalized = (Array.isArray(rows) ? rows : [])
       .map(normalizeServerClaim)
@@ -147,7 +153,7 @@
     return loadClaims()
       .filter(claim =>
         String(claim.questId || "") === key &&
-        claim.status === "claimed"
+        isClaimedStatus(claim.status)
       )
       .sort((a, b) => String(b.claimedAt || "").localeCompare(String(a.claimedAt || "")));
   }
@@ -160,7 +166,7 @@
     return loadClaims().some(claim =>
       String(claim.questId || "") === key &&
       String(claim.observationId || "") === id &&
-      claim.status === "claimed"
+      isClaimedStatus(claim.status)
     );
   }
 
@@ -328,13 +334,26 @@
         }
         mergeQuestEvidence(serverResult?.evidence);
       } catch (err) {
-        console.warn("GridWild identification claim saved locally but not synced:", err);
+        console.warn("GridWild identification claim was not server-verified:", err);
+        if (input.quest) {
+          return {
+            ok: false,
+            reason: err?.message || "Identification was not verified by iNaturalist."
+          };
+        }
         claim = {
           ...claim,
           serverSynced: false,
           syncError: err.message || "Server sync failed"
         };
       }
+    }
+
+    if (input.quest && !serverResult?.claim) {
+      return {
+        ok: false,
+        reason: "Reward-bearing identification claims must be verified by iNaturalist."
+      };
     }
 
     upsertLocalClaim(claim);

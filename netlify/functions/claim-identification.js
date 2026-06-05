@@ -1,4 +1,12 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
+const { requireStartedQuest } = require("./_quest-access");
+const {
+  fetchINatObservation,
+  requireLinkedINatUser,
+  verifyINatIdentification
+} = require("./_inat-authority");
+const { isIdentificationQuest } = require("./_quest-authority");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -6,7 +14,6 @@ const supabase = createClient(
 );
 
 const CONFIDENCE = new Set(["coarse", "likely", "careful", "expert"]);
-const STATUS = new Set(["claimed", "submitted", "verified", "rejected"]);
 
 function cleanString(value, max = 500) {
   return String(value || "").trim().slice(0, max);
@@ -15,15 +22,6 @@ function cleanString(value, max = 500) {
 function cleanConfidence(value) {
   const next = cleanString(value, 24);
   return CONFIDENCE.has(next) ? next : "coarse";
-}
-
-function cleanStatus(value) {
-  const next = cleanString(value, 24);
-  return STATUS.has(next) ? next : "claimed";
-}
-
-function cleanPayload(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 async function findExistingClaim(playerId, questId, observationId) {
@@ -77,14 +75,14 @@ async function upsertQuestEvidence(claim, payload) {
       quest_id: claim.quest_id,
       obs_id: claim.observation_id,
       source: "identification",
-      status: "claimed",
+      status: "verified",
       claimed_at: claim.claimed_at,
       evidence_type: "identification",
       target_type: "observation",
       target_id: claim.observation_id,
       external_id: claim.external_identification_id,
       confidence: claim.confidence,
-      verification_status: claim.status,
+      verification_status: "verified",
       payload: {
         ...payload,
         identification_claim_id: claim.id,
@@ -104,33 +102,64 @@ async function upsertQuestEvidence(claim, payload) {
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const playerId = cleanString(body.player_id, 80);
     const questId = cleanString(body.quest_id, 80) || null;
     const observationId = cleanString(body.observation_id || body.obs_id, 120);
-    const taxonId = Number(body.taxon_id);
-    const taxonName = cleanString(body.taxon_name, 240);
-    const claimedAt = body.claimed_at ? new Date(body.claimed_at).toISOString() : new Date().toISOString();
-    const submittedAt = body.submitted_at ? new Date(body.submitted_at).toISOString() : null;
-    const payload = cleanPayload(body.payload);
+    const requestedTaxonId = Number(body.taxon_id);
+    const externalIdentificationId = cleanString(
+      body.external_identification_id || body.external_id,
+      120
+    );
 
     if (!playerId) throw new Error("player_id is required");
     if (!observationId) throw new Error("observation_id is required");
-    if (!Number.isFinite(taxonId)) throw new Error("taxon_id is required");
-    if (!taxonName) throw new Error("taxon_name is required");
+    if (!Number.isFinite(requestedTaxonId)) throw new Error("taxon_id is required");
+    if (!externalIdentificationId) {
+      throw new Error("external_identification_id is required");
+    }
+
+    let quest = null;
+    if (questId) {
+      ({ quest } = await requireStartedQuest(supabase, playerId, questId));
+      if (!isIdentificationQuest(quest)) {
+        throw new Error("This quest requires observation evidence, not identification evidence.");
+      }
+    }
+
+    const inat = await requireLinkedINatUser(supabase, event, playerId);
+    const observation = await fetchINatObservation(inat.apiToken, observationId);
+    const identification = verifyINatIdentification(
+      observation,
+      inat.user,
+      externalIdentificationId,
+      requestedTaxonId
+    );
+    const taxon = identification?.taxon || {};
+    const claimedAt = new Date().toISOString();
+    const submittedAt = identification?.created_at || identification?.updated_at || claimedAt;
+    const payload = {
+      verified_at: claimedAt,
+      inat_user_id: Number(inat.user.id),
+      observation_uri: observation?.uri || null,
+      identification_id: String(identification.id),
+      category: identification?.category || null,
+      disagreement: identification?.disagreement ?? null
+    };
 
     const claim = await upsertIdentificationClaim({
       player_id: playerId,
       quest_id: questId,
       observation_id: observationId,
-      observation_uri: cleanString(body.observation_uri, 500) || null,
-      taxon_id: Math.round(taxonId),
-      taxon_name: taxonName,
-      taxon_common_name: cleanString(body.taxon_common_name, 240) || null,
+      observation_uri: observation?.uri || null,
+      taxon_id: Number(taxon.id),
+      taxon_name: cleanString(taxon.name, 240),
+      taxon_common_name: cleanString(taxon.preferred_common_name, 240) || null,
       confidence: cleanConfidence(body.confidence),
-      source: cleanString(body.source, 80) || "gridwild",
-      status: cleanStatus(body.status),
-      external_identification_id: cleanString(body.external_identification_id || body.external_id, 120) || null,
+      source: "inat_identification",
+      status: "verified",
+      external_identification_id: String(identification.id),
       submitted_at: submittedAt,
       claimed_at: claimedAt,
       payload
@@ -144,7 +173,7 @@ exports.handler = async function (event) {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

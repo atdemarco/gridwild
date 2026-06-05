@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,6 +8,7 @@ const supabase = createClient(
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
 
     const {
@@ -23,44 +25,21 @@ exports.handler = async function (event) {
       throw new Error("slot is required");
     }
 
-    const allowedSlots = [
-      "title",
-      "frame",
-      "trail",
-      "companion",
-      "hat"
-    ];
-
-    if (!allowedSlots.includes(slot)) {
-      throw new Error("invalid slot");
-    }
-
-    const patch = {
-      player_id,
-      updated_at: new Date().toISOString()
-    };
-
-    patch[slot] = item_id || null;
-
-    const { data, error } = await supabase
-      .from("player_equipment")
-      .upsert(patch, {
-        onConflict: "player_id"
-      })
-      .select("*")
-      .single();
+    const { data, error } = await supabase.rpc("gridwild_set_owned_equipment", {
+      p_player_id: player_id,
+      p_slot: slot,
+      p_item_id: item_id || null
+    });
 
     if (error) throw error;
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        equipment: data
-      })
+      body: JSON.stringify(data)
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({
         error: err.message
       })

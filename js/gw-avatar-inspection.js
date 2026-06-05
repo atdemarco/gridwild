@@ -12,7 +12,18 @@
     ["companion", "Companion"]
   ];
 
+  const ARCHETYPE_LABELS = {
+    naturalist: "Naturalist",
+    bug_hunter: "Bug Hunter",
+    birder: "Birder",
+    fungus_friend: "Fungus Friend",
+    urban_ranger: "Urban Ranger",
+    night_moth_seeker: "Night Moth Seeker"
+  };
+
   let currentRoot = null;
+  let currentView = { kind: "self" };
+  const playerCache = new Map();
 
   function esc(s) {
     return String(s ?? "")
@@ -23,8 +34,74 @@
       .replaceAll("'", "&#39;");
   }
 
+  function formatNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toLocaleString() : "-";
+  }
+
   function cleanTitle(name) {
     return String(name || "").replace(/^Title:\s*/i, "");
+  }
+
+  function archetypeLabel(archetype) {
+    const characterDef = window.GridWildCharacter?.ARCHETYPES?.find?.(item => item.id === archetype);
+    return characterDef?.label || ARCHETYPE_LABELS[archetype] || "Explorer";
+  }
+
+  function equipmentItemsFromRow(row) {
+    const catalog = window.GridWildStore?.getCatalog?.() || [];
+    const out = {};
+
+    SLOT_LABELS.forEach(([slot]) => {
+      const itemId = row?.[slot];
+      out[slot] = itemId ? catalog.find(item => item.id === itemId) || null : null;
+    });
+
+    return out;
+  }
+
+  function mergePlayerData(previous = {}, next = {}) {
+    return {
+      ...previous,
+      ...next,
+      player: {
+        ...(previous.player || {}),
+        ...(next.player || {})
+      },
+      equipment: next.equipment === undefined ? previous.equipment : next.equipment,
+      stats: {
+        ...(previous.stats || {}),
+        ...(next.stats || {})
+      }
+    };
+  }
+
+  function hasPlayerStats(data) {
+    const stats = data?.stats || {};
+    return [
+      "wildpoints",
+      "quests_completed",
+      "parties_joined",
+      "achievements_unlocked"
+    ].some(key => Object.prototype.hasOwnProperty.call(stats, key));
+  }
+
+  function avatarStateForPlayer(data = {}) {
+    const player = data.player || {};
+    const archetype = player.archetype || "naturalist";
+
+    return {
+      character: {
+        archetype,
+        icon: player.icon || "",
+        color: player.color || "fern"
+      },
+      equipped: equipmentItemsFromRow(data.equipment || {}),
+      displayName: player.display_name || "Explorer",
+      archetypeLabel: archetypeLabel(archetype),
+      color: player.color || "fern",
+      baseIcon: player.icon || ""
+    };
   }
 
   function injectStyles() {
@@ -39,6 +116,10 @@
         width: min(760px, 96vw);
         max-height: min(820px, 92vh);
         grid-template-rows: auto 1fr auto;
+      }
+
+      .gw-avatar-inspection-backdrop {
+        z-index: 100004;
       }
 
       .gw-avatar-inspection-body {
@@ -172,6 +253,56 @@
         line-height: 1;
       }
 
+      .gw-player-info-stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .gw-player-info-stat {
+        min-width: 0;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(215,183,116,0.14);
+        background: rgba(255,255,255,0.045);
+      }
+
+      .gw-player-info-stat-value {
+        color: #f4e8cf;
+        font-size: 20px;
+        line-height: 1;
+        font-weight: 950;
+      }
+
+      .gw-player-info-stat-label {
+        margin-top: 5px;
+        color: rgba(239,230,211,0.58);
+        font-size: 10px;
+        line-height: 1.2;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .gw-player-info-home-title {
+        color: #efe6d3;
+        font-size: 15px;
+        line-height: 1.25;
+        font-weight: 900;
+      }
+
+      .gw-player-info-home-meta,
+      .gw-player-info-message {
+        margin-top: 5px;
+        color: rgba(239,230,211,0.62);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .gw-player-info-message.is-error {
+        color: #f0b6a9;
+      }
+
       @media (max-width: 640px) {
         .gw-avatar-inspection-modal {
           width: min(96vw, 520px);
@@ -188,6 +319,10 @@
 
         .gw-avatar-display-name {
           font-size: 24px;
+        }
+
+        .gw-player-info-stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
     `;
@@ -213,11 +348,13 @@
       .slice(0, limit);
   }
 
-  function renderEquippedRows(equipped) {
+  function renderEquippedRows(equipped, options = {}) {
     return SLOT_LABELS.map(([slot, label]) => {
       const item = equipped?.[slot];
       const name = item?.name ? cleanTitle(item.name) : "None equipped";
-      const meta = item ? `${item.rarity || "common"} ${slot}` : "Open Inventory to change this slot.";
+      const meta = item
+        ? `${item.rarity || "common"} ${slot}`
+        : options.emptyMeta || "Open Inventory to change this slot.";
 
       return `
         <div class="gw-avatar-equipped-row">
@@ -245,7 +382,7 @@
     `;
   }
 
-  function renderInto(root) {
+  function renderSelfInto(root) {
     const avatarState = window.GridWildAvatarRenderer?.getAvatarState?.() || {
       character: {},
       equipped: {},
@@ -307,18 +444,117 @@
     bindInside(root);
   }
 
+  function renderPlayerInto(root) {
+    const data = currentView.data || {};
+    const avatarState = avatarStateForPlayer(data);
+    const equipped = avatarState.equipped || {};
+    const stats = data.stats || {};
+    const title = equipped.title?.name ? cleanTitle(equipped.title.name) : avatarState.archetypeLabel;
+    const niche = data.home_niche || null;
+    const hasHomeNicheResult = Object.prototype.hasOwnProperty.call(data, "home_niche");
+    const nicheName = niche?.short_title || niche?.title ||
+      (currentView.loading && !hasHomeNicheResult ? "Loading..." : "No home niche selected");
+    const nicheMeta = [
+      niche?.theme,
+      niche?.primary_place_label,
+      niche?.niche_type
+    ].filter(Boolean).join(" \u00b7 ");
+
+    root.innerHTML = `
+      <div class="gw-store-modal gw-avatar-inspection-modal" role="dialog" aria-modal="true" aria-labelledby="gwAvatarInspectionTitle">
+        <div class="gw-store-head">
+          <div class="gw-store-title" id="gwAvatarInspectionTitle">Player Info</div>
+          <div class="gw-store-sub">
+            Field identity, home niche, and shared stats.
+          </div>
+        </div>
+
+        <div class="gw-avatar-inspection-body">
+          <div class="gw-avatar-inspection-hero">
+            <div class="gw-avatar-preview-card">
+              ${window.GridWildAvatarRenderer?.renderHtml?.({ size: "large", state: avatarState }) || ""}
+            </div>
+
+            <div class="gw-avatar-identity-card">
+              <div class="gw-avatar-display-name">${esc(avatarState.displayName)}</div>
+              <div class="gw-avatar-inspection-kicker">
+                ${esc(title)} &middot; ${esc(avatarState.archetypeLabel)}
+              </div>
+              <div class="gw-avatar-inspection-desc">
+                ${esc(avatarState.color || "fern")} field theme
+              </div>
+            </div>
+          </div>
+
+          <div class="gw-avatar-panel-section">
+            <div class="gw-avatar-section-title">Field Stats</div>
+            <div class="gw-player-info-stats">
+              <div class="gw-player-info-stat">
+                <div class="gw-player-info-stat-value">${currentView.loading ? "..." : formatNumber(stats.wildpoints)}</div>
+                <div class="gw-player-info-stat-label">Wildpoints</div>
+              </div>
+              <div class="gw-player-info-stat">
+                <div class="gw-player-info-stat-value">${currentView.loading ? "..." : formatNumber(stats.quests_completed)}</div>
+                <div class="gw-player-info-stat-label">Quests Completed</div>
+              </div>
+              <div class="gw-player-info-stat">
+                <div class="gw-player-info-stat-value">${currentView.loading ? "..." : formatNumber(stats.parties_joined)}</div>
+                <div class="gw-player-info-stat-label">Parties Joined</div>
+              </div>
+              <div class="gw-player-info-stat">
+                <div class="gw-player-info-stat-value">${currentView.loading ? "..." : formatNumber(stats.achievements_unlocked)}</div>
+                <div class="gw-player-info-stat-label">Achievements</div>
+              </div>
+            </div>
+            ${currentView.error ? `<div class="gw-player-info-message is-error">Could not load this player's shared stats.</div>` : ""}
+          </div>
+
+          <div class="gw-avatar-panel-section">
+            <div class="gw-avatar-section-title">Home Niche</div>
+            <div class="gw-player-info-home-title">${esc(nicheName)}</div>
+            ${nicheMeta ? `<div class="gw-player-info-home-meta">${esc(nicheMeta)}</div>` : ""}
+          </div>
+
+          <div class="gw-avatar-panel-section">
+            <div class="gw-avatar-section-title">Equipped</div>
+            <div class="gw-avatar-equipped-list">
+              ${renderEquippedRows(equipped, { emptyMeta: "Not equipped." })}
+            </div>
+          </div>
+        </div>
+
+        <div class="gw-store-foot">
+          <button class="gw-store-action secondary" id="gwAvatarInspectionCloseBtn" type="button">Close</button>
+        </div>
+      </div>
+    `;
+
+    bindInside(root);
+  }
+
+  function renderInto(root) {
+    if (currentView.kind === "player") {
+      renderPlayerInto(root);
+      return;
+    }
+
+    renderSelfInto(root);
+  }
+
   function close() {
     currentRoot?.remove();
     currentRoot = null;
+    currentView = { kind: "self" };
   }
 
-  function open() {
+  function openRoot(view) {
     injectStyles();
     document.querySelectorAll(".gw-store-backdrop").forEach(el => el.remove());
 
     const root = document.createElement("div");
     root.className = "gw-store-backdrop gw-avatar-inspection-backdrop";
     currentRoot = root;
+    currentView = view;
 
     document.body.appendChild(root);
 
@@ -332,6 +568,67 @@
 
     renderInto(root);
     root.querySelector("#gwAvatarInspectionCloseBtn")?.focus();
+  }
+
+  function open() {
+    openRoot({ kind: "self" });
+  }
+
+  function openPlayer(playerId, initialData = {}) {
+    if (!playerId) return;
+
+    if (String(playerId) === String(window.GridWildAPI?.getPlayerId?.() || "")) {
+      open();
+      return;
+    }
+
+    const cached = playerCache.get(String(playerId)) || {};
+    const data = mergePlayerData(cached, initialData);
+    const requestId = `${playerId}:${Date.now()}:${Math.random()}`;
+
+    openRoot({
+      kind: "player",
+      playerId: String(playerId),
+      requestId,
+      data,
+      loading: !hasPlayerStats(data),
+      error: null
+    });
+
+    if (!window.GridWildAPI?.getPlayerInfo) {
+      currentView.loading = false;
+      currentView.error = "Player info is unavailable.";
+      refreshOpen();
+      return;
+    }
+
+    window.GridWildAPI.getPlayerInfo(playerId)
+      .then(result => {
+        if (
+          currentView.kind !== "player" ||
+          currentView.playerId !== String(playerId) ||
+          currentView.requestId !== requestId
+        ) return;
+
+        const merged = mergePlayerData(currentView.data, result || {});
+        playerCache.set(String(playerId), merged);
+        currentView.data = merged;
+        currentView.loading = false;
+        currentView.error = null;
+        refreshOpen();
+      })
+      .catch(err => {
+        console.warn("Could not load player info:", err);
+        if (
+          currentView.kind !== "player" ||
+          currentView.playerId !== String(playerId) ||
+          currentView.requestId !== requestId
+        ) return;
+
+        currentView.loading = false;
+        currentView.error = err?.message || "Player info is unavailable.";
+        refreshOpen();
+      });
   }
 
   function refreshOpen() {
@@ -362,6 +659,7 @@
 
   window.GridWildAvatarInspection = {
     open,
+    openPlayer,
     close,
     bindButtons,
     refreshOpen

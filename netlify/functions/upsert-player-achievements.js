@@ -1,4 +1,6 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
+const { getVerifiedAchievements } = require("./_achievement-authority");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,47 +9,25 @@ const supabase = createClient(
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
-    const { player_id, achievements } = body;
+    const { player_id } = body;
 
     if (!player_id) throw new Error("player_id is required");
-    if (!Array.isArray(achievements)) throw new Error("achievements must be an array");
+    const { error: refreshError } = await supabase.rpc("gridwild_refresh_verified_achievements", {
+      p_player_id: player_id
+    });
+    if (refreshError) throw refreshError;
 
-    const rows = achievements.map(a => ({
-      player_id,
-      achievement_id: a.achievement_id,
-      unlocked: !!a.unlocked,
-      progress: Number(a.progress || 0),
-      target: Number(a.target || 1),
-      achieved_at: a.achieved_at || null,
-      achieved_where: a.achieved_where || null,
-      source: a.source || null,
-      updated_at: new Date().toISOString()
-    })).filter(a => a.achievement_id);
-
-    if (!rows.length) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ achievements: [] })
-      };
-    }
-
-    const { data, error } = await supabase
-      .from("player_achievements")
-      .upsert(rows, {
-        onConflict: "player_id,achievement_id"
-      })
-      .select("*");
-
-    if (error) throw error;
+    const achievements = await getVerifiedAchievements(supabase, player_id);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ achievements: data || [] })
+      body: JSON.stringify({ achievements })
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

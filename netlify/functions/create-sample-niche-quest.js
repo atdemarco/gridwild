@@ -1,9 +1,12 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const {
   buildNicheDisplayTitle,
   buildSampleNicheRecipe,
   sampleQuestDescription
 } = require("./_local-niche-utils");
+const { MAX_QUEST_REWARD } = require("./_quest-reward");
+const { issueQuest, questIssuanceKey } = require("./_quest-authority");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -12,6 +15,7 @@ const supabase = createClient(
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const { player_id, niche_id } = body;
 
@@ -29,25 +33,46 @@ exports.handler = async function (event) {
     const title = niche.title || buildNicheDisplayTitle(niche);
     const recipe = buildSampleNicheRecipe(niche);
 
-    const insert = {
+    const rewardWildpoints = Math.min(
+      MAX_QUEST_REWARD,
+      Math.max(40, Math.round(60 + Number(niche.questability_score || 0) * 90))
+    );
+    const issued = await issueQuest(supabase, {
+      playerId: player_id,
       title,
       description: sampleQuestDescription(niche),
-      quest_type: "sample_niche",
-      reward_wildpoints: Math.max(40, Math.round(60 + Number(niche.questability_score || 0) * 90)),
+      questType: "sample_niche",
       recipe,
       source: "local_niche",
-      created_by: player_id,
-      is_active: true,
-      niche_id
-    };
+      rewardWildpoints,
+      issuanceKey: questIssuanceKey("local_niche", "sample_niche", recipe, niche_id),
+      nicheId: niche_id
+    });
+    const quest = issued.quest;
 
-    const { data: quest, error: questError } = await supabase
-      .from("quests")
-      .insert(insert)
+    const { data: existingPlayerQuest, error: existingPlayerQuestError } = await supabase
+      .from("player_quests")
       .select("*")
-      .single();
+      .eq("player_id", player_id)
+      .eq("quest_id", quest.id)
+      .maybeSingle();
 
-    if (questError) throw questError;
+    if (existingPlayerQuestError) throw existingPlayerQuestError;
+    if (existingPlayerQuest && ["completed", "archived"].includes(existingPlayerQuest.status)) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          quest: {
+            ...quest,
+            status: existingPlayerQuest.status,
+            player_quests: [existingPlayerQuest]
+          },
+          player_quest: existingPlayerQuest,
+          state: null,
+          already_issued: true
+        })
+      };
+    }
 
     const { error: pauseError } = await supabase
       .from("player_quests")
@@ -106,12 +131,13 @@ exports.handler = async function (event) {
           player_quests: [playerQuest]
         },
         player_quest: playerQuest,
-        state
+        state,
+        already_issued: !!issued.already_issued
       })
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

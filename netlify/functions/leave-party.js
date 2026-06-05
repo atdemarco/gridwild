@@ -1,4 +1,6 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
+const { requirePartyAccess } = require("./_party-access");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,10 +9,12 @@ const supabase = createClient(
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const { player_id, party_id } = JSON.parse(event.body || "{}");
 
     if (!player_id) throw new Error("player_id is required");
     if (!party_id) throw new Error("party_id is required");
+    await requirePartyAccess(supabase, { partyId: party_id, playerId: player_id });
 
     const { error } = await supabase
       .from("party_members")
@@ -33,7 +37,7 @@ exports.handler = async function (event) {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

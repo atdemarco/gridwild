@@ -6,6 +6,7 @@
   let ctx = null;
   let raf = null;
   let canvasTopLeft = L.point(0, 0);
+  let canvasLayout = null;
 
   //const FOG_UNKNOWN_OPACITY = 0.34;
   //  const FOG_COLOR_RGB = "38,46,42";
@@ -154,35 +155,14 @@
     return canvas;
   }
 
-  function positionCanvas() {
-    ensureCanvas();
-
-    canvasTopLeft = map.containerPointToLayerPoint([0, 0]);
-    L.DomUtil.setPosition(canvas, canvasTopLeft);
-  }
-
   function layerPoint(latlng) {
     return map.latLngToLayerPoint(latlng).subtract(canvasTopLeft);
   }
 
   function resizeCanvas() {
     ensureCanvas();
-    positionCanvas();
-
-    const size = map.getSize();
-    const dpr = window.GridWildCanvasPerf?.getDpr?.("fog") || window.devicePixelRatio || 1;
-
-    const wantW = Math.round(size.x * dpr);
-    const wantH = Math.round(size.y * dpr);
-
-    if (canvas.width !== wantW || canvas.height !== wantH) {
-      canvas.width = wantW;
-      canvas.height = wantH;
-      canvas.style.width = `${size.x}px`;
-      canvas.style.height = `${size.y}px`;
-    }
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    canvasLayout = window.GridWildCanvasPerf.layoutPaddedCanvas(canvas, ctx, "fog");
+    canvasTopLeft = canvasLayout.topLeft;
   }
 
 
@@ -233,8 +213,7 @@ function render() {
   ensureCanvas();
   resizeCanvas();
 
-  const size = map.getSize();
-  ctx.clearRect(0, 0, size.x, size.y);
+  ctx.clearRect(0, 0, canvasLayout.width, canvasLayout.height);
 
   const fogOn = window.__gwState?.showFog ?? false;
 
@@ -371,8 +350,7 @@ function renderROW() {
   ensureCanvas();
   resizeCanvas();
 
-  const size = map.getSize();
-  ctx.clearRect(0, 0, size.x, size.y);
+  ctx.clearRect(0, 0, canvasLayout.width, canvasLayout.height);
 
   const fogOn = window.__gwState?.showFog ?? false;
 
@@ -457,7 +435,14 @@ function renderROW() {
   }
 }
 
-  function scheduleRender() {
+  function scheduleRender(evt) {
+    if (
+      evt?.type === "move" &&
+      window.GridWildCanvasPerf?.canvasCoversViewport?.(canvasLayout)
+    ) {
+      return;
+    }
+
     if (raf) return;
     raf = requestAnimationFrame(render);
   }

@@ -927,18 +927,32 @@ async function hydratePartyForQuest(questId) {
   if (!result?.party?.id) return null;
 
   window.__gwState = window.__gwState || {};
-  window.__gwState.party = result.party;
-  window.__gwState.partyMembers = result.members || [];
-  window.__gwState.partyEvents = result.events || [];
-  window.__gwState.partyEvidence = result.evidence || [];
-  window.__gwState.partyProgress = result.progress || 0;
+  const snapshot = {
+    party: result.party,
+    members: result.members || [],
+    events: result.events || [],
+    evidence: result.evidence || [],
+    progress: result.progress || 0,
+    route: []
+  };
 
   try {
     const routeData = await window.GridWildAPI?.getPartyRoute?.(result.party.id);
-    window.__gwState.partyRoute = routeData?.route || [];
+    snapshot.route = routeData?.route || [];
   } catch (err) {
     console.warn("Could not load quest party route:", err);
-    window.__gwState.partyRoute = [];
+  }
+
+  window.GridWildParty?.rememberPartySnapshot?.(snapshot);
+
+  if (!window.GridWildPartyLive?.getActivePartyId?.()) {
+    window.__gwState.party = result.party;
+    window.__gwState.partyMembers = snapshot.members;
+    window.__gwState.partyEvents = snapshot.events;
+    window.__gwState.partyEvidence = snapshot.evidence;
+    window.__gwState.partyProgress = snapshot.progress;
+    window.__gwState.partyRoute = snapshot.route;
+    window.__gwState.partyRoutePartyId = result.party.id;
   }
 
   return result.party.id;
@@ -1098,7 +1112,6 @@ async function startQuestFromRecipe(recipe, options = {}) {
       title: quest.title,
       description: quest.description,
       quest_type: isIdentificationQuest(quest) ? "identify" : "explore",
-      reward_wildpoints: quest.pointValue || estimateRewardXP(quest.recipe),
       recipe: quest.recipe,
       source
     });
@@ -2567,7 +2580,6 @@ function openNewSurveyConfigurator() {
   document.addEventListener("DOMContentLoaded", () => {
     injectStyles();
     scheduleQuestLocaleRefresh(getGpsFix());
-    setTimeout(openLinkedSurveyFromUrl, 0);
   });
 
   window.addEventListener("gwUserLocationUpdated", evt => {

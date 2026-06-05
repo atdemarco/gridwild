@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { applyPartyTimingToRows } = require("./_party-duration");
 
 const supabase = createClient(
@@ -6,8 +7,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-exports.handler = async function () {
+exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const { data, error } = await supabase
       .from("parties")
       .select("*")
@@ -27,7 +29,7 @@ exports.handler = async function () {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

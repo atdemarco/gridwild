@@ -53,6 +53,7 @@ let gridHeatRaf = null;
 let gridHeatThrottleTimer = null;
 let gridHeatLastRenderAt = 0;
 let gridHeatCanvasTopLeft = L.point(0, 0);
+let gridHeatCanvasLayout = null;
 const GRID_HEAT_INTERACTION_RENDER_INTERVAL_MS = 80;
 const COARSE_HEAT_AUTO_SCALE_PX = 118;
 const COARSE_HEAT_AUTO_STEPS = [
@@ -78,7 +79,12 @@ const COARSE_DATA_VERSION_DEBOUNCE_MS = 360;
 const COARSE_DATA_VERSION_MAX_WAIT_MS = 1200;
 const FEET_PER_METER = 3.280839895;
 
-window.GridWildCanvasPerf = window.GridWildCanvasPerf || (function () {
+window.GridWildCanvasPerf = (function (existing = {}) {
+  const DEFAULT_BUFFER_PX = 128;
+  const MOBILE_BUFFER_PX = 96;
+  const MAX_PADDED_AREA_RATIO = 1.65;
+  const BUFFER_EDGE_PX = 16;
+
   function isMobileLike() {
     return window.matchMedia?.("(max-width: 700px), (pointer: coarse)")?.matches === true;
   }
@@ -93,8 +99,82 @@ window.GridWildCanvasPerf = window.GridWildCanvasPerf || (function () {
     return Math.max(1, Math.min(nativeDpr, cap));
   }
 
-  return { getDpr, isMobileLike };
-})();
+  function getBufferPx(requestedPx, viewport = map.getSize()) {
+    const requested = Number(requestedPx);
+    const preferred = Number.isFinite(requested) && requested >= 0
+      ? requested
+      : (isMobileLike() ? MOBILE_BUFFER_PX : DEFAULT_BUFFER_PX);
+    const width = Math.max(1, Number(viewport?.x) || 1);
+    const height = Math.max(1, Number(viewport?.y) || 1);
+    const areaDelta = width * height * (MAX_PADDED_AREA_RATIO - 1);
+    const span = width + height;
+    const areaLimitedBuffer = (-span + Math.sqrt(span * span + 4 * areaDelta)) / 4;
+
+    return Math.max(0, Math.floor(Math.min(preferred, areaLimitedBuffer)));
+  }
+
+  function layoutPaddedCanvas(canvas, ctx, label = "canvas", options = {}) {
+    const viewport = map.getSize();
+    const bufferPx = getBufferPx(options.bufferPx, viewport);
+    const width = Math.max(1, Math.round(viewport.x + bufferPx * 2));
+    const height = Math.max(1, Math.round(viewport.y + bufferPx * 2));
+    const topLeft = map.containerPointToLayerPoint([-bufferPx, -bufferPx]);
+    const dpr = getDpr(label);
+    const wantW = Math.round(width * dpr);
+    const wantH = Math.round(height * dpr);
+
+    L.DomUtil.setPosition(canvas, topLeft);
+
+    if (canvas.width !== wantW || canvas.height !== wantH) {
+      canvas.width = wantW;
+      canvas.height = wantH;
+    }
+
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    return {
+      topLeft,
+      width,
+      height,
+      bufferPx,
+      viewportWidth: viewport.x,
+      viewportHeight: viewport.y,
+      zoom: map.getZoom()
+    };
+  }
+
+  function canvasCoversViewport(layout, edgePx = BUFFER_EDGE_PX) {
+    if (!layout || layout.zoom !== map.getZoom()) return false;
+
+    const viewport = map.getSize();
+    if (
+      layout.viewportWidth !== viewport.x ||
+      layout.viewportHeight !== viewport.y
+    ) {
+      return false;
+    }
+
+    const topLeft = map.containerPointToLayerPoint([0, 0]);
+    const bottomRight = map.containerPointToLayerPoint(viewport);
+    const edge = Math.max(0, Math.min(layout.bufferPx, Number(edgePx) || 0));
+
+    return topLeft.x >= layout.topLeft.x + edge &&
+      topLeft.y >= layout.topLeft.y + edge &&
+      bottomRight.x <= layout.topLeft.x + layout.width - edge &&
+      bottomRight.y <= layout.topLeft.y + layout.height - edge;
+  }
+
+  return {
+    ...existing,
+    getDpr,
+    isMobileLike,
+    getBufferPx,
+    layoutPaddedCanvas,
+    canvasCoversViewport
+  };
+})(window.GridWildCanvasPerf);
 
 function ensureGridHeatCanvas() {
   if (gridHeatCanvas) return gridHeatCanvas;
@@ -118,35 +198,18 @@ function ensureGridHeatCanvas() {
   return gridHeatCanvas;
 }
 
-function positionGridHeatCanvas() {
-  ensureGridHeatCanvas();
-
-  gridHeatCanvasTopLeft = map.containerPointToLayerPoint([0, 0]);
-  L.DomUtil.setPosition(gridHeatCanvas, gridHeatCanvasTopLeft);
-}
-
 function gridHeatLayerPoint(latlng) {
   return map.latLngToLayerPoint(latlng).subtract(gridHeatCanvasTopLeft);
 }
 
 function resizeGridHeatCanvas() {
   ensureGridHeatCanvas();
-  positionGridHeatCanvas();
-
-  const size = map.getSize();
-  const dpr = window.GridWildCanvasPerf?.getDpr?.("heat") || window.devicePixelRatio || 1;
-
-  const wantW = Math.round(size.x * dpr);
-  const wantH = Math.round(size.y * dpr);
-
-  if (gridHeatCanvas.width !== wantW || gridHeatCanvas.height !== wantH) {
-    gridHeatCanvas.width = wantW;
-    gridHeatCanvas.height = wantH;
-    gridHeatCanvas.style.width = `${size.x}px`;
-    gridHeatCanvas.style.height = `${size.y}px`;
-  }
-
-  gridHeatCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  gridHeatCanvasLayout = window.GridWildCanvasPerf.layoutPaddedCanvas(
+    gridHeatCanvas,
+    gridHeatCtx,
+    "heat"
+  );
+  gridHeatCanvasTopLeft = gridHeatCanvasLayout.topLeft;
 }
 
 window.setShimmerVisible = function(show = true) {
@@ -1340,14 +1403,6 @@ async function loadGridWildStaticAssets() {
       .catch((err) => console.warn("GridWild asset manifest unavailable.", err));
   }
 
-  if (window.GridWildAssets?.loadSquareSummary) {
-    window.GridWildAssets.loadSquareSummary()
-      .then((summary) => {
-        window.__gwSquareGenusSummary = summary || null;
-      })
-      .catch((err) => console.warn("GridWild square summary unavailable.", err));
-  }
-
   try {
     const heatUrl = await getGridAssetUrl("heat", "assets/dc_heat.csv");
     await Promise.allSettled([
@@ -1366,6 +1421,40 @@ async function loadGridWildStaticAssets() {
     finishRegularGridDataDownloadToast();
   }
 }
+
+let gridWildStaticAssetsPromise = null;
+
+function ensureGridWildStaticAssetsLoaded() {
+  if (gridWildStaticAssetsPromise) return gridWildStaticAssetsPromise;
+
+  gridWildStaticAssetsPromise = loadGridWildStaticAssets()
+    .catch((err) => {
+      gridWildStaticAssetsPromise = null;
+      throw err;
+    });
+
+  return gridWildStaticAssetsPromise;
+}
+
+function scheduleGridWildStaticAssetsLoad(delay = 1000) {
+  if (window.__staticGridCounts instanceof Map && window.__staticGridCounts.size > 0) return;
+  if (gridWildStaticAssetsPromise) return;
+
+  const start = () => {
+    ensureGridWildStaticAssetsLoaded()
+      .catch((err) => console.warn("GridWild static map assets unavailable.", err));
+  };
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(start, { timeout: Math.max(1800, delay + 500) });
+    return;
+  }
+
+  window.setTimeout(start, delay);
+}
+
+window.ensureGridWildStaticAssetsLoaded = ensureGridWildStaticAssetsLoaded;
+window.scheduleGridWildStaticAssetsLoad = scheduleGridWildStaticAssetsLoad;
 
 async function loadObserverDictionary() {
   if (window.__gwObserverDict) return window.__gwObserverDict;
@@ -3385,7 +3474,7 @@ map.on("move zoom resize viewreset zoomend moveend", scheduleGridHeatCanvasRende
 map.on("zoomend resize moveend", updateGrid);
 updateGrid();
 
-loadGridWildStaticAssets();
+scheduleGridWildStaticAssetsLoad(1200);
 
 // RPG-style grid cell popup on double click
 // Disable Leaflet dblclick-to-zoom so we can use dblclick for UI
@@ -3752,6 +3841,11 @@ window.setHeatVisible = function (visible) {
   window.__gwFilters = window.__gwFilters || {};
   window.__gwFilters.showHeat = !!visible;
 
+  if (visible) {
+    ensureGridWildStaticAssetsLoaded()
+      .catch((err) => console.warn("GridWild heat assets unavailable.", err));
+  }
+
   ensureGridHeatCanvas();
   gridHeatCanvas.style.display = visible ? "block" : "none";
 
@@ -3765,116 +3859,203 @@ window.setHeatVisible = function (visible) {
 // End allow  UI to toggle the heat overlay
 
 
-// Load static CSV: ix,iy,count -- when I added static assets
-async function loadStaticHeatmapCsv(url) {
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+const STATIC_HEAT_CSV_WORKER_URL = "js/gw-heat-csv-worker.js";
+const STATIC_HEAT_FALLBACK_YIELD_ROWS = 1500;
 
-    const text = await resp.text();
-    const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+function staticHeatMetricsFromRow(row) {
+  return {
+    count: row[1],
+    species: row[2],
+    observers: row[3],
+    n_captive: row[4],
+    last_observed: row[5],
+    median_last10_observed: row[6],
+    last_observed_ms: row[7],
+    median_last10_observed_ms: row[8]
+  };
+}
 
-    if (lines.length < 2) {
-      console.warn("Static heat CSV is empty or header-only.");
-      return;
+function loadStaticHeatmapCsvInWorker(url) {
+  return new Promise((resolve, reject) => {
+    const workerUrl = new URL(STATIC_HEAT_CSV_WORKER_URL, document.baseURI);
+    const heatUrl = new URL(url, document.baseURI).href;
+    const worker = new Worker(workerUrl);
+    const counts = new Map();
+    let settled = false;
+
+    function finish(callback, value) {
+      if (settled) return;
+      settled = true;
+      worker.terminate();
+      callback(value);
     }
 
-    const header = lines[0].trim().toLowerCase();
-//    if (header !== "ix,iy,count,species,observers") {
- //     console.warn(`Unexpected CSV header: ${header}`);
- //   }
-    
-    const allowedHeaders = new Set([
-      "ix,iy,count,species,observers,n_captive",
-      "ix,iy,count,n_species,n_observers,n_captive",
-      "ix,iy,count,species,observers",
-      "ix,iy,count,n_genera,n_observers,n_captive,last_observed,median_last10_observed"
-    ]);
+    worker.onmessage = event => {
+      const message = event.data || {};
 
-    if (!allowedHeaders.has(header)) {
-      console.warn(`Unexpected CSV header: ${header}`);
-    }
-
-    const columns = header.split(",").map(s => s.trim());
-    const col = (...names) => {
-      for (const name of names) {
-        const i = columns.indexOf(name);
-        if (i >= 0) return i;
+      if (message.type === "chunk") {
+        for (const row of message.rows || []) {
+          counts.set(row[0], staticHeatMetricsFromRow(row));
+        }
+        return;
       }
-      return -1;
+
+      if (message.type === "warning") {
+        console.warn(message.message);
+        return;
+      }
+
+      if (message.type === "done") {
+        finish(resolve, counts);
+        return;
+      }
+
+      if (message.type === "error") {
+        finish(reject, new Error(message.message || "Static heat CSV worker failed."));
+      }
     };
 
-    const ixCol = col("ix");
-    const iyCol = col("iy");
-    const countCol = col("count");
-    const speciesCol = col("species", "n_species", "n_genera");
-    const observersCol = col("observers", "n_observers");
-    const captiveCol = col("n_captive");
-    const lastObservedCol = col("last_observed");
-    const medianLast10Col = col("median_last10_observed");
+    worker.onerror = event => {
+      finish(reject, new Error(event.message || "Static heat CSV worker failed."));
+    };
 
-    const counts = new Map();
+    worker.postMessage({ url: heatUrl });
+  });
+}
 
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split(",");
-      if (parts.length < 5) continue;
+function parseStaticHeatCsvColumns(header) {
+  const columns = header.split(",").map(value => value.trim());
+  const col = (...names) => {
+    for (const name of names) {
+      const index = columns.indexOf(name);
+      if (index >= 0) return index;
+    }
+    return -1;
+  };
 
-      const ix = Number(parts[ixCol]);
-      const iy = Number(parts[iyCol]);
-      const count = Number(parts[countCol]);
-      const species = Number(parts[speciesCol]);
-      const observers = Number(parts[observersCol]);
-      const n_captive = captiveCol >= 0 ? Number(parts[captiveCol] ?? 0) : 0;
-      const last_observed = lastObservedCol >= 0 ? (parts[lastObservedCol] || null) : null;
-      const median_last10_observed = medianLast10Col >= 0 ? (parts[medianLast10Col] || null) : null;
-      const last_observed_ms = parseGridDateMs(last_observed);
-      const median_last10_observed_ms = parseGridDateMs(median_last10_observed);
+  return {
+    ix: col("ix"),
+    iy: col("iy"),
+    count: col("count"),
+    species: col("species", "n_species", "n_genera"),
+    observers: col("observers", "n_observers"),
+    captive: col("n_captive"),
+    lastObserved: col("last_observed"),
+    medianLast10: col("median_last10_observed")
+  };
+}
 
-      if (
-        !Number.isFinite(ix) ||
-        !Number.isFinite(iy) ||
-        !Number.isFinite(count) ||
-        !Number.isFinite(species) ||
-        !Number.isFinite(observers) ||
-        !Number.isFinite(n_captive)
-      ) {
-        continue;
-      }
+function yieldStaticHeatFallback() {
+  return new Promise(resolve => window.setTimeout(resolve, 0));
+}
 
-      counts.set(`${ix},${iy}`, {
-        count,
-        species,
-        observers,
-        n_captive,
-        last_observed,
-        median_last10_observed,
-        last_observed_ms,
-        median_last10_observed_ms
-      });
+async function loadStaticHeatmapCsvFallback(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+  const text = await response.text();
+  const counts = new Map();
+  let cursor = 0;
+  let columns = null;
+  let rowsSinceYield = 0;
+
+  while (cursor < text.length) {
+    const nextBreak = text.indexOf("\n", cursor);
+    const end = nextBreak >= 0 ? nextBreak : text.length;
+    const line = text.slice(cursor, end).replace(/\r$/, "");
+    cursor = nextBreak >= 0 ? nextBreak + 1 : text.length;
+
+    if (!line.trim()) continue;
+
+    if (!columns) {
+      columns = parseStaticHeatCsvColumns(line.trim().toLowerCase());
+      continue;
     }
 
-    window.__staticGridCounts = counts;
-    window.GridWildCoarseHeatCache?.invalidate?.();
+    const parts = line.split(",");
+    if (parts.length < 5) continue;
 
-//    console.log(`Loaded static heatmap cells: ${counts.size}`);
+    const ix = Number(parts[columns.ix]);
+    const iy = Number(parts[columns.iy]);
+    const count = Number(parts[columns.count]);
+    const species = Number(parts[columns.species]);
+    const observers = Number(parts[columns.observers]);
+    const nCaptive = columns.captive >= 0 ? Number(parts[columns.captive] ?? 0) : 0;
 
-    // updating the static grid heat
-    updateStaticGridHeat();
-
-    if (typeof window.updateHudCenterSummary === "function") {
-      window.updateHudCenterSummary();
+    if (
+      !Number.isFinite(ix) ||
+      !Number.isFinite(iy) ||
+      !Number.isFinite(count) ||
+      !Number.isFinite(species) ||
+      !Number.isFinite(observers) ||
+      !Number.isFinite(nCaptive)
+    ) {
+      continue;
     }
 
-    if (typeof window.updateTopObserversPanel === "function") {
-      window.updateTopObserversPanel();
-    }
+    const lastObserved = columns.lastObserved >= 0
+      ? (parts[columns.lastObserved] || null)
+      : null;
+    const medianLast10Observed = columns.medianLast10 >= 0
+      ? (parts[columns.medianLast10] || null)
+      : null;
 
-    if (typeof window.updateHudCladogram === "function") {
-      window.updateHudCladogram();
+    counts.set(`${ix},${iy}`, {
+      count,
+      species,
+      observers,
+      n_captive: nCaptive,
+      last_observed: lastObserved,
+      median_last10_observed: medianLast10Observed,
+      last_observed_ms: parseGridDateMs(lastObserved),
+      median_last10_observed_ms: parseGridDateMs(medianLast10Observed)
+    });
+
+    rowsSinceYield++;
+    if (rowsSinceYield >= STATIC_HEAT_FALLBACK_YIELD_ROWS) {
+      rowsSinceYield = 0;
+      await yieldStaticHeatFallback();
     }
-  } catch (err) {
-    console.error("Failed to load static heat CSV:", err);
   }
+
+  return counts;
+}
+
+function installStaticHeatmapCounts(counts) {
+  window.__staticGridCounts = counts;
+  window.GridWildCoarseHeatCache?.invalidate?.();
+
+  updateStaticGridHeat();
+
+  if (typeof window.updateHudCenterSummary === "function") {
+    window.updateHudCenterSummary();
+  }
+
+  if (typeof window.updateTopObserversPanel === "function") {
+    window.updateTopObserversPanel();
+  }
+
+  if (typeof window.updateHudCladogram === "function") {
+    window.updateHudCladogram();
+  }
+}
+
+async function loadStaticHeatmapCsv(url) {
+  let counts = null;
+
+  if (typeof Worker === "function") {
+    try {
+      counts = await loadStaticHeatmapCsvInWorker(url);
+    } catch (err) {
+      console.warn("Static heat CSV worker unavailable; using yielding parser.", err);
+    }
+  }
+
+  if (!counts) {
+    counts = await loadStaticHeatmapCsvFallback(url);
+  }
+
+  installStaticHeatmapCounts(counts);
 }
 
 // more for static assets -- Render precomputed static heatmap
@@ -5117,6 +5298,18 @@ function requestGridHeatCanvasFrame() {
 }
 
 function scheduleGridHeatCanvasRender(evt) {
+  if (
+    evt?.type === "move" &&
+    window.GridWildCanvasPerf?.canvasCoversViewport?.(gridHeatCanvasLayout)
+  ) {
+    return;
+  }
+
+  if (evt?.type === "move") {
+    requestGridHeatCanvasFrame();
+    return;
+  }
+
   const force = evt?.force === true || isGridHeatSettledEvent(evt);
   const throttle = isGridHeatInteractionEvent(evt) && !force;
 
@@ -5216,8 +5409,7 @@ function renderGridHeatCanvas() {
   resizeGridHeatCanvas();
   syncCoarseHeatControls();
 
-  const size = map.getSize();
-  gridHeatCtx.clearRect(0, 0, size.x, size.y);
+  gridHeatCtx.clearRect(0, 0, gridHeatCanvasLayout.width, gridHeatCanvasLayout.height);
 
   const heatOn = window.__gwFilters?.showHeat ?? true;
   if (!heatOn) return;

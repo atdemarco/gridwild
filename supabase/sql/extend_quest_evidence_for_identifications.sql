@@ -22,6 +22,14 @@ where target_id is null
    or target_type is null
    or verification_status is null;
 
+update public.quest_evidence
+set target_type = 'observation'
+where target_type = 'inat_observation';
+
+update public.quest_evidence
+set target_type = 'external'
+where target_type not in ('observation', 'identification', 'draft', 'external');
+
 do $$
 begin
   if to_regclass('public.quest_evidence') is not null and not exists (

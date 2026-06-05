@@ -29,10 +29,17 @@
 
 function loadStore() {
   const dbRows = window.__gwState?.playerAchievements;
+  let out = {};
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    out = parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    out = {};
+  }
 
   if (Array.isArray(dbRows)) {
-    const out = {};
-
     dbRows.forEach(row => {
       out[row.achievement_id] = {
         unlocked: !!row.unlocked,
@@ -43,17 +50,9 @@ function loadStore() {
         source: row.source || "db"
       };
     });
-
-    return out;
   }
 
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
+  return out;
 }
 
 function saveStore(store) {
@@ -61,16 +60,6 @@ function saveStore(store) {
 
   // Keep local fallback mirror for now.
   localStorage.setItem(STORAGE_KEY, JSON.stringify(safeStore));
-
-  const rows = Object.entries(safeStore).map(([achievementId, state]) => ({
-    achievement_id: achievementId,
-    unlocked: !!state?.unlocked,
-    progress: Number(state?.progress || 0),
-    target: Number(state?.target || 1),
-    achieved_at: state?.achieved_at || null,
-    achieved_where: state?.achieved_where || null,
-    source: state?.source || null
-  }));
 
   if (!window.GridWildAPI?.getPlayerId?.()) {
     if (!pendingBootstrapSync) {
@@ -85,7 +74,7 @@ function saveStore(store) {
     return;
   }
 
-  window.GridWildAPI?.upsertPlayerAchievements?.(rows)
+  window.GridWildAPI?.upsertPlayerAchievements?.()
     .then(result => {
       window.__gwState = window.__gwState || {};
       window.__gwState.playerAchievements = result.achievements || [];

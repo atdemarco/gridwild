@@ -21,6 +21,8 @@
 
   let contextTopLeft = L.point(0, 0);
   let buildingTopLeft = L.point(0, 0);
+  let contextLayout = null;
+  let buildingLayout = null;
 
   let raf = null;
   let fetchTimer = null;
@@ -99,39 +101,24 @@
     }
   }
 
-  function positionCanvas(c) {
-    const topLeft = map.containerPointToLayerPoint([0, 0]);
-    L.DomUtil.setPosition(c, topLeft);
-    return topLeft;
-  }
-
   function pointForCanvas(latlng, topLeft) {
     return map.latLngToLayerPoint(latlng).subtract(topLeft);
   }
 
-  function resizeOneCanvas(c, cctx) {
-    const size = map.getSize();
-    const dpr = window.GridWildCanvasPerf?.getDpr?.("osm-features") || window.devicePixelRatio || 1;
-
-    const wantW = Math.round(size.x * dpr);
-    const wantH = Math.round(size.y * dpr);
-
-    if (c.width !== wantW || c.height !== wantH) {
-      c.width = wantW;
-      c.height = wantH;
-      c.style.width = `${size.x}px`;
-      c.style.height = `${size.y}px`;
-    }
-
-    cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-
   function resizeCanvas() {
     ensureCanvas();
-    contextTopLeft = positionCanvas(contextCanvas);
-    buildingTopLeft = positionCanvas(buildingCanvas);
-    resizeOneCanvas(contextCanvas, contextCtx);
-    resizeOneCanvas(buildingCanvas, buildingCtx);
+    contextLayout = window.GridWildCanvasPerf.layoutPaddedCanvas(
+      contextCanvas,
+      contextCtx,
+      "osm-features"
+    );
+    buildingLayout = window.GridWildCanvasPerf.layoutPaddedCanvas(
+      buildingCanvas,
+      buildingCtx,
+      "osm-features"
+    );
+    contextTopLeft = contextLayout.topLeft;
+    buildingTopLeft = buildingLayout.topLeft;
   }
 
   function getBufferedQueryBounds() {
@@ -468,14 +455,12 @@
   }
 
   function clearCanvases() {
-    const size = map.getSize();
-
-    if (contextCtx) {
-      contextCtx.clearRect(0, 0, size.x, size.y);
+    if (contextCtx && contextLayout) {
+      contextCtx.clearRect(0, 0, contextLayout.width, contextLayout.height);
     }
 
-    if (buildingCtx) {
-      buildingCtx.clearRect(0, 0, size.x, size.y);
+    if (buildingCtx && buildingLayout) {
+      buildingCtx.clearRect(0, 0, buildingLayout.width, buildingLayout.height);
     }
   }
 
@@ -587,7 +572,14 @@
     renderBuildingLayer();
   }
 
-  function scheduleRender() {
+  function scheduleRender(evt) {
+    if (
+      evt?.type === "move" &&
+      window.GridWildCanvasPerf?.canvasCoversViewport?.(contextLayout)
+    ) {
+      return;
+    }
+
     if (raf) return;
     raf = requestAnimationFrame(render);
   }

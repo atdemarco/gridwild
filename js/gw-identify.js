@@ -4,6 +4,12 @@
 // -----------------------------------------------------------------------------
 
 (function () {
+  function isClaimedStatus(status) {
+    return ["claimed", "submitted", "verified", "counted"].includes(
+      String(status || "").toLowerCase()
+    );
+  }
+
   const DEFAULT_RADIUS_KM = 25;
   const DEFAULT_PER_PAGE = 30;
   const MUTED_CHILD_TAXON_SHARE = 0.10;
@@ -393,7 +399,7 @@
       claims.some(claim =>
         String(claim.questId || "") === questKey(quest) &&
         String(claim.observationId || "") === String(obs?.id || "") &&
-        claim.status === "claimed"
+        isClaimedStatus(claim.status)
       );
   }
 
@@ -407,7 +413,7 @@
       String(e.quest_id) === qid &&
       String(e.obs_id) === String(claim.observationId) &&
       e.source === "identification" &&
-      e.status === "claimed"
+      isClaimedStatus(e.status)
     );
 
     if (already) return;

@@ -485,8 +485,6 @@ function openINaturalistHandoffModal(fieldPacket, draft) {
   };
 
     modal.querySelector("#gwINatDoneBtn").onclick = () => {
-    window.GridWildEconomy?.rewardObservationHandoff?.(draft.id);
-
     modal.remove();
     render();
     window.initGridWildMobilePanels?.();

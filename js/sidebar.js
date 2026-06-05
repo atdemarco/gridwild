@@ -107,12 +107,12 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
     }
   }
 
-  function applyHeatOverlayVisibility(visible) {
+  function applyHeatOverlayVisibility(visible, options = {}) {
     const enabled = visible === true;
     window.__gwFilters = window.__gwFilters || {};
     window.__gwFilters.showHeat = enabled;
 
-    if (typeof window.setHeatVisible === "function") {
+    if (typeof window.setHeatVisible === "function" && options.loadHeatAssets !== false) {
       window.setHeatVisible(enabled);
     }
 
@@ -151,7 +151,7 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
   }
 
   // Apply layer visibility to Leaflet layers exposed by other modules
-  function applyLayerVisibility() {
+  function applyLayerVisibility(options = {}) {
     // Points
     if (window.iNatLayer) {
       const wantPoints = window.__gwFilters?.showPoints ?? false;
@@ -163,7 +163,9 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
     }
 
     // Heat overlay (initgrid exposes window.setHeatVisible below)
-    applyHeatOverlayVisibility(window.__gwFilters?.showHeat ?? true);
+    applyHeatOverlayVisibility(window.__gwFilters?.showHeat ?? true, {
+      loadHeatAssets: options.loadHeatAssets
+    });
 
     // Shimmer layer if applicable...
     if (typeof window.setShimmerVisible === "function") {
@@ -197,7 +199,7 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
     window.__gwFilters = window.__gwFilters || {};
     applySavedUIState();
     syncStateFromUI();
-    applyLayerVisibility();
+    applyLayerVisibility({ loadHeatAssets: false });
     paintLegendFromHeatFunction();
 
 [
@@ -278,7 +280,7 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
 
     $("toggleHeat")?.addEventListener("change", () => {
       syncStateFromUI();
-      applyLayerVisibility();
+      applyLayerVisibility({ loadHeatAssets: true });
     });
 
     // Any taxa change triggers refetch
@@ -428,6 +430,7 @@ function saveUIState() {
     hapticsEnabled: window.__gwState?.hapticsEnabled !== false,
     metricUnitsEnabled: window.__gwState?.metricUnitsEnabled === true,
     showGpsCircle: window.__gwState?.showGpsCircle === true,
+    dayNightMode: window.GridWildMapMode?.getMode?.() || window.__gwState?.dayNightMode || "day",
     showNicheSparkles: window.__gwState?.showNicheSparkles === true,
     fogSmoothingEnabled: byId("toggleFogSmoothing")?.checked ?? true,
     godsEyeEnabled: byId("toggleGodsEye")?.checked ?? false,
@@ -487,6 +490,8 @@ function applySavedUIState() {
   window.__gwState.hapticsEnabled = s.hapticsEnabled ?? true;
   window.__gwState.metricUnitsEnabled = s.metricUnitsEnabled === true;
   window.__gwState.showGpsCircle = s.showGpsCircle === true;
+  window.__gwState.dayNightMode = s.dayNightMode === "night" ? "night" : "day";
+  window.GridWildMapMode?.setMode?.(window.__gwState.dayNightMode, { persist: false });
   window.__gwState.showNicheSparkles = s.showNicheSparkles === true;
   if (byId("toggleGodsEye"))      byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;

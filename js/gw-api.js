@@ -1,668 +1,397 @@
-window.GridWildAPI = {
+async function gridWildApiErrorFromResponse(response) {
+  const text = await response.text();
+  let message = text;
 
-    async getBootstrap() {
-        const playerId = this.getPlayerId();
+  try {
+    message = JSON.parse(text)?.error || text;
+  } catch {
+    // Keep non-JSON response text as the error message.
+  }
 
-        const res = await fetch("/.netlify/functions/get-bootstrap", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ player_id: playerId })
-        });
+  const error = new Error(message || `Request failed: HTTP ${response.status}`);
+  error.status = response.status;
+  error.responseText = text;
+  return error;
+}
 
-        if (!res.ok) throw new Error(await res.text());
-        return await res.json();
-    },
+function gridWildApiBody(payload = {}) {
+  const body = { ...(payload || {}) };
+  const playerId = window.GridWildAPI?.getPlayerId?.() || null;
+  const sessionToken = window.GridWildAPI?.getPlayerSessionToken?.() || "";
 
-    async createParty(name = "New Party", questId = null, options = {}) {
-  const playerId = this.getPlayerId();
+  if (body.player_id === undefined && playerId) {
+    body.player_id = playerId;
+  }
 
-  const res = await fetch("/.netlify/functions/create-party", {
+  if (body.session_token === undefined && sessionToken) {
+    body.session_token = sessionToken;
+  }
+
+  return JSON.stringify(body);
+}
+
+async function postFunction(name, payload = {}, options = {}) {
+  const res = await fetch(`/.netlify/functions/${name}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    body: gridWildApiBody(payload),
+    ...(options.fetchOptions || {})
+  });
+
+  if (!res.ok) throw await gridWildApiErrorFromResponse(res);
+  return await res.json();
+}
+
+function gridWildINatHeaders() {
+  const token = window.GridWildINatAuth?.getToken?.() || "";
+  return token ? { "X-GridWild-INat-Token": token } : {};
+}
+
+window.GridWildAPI = {
+  async getBootstrap() {
+    return postFunction("get-bootstrap", { player_id: this.getPlayerId() });
+  },
+
+  async getPlayerBootstrapDetails() {
+    return postFunction("get-player-bootstrap-details", { player_id: this.getPlayerId() });
+  },
+
+  async createParty(name = "New Party", questId = null, options = {}) {
+    return postFunction("create-party", {
+      player_id: this.getPlayerId(),
       name,
       quest_id: questId,
       ...options
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-
-async joinParty(partyId) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/join-party", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async joinParty(partyId) {
+    return postFunction("join-party", {
+      player_id: this.getPlayerId(),
       party_id: partyId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-
-async leaveParty(partyId) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/leave-party", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async leaveParty(partyId) {
+    return postFunction("leave-party", {
+      player_id: this.getPlayerId(),
       party_id: partyId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-
-async getParty(partyId = null) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/get-party", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async getParty(partyId = null) {
+    return postFunction("get-party", {
+      player_id: this.getPlayerId(),
       party_id: partyId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-
-async getPartyForQuest(questId) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/get-party-for-quest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async getPartyForQuest(questId) {
+    return postFunction("get-party-for-quest", {
+      player_id: this.getPlayerId(),
       quest_id: questId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
+  async getPartyHistory(limit = 25) {
+    return postFunction("get-party-history", {
+      player_id: this.getPlayerId(),
+      limit
+    });
+  },
 
-async endParty(partyId) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/end-party", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async endParty(partyId) {
+    return postFunction("end-party", {
+      player_id: this.getPlayerId(),
       party_id: partyId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-
-async setActiveParty(partyId = null) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/set-active-party", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async setActiveParty(partyId = null) {
+    return postFunction("set-active-party", {
+      player_id: this.getPlayerId(),
       party_id: partyId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async getNearbyParties() {
-  const res = await fetch("/.netlify/functions/get-nearby-parties", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({})
-  });
+  async getNearbyParties() {
+    return postFunction("get-nearby-parties");
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async getPartyRoute(partyId) {
-  const res = await fetch("/.netlify/functions/get-party-route", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ party_id: partyId })
-  });
+  async getPartyRoute(partyId) {
+    return postFunction("get-party-route", { party_id: partyId });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async claimQuestEvidence(questId, obsId, source = "observation") {
-  const playerId = this.getPlayerId();
+  async claimQuestEvidence(questId, obsId, source = "observation") {
+    const data = await postFunction(
+      "claim-quest-evidence",
+      {
+        player_id: this.getPlayerId(),
+        quest_id: questId,
+        obs_id: obsId,
+        source
+      },
+      { headers: gridWildINatHeaders() }
+    );
 
-  const res = await fetch("/.netlify/functions/claim-quest-evidence", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
-      quest_id: questId,
-      obs_id: obsId,
-      source
-    })
-  });
+    if (Array.isArray(data?.verified_achievements)) {
+      window.__gwState = window.__gwState || {};
+      window.__gwState.playerAchievements = data.verified_achievements;
+      window.dispatchEvent(new CustomEvent("gwAchievementsChanged"));
+    }
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async claimIdentificationEvidence(claim = {}) {
-  const playerId = this.getPlayerId();
+    return data;
+  },
 
-  const res = await fetch("/.netlify/functions/claim-identification", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...claim,
-      player_id: playerId
-    })
-  });
+  async claimIdentificationEvidence(claim = {}) {
+    return postFunction(
+      "claim-identification",
+      {
+        ...claim,
+        player_id: this.getPlayerId()
+      },
+      { headers: gridWildINatHeaders() }
+    );
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async updatePlayer(patch = {}) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/update-player", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      player_id: playerId,
+  async updatePlayer(patch = {}) {
+    return postFunction("update-player", {
+      player_id: this.getPlayerId(),
       ...patch
-    })
-  });
+    });
+  },
 
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return await res.json();
-},
-
-async addWildpoints(delta = 0) {
-  window.__gwState = window.__gwState || {};
-  window.__gwState.player = window.__gwState.player || {};
-
-  const current = Number(window.__gwState.player.wildpoints || 0);
-  const next = current + Number(delta || 0);
-
-  const result = await this.updatePlayer({
-    wildpoints: next
-  });
-
-  window.__gwState.player = result.player;
-
-  return result.player;
-},
-async setActiveQuest(questId = null) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/set-active-quest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async setActiveQuest(questId = null) {
+    return postFunction("set-active-quest", {
+      player_id: this.getPlayerId(),
       quest_id: questId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async createQuest(quest) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/create-quest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  async createQuest(quest) {
+    return postFunction("create-quest", {
       ...quest,
-      player_id: playerId
-    })
-  });
+      player_id: this.getPlayerId()
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async getQuests() {
-  const playerId = this.getPlayerId();
+  async getQuests() {
+    return postFunction("get-quests", { player_id: this.getPlayerId() });
+  },
 
-  const res = await fetch("/.netlify/functions/get-quests", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId
-    })
-  });
-
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async getNearbyLocalNiches(lat, lng, options = {}) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/get-local-niches", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async getNearbyLocalNiches(lat, lng, options = {}) {
+    return postFunction("get-local-niches", {
+      player_id: this.getPlayerId(),
       lat,
       lng,
       radius_m: options.radius_m,
       limit: options.limit
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async setHomeNiche(nicheId) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/set-home-niche", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async setHomeNiche(nicheId) {
+    return postFunction("set-home-niche", {
+      player_id: this.getPlayerId(),
       niche_id: nicheId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async unsetHomeNiche() {
-  const playerId = this.getPlayerId();
+  async unsetHomeNiche() {
+    return postFunction("unset-home-niche", { player_id: this.getPlayerId() });
+  },
 
-  const res = await fetch("/.netlify/functions/unset-home-niche", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId
-    })
-  });
+  async getLocalNicheHomeUsers(nicheId) {
+    return postFunction("get-local-niche-home-users", { niche_id: nicheId });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async getLocalNicheHomeUsers(nicheId) {
-  const res = await fetch("/.netlify/functions/get-local-niche-home-users", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ niche_id: nicheId })
-  });
-
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async upsertLocalNiches(niches = []) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/upsert-local-niches", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async upsertLocalNiches(niches = []) {
+    return postFunction("upsert-local-niches", {
+      player_id: this.getPlayerId(),
       niches
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async getLocalNicheComments(nicheId) {
-  const res = await fetch("/.netlify/functions/get-local-niche-comments", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ niche_id: nicheId })
-  });
+  async getLocalNicheComments(nicheId) {
+    return postFunction("get-local-niche-comments", { niche_id: nicheId });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async addLocalNicheComment(nicheId, commentText, commentType = "general_comment") {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/add-local-niche-comment", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async addLocalNicheComment(nicheId, commentText, commentType = "general_comment") {
+    return postFunction("add-local-niche-comment", {
+      player_id: this.getPlayerId(),
       niche_id: nicheId,
       comment_text: commentText,
       comment_type: commentType
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async createSampleNicheQuest(nicheId) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/create-sample-niche-quest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async createSampleNicheQuest(nicheId) {
+    return postFunction("create-sample-niche-quest", {
+      player_id: this.getPlayerId(),
       niche_id: nicheId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async addPartyRoutePoint(partyId, lat, lng, accuracyMeters = null) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/add-party-route-point", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async addPartyRoutePoint(partyId, lat, lng, accuracyMeters = null) {
+    return postFunction("add-party-route-point", {
+      player_id: this.getPlayerId(),
       party_id: partyId,
       lat,
       lng,
       accuracy_meters: accuracyMeters
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async upsertPlayerPresence(patch = {}, options = {}) {
-  const playerId = this.getPlayerId();
-  const sessionToken = this.getSessionToken();
+  async upsertPlayerPresence(patch = {}, options = {}) {
+    return postFunction(
+      "upsert-player-presence",
+      {
+        player_id: this.getPlayerId(),
+        session_token: this.getPlayerSessionToken(),
+        ...patch
+      },
+      { fetchOptions: options.keepalive ? { keepalive: true } : {} }
+    );
+  },
 
-  const fetchOptions = {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
-      session_token: sessionToken,
-      ...patch
-    })
-  };
-
-  if (options.keepalive) {
-    fetchOptions.keepalive = true;
-  }
-
-  const res = await fetch("/.netlify/functions/upsert-player-presence", fetchOptions);
-
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async getNearbyPlayerPresence(lat, lng, options = {}) {
-  const playerId = this.getPlayerId();
-  const sessionToken = this.getSessionToken();
-
-  const res = await fetch("/.netlify/functions/get-nearby-player-presence", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
-      session_token: sessionToken,
+  async getNearbyPlayerPresence(lat, lng, options = {}) {
+    return postFunction("get-nearby-player-presence", {
+      player_id: this.getPlayerId(),
+      session_token: this.getPlayerSessionToken(),
       lat,
       lng,
       radius_m: options.radius_m
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
+  async getPlayerInfo(targetPlayerId) {
+    return postFunction("get-player-info", {
+      player_id: this.getPlayerId(),
+      session_token: this.getPlayerSessionToken(),
+      target_player_id: targetPlayerId
+    });
+  },
 
-async updatePartyEvidenceStatus(partyId, draftId, status) {
-  const playerId = this.getPlayerId();
+  async getChatMessages(roomType, roomId, options = {}) {
+    return postFunction("get-chat-messages", {
+      player_id: this.getPlayerId(),
+      session_token: this.getPlayerSessionToken(),
+      room_type: roomType,
+      room_id: roomId,
+      limit: options.limit
+    });
+  },
 
-  const res = await fetch("/.netlify/functions/update-party-evidence", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async sendChatMessage(roomType, roomId, message = {}) {
+    return postFunction("send-chat-message", {
+      player_id: this.getPlayerId(),
+      session_token: this.getPlayerSessionToken(),
+      room_type: roomType,
+      room_id: roomId,
+      message_type: message.message_type || "text",
+      body: message.body || "",
+      payload: message.payload || {}
+    });
+  },
+
+  async updatePartyEvidenceStatus(partyId, draftId, status) {
+    return postFunction("update-party-evidence", {
+      player_id: this.getPlayerId(),
       party_id: partyId,
       draft_id: draftId,
       status
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-
-async addPartyEvidence(evidence) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/add-party-evidence", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  async addPartyEvidence(evidence) {
+    return postFunction("add-party-evidence", {
       ...evidence,
-      player_id: playerId
-    })
-  });
+      player_id: this.getPlayerId()
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-
-    async acceptQuest(questId) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/accept-quest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async acceptQuest(questId) {
+    return postFunction("accept-quest", {
+      player_id: this.getPlayerId(),
       quest_id: questId
-        })
     });
+  },
 
-    if (!res.ok) throw new Error(await res.text());
-    return await res.json();
-    },
-
-    async abandonQuest(questId) {
-    const playerId = this.getPlayerId();
-
-    const res = await fetch("/.netlify/functions/abandon-quest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-        player_id: playerId,
-        quest_id: questId
-        })
+  async abandonQuest(questId) {
+    return postFunction("abandon-quest", {
+      player_id: this.getPlayerId(),
+      quest_id: questId
     });
+  },
 
-    if (!res.ok) throw new Error(await res.text());
-    return await res.json();
-    },
-
-    async archiveQuest(questId) {
-    const playerId = this.getPlayerId();
-
-    const res = await fetch("/.netlify/functions/archive-quest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-        player_id: playerId,
-        quest_id: questId
-        })
+  async archiveQuest(questId) {
+    return postFunction("archive-quest", {
+      player_id: this.getPlayerId(),
+      quest_id: questId
     });
+  },
 
-    if (!res.ok) throw new Error(await res.text());
-    return await res.json();
-    },
-
-    async completeQuest(questId) {
-    const playerId = this.getPlayerId();
-
-    const res = await fetch("/.netlify/functions/complete-quest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-        player_id: playerId,
-        quest_id: questId
-        })
+  async completeQuest(questId) {
+    return postFunction("complete-quest", {
+      player_id: this.getPlayerId(),
+      quest_id: questId
     });
+  },
 
-    if (!res.ok) throw new Error(await res.text());
-    return await res.json();
-    },
-    async addPlayerInventoryItem(itemId) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/add-player-inventory-item", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async purchaseStoreItem(itemId) {
+    return postFunction("purchase-store-item", {
+      player_id: this.getPlayerId(),
       item_id: itemId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async getSurveys() {
-  const playerId = this.getPlayerId();
+  async getSurveys() {
+    return postFunction("get-surveys", { player_id: this.getPlayerId() });
+  },
 
-  const res = await fetch("/.netlify/functions/get-surveys", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId
-    })
-  });
-
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-
-async getSurveyById(surveyId) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/get-survey-by-id", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async getSurveyById(surveyId) {
+    return postFunction("get-survey-by-id", {
+      player_id: this.getPlayerId(),
       survey_id: surveyId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-
-async saveSurvey(survey) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/save-survey", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async saveSurvey(survey) {
+    return postFunction("save-survey", {
+      player_id: this.getPlayerId(),
       survey
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async deleteSurvey(surveyId) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/delete-survey", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async deleteSurvey(surveyId) {
+    return postFunction("delete-survey", {
+      player_id: this.getPlayerId(),
       survey_id: surveyId
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-
-async setPlayerSurveyState(surveyId, patch = {}) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/set-player-survey-state", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async setPlayerSurveyState(surveyId, patch = {}) {
+    return postFunction("set-player-survey-state", {
+      player_id: this.getPlayerId(),
       survey_id: surveyId,
       ...patch
-    })
-  });
+    });
+  },
 
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async upsertPlayerAchievements(achievements = []) {
-  const playerId = this.getPlayerId();
+  async upsertPlayerAchievements() {
+    return postFunction("upsert-player-achievements", {
+      player_id: this.getPlayerId()
+    });
+  },
 
-  const res = await fetch("/.netlify/functions/upsert-player-achievements", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
-      achievements
-    })
-  });
-
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-async setPlayerEquipment(slot, itemId = null) {
-  const playerId = this.getPlayerId();
-
-  const res = await fetch("/.netlify/functions/set-player-equipment", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      player_id: playerId,
+  async setPlayerEquipment(slot, itemId = null) {
+    return postFunction("set-player-equipment", {
+      player_id: this.getPlayerId(),
       slot,
       item_id: itemId
-    })
-  });
-
-  if (!res.ok) throw new Error(await res.text());
-  return await res.json();
-},
-  async createPlayer(displayName = "New Explorer") {
-    const res = await fetch("/.netlify/functions/create-player", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ display_name: displayName })
     });
-
-    if (!res.ok) throw new Error(await res.text());
-    return await res.json();
   },
 
   getPlayerId() {
@@ -679,10 +408,37 @@ async setPlayerEquipment(slot, itemId = null) {
     }
   },
 
+  getPlayerSessionToken() {
+    const accountToken = this.getSessionToken();
+    if (accountToken) return accountToken;
+
+    try {
+      const raw = localStorage.getItem("gwPlayerSession");
+      const session = raw ? JSON.parse(raw) : null;
+      return session?.token || "";
+    } catch {
+      return "";
+    }
+  },
+
+  setPlayerSession(session) {
+    if (!session?.token) {
+      localStorage.removeItem("gwPlayerSession");
+      return;
+    }
+
+    localStorage.setItem("gwPlayerSession", JSON.stringify({
+      token: session.token,
+      type: session.type || "guest",
+      expiresAt: session.expires_at || session.expiresAt || ""
+    }));
+  },
+
+  clearPlayerSession() {
+    localStorage.removeItem("gwPlayerSession");
+  },
+
   setPlayerId(id) {
     localStorage.setItem("gwPlayerId", id);
   }
-
-  
 };
-

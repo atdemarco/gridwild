@@ -48,23 +48,11 @@
     if (!id) return true;
 
     const dbRows = window.__gwState?.playerAchievements;
-
-    if (Array.isArray(dbRows)) {
-      return dbRows.some(row =>
-        row.achievement_id === id &&
-        row.unlocked === true
-      );
-    }
-
-    const storeRaw = localStorage.getItem("gw_user_achievements_v1");
-    if (!storeRaw) return false;
-
-    try {
-      const store = JSON.parse(storeRaw);
-      return !!store?.[id]?.unlocked;
-    } catch {
-      return false;
-    }
+    if (!Array.isArray(dbRows)) return false;
+    return dbRows.some(row =>
+      row.achievement_id === id &&
+      row.unlocked === true
+    );
   }
 
   function isLocked(item) {
@@ -543,7 +531,7 @@
     const owned = owns(item.id);
 
     if (owned) {
-      const result = window.GridWildEconomy?.equipItem?.(item.id);
+      const result = await window.GridWildEconomy?.equipItem?.(item.id);
 
       if (!result?.ok) {
         alert(result?.reason || "Could not equip item.");

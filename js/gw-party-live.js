@@ -7,9 +7,12 @@
 const PARTY_POLL_INTERVAL_MS = 15000;
 const PARTY_COVER_POLL_INTERVAL_MS = 15000;
 const NEARBY_PARTIES_REFRESH_MS = 30000;
+const PARTY_HISTORY_REFRESH_MS = 60000;
 
 let loadPartyInFlight = null;
+let loadPartyInFlightKey = null;
 let lastNearbyPartiesLoadedAt = 0;
+let lastPartyHistoryLoadedAt = 0;
 
 
     function getActivePartyId() {
@@ -32,6 +35,8 @@ let lastNearbyPartiesLoadedAt = 0;
             window.__gwState.partyEvents = [];
             window.__gwState.partyEvidence = [];
             window.__gwState.partyProgress = 0;
+            window.__gwState.partyRoute = [];
+            window.__gwState.partyRoutePartyId = null;
         }
 
         window.GridWildAPI?.setActiveParty?.(id || null).catch(err => {
@@ -44,11 +49,21 @@ let lastNearbyPartiesLoadedAt = 0;
         }
 
 async function loadParty(options = {}) {
-  if (loadPartyInFlight) return loadPartyInFlight;
+  const loadKey = `${getActivePartyId() || ""}:${options.forceNearby ? "nearby" : "normal"}`;
 
-  loadPartyInFlight = loadPartyNow(options).finally(() => {
-    loadPartyInFlight = null;
+  if (loadPartyInFlight && loadPartyInFlightKey === loadKey) {
+    return loadPartyInFlight;
+  }
+
+  const promise = loadPartyNow(options).finally(() => {
+    if (loadPartyInFlight === promise) {
+      loadPartyInFlight = null;
+      loadPartyInFlightKey = null;
+    }
   });
+
+  loadPartyInFlight = promise;
+  loadPartyInFlightKey = loadKey;
 
   return loadPartyInFlight;
 }
@@ -62,34 +77,56 @@ async function loadPartyNow(options = {}) {
       options.forceNearby ||
       !lastNearbyPartiesLoadedAt ||
       now - lastNearbyPartiesLoadedAt >= NEARBY_PARTIES_REFRESH_MS;
+    let partyEndedDuringLoad = false;
     let party = data?.party || null;
 
+    const currentActiveId = getActivePartyId();
+    if (activeId && String(currentActiveId || "") !== String(activeId)) {
+      return data;
+    }
+
+    if (!activeId && currentActiveId) {
+      return data;
+    }
+
     if (activeId && (!party || party.status === "ended")) {
+      partyEndedDuringLoad = party?.status === "ended";
       setActivePartyId(null);
       party = null;
     }
 
     window.__gwState = window.__gwState || {};
+    const partyId = party?.id || null;
+    const rowBelongsToParty = row =>
+      partyId && String(row?.party_id || row?.partyId || "") === String(partyId);
+    const scopedMembers = partyId ? (data.members || []).filter(rowBelongsToParty) : [];
+    const scopedEvents = partyId ? (data.events || []).filter(rowBelongsToParty) : [];
+    const scopedEvidence = partyId ? (data.evidence || []).filter(rowBelongsToParty) : [];
+
     window.__gwState.party = party;
-    window.__gwState.partyMembers = data.members || [];
-    window.__gwState.partyEvents = data.events || [];
-    window.__gwState.partyEvidence = data.evidence || [];
-    window.__gwState.partyProgress = data.progress || 0;
+    window.__gwState.partyMembers = scopedMembers;
+    window.__gwState.partyEvents = scopedEvents;
+    window.__gwState.partyEvidence = scopedEvidence;
+    window.__gwState.partyProgress = scopedEvidence
+      .filter(row => row?.status !== "excluded")
+      .length;
 
 
     window.__gwState.partyRoute = [];
+    window.__gwState.partyRoutePartyId = partyId;
 
-    if (party?.id) {
+    if (partyId) {
       try {
-        const routeData = await window.GridWildAPI.getPartyRoute(party.id);
-        window.__gwState.partyRoute = routeData.route || [];
+        const routeData = await window.GridWildAPI.getPartyRoute(partyId);
+        window.__gwState.partyRoute = (routeData.route || [])
+          .filter(row => !row?.party_id || String(row.party_id) === String(partyId));
       } catch (err) {
         console.warn("Could not load party route:", err);
         window.__gwState.partyRoute = [];
       }
     }
 
-    if (party?.id && party.id !== getActivePartyId()) {
+    if (party?.id && !getActivePartyId()) {
       setActivePartyId(party.id);
     }
 
@@ -104,6 +141,23 @@ async function loadPartyNow(options = {}) {
         lastNearbyPartiesLoadedAt = Date.now();
       }
     }
+
+    const shouldRefreshHistory =
+      options.forceHistory ||
+      partyEndedDuringLoad ||
+      !lastPartyHistoryLoadedAt ||
+      now - lastPartyHistoryLoadedAt >= PARTY_HISTORY_REFRESH_MS;
+
+    if (shouldRefreshHistory) try {
+      const history = await window.GridWildAPI?.getPartyHistory?.(25);
+      window.__gwState.partyHistory = history?.parties || [];
+      lastPartyHistoryLoadedAt = Date.now();
+    } catch (err) {
+      console.warn("Could not load party history:", err);
+      window.__gwState.partyHistory = window.__gwState.partyHistory || [];
+    }
+
+    window.dispatchEvent(new CustomEvent("gwPartiesChanged"));
 
     return data;
   } catch (err) {

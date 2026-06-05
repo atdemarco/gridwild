@@ -6,6 +6,7 @@
   const ACCOUNT_KEY = "gwAccount";
   const SESSION_KEY = "gwAccountSession";
   const PLAYER_KEY = "gwPlayerId";
+  const PLAYER_SESSION_KEY = "gwPlayerSession";
 
   function esc(s) {
     return String(s ?? "")
@@ -65,7 +66,9 @@
 
     if (player?.id) {
       localStorage.setItem(PLAYER_KEY, player.id);
+      localStorage.removeItem(PLAYER_SESSION_KEY);
       window.GridWildAPI?.setPlayerId?.(player.id);
+      window.GridWildAPI?.clearPlayerSession?.();
       window.__gwState = window.__gwState || {};
       window.__gwState.player = player;
     }
@@ -85,6 +88,7 @@
     localStorage.removeItem(ACCOUNT_KEY);
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(PLAYER_KEY);
+    localStorage.removeItem(PLAYER_SESSION_KEY);
     window.dispatchEvent(new CustomEvent("gwAccountChanged", {
       detail: { account: null, player: window.__gwState?.player || null }
     }));
@@ -128,7 +132,8 @@
       username,
       password,
       display_name: displayName,
-      existing_player_id: window.GridWildAPI?.getPlayerId?.() || localStorage.getItem(PLAYER_KEY) || null
+      existing_player_id: window.GridWildAPI?.getPlayerId?.() || localStorage.getItem(PLAYER_KEY) || null,
+      existing_player_session_token: window.GridWildAPI?.getPlayerSessionToken?.() || null
     });
 
     setSignedIn(data);

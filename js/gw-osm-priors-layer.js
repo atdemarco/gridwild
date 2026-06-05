@@ -29,6 +29,7 @@
   let canvas = null;
   let ctx = null;
   let topLeft = L.point(0, 0);
+  let canvasLayout = null;
   let raf = null;
   let listenersBound = false;
   let projectedVersion = -1;
@@ -129,23 +130,13 @@
 
   function resizeCanvas() {
     ensureCanvas();
-
-    topLeft = map.containerPointToLayerPoint([0, 0]);
-    L.DomUtil.setPosition(canvas, topLeft);
-
-    const size = map.getSize();
-    const dpr = window.GridWildCanvasPerf?.getDpr?.("osm-priors") || window.devicePixelRatio || 1;
-    const wantW = Math.round(size.x * dpr);
-    const wantH = Math.round(size.y * dpr);
-
-    if (canvas.width !== wantW || canvas.height !== wantH) {
-      canvas.width = wantW;
-      canvas.height = wantH;
-      canvas.style.width = `${size.x}px`;
-      canvas.style.height = `${size.y}px`;
-    }
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    canvasLayout = window.GridWildCanvasPerf.layoutPaddedCanvas(
+      canvas,
+      ctx,
+      "osm-priors",
+      { bufferPx: VIEW_PAD_PX }
+    );
+    topLeft = canvasLayout.topLeft;
   }
 
   function layerPoint(latlng) {
@@ -641,9 +632,8 @@
   }
 
   function clearCanvas() {
-    if (!ctx) return;
-    const size = map.getSize();
-    ctx.clearRect(0, 0, size.x, size.y);
+    if (!ctx || !canvasLayout) return;
+    ctx.clearRect(0, 0, canvasLayout.width, canvasLayout.height);
   }
 
   function ensureOsmLayerEnabled() {
@@ -775,7 +765,14 @@
     ctx.globalAlpha = 1;
   }
 
-  function scheduleRender() {
+  function scheduleRender(evt) {
+    if (
+      evt?.type === "move" &&
+      window.GridWildCanvasPerf?.canvasCoversViewport?.(canvasLayout)
+    ) {
+      return;
+    }
+
     if (raf) return;
     raf = requestAnimationFrame(render);
   }

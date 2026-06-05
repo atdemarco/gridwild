@@ -6,6 +6,10 @@
 
 (function () {
   const STORAGE_KEY = "gw_draft_observations_v1";
+  const PRIMARY_CAPTURE_MAX_SIDE = 1000;
+  const PRIMARY_CAPTURE_QUALITY = 0.62;
+  const FALLBACK_CAPTURE_MAX_SIDE = 720;
+  const FALLBACK_CAPTURE_QUALITY = 0.5;
   let activeDraftId = null;
 
   function nowISO() {
@@ -22,8 +26,62 @@
     }
   }
 
+  function isQuotaExceededError(err) {
+    if (err?.isGridWildDraftQuotaError) return true;
+
+    return err?.name === "QuotaExceededError" ||
+      err?.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+      err?.name === "GridWildDraftQuotaError" ||
+      err?.code === 22 ||
+      err?.code === 1014 ||
+      /quota|exceeded/i.test(String(err?.message || ""));
+  }
+
+  function compactDraftsForStorage(drafts) {
+    return (drafts || [])
+      .filter(draft => {
+        if (!draft?.id) return false;
+        if (draft.id === activeDraftId) return true;
+        if ((draft.photos || []).length > 0) return true;
+        if (String(draft.notes || "").trim()) return true;
+        return draft.handoff?.status && draft.handoff.status !== "not_sent";
+      })
+      .map(draft => {
+        if (draft.status !== "uploaded") return draft;
+
+        return {
+          ...draft,
+          photos: [],
+          primaryPhotoId: null,
+          storageCompactedAt: nowISO()
+        };
+      });
+  }
+
   function saveDrafts(drafts) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts || []));
+    const rows = drafts || [];
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+    } catch (err) {
+      if (!isQuotaExceededError(err)) throw err;
+
+      const compacted = compactDraftsForStorage(rows);
+
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(compacted));
+      } catch (retryErr) {
+        if (!isQuotaExceededError(retryErr)) throw retryErr;
+
+        const storageErr = new Error(
+          "Draft photo storage quota is full. Delete or upload older draft observations, then try again."
+        );
+        storageErr.name = "GridWildDraftQuotaError";
+        storageErr.isGridWildDraftQuotaError = true;
+        throw storageErr;
+      }
+    }
+
     window.dispatchEvent(new CustomEvent("gwDraftObservationsChanged"));
   }
 
@@ -98,7 +156,7 @@
     });
   }
 
-    async function fileToCompressedDataURL(file, maxSide = 1400, quality = 0.72) {
+  async function fileToCompressedDataURL(file, maxSide = PRIMARY_CAPTURE_MAX_SIDE, quality = PRIMARY_CAPTURE_QUALITY) {
     const img = new Image();
     img.src = await fileToDataURL(file);
     await img.decode();
@@ -112,7 +170,7 @@
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
     return canvas.toDataURL("image/jpeg", quality);
-    }
+  }
 
   async function scorePhotoPlaceholder(dataUrl) {
     // Placeholder. Later: blur, exposure, subject size, classifier.
@@ -123,42 +181,86 @@
     };
   }
 
+  async function makePhotoRecord(file, draft, options = {}) {
+    const dataUrl = await fileToCompressedDataURL(
+      file,
+      options.maxSide || PRIMARY_CAPTURE_MAX_SIDE,
+      options.quality || PRIMARY_CAPTURE_QUALITY
+    );
+    const quality = await scorePhotoPlaceholder(dataUrl);
+
+    return {
+      id: `photo_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      kind: "original",
+      sourcePhotoId: null,
+      name: file.name || "capture.jpg",
+      mimeType: file.type || "image/jpeg",
+      createdAt: nowISO(),
+      dataUrl,
+      role: draft.photos.length === 0 ? "primary" : "detail",
+      quality,
+      transforms: null
+    };
+  }
+
+  function addPhotoRecordToDraft(draft, photo) {
+    draft.photos.push(photo);
+    if (!draft.primaryPhotoId) draft.primaryPhotoId = photo.id;
+  }
+
+  function removePhotoRecordFromDraft(draft, photoId) {
+    draft.photos = draft.photos.filter(photo => photo.id !== photoId);
+    if (draft.primaryPhotoId === photoId) {
+      draft.primaryPhotoId = draft.photos[0]?.id || null;
+    }
+  }
+
   async function addFilesToDraft(draftId, fileList) {
-    const draft = getDraft(draftId);
+    let draft = getDraft(draftId);
     if (!draft) throw new Error("No active draft observation.");
 
     const files = Array.from(fileList || []);
     for (const file of files) {
-      const dataUrl = await fileToCompressedDataURL(file, 1400, 0.72);
-      const quality = await scorePhotoPlaceholder(dataUrl);
+      let photo = await makePhotoRecord(file, draft);
+      addPhotoRecordToDraft(draft, photo);
 
-      const photo = {
-        id: `photo_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        kind: "original",
-        sourcePhotoId: null,
-        name: file.name || "capture.jpg",
-        mimeType: file.type || "image/jpeg",
-        createdAt: nowISO(),
-        dataUrl,
-        role: draft.photos.length === 0 ? "primary" : "detail",
-        quality,
-        transforms: null
-      };
+      try {
+        draft = upsertDraft(draft);
+        continue;
+      } catch (err) {
+        if (!isQuotaExceededError(err)) throw err;
+      }
 
-      draft.photos.push(photo);
-      if (!draft.primaryPhotoId) draft.primaryPhotoId = photo.id;
+      removePhotoRecordFromDraft(draft, photo.id);
+
+      photo = await makePhotoRecord(file, draft, {
+        maxSide: FALLBACK_CAPTURE_MAX_SIDE,
+        quality: FALLBACK_CAPTURE_QUALITY
+      });
+      addPhotoRecordToDraft(draft, photo);
+
+      draft = upsertDraft(draft);
     }
 
-    return upsertDraft(draft);
+    return draft;
   }
 
   function startCaptureForNewObservation() {
     const draft = makeDraft();
     activeDraftId = draft.id;
-    upsertDraft(draft);
+
+    try {
+      upsertDraft(draft);
+    } catch (err) {
+      activeDraftId = null;
+      console.warn("Could not start draft observation:", err);
+      alert(err?.message || "Could not start a draft observation.");
+      return;
+    }
 
     const input = document.getElementById("cameraInput");
     if (!input) {
+      activeDraftId = null;
       alert("Camera input is missing.");
       return;
     }
@@ -175,7 +277,13 @@
     if (!activeDraftId) {
       const draft = makeDraft();
       activeDraftId = draft.id;
-      upsertDraft(draft);
+
+      try {
+        upsertDraft(draft);
+      } catch (err) {
+        activeDraftId = null;
+        throw err;
+      }
     }
 
     return addFilesToDraft(activeDraftId, files);

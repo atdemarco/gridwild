@@ -68,30 +68,15 @@
     return String(obs?.id || "");
   }
 
-  function normalizeDraftAsObservation(draft) {
-  return {
-    id: draft.id,
-    source: "draft",
-    taxon: draft?.suggestedId?.taxonName || "Draft observation",
-    common_name: "",
-    scientific_name: draft?.suggestedId?.taxonName || "",
-    iconic_taxon_name: draft?.suggestedId?.iconicTaxon || "Unknown",
-    observed_on: draft?.observedAt || draft?.createdAt || draft?.updatedAt,
-    accuracy: draft?.location?.accuracyMeters,
-    lat: draft?.location?.lat,
-    lng: draft?.location?.lng,
-    _draft: draft
-  };
-}
+  const CLAIMED_STATUSES = new Set(["claimed", "submitted", "verified", "counted"]);
+
+  function isClaimedStatus(status) {
+    return CLAIMED_STATUSES.has(String(status || "").toLowerCase());
+  }
 
   function getAllEvidenceObservations() {
-  const recent = window.GridWildRecentINat?.getRecentObservations?.() || [];
-
-  const drafts = (window.GridWildDraftObservations?.loadDrafts?.() || [])
-    .filter(d => d.status !== "sent" && d.status !== "deleted")
-    .map(normalizeDraftAsObservation);
-
-  return [...recent, ...drafts];
+  // Reward evidence must exist on iNaturalist before the server can verify it.
+  return window.GridWildRecentINat?.getRecentObservations?.() || [];
 }
 
   function syncQuestStateFromData(data) {
@@ -129,7 +114,7 @@
     const already = evidence.some(e =>
       String(e.quest_id) === String(dbQuestId) &&
       String(e.obs_id) === id &&
-      e.status === "claimed"
+      isClaimedStatus(e.status)
     );
 
     if (!already) {
@@ -291,7 +276,7 @@ function claimedQuestForObservationChannel(obs, channel) {
   const quests = window.GridWildQuests?.getVisibleQuests?.() || [];
 
   for (const e of evidence) {
-    if (String(e.obs_id) !== id || e.status !== "claimed") continue;
+    if (String(e.obs_id) !== id || !isClaimedStatus(e.status)) continue;
 
     const q = quests.find(x =>
       String(x.dbId || x.id) === String(e.quest_id)
@@ -316,7 +301,7 @@ function claimedQuestForObservationChannel(obs, channel) {
     if (dbEvidence.some(e =>
       String(e.quest_id) === String(dbQuestId) &&
       String(e.obs_id) === String(id) &&
-      e.status === "claimed"
+      isClaimedStatus(e.status)
     )) {
       return true;
     }
@@ -352,6 +337,9 @@ function claimedQuestForObservationChannel(obs, channel) {
     }).catch(err => {
       removeOptimisticEvidence(quest, obs);
       console.warn("Could not sync quest evidence claim:", err);
+      if (options.notifyError !== false) {
+        alert(`Could not verify quest evidence: ${err?.message || "Unknown error"}`);
+      }
     });
 
     return {
@@ -372,7 +360,7 @@ function claimedQuestForObservationChannel(obs, channel) {
     let claimed = 0;
 
     for (const obs of candidates) {
-      const result = claimObservationForQuest(obs, quest);
+      const result = claimObservationForQuest(obs, quest, { notifyError: false });
       if (result.ok) claimed += 1;
     }
 
@@ -400,7 +388,7 @@ function claimedQuestForObservationChannel(obs, channel) {
     for (const obs of candidates) {
       if (isObservationClaimedForQuest(obs, quest)) continue;
 
-      const result = claimObservationForQuest(obs, quest);
+      const result = claimObservationForQuest(obs, quest, { notifyError: false });
       if (result.ok) claimed += 1;
     }
 
@@ -416,7 +404,7 @@ function claimedQuestForObservationChannel(obs, channel) {
     return evidence
       .filter(e =>
         String(e.quest_id) === String(dbQuestId) &&
-        e.status === "claimed"
+        isClaimedStatus(e.status)
       )
       .map(e => byId.get(String(e.obs_id)))
       .filter(Boolean);
@@ -647,7 +635,7 @@ function claimedQuestForObservationChannel(obs, channel) {
     const evidence = window.__gwState?.questEvidence || [];
 
     const claimed = evidence.some(e =>
-      String(e.obs_id) === id && e.status === "claimed"
+      String(e.obs_id) === id && isClaimedStatus(e.status)
     );
     if (claimed) {
       return `<span class="gw-evidence-badge claimed" title="Already linked to a quest">🔗</span>`;

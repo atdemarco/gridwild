@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { applyPartyTimingToRows } = require("./_party-duration");
 
 const supabase = createClient(
@@ -8,6 +9,7 @@ const supabase = createClient(
 
 exports.handler = async function(event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const { player_id, quest_id } = body;
 
@@ -40,11 +42,27 @@ exports.handler = async function(event) {
     if (partiesError) throw partiesError;
 
     const timedParties = await applyPartyTimingToRows(supabase, parties || [], { playerId: player_id });
+    const { data: myMemberships, error: myMembershipError } = await supabase
+      .from("party_members")
+      .select("party_id")
+      .eq("player_id", player_id)
+      .in("party_id", partyIds);
 
-    const party = timedParties.find(p =>
-      p.status !== "ended" &&
-      (p.visibility === "public" || p.created_by === player_id)
-    ) || null;
+    if (myMembershipError) throw myMembershipError;
+
+    const memberPartyIds = new Set((myMemberships || []).map(row => row.party_id));
+    const partyById = new Map((timedParties || []).map(p => [p.id, p]));
+
+    const party = partyIds
+      .map(id => partyById.get(id))
+      .find(p =>
+        p &&
+        (
+          p.visibility === "public" ||
+          p.created_by === player_id ||
+          memberPartyIds.has(p.id)
+        )
+      ) || null;
 
     if (!party) {
       return {
@@ -55,7 +73,7 @@ exports.handler = async function(event) {
 
     const { data: members, error: membersError } = await supabase
       .from("party_members")
-      .select("*, players(id, display_name, wildpoints)")
+      .select("*, players(id, display_name, archetype, icon, color, wildpoints)")
       .eq("party_id", party.id)
       .order("joined_at", { ascending: true });
 
@@ -92,7 +110,7 @@ exports.handler = async function(event) {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

@@ -1,5 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { applyPartyTiming } = require("./_party-duration");
+const { requirePartyAccess } = require("./_party-access");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -8,6 +10,7 @@ const supabase = createClient(
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const { player_id, party_id, lat, lng, accuracy_meters } = body;
 
@@ -29,9 +32,11 @@ exports.handler = async function (event) {
     if (partyError) throw partyError;
 
     const timing = await applyPartyTiming(supabase, party, { playerId: player_id });
-    if (timing.party?.status === "ended") {
-      throw new Error("This party has ended.");
-    }
+    await requirePartyAccess(supabase, {
+      party: timing.party,
+      playerId: player_id,
+      write: true
+    });
 
     const { data, error } = await supabase
       .from("party_route_points")
@@ -55,7 +60,7 @@ exports.handler = async function (event) {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

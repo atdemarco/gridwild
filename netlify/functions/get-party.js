@@ -1,5 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { applyPartyTiming } = require("./_party-duration");
+const { requirePartyAccess } = require("./_party-access");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -8,14 +10,17 @@ const supabase = createClient(
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const { player_id, party_id } = body;
+    const requestedPartyId = party_id || null;
+    let stateActivePartyId = null;
 
     if (!player_id && !party_id) {
       throw new Error("player_id or party_id is required");
     }
 
-let activePartyId = party_id || null;
+let activePartyId = requestedPartyId;
 
 if (!activePartyId) {
   const { data: state, error: stateError } = await supabase
@@ -26,7 +31,8 @@ if (!activePartyId) {
 
   if (stateError) throw stateError;
 
-  activePartyId = state?.active_party_id || null;
+  stateActivePartyId = state?.active_party_id || null;
+  activePartyId = stateActivePartyId;
 }
 
     if (!activePartyId) {
@@ -46,8 +52,13 @@ if (!activePartyId) {
 
     const timing = await applyPartyTiming(supabase, party, { playerId: player_id });
     party = timing.party;
+    await requirePartyAccess(supabase, {
+      party,
+      playerId: player_id,
+      allowPublicRead: true
+    });
 
-    if (party?.status === "ended" && player_id && party.id === activePartyId) {
+    if (!requestedPartyId && party?.status === "ended" && player_id && party.id === stateActivePartyId) {
       await supabase
         .from("player_state")
         .upsert({
@@ -61,7 +72,7 @@ if (!activePartyId) {
 
     const { data: members, error: membersError } = await supabase
       .from("party_members")
-      .select("*, players(id, display_name, wildpoints)")
+      .select("*, players(id, display_name, archetype, icon, color, wildpoints)")
       .eq("party_id", activePartyId)
       .order("joined_at", { ascending: true });
 
@@ -98,7 +109,7 @@ if (!activePartyId) {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

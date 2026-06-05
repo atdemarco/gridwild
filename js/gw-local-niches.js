@@ -11187,7 +11187,7 @@
     unsetHomeNiche
   };
 
-  document.addEventListener("DOMContentLoaded", () => {
+  function initLocalNiches() {
     injectStyles();
     saveLayerVisible();
     mergeBookmarkedNichesIntoState();
@@ -11198,7 +11198,13 @@
       }
       drawNicheLayer();
     }, 0);
-  });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initLocalNiches, { once: true });
+  } else {
+    initLocalNiches();
+  }
 
   window.addEventListener("gwBootstrapReady", () => {
     reloadBookmarkedNichesFromStorage();

@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { buildNicheDisplayTitle, clampNumber } = require("./_local-niche-utils");
 
 const supabase = createClient(
@@ -74,6 +75,7 @@ function cleanNiche(raw, playerId) {
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const playerId = body.player_id || null;
     const incoming = Array.isArray(body.niches) ? body.niches : [];
@@ -114,7 +116,7 @@ exports.handler = async function (event) {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

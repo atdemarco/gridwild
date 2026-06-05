@@ -97,7 +97,12 @@ function normalizeDbPartyForLegacy(p) {
     memberCount: Number(p.member_count || p.memberCount || (isActiveParty ? activeMembers.length : 1) || 1),
     distanceLabel: "online",
     startsAt: p.starts_at || p.created_at || new Date().toISOString(),
+    endedAt: p.ended_at || p.endedAt || null,
+    completedAt: p.ended_at || p.completedAt || null,
     durationMinutes: Number(p.duration_minutes || 60),
+    routeDistanceMeters: Number(p.route_distance_meters || p.routeDistanceMeters || 0),
+    linkedQuestId: p.linked_quest_id || p.linkedQuestId || null,
+    linkedQuestTitle: p.linked_quest_title || p.linkedQuestTitle || "",
     locationMode,
     locationUserId: p.location_user_id || locationConfig.locationUserId || null,
     location: locationConfig.location || null,
@@ -117,6 +122,14 @@ function getAllParties() {
     .map(normalizeDbPartyForLegacy)
     .filter(Boolean);
 
+  const historyParties = (window.__gwState?.partyHistory || [])
+    .map(normalizeDbPartyForLegacy)
+    .filter(Boolean);
+
+  const snapshotParties = Object.values(window.__gwState?.partySnapshotsById || {})
+    .map(snapshot => normalizeDbPartyForLegacy(snapshot?.party))
+    .filter(Boolean);
+
   const seen = new Set();
   const rows = [];
 
@@ -130,12 +143,60 @@ function getAllParties() {
   addParty(activeParty);
 
   nearbyParties.forEach(addParty);
+  historyParties.forEach(addParty);
+  snapshotParties.forEach(addParty);
 
   return rows;
 }
 
   function getParty(id) {
     return getAllParties().find(p => p.id === id) || null;
+  }
+
+  function rememberPartySnapshot(data = {}) {
+    const party = data.party || null;
+    if (!party?.id) return null;
+
+    window.__gwState = window.__gwState || {};
+    window.__gwState.partySnapshotsById = window.__gwState.partySnapshotsById || {};
+    window.__gwState.partySnapshotsById[party.id] = {
+      party: {
+        ...party,
+        progress: Number(data.progress || party.progress || 0),
+        member_count: Number(data.members?.length || party.member_count || party.memberCount || 0)
+      },
+      members: data.members || [],
+      events: data.events || [],
+      evidence: data.evidence || [],
+      progress: data.progress || 0,
+      route: data.route || []
+    };
+
+    return window.__gwState.partySnapshotsById[party.id];
+  }
+
+  async function hydratePartySnapshot(id) {
+    if (!id) return false;
+
+    const existing = window.__gwState?.partySnapshotsById?.[id];
+    if (existing?.party && Array.isArray(existing.evidence) && Array.isArray(existing.route)) {
+      return true;
+    }
+
+    const data = await window.GridWildAPI?.getParty?.(id);
+    if (!data?.party?.id) return false;
+
+    let route = [];
+    try {
+      const routeData = await window.GridWildAPI?.getPartyRoute?.(data.party.id);
+      route = routeData?.route || [];
+    } catch (err) {
+      console.warn("Could not load party history route:", err);
+    }
+
+    rememberPartySnapshot({ ...data, route });
+    window.dispatchEvent(new CustomEvent("gwPartiesChanged"));
+    return true;
   }
 
   function isJoined(id) {
@@ -341,10 +402,15 @@ function ensurePartyMembers(party) {
 
 function getPartyMembers(partyId) {
   const activeId = window.__gwState?.party?.id;
+  const rows = partyId && activeId === partyId
+    ? (window.__gwState?.partyMembers || [])
+    : (window.__gwState?.partySnapshotsById?.[partyId]?.members || []);
 
-  if (partyId && activeId === partyId) {
-    return (window.__gwState?.partyMembers || []).map(m => ({
+  if (partyId) {
+    return rows.map(m => ({
       id: m.id || m.player_id,
+      playerId: m.player_id || m.players?.id || null,
+      player: m.players || null,
       name: m.players?.display_name || m.player_id?.slice(0, 8) || "Unknown",
       role: m.role || "member",
       joinedAt: m.joined_at,
@@ -369,6 +435,29 @@ function memberRoleLabel(role) {
   }[role] || "Observer";
 }
 
+function bindPartyMemberInspection(root) {
+  root?.querySelectorAll?.(".gw-party-member-inspect[data-player-id]").forEach(btn => {
+    if (btn.dataset.playerInspectionBound === "true") return;
+    btn.dataset.playerInspectionBound = "true";
+
+    btn.addEventListener("click", () => {
+      const playerId = btn.dataset.playerId;
+      if (!playerId) return;
+
+      const coverRoot = btn.closest("#gwPartyCoverRoot");
+      const partyId = coverRoot?.dataset.partyId || "";
+      const member = getPartyMembers(partyId).find(row => String(row.playerId) === String(playerId));
+
+      window.GridWildAvatarInspection?.openPlayer?.(playerId, {
+        player: member?.player || {
+          id: playerId,
+          display_name: member?.name || "Explorer"
+        }
+      });
+    });
+  });
+}
+
 function renderPartyMembersHtml(partyId) {
   const members = getPartyMembers(partyId);
 
@@ -379,13 +468,13 @@ function renderPartyMembersHtml(partyId) {
   return `
     <div class="gw-party-member-grid">
       ${members.map(m => `
-        <div class="gw-party-member-pill">
+        <button class="gw-party-member-pill gw-party-member-inspect" type="button" data-player-id="${esc(m.playerId || "")}">
           <span class="gw-party-member-avatar">${m.role === "host" ? "⭐" : "👤"}</span>
           <span>
             <span class="gw-party-member-name">${esc(m.name)}</span>
             <span class="gw-party-member-role">${esc(memberRoleLabel(m.role))}</span>
           </span>
-        </div>
+        </button>
       `).join("")}
     </div>
   `;
@@ -426,8 +515,11 @@ function activityIcon(type) {
 }
 
 function loadPartyEvidence() {
+  const loadedId = window.__gwState?.party?.id;
+
   return (window.__gwState?.partyEvidence || []).reduce((acc, e) => {
     if (!e.party_id || !e.draft_id) return acc;
+    if (loadedId && String(e.party_id) !== String(loadedId)) return acc;
 
     acc[`${e.party_id}::${e.draft_id}`] = {
       partyId: e.party_id,
@@ -481,19 +573,39 @@ function getDraftIconicTaxon(draft) {
 }
 
 function loadPartyRoutes() {
-  const activeId = window.__gwState?.party?.id;
+  const loadedId = window.__gwState?.party?.id;
+  const routePartyId = window.__gwState?.partyRoutePartyId || null;
   const route = window.__gwState?.partyRoute || [];
+  const partyId = routePartyId || loadedId;
+  const rows = {};
 
-  if (!activeId || !route.length) return {};
+  if (partyId && route.length && (!loadedId || !routePartyId || String(routePartyId) === String(loadedId))) {
+    rows[partyId] = route
+      .filter(p => String(p?.party_id || routePartyId || "") === String(partyId))
+      .map(p => ({
+        lat: Number(p.lat),
+        lng: Number(p.lng),
+        accuracyMeters: p.accuracy_meters,
+        t: p.created_at
+      }));
+  }
 
-  return {
-    [activeId]: route.map(p => ({
-      lat: Number(p.lat),
-      lng: Number(p.lng),
-      accuracyMeters: p.accuracy_meters,
-      t: p.created_at
-    }))
-  };
+  for (const [id, snapshot] of Object.entries(window.__gwState?.partySnapshotsById || {})) {
+    if (rows[id]) continue;
+    const snapshotRoute = Array.isArray(snapshot?.route) ? snapshot.route : [];
+    if (!snapshotRoute.length) continue;
+
+    rows[id] = snapshotRoute
+      .filter(p => String(p?.party_id || id || "") === String(id))
+      .map(p => ({
+        lat: Number(p.lat),
+        lng: Number(p.lng),
+        accuracyMeters: p.accuracy_meters,
+        t: p.created_at
+      }));
+  }
+
+  return rows;
 }
 
 function getPartyRouteCellKey(lat, lng) {
@@ -554,6 +666,7 @@ function appendOptimisticPartyRoutePoint(partyId, lat, lng, accuracyMeters, cell
     : [];
 
   window.__gwState.partyRoute = route;
+  window.__gwState.partyRoutePartyId = partyId;
 
   const optimisticId = `local_route_${partyId}_${Date.now()}`;
   route.push({
@@ -638,11 +751,18 @@ function recordPartyPosition(lat, lng, accuracyMeters) {
 }
 
 function getPartyEvidenceRows(partyId) {
-  const activeId = window.__gwState?.party?.id;
+  const loadedId = window.__gwState?.party?.id;
+  const sourceEvidence =
+    partyId && String(loadedId || "") === String(partyId)
+      ? (window.__gwState?.partyEvidence || [])
+      : (window.__gwState?.partySnapshotsById?.[partyId]?.evidence || []);
 
-  if (partyId && activeId === partyId) {
-    return (window.__gwState?.partyEvidence || [])
-      .filter(e => e.status === "counted")
+  if (partyId) {
+    return sourceEvidence
+      .filter(e =>
+        String(e.party_id || "") === String(partyId) &&
+        e.status === "counted"
+      )
       .map(e => ({
         partyId: e.party_id,
         draftId: e.draft_id,
@@ -659,11 +779,18 @@ function getPartyEvidenceRows(partyId) {
 }
 
 function getExcludedPartyEvidenceRows(partyId) {
-  const activeId = window.__gwState?.party?.id;
+  const loadedId = window.__gwState?.party?.id;
+  const sourceEvidence =
+    partyId && String(loadedId || "") === String(partyId)
+      ? (window.__gwState?.partyEvidence || [])
+      : (window.__gwState?.partySnapshotsById?.[partyId]?.evidence || []);
 
-  if (partyId && activeId === partyId) {
-    return (window.__gwState?.partyEvidence || [])
-      .filter(e => e.status === "excluded")
+  if (partyId) {
+    return sourceEvidence
+      .filter(e =>
+        String(e.party_id || "") === String(partyId) &&
+        e.status === "excluded"
+      )
       .map(e => ({
         partyId: e.party_id,
         draftId: e.draft_id,
@@ -763,6 +890,11 @@ function haversineMeters(a, b) {
 }
 
 function getRouteDistanceMeters(points) {
+  if (!Array.isArray(points) || points.length < 2) {
+    const fallback = Number(points?.routeDistanceMeters);
+    return Number.isFinite(fallback) ? fallback : 0;
+  }
+
   let total = 0;
 
   for (let i = 1; i < points.length; i++) {
@@ -774,9 +906,24 @@ function getRouteDistanceMeters(points) {
 }
 
 function formatDistance(meters) {
-  const m = Number(meters || 0);
-  if (m < 1000) return `${Math.round(m)} m`;
-  return `${(m / 1000).toFixed(2)} km`;
+  const value = Number(meters);
+  const metric = window.GridWildUnits?.metricEnabled?.() === true;
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return metric ? "0 m" : "0 ft";
+  }
+
+  if (metric) {
+    if (value < 1) return `${value.toFixed(1)} m`;
+    if (value < 1000) return `${Math.round(value)} m`;
+    return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} km`;
+  }
+
+  const feet = value * 3.280839895;
+  if (feet < 5280) return `${feet < 10 ? feet.toFixed(1) : Math.round(feet)} ft`;
+
+  const miles = feet / 5280;
+  return `${miles.toFixed(miles < 10 ? 1 : 0)} mi`;
 }
 
 function endParty(id) {
@@ -1358,11 +1505,14 @@ function partyReportUrl(id) {
 
   function renderPartyHistoryRows() {
     const all = getAllParties();
-    const activeId = getActivePartyId();
 
     const rows = all
-    .filter(p => p.id === activeId)
-    .filter(p => p.endedAt || p.completedAt || countEvidenceForParty(p.id) > 0)
+    .filter(p =>
+      p.mode === "ended" ||
+      p.status === "ended" ||
+      p.endedAt ||
+      p.completedAt
+    )
     .sort((a, b) =>
       new Date(b.endedAt || b.completedAt || b.startsAt || b.createdAt || 0) -
       new Date(a.endedAt || a.completedAt || a.startsAt || a.createdAt || 0)
@@ -1373,8 +1523,12 @@ function partyReportUrl(id) {
     }
 
   return rows.map(p => {
-    const evidenceCount = countEvidenceForParty(p.id);
+    const evidenceCount = Math.max(
+      Number(p.progress || 0),
+      countEvidenceForParty(p.id)
+    );
     const route = loadPartyRoutes()[p.id] || [];
+    route.routeDistanceMeters = Number(p.routeDistanceMeters || 0);
 
     return `
       <div class="gw-party-row">
@@ -1460,11 +1614,19 @@ function partyReportUrl(id) {
     });
 
     root.querySelectorAll(".gw-party-recap-btn").forEach(btn => {
-    btn.onclick = () => openPartyRecap(btn.dataset.partyId);
+    btn.onclick = async () => {
+      const id = btn.dataset.partyId;
+      await hydratePartySnapshot(id);
+      openPartyRecap(id);
+    };
     });
 
     root.querySelectorAll(".gw-party-share-btn").forEach(btn => {
-    btn.onclick = () => shareParty(btn.dataset.partyId);
+    btn.onclick = async () => {
+      const id = btn.dataset.partyId;
+      await hydratePartySnapshot(id);
+      shareParty(id);
+    };
     });
   }
 
@@ -1600,14 +1762,18 @@ function partyReportUrl(id) {
   `;
 
   document.body.appendChild(root);
-  
-  
+
+  const closeRecap = () => {
+    destroyPartyRecapMaps(root);
+    root.remove();
+  };
+
   root.querySelectorAll("[data-party-close]").forEach(btn => {
-    btn.onclick = () => root.remove();
+    btn.onclick = closeRecap;
   });
 
   root.addEventListener("click", e => {
-    if (e.target === root) root.remove();
+    if (e.target === root) closeRecap();
   });
 
   root.querySelector("#gwPartyShareRecapBtn")?.addEventListener("click", () => {
@@ -1616,14 +1782,14 @@ function partyReportUrl(id) {
 
   root.querySelector("#gwPartyEndRecapBtn")?.addEventListener("click", () => {
     endParty(id);
-    root.remove();
+    closeRecap();
   });
 
     root.querySelectorAll(".gw-party-evidence-exclude-btn").forEach(btn => {
     btn.addEventListener("click", () => {
         excludePartyEvidence(btn.dataset.partyId, btn.dataset.draftId)
         .then(() => {
-            root.remove();
+            closeRecap();
             openPartyRecap(id);
         });
     });
@@ -1633,7 +1799,7 @@ function partyReportUrl(id) {
     btn.addEventListener("click", () => {
         reincludePartyEvidence(btn.dataset.partyId, btn.dataset.draftId)
         .then(() => {
-            root.remove();
+            closeRecap();
             openPartyRecap(id);
         });
     });
@@ -1642,75 +1808,152 @@ function partyReportUrl(id) {
   setTimeout(() => drawPartyRecapMap(id), 50);
 }
 
-function drawPartyRecapMap(id) {
-  const host = document.getElementById(`gwPartyRecapMap_${id}`);
+function createPartyRecapBaseLayer() {
+  const choice = window.GridWildBaseMaps?.getBaseMap?.() || window.__gwState?.baseMap || "street";
+
+  if (choice === "terrain" && typeof window.createTerrainBaseLayer === "function") {
+    return window.createTerrainBaseLayer();
+  }
+  if (typeof window.createStreetBaseLayer === "function") {
+    return window.createStreetBaseLayer();
+  }
+
+  return L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    maxZoom: 20,
+    attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
+  });
+}
+
+function destroyPartyRecapMaps(root = document) {
+  root?.querySelectorAll?.(".gw-party-recap-map").forEach(host => {
+    if (!host._gwPartyRecapMap) return;
+    host._gwPartyRecapMap.remove();
+    host._gwPartyRecapMap = null;
+  });
+}
+
+function renderPartyRecapMap(host, route = [], evidence = [], label = "Party route map") {
   if (!host) return;
 
-  const route = loadPartyRoutes()[id] || [];
-  const evidence = getPartyEvidenceRows(id);
+  if (host._gwPartyRecapMap) {
+    host._gwPartyRecapMap.remove();
+    host._gwPartyRecapMap = null;
+  }
 
-  if (!route.length && !evidence.length) return;
+  const routePoints = route
+    .map(point => [Number(point.lat), Number(point.lng)])
+    .filter(point => Number.isFinite(point[0]) && Number.isFinite(point[1]));
+  const observations = evidence
+    .filter(row => Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lng)))
+    .map(row => ({
+      latlng: [Number(row.lat), Number(row.lng)],
+      label: row.taxon || "Observation"
+    }));
 
-  host.innerHTML = "";
-
-  const pts = [
-    ...route.map(p => ({ lat: Number(p.lat), lng: Number(p.lng), kind: "route" })),
-    ...evidence
-      .filter(e => Number.isFinite(Number(e.lat)) && Number.isFinite(Number(e.lng)))
-      .map(e => ({ lat: Number(e.lat), lng: Number(e.lng), kind: "obs" }))
-  ].filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
-
-  if (!pts.length) {
+  if (!window.L || (!routePoints.length && !observations.length)) {
+    host.classList.add("is-empty");
     host.innerHTML = `<div class="gw-muted">No mappable points recorded.</div>`;
     return;
   }
 
-  const minLat = Math.min(...pts.map(p => p.lat));
-  const maxLat = Math.max(...pts.map(p => p.lat));
-  const minLng = Math.min(...pts.map(p => p.lng));
-  const maxLng = Math.max(...pts.map(p => p.lng));
+  host.classList.remove("is-empty");
+  host.innerHTML = "";
+  host.setAttribute("role", "img");
+  host.setAttribute("aria-label", label);
 
-  const padLat = Math.max(0.00008, (maxLat - minLat) * 0.16);
-  const padLng = Math.max(0.00008, (maxLng - minLng) * 0.16);
+  const recapMap = L.map(host, {
+    zoomControl: false,
+    attributionControl: true,
+    dragging: false,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    boxZoom: false,
+    keyboard: false,
+    tap: false,
+    touchZoom: false
+  });
+  host._gwPartyRecapMap = recapMap;
 
-  const width = 520;
-  const height = 260;
+  createPartyRecapBaseLayer().addTo(recapMap);
 
-  const xOf = lng => ((lng - (minLng - padLng)) / ((maxLng + padLng) - (minLng - padLng))) * width;
-  const yOf = lat => height - (((lat - (minLat - padLat)) / ((maxLat + padLat) - (minLat - padLat))) * height);
+  const features = L.featureGroup().addTo(recapMap);
+  if (routePoints.length) {
+    L.polyline(routePoints, {
+      color: "rgba(20,17,15,0.72)",
+      weight: 8,
+      opacity: 0.88,
+      lineCap: "round",
+      lineJoin: "round",
+      interactive: false
+    }).addTo(features);
 
-  const routePath = route
-    .filter(p => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)))
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${xOf(Number(p.lng)).toFixed(1)} ${yOf(Number(p.lat)).toFixed(1)}`)
-    .join(" ");
+    L.polyline(routePoints, {
+      color: "#f0b85a",
+      weight: 4,
+      opacity: 1,
+      lineCap: "round",
+      lineJoin: "round",
+      interactive: false
+    }).addTo(features);
 
-  const obsDots = evidence
-    .filter(e => Number.isFinite(Number(e.lat)) && Number.isFinite(Number(e.lng)))
-    .map(e => `
-      <circle
-        cx="${xOf(Number(e.lng)).toFixed(1)}"
-        cy="${yOf(Number(e.lat)).toFixed(1)}"
-        r="5"
-        class="gw-party-recap-obs-dot"
-      >
-        <title>${esc(e.taxon || "Observation")}</title>
-      </circle>
-    `).join("");
+    L.circleMarker(routePoints[0], {
+      radius: 7,
+      color: "#201711",
+      weight: 2,
+      fillColor: "#72d89b",
+      fillOpacity: 1,
+      interactive: false
+    }).addTo(features);
 
-  host.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" class="gw-party-recap-svg" role="img" aria-label="Party route map">
-      <rect x="0" y="0" width="${width}" height="${height}" rx="18" class="gw-party-recap-map-bg"></rect>
+    L.circleMarker(routePoints[routePoints.length - 1], {
+      radius: 7,
+      color: "#201711",
+      weight: 2,
+      fillColor: "#ffe082",
+      fillOpacity: 1,
+      interactive: false
+    }).addTo(features);
+  }
 
-      ${routePath ? `<path d="${routePath}" class="gw-party-recap-route"></path>` : ""}
+  observations.forEach(observation => {
+    L.circleMarker(observation.latlng, {
+      radius: 6,
+      color: "#201711",
+      weight: 2,
+      fillColor: "#f4e8cf",
+      fillOpacity: 1
+    })
+      .bindTooltip(esc(observation.label), { direction: "top" })
+      .addTo(features);
+  });
 
-      ${route.length ? `
-        <circle cx="${xOf(Number(route[0].lng)).toFixed(1)}" cy="${yOf(Number(route[0].lat)).toFixed(1)}" r="6" class="gw-party-recap-start"></circle>
-        <circle cx="${xOf(Number(route[route.length - 1].lng)).toFixed(1)}" cy="${yOf(Number(route[route.length - 1].lat)).toFixed(1)}" r="6" class="gw-party-recap-end"></circle>
-      ` : ""}
+  const bounds = features.getBounds();
+  if (bounds.isValid()) {
+    recapMap.fitBounds(bounds.pad(0.18), {
+      animate: false,
+      maxZoom: 18
+    });
+  }
 
-      ${obsDots}
-    </svg>
-  `;
+  window.setTimeout(() => {
+    if (!host.isConnected || host._gwPartyRecapMap !== recapMap) return;
+    recapMap.invalidateSize({ animate: false });
+    if (bounds.isValid()) {
+      recapMap.fitBounds(bounds.pad(0.18), {
+        animate: false,
+        maxZoom: 18
+      });
+    }
+  }, 120);
+}
+
+function drawPartyRecapMap(id) {
+  renderPartyRecapMap(
+    document.getElementById(`gwPartyRecapMap_${id}`),
+    loadPartyRoutes()[id] || [],
+    getPartyEvidenceRows(id),
+    "Party trip report route map"
+  );
 }
 
   function rerenderPartySheet() {
@@ -1971,6 +2214,169 @@ function drawPartyRecapMap(id) {
   return type.replaceAll("_", " ");
 }
 
+  function clampPartyMeterPercent(value) {
+    return Math.max(0, Math.min(100, Number(value) || 0));
+  }
+
+  function formatPartyClock(ms) {
+    const totalSeconds = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+    if (minutes) return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+    return `${seconds}s`;
+  }
+
+  function formatPartySpan(ms) {
+    const totalMinutes = Math.max(0, Math.floor(Number(ms || 0) / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours) return `${hours}h${minutes ? ` ${minutes}m` : ""}`;
+    if (totalMinutes) return `${totalMinutes}m`;
+    return "<1m";
+  }
+
+  function getPartyTimeMeter(party, nowMs = Date.now()) {
+    const startMs = Date.parse(party?.startsAt || party?.starts_at || party?.createdAt || party?.created_at || "");
+    const durationMinutes = Number(party?.durationMinutes ?? party?.duration_minutes);
+    const durationMs = durationMinutes * 60000;
+
+    if (!Number.isFinite(startMs) || !Number.isFinite(durationMs) || durationMs <= 0) {
+      return {
+        percent: 0,
+        value: "No fixed end",
+        note: "This party has no configured duration."
+      };
+    }
+
+    const endedAtMs = Date.parse(party?.endedAt || party?.ended_at || party?.completedAt || "");
+    const isEnded = party?.mode === "ended" || party?.status === "ended" || Number.isFinite(endedAtMs);
+    const plannedEndMs = startMs + durationMs;
+
+    if (isEnded) {
+      const actualEndMs = Number.isFinite(endedAtMs) ? endedAtMs : plannedEndMs;
+      return {
+        percent: 100,
+        value: "Complete",
+        note: `Ended after ${formatPartySpan(Math.max(0, actualEndMs - startMs))}.`
+      };
+    }
+
+    if (nowMs < startMs) {
+      return {
+        percent: 0,
+        value: `Starts in ${formatPartyClock(startMs - nowMs)}`,
+        note: `${formatPartySpan(durationMs)} planned duration.`
+      };
+    }
+
+    const elapsedMs = Math.max(0, nowMs - startMs);
+    const remainingMs = Math.max(0, plannedEndMs - nowMs);
+    const percent = clampPartyMeterPercent(elapsedMs / durationMs * 100);
+
+    return {
+      percent,
+      value: remainingMs > 0 ? `${formatPartyClock(remainingMs)} remaining` : "Completing...",
+      note: `${formatPartySpan(Math.min(elapsedMs, durationMs))} elapsed of ${formatPartySpan(durationMs)}.`
+    };
+  }
+
+  function getPartyGoalMeter(party) {
+    const progress = Math.max(
+      Number(party?.progress || 0),
+      getSharedPartyProgress(party?.id)
+    );
+    const target = Math.max(0, Number(party?.target || 0));
+    const percent = target > 0
+      ? clampPartyMeterPercent(progress / target * 100)
+      : 0;
+
+    return {
+      percent,
+      value: target > 0 ? `${progress} / ${target}` : String(progress),
+      note: target > 0 ? `${Math.round(percent)}% of observation goal.` : "Counted observations."
+    };
+  }
+
+  function renderPartyCoverMetersHtml() {
+    return `
+      <div class="gw-party-meter-stack" id="gwPartyCoverMeters">
+        <div class="gw-party-meter" data-party-meter="time">
+          <div class="gw-party-meter-head">
+            <span class="gw-party-meter-label">Time to completion</span>
+            <strong class="gw-party-meter-value">Loading...</strong>
+          </div>
+          <div class="gw-party-meter-track" role="progressbar" aria-label="Party elapsed time" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="gw-party-meter-fill is-time"></div>
+          </div>
+          <div class="gw-party-meter-note"></div>
+        </div>
+
+        <div class="gw-party-meter" data-party-meter="goal">
+          <div class="gw-party-meter-head">
+            <span class="gw-party-meter-label">Goal progress</span>
+            <strong class="gw-party-meter-value">Loading...</strong>
+          </div>
+          <div class="gw-party-meter-track" role="progressbar" aria-label="Party goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="gw-party-meter-fill is-goal"></div>
+          </div>
+          <div class="gw-party-meter-note"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function updatePartyCoverMeter(root, key, meter) {
+    const meterEl = root?.querySelector?.(`[data-party-meter="${key}"]`);
+    if (!meterEl) return;
+
+    const percent = clampPartyMeterPercent(meter.percent);
+    const track = meterEl.querySelector(".gw-party-meter-track");
+    const fill = meterEl.querySelector(".gw-party-meter-fill");
+    const value = meterEl.querySelector(".gw-party-meter-value");
+    const note = meterEl.querySelector(".gw-party-meter-note");
+
+    if (track) {
+      track.setAttribute("aria-valuenow", String(Math.round(percent)));
+      track.setAttribute("aria-valuetext", meter.value);
+    }
+    if (fill) {
+      fill.style.width = `${percent}%`;
+      fill.classList.toggle("is-complete", percent >= 100);
+    }
+    if (value) value.textContent = meter.value;
+    if (note) note.textContent = meter.note;
+  }
+
+  function refreshPartyCoverMeters(id) {
+    const root = document.getElementById("gwPartyCoverRoot");
+    if (!root || root.dataset.partyId !== id) return false;
+
+    const party = getParty(id);
+    if (!party) return false;
+
+    updatePartyCoverMeter(root, "time", getPartyTimeMeter(party));
+    updatePartyCoverMeter(root, "goal", getPartyGoalMeter(party));
+    return true;
+  }
+
+  function stopPartyCoverMeterTimer() {
+    window.clearInterval(window.__gwPartyCoverMeterTimer);
+    window.__gwPartyCoverMeterTimer = null;
+  }
+
+  function startPartyCoverMeterTimer(id) {
+    stopPartyCoverMeterTimer();
+    refreshPartyCoverMeters(id);
+
+    window.__gwPartyCoverMeterTimer = window.setInterval(() => {
+      if (!refreshPartyCoverMeters(id)) stopPartyCoverMeterTimer();
+    }, 1000);
+  }
+
   function refreshOpenCover(id) {
     const root = document.getElementById("gwPartyCoverRoot");
     if (!root) return;
@@ -1984,26 +2390,19 @@ function drawPartyRecapMap(id) {
     const members = window.__gwState?.partyMembers || [];
     const events = window.__gwState?.partyEvents || [];
     if (countEl) { countEl.textContent = `${members.length || 1} joined`; }
+    if (progressEl) {
+      const party = getParty(id);
+      progressEl.textContent = Math.max(
+        Number(party?.progress || 0),
+        getSharedPartyProgress(id)
+      );
+    }
+    refreshPartyCoverMeters(id);
 
     if (membersEl) {
-    membersEl.innerHTML = members.length
-      ? `
-        <div class="gw-party-member-grid">
-          ${members.map(m => `
-            <div class="gw-party-member-pill">
-              <span class="gw-party-member-avatar">${m.role === "leader" ? "⭐" : "👤"}</span>
-              <span>
-                <span class="gw-party-member-name">
-                ${esc(m.players?.display_name || m.player_id?.slice(0, 8) || "Unknown")}
-                </span>
-                <span class="gw-party-member-role">${esc(m.role || "member")}</span>
-              </span>
-            </div>
-          `).join("")}
-        </div>
-      `
-      : renderPartyMembersHtml(id);
-  }
+      membersEl.innerHTML = renderPartyMembersHtml(id);
+      bindPartyMemberInspection(membersEl);
+    }
 
   if (activityEl) {
     activityEl.innerHTML = events.length
@@ -2046,6 +2445,9 @@ function drawPartyRecapMap(id) {
 
     const myDbMember = (window.__gwState?.partyMembers || [])
     .find(m => m.player_id === myPlayerId);
+    const isParticipant = joined || getPartyMembers(id)
+      .some(member => String(member.playerId || "") === String(myPlayerId || ""));
+    const chatCanSend = isParticipant && p.mode !== "ended" && p.status !== "ended";
 
     const canEndParty =
     p.created_by === myPlayerId ||
@@ -2098,11 +2500,9 @@ function drawPartyRecapMap(id) {
           </div>
         </div>
 
-        <div class="gw-party-stat-v">
-        <span id="gwPartyCoverProgress">
-            ${Math.max(Number(p.progress || 0), countEvidenceForParty(p.id))}
-        </span> / ${Number(p.target || 0)}
-        </div>
+        ${renderPartyCoverMetersHtml()}
+
+        <div id="gwPartyCoverChat"></div>
 
         <div class="gw-party-qr-wrap">
           <img class="gw-party-qr" src="${qrSrc(id)}" alt="Party QR code">
@@ -2140,38 +2540,52 @@ function drawPartyRecapMap(id) {
 
     document.body.appendChild(root);
     window.GridWildPartyLive?.startCoverPolling?.(id);
+    bindPartyMemberInspection(root);
+    startPartyCoverMeterTimer(id);
+
+    const chatMount = root.querySelector("#gwPartyCoverChat");
+    const closeCover = () => {
+      window.GridWildPartyLive?.stopCoverPolling?.();
+      stopPartyCoverMeterTimer();
+      window.GridWildChat?.destroy?.(chatMount);
+      root.remove();
+    };
+
+    window.GridWildChat?.mount?.(chatMount, {
+      roomType: "party",
+      roomId: id,
+      title: "Party chat",
+      canRead: isParticipant,
+      canSend: chatCanSend,
+      disabledMessage: isParticipant
+        ? "This party chat is read-only."
+        : "Join this party to use chat.",
+      onLocationOpen: closeCover,
+      onAttachmentOpen: closeCover
+    });
 
     root.querySelectorAll("[data-party-close]").forEach(btn => {
-      btn.onclick = () => {
-        window.GridWildPartyLive?.stopCoverPolling?.();
-        root.remove();
-        };
+      btn.onclick = closeCover;
     });
 
     root.addEventListener("click", e => {
-      if (e.target === root) {
-        window.GridWildPartyLive?.stopCoverPolling?.();
-        root.remove();
-        }
+      if (e.target === root) closeCover();
     });
 
     root.querySelector("#gwPartyJoinCoverBtn")?.addEventListener("click", () => {
-    window.GridWildPartyLive?.stopCoverPolling?.();
+    closeCover();
     joinParty(id);
-    root.remove();
     });
 
     root.querySelector("#gwPartyLeaveCoverBtn")?.addEventListener("click", () => {
-    window.GridWildPartyLive?.stopCoverPolling?.();
+    closeCover();
     leaveParty(id);
-    root.remove();
     });
 
     root.querySelector("#gwPartySetActiveBtn")?.addEventListener("click", () => {
-    window.GridWildPartyLive?.stopCoverPolling?.();
+    closeCover();
     setActivePartyId(id);
     toast("🟢 Party active");
-    root.remove();
     });
 
   }
@@ -2264,92 +2678,25 @@ function openStaticPartyReport(report) {
 
   document.body.appendChild(root);
 
+  const closeReport = () => {
+    destroyPartyRecapMaps(root);
+    root.remove();
+  };
+
   root.querySelectorAll("[data-party-close]").forEach(btn => {
-    btn.onclick = () => root.remove();
+    btn.onclick = closeReport;
   });
 
   setTimeout(() => drawStaticPartyReportMap(report), 50);
 }
 
 function drawStaticPartyReportMap(report) {
-  const host = document.getElementById("gwStaticPartyReportMap");
-  if (!host) return;
-
-  const route = report.route || [];
-  const evidence = report.evidence || [];
-
-  const pts = [
-    ...route.map(p => ({
-      lat: Number(p.lat),
-      lng: Number(p.lng),
-      kind: "route"
-    })),
-    ...evidence
-      .filter(e => Number.isFinite(Number(e.lat)) && Number.isFinite(Number(e.lng)))
-      .map(e => ({
-        lat: Number(e.lat),
-        lng: Number(e.lng),
-        kind: "obs",
-        taxon: e.taxon || "Observation"
-      }))
-  ].filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
-
-  if (!pts.length) {
-    host.innerHTML = `<div class="gw-muted">No mappable points included.</div>`;
-    return;
-  }
-
-  const minLat = Math.min(...pts.map(p => p.lat));
-  const maxLat = Math.max(...pts.map(p => p.lat));
-  const minLng = Math.min(...pts.map(p => p.lng));
-  const maxLng = Math.max(...pts.map(p => p.lng));
-
-  const padLat = Math.max(0.00008, (maxLat - minLat) * 0.16);
-  const padLng = Math.max(0.00008, (maxLng - minLng) * 0.16);
-
-  const width = 520;
-  const height = 260;
-
-  const xOf = lng =>
-    ((lng - (minLng - padLng)) / ((maxLng + padLng) - (minLng - padLng))) * width;
-
-  const yOf = lat =>
-    height - (((lat - (minLat - padLat)) / ((maxLat + padLat) - (minLat - padLat))) * height);
-
-  const routePath = route
-    .filter(p => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)))
-    .map((p, i) =>
-      `${i === 0 ? "M" : "L"} ${xOf(Number(p.lng)).toFixed(1)} ${yOf(Number(p.lat)).toFixed(1)}`
-    )
-    .join(" ");
-
-  const obsDots = evidence
-    .filter(e => Number.isFinite(Number(e.lat)) && Number.isFinite(Number(e.lng)))
-    .map(e => `
-      <circle
-        cx="${xOf(Number(e.lng)).toFixed(1)}"
-        cy="${yOf(Number(e.lat)).toFixed(1)}"
-        r="5"
-        class="gw-party-recap-obs-dot"
-      >
-        <title>${esc(e.taxon || "Observation")}</title>
-      </circle>
-    `).join("");
-
-  host.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" class="gw-party-recap-svg" role="img" aria-label="Static party route map">
-      <rect x="0" y="0" width="${width}" height="${height}" rx="18" class="gw-party-recap-map-bg"></rect>
-
-      ${routePath ? `<path d="${routePath}" class="gw-party-recap-route"></path>` : ""}
-
-      ${route.length ? `
-        <circle cx="${xOf(Number(route[0].lng)).toFixed(1)}" cy="${yOf(Number(route[0].lat)).toFixed(1)}" r="6" class="gw-party-recap-start"></circle>
-        <circle cx="${xOf(Number(route[route.length - 1].lng)).toFixed(1)}" cy="${yOf(Number(route[route.length - 1].lat)).toFixed(1)}" r="6" class="gw-party-recap-end"></circle>
-      ` : ""}
-
-      ${obsDots}
-    </svg>
-  `;
+  renderPartyRecapMap(
+    document.getElementById("gwStaticPartyReportMap"),
+    report.route || [],
+    report.evidence || [],
+    "Shared party trip report route map"
+  );
 }
 
   function handleJoinFromUrl() {
@@ -2672,6 +3019,18 @@ function scheduleActivePartyHudRender() {
     const style = document.createElement("style");
     style.id = "gwPartyStyles";
     style.textContent = `
+      #sheetCommunity .gw-sheet-card {
+        height: min(78vh, 760px);
+        height: min(78dvh, 760px);
+        max-height: min(78vh, 760px);
+        max-height: min(78dvh, 760px);
+      }
+
+      #sheetCommunity .gw-sheet-body {
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+
       .gw-party-start-main {
         border-color: rgba(240,209,138,0.65) !important;
         color: #fff2c8 !important;
@@ -2979,6 +3338,83 @@ function scheduleActivePartyHudRender() {
         font-weight: 850;
       }
 
+      .gw-party-meter-stack {
+        display: grid;
+        gap: 12px;
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(215,183,116,0.14);
+        background: rgba(10,15,12,0.34);
+      }
+
+      .gw-party-meter {
+        min-width: 0;
+      }
+
+      .gw-party-meter-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .gw-party-meter-label {
+        min-width: 0;
+        color: rgba(239,230,211,0.68);
+        font-size: 10px;
+        line-height: 1.2;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .gw-party-meter-value {
+        flex: 0 1 auto;
+        min-width: 0;
+        color: #fff2c8;
+        font-size: 13px;
+        line-height: 1.2;
+        font-weight: 950;
+        text-align: right;
+      }
+
+      .gw-party-meter-track {
+        height: 11px;
+        margin-top: 7px;
+        overflow: hidden;
+        border-radius: 6px;
+        border: 1px solid rgba(255,255,255,0.10);
+        background: rgba(0,0,0,0.30);
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.32);
+      }
+
+      .gw-party-meter-fill {
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        transition: width 500ms linear;
+      }
+
+      .gw-party-meter-fill.is-time {
+        background: linear-gradient(90deg, #d7b774, #ef9d47);
+      }
+
+      .gw-party-meter-fill.is-goal {
+        background: linear-gradient(90deg, #4f9f64, #83d174);
+      }
+
+      .gw-party-meter-fill.is-complete {
+        background: linear-gradient(90deg, #5ebd73, #b7e66f);
+      }
+
+      .gw-party-meter-note {
+        margin-top: 5px;
+        color: rgba(239,230,211,0.54);
+        font-size: 10px;
+        line-height: 1.25;
+      }
+
       .gw-party-qr-wrap {
         text-align: center;
         margin-top: 14px;
@@ -3051,55 +3487,40 @@ function scheduleActivePartyHudRender() {
     }
 
     .gw-party-recap-map {
-    margin-top: 12px;
-    min-height: 240px;
-    border-radius: 18px;
-    border: 1px solid rgba(215,183,116,0.16);
-    background:
-        radial-gradient(circle at 20% 20%, rgba(240,209,138,0.10), transparent 35%),
-        rgba(0,0,0,0.18);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
+      position: relative;
+      width: 100%;
+      height: 260px;
+      min-height: 240px;
+      margin-top: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(215,183,116,0.22);
+      border-radius: 8px;
+      background: #dfe5db;
     }
 
-    .gw-party-recap-svg {
-    width: 100%;
-    height: 260px;
-    display: block;
+    .gw-party-recap-map.is-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.18);
     }
 
-    .gw-party-recap-map-bg {
-    fill: rgba(20,17,15,0.56);
-    stroke: rgba(215,183,116,0.18);
+    .gw-party-recap-map .leaflet-control-attribution {
+      max-width: calc(100% - 8px);
+      background: rgba(255,255,255,0.82);
+      font-size: 8px;
+      line-height: 1.25;
+      white-space: normal;
     }
 
-    .gw-party-recap-route {
-    fill: none;
-    stroke: rgba(240,209,138,0.92);
-    stroke-width: 4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    filter: drop-shadow(0 0 6px rgba(240,209,138,0.22));
-    }
-
-    .gw-party-recap-start {
-    fill: #9ee6bd;
-    stroke: rgba(20,17,15,0.95);
-    stroke-width: 2;
-    }
-
-    .gw-party-recap-end {
-    fill: #ffe082;
-    stroke: rgba(20,17,15,0.95);
-    stroke-width: 2;
-    }
-
-    .gw-party-recap-obs-dot {
-    fill: #f4e8cf;
-    stroke: rgba(20,17,15,0.96);
-    stroke-width: 2;
+    .gw-party-recap-map .leaflet-tooltip {
+      border: 1px solid rgba(50,42,31,0.25);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.94);
+      color: #201711;
+      font-size: 10px;
+      font-weight: 800;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.18);
     }
 
     .gw-active-party-hud {
@@ -3387,6 +3808,7 @@ function scheduleActivePartyHudRender() {
 }
 
 .gw-party-member-pill {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3394,7 +3816,18 @@ function scheduleActivePartyHudRender() {
   border-radius: 14px;
   border: 1px solid rgba(215,183,116,0.14);
   background: rgba(255,255,255,0.045);
+  color: inherit;
+  font: inherit;
+  appearance: none;
   text-align: left;
+  cursor: pointer;
+}
+
+.gw-party-member-inspect:hover,
+.gw-party-member-inspect:focus-visible {
+  border-color: rgba(240,209,138,0.42);
+  background: rgba(240,209,138,0.09);
+  outline: none;
 }
 
 .gw-party-member-avatar {
@@ -3465,6 +3898,30 @@ function scheduleActivePartyHudRender() {
   font-size: 10px;
   color: rgba(239,230,211,0.54);
 }
+
+@media (max-width: 600px) {
+  .gw-party-meter-stack {
+    gap: 14px;
+    padding: 11px;
+  }
+
+  .gw-party-meter-head {
+    align-items: flex-start;
+  }
+
+  .gw-party-meter-label {
+    max-width: 44%;
+  }
+
+  .gw-party-meter-value {
+    max-width: 56%;
+    overflow-wrap: anywhere;
+  }
+
+  .gw-party-meter-track {
+    height: 13px;
+  }
+}
     `;
 
     document.head.appendChild(style);
@@ -3487,21 +3944,30 @@ function scheduleActivePartyHudRender() {
     refreshMapBeacon();
   });
 
-  window.addEventListener("load", () => {
-    setTimeout(() => {
-      refreshMapBeacon();
-      handleJoinFromUrl();
-      handlePartyReportFromUrl();
-    }, 500);
+  window.addEventListener("gridwild:unitschange", () => {
+    refreshMapBeacon();
+    rerenderPartySheet();
+    scheduleActivePartyHudRender();
   });
 
     window.addEventListener("gwPartiesChanged", scheduleActivePartyHudRender);
     window.addEventListener("gwPartyEvidenceChanged", scheduleActivePartyHudRender);
     window.addEventListener("gwActivePartyChanged", scheduleActivePartyHudRender);
 
-    window.addEventListener("load", () => {
-    setTimeout(scheduleActivePartyHudRender, 700);
-    });
+  function initPartyAfterPageLoad() {
+    setTimeout(() => {
+      refreshMapBeacon();
+      handleJoinFromUrl();
+      handlePartyReportFromUrl();
+      scheduleActivePartyHudRender();
+    }, 500);
+  }
+
+  if (document.readyState === "complete") {
+    initPartyAfterPageLoad();
+  } else {
+    window.addEventListener("load", initPartyAfterPageLoad, { once: true });
+  }
 
 
 function getDraftPartyMatchStatus(draft) {
@@ -3617,6 +4083,8 @@ function getDraftPartyMatchStatus(draft) {
     endParty,
     recordPartyPosition,
     loadPartyRoutes,
+    rememberPartySnapshot,
+    hydratePartySnapshot,
 
     // Derive a party from a quest
     createPartyFromQuest,

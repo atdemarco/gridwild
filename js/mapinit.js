@@ -1,14 +1,67 @@
     // Map init
   window.map = L.map("map", {
      zoomControl: false,
-     attributionControl: true
+     attributionControl: true,
+     touchZoom: true
   });
   const map = window.map; // local alias
 
+function installGridWildViewportGestureGuard() {
+  if (window.__gwViewportGestureGuardInstalled) return;
+  window.__gwViewportGestureGuardInstalled = true;
+
+  const mapSelector = "#map, .leaflet-container";
+  const mapEl = document.getElementById("map");
+
+  function isMapGestureTarget(target) {
+    return !!target?.closest?.(mapSelector);
+  }
+
+  function preventIfCancelable(evt) {
+    if (evt.cancelable) evt.preventDefault();
+  }
+
+  mapEl?.style.setProperty("touch-action", "none");
+
+  // iOS Safari exposes page pinch as GestureEvents. Blocking their default
+  // keeps the browser viewport at 1x while Leaflet still receives touch events.
+  ["gesturestart", "gesturechange", "gestureend"].forEach(type => {
+    document.addEventListener(type, preventIfCancelable, {
+      capture: true,
+      passive: false
+    });
+  });
+
+  document.addEventListener("touchmove", evt => {
+    if ((evt.touches?.length || 0) < 2) return;
+    if (isMapGestureTarget(evt.target)) return;
+    preventIfCancelable(evt);
+  }, {
+    capture: true,
+    passive: false
+  });
+
+  document.addEventListener("wheel", evt => {
+    if (!evt.ctrlKey && !evt.metaKey) return;
+    if (isMapGestureTarget(evt.target)) return;
+    preventIfCancelable(evt);
+  }, {
+    capture: true,
+    passive: false
+  });
+}
+
+installGridWildViewportGestureGuard();
+
 const GRIDWILD_BASE_MAP_STORAGE_KEY = "gridwildBaseMap";
+const GRIDWILD_DAY_NIGHT_MODE_STORAGE_KEY = "gridwildDayNightMode";
 
 function normalizeGridWildBaseMapChoice(value) {
   return value === "terrain" ? "terrain" : "street";
+}
+
+function normalizeGridWildDayNightMode(value) {
+  return value === "night" || value === "dark" ? "night" : "day";
 }
 
 function readSavedGridWildBaseMapChoice() {
@@ -21,6 +74,19 @@ function readSavedGridWildBaseMapChoice() {
     return normalizeGridWildBaseMapChoice(localStorage.getItem(GRIDWILD_BASE_MAP_STORAGE_KEY));
   } catch {
     return "street";
+  }
+}
+
+function readSavedGridWildDayNightMode() {
+  try {
+    const uiState = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+    if (uiState.dayNightMode) return normalizeGridWildDayNightMode(uiState.dayNightMode);
+  } catch {}
+
+  try {
+    return normalizeGridWildDayNightMode(localStorage.getItem(GRIDWILD_DAY_NIGHT_MODE_STORAGE_KEY));
+  } catch {
+    return "day";
   }
 }
 
@@ -66,6 +132,7 @@ window.__gwState = {
   lockZoom: 19,
   metricUnitsEnabled: false,
   showGpsCircle: false,
+  dayNightMode: readSavedGridWildDayNightMode(),
   activeLens: "classic"
 };
 
@@ -194,6 +261,45 @@ window.createStreetBaseLayer = createStreetBaseLayer;
 window.createTerrainBaseLayer = createTerrainBaseLayer;
 window.streetBaseLayer = streetBaseLayer;
 window.terrainBaseLayer = terrainBaseLayer;
+
+function persistGridWildDayNightMode(mode) {
+  try {
+    localStorage.setItem(GRIDWILD_DAY_NIGHT_MODE_STORAGE_KEY, mode);
+  } catch {}
+
+  try {
+    const uiState = JSON.parse(localStorage.getItem("gw_ui_state") || "{}");
+    uiState.dayNightMode = mode;
+    localStorage.setItem("gw_ui_state", JSON.stringify(uiState));
+  } catch {}
+}
+
+function setGridWildDayNightMode(mode, options = {}) {
+  const nextMode = normalizeGridWildDayNightMode(mode);
+
+  window.__gwState = window.__gwState || {};
+  window.__gwState.dayNightMode = nextMode;
+  document.documentElement.classList.toggle("gw-map-night", nextMode === "night");
+  document.documentElement.dataset.gwMapMode = nextMode;
+
+  if (options.persist !== false) {
+    persistGridWildDayNightMode(nextMode);
+  }
+
+  window.dispatchEvent(new CustomEvent("gridwild:mapmodechange", {
+    detail: { dayNightMode: nextMode }
+  }));
+
+  return nextMode;
+}
+
+window.GridWildMapMode = {
+  getMode: () => window.__gwState?.dayNightMode || "day",
+  setMode: setGridWildDayNightMode,
+  toggle: () => setGridWildDayNightMode(window.__gwState?.dayNightMode === "night" ? "day" : "night"),
+  normalizeChoice: normalizeGridWildDayNightMode
+};
+
 window.GridWildBaseMaps = {
   getBaseMap: () => window.__gwState?.baseMap || "street",
   setBaseMap: setGridWildBaseMap,
@@ -203,6 +309,7 @@ window.GridWildBaseMaps = {
 };
 
 setGridWildBaseMap(window.__gwState.baseMap, { persist: false });
+setGridWildDayNightMode(window.__gwState.dayNightMode, { persist: false });
 
 
     // Default view (in case location fails)

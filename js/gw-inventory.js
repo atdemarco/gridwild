@@ -36,14 +36,13 @@ async function unequipSlot(slot) {
   const state = window.GridWildEconomy?.load?.();
   if (!state?.equipped) return;
 
-  state.equipped[slot] = null;
-  window.GridWildEconomy?.save?.(state);
-
   try {
     const result = await window.GridWildAPI.setPlayerEquipment(slot, null);
 
     window.__gwState = window.__gwState || {};
     window.__gwState.playerEquipment = result.equipment;
+    state.equipped[slot] = null;
+    window.GridWildEconomy?.save?.(state);
   } catch (err) {
     console.warn("Could not sync unequip:", err);
   }
@@ -167,11 +166,13 @@ async function unequipSlot(slot) {
     });
 
     root.querySelectorAll("[data-inventory-equip]").forEach(btn => {
-      btn.onclick = () => {
-        const result = window.GridWildEconomy?.equipItem?.(btn.dataset.inventoryEquip);
+      btn.onclick = async () => {
+        btn.disabled = true;
+        const result = await window.GridWildEconomy?.equipItem?.(btn.dataset.inventoryEquip);
 
         if (!result?.ok) {
           alert(result?.reason || "Could not equip item.");
+          btn.disabled = false;
           return;
         }
 

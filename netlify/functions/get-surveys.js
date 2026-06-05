@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,6 +8,7 @@ const supabase = createClient(
 
 exports.handler = async function(event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const playerId = body.player_id || null;
 
@@ -38,16 +40,28 @@ exports.handler = async function(event) {
         .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
     }
 
+    let playerSurveys = [];
+    if (playerId) {
+      const { data, error } = await supabase
+        .from("player_surveys")
+        .select("*")
+        .eq("player_id", playerId);
+
+      if (error) throw error;
+      playerSurveys = data || [];
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify({
-        surveys
+        surveys,
+        player_surveys: playerSurveys
       })
     };
 
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({
         error: err.message
       })

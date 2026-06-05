@@ -10,15 +10,19 @@
   const HEARTBEAT_INTERVAL_MS = 12000;
   const POLL_INTERVAL_MS = 15000;
   const MIN_POLL_INTERVAL_MS = 8000;
+  const ERROR_BACKOFF_MS = 30000;
   const MAX_POLL_RADIUS_M = 50000;
 
   let publishVisibility = localStorage.getItem(VISIBILITY_KEY) || "hidden";
   let lastLocation = null;
   let lastHeartbeatAt = 0;
+  let nextHeartbeatRetryAt = 0;
   let heartbeatInFlight = false;
   let lastPollAt = 0;
+  let nextPollRetryAt = 0;
   let pollInFlight = false;
   let pollTimer = null;
+  let authBlocked = false;
   let presenceLayer = null;
   let mapEventsBound = false;
   let stylesInjected = false;
@@ -33,7 +37,12 @@
   }
 
   function isSignedIn() {
+    const session = window.GridWildAccount?.getSession?.();
+    const expiresAt = Date.parse(session?.expiresAt || "");
+    const sessionExpired = Number.isFinite(expiresAt) && expiresAt <= Date.now();
+
     return !!(
+      !sessionExpired &&
       window.GridWildAccount?.isSignedIn?.() &&
       window.GridWildAPI?.getPlayerId?.() &&
       window.GridWildAPI?.getSessionToken?.()
@@ -41,7 +50,7 @@
   }
 
   function shouldPublish() {
-    return isSignedIn() && publishVisibility === "visible";
+    return !authBlocked && isSignedIn() && publishVisibility === "visible";
   }
 
   function isPublishingVisible() {
@@ -251,6 +260,38 @@
     return `${esc(name)}<br>${esc(status)}`;
   }
 
+  function openPresencePlayer(presence) {
+    window.GridWildAvatarInspection?.openPlayer?.(presence.player_id, {
+      player: presence.player,
+      equipment: presence.equipment,
+      presence
+    });
+  }
+
+  function stopPresenceDoubleClick(event) {
+    const originalEvent = event?.originalEvent || event;
+
+    originalEvent?.preventDefault?.();
+    originalEvent?.stopPropagation?.();
+    originalEvent?.stopImmediatePropagation?.();
+
+    if (originalEvent) originalEvent._stopped = true;
+    if (event && event !== originalEvent) event._stopped = true;
+  }
+
+  function bindPresenceMarkerDoubleClick(marker, presence) {
+    marker.on("dblclick", event => {
+      stopPresenceDoubleClick(event);
+      openPresencePlayer(presence);
+    });
+
+    const markerElement = marker.getElement?.();
+    markerElement?.addEventListener("dblclick", event => {
+      stopPresenceDoubleClick(event);
+      openPresencePlayer(presence);
+    }, { capture: true });
+  }
+
   function renderLayer(presences = []) {
     injectStyles();
 
@@ -275,7 +316,8 @@
       const marker = L.marker([lat, lng], {
         icon,
         pane: PANE,
-        interactive: true
+        interactive: true,
+        bubblingMouseEvents: false
       });
 
       marker.bindTooltip(tooltipText(presence), {
@@ -285,6 +327,7 @@
       });
 
       marker.addTo(layer);
+      bindPresenceMarkerDoubleClick(marker, presence);
     });
   }
 
@@ -304,6 +347,30 @@
     return Math.max(500, Math.min(MAX_POLL_RADIUS_M, Math.round(radius)));
   }
 
+  function isUnauthorizedError(err) {
+    if (Number(err?.status) === 401) return true;
+    return /GridWild account session (?:is|required|expired|invalid)/i.test(err?.message || "");
+  }
+
+  function handleAuthError(err) {
+    if (!isUnauthorizedError(err)) return false;
+    if (!isSignedIn()) return true;
+
+    const firstFailure = !authBlocked;
+    authBlocked = true;
+    nextHeartbeatRetryAt = Infinity;
+    nextPollRetryAt = Infinity;
+    stopPolling();
+    clearLayer();
+
+    if (firstFailure) {
+      console.warn("HUD presence paused because the GridWild account session is no longer valid. Log in again to resume.");
+    }
+
+    refreshSettingsStatus("GridWild session expired. Log in again to use HUD presence.");
+    return true;
+  }
+
   async function sendHeartbeat(options = {}) {
     const force = !!options.force;
     if (!shouldPublish()) return null;
@@ -315,6 +382,7 @@
     }
 
     const now = Date.now();
+    if (now < nextHeartbeatRetryAt) return null;
     if (!force && now - lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) return null;
     if (heartbeatInFlight && !force) return null;
 
@@ -333,11 +401,15 @@
       window.__gwState = window.__gwState || {};
       window.__gwState.playerPresence = result.presence || null;
       lastHeartbeatAt = Date.now();
+      nextHeartbeatRetryAt = 0;
       refreshSettingsStatus();
       return result.presence;
     } catch (err) {
-      console.warn("Could not sync player presence:", err);
-      refreshSettingsStatus("Could not sync HUD presence.");
+      if (!handleAuthError(err)) {
+        nextHeartbeatRetryAt = Date.now() + ERROR_BACKOFF_MS;
+        console.warn("Could not sync player presence:", err);
+        refreshSettingsStatus("Could not sync HUD presence.");
+      }
       return null;
     } finally {
       heartbeatInFlight = false;
@@ -345,7 +417,7 @@
   }
 
   async function markOffline(options = {}) {
-    if (!isSignedIn()) return null;
+    if (authBlocked || !isSignedIn()) return null;
 
     try {
       const result = await window.GridWildAPI.upsertPlayerPresence({
@@ -360,13 +432,16 @@
       refreshSettingsStatus();
       return result.presence;
     } catch (err) {
-      console.warn("Could not mark player presence offline:", err);
+      if (!handleAuthError(err)) {
+        console.warn("Could not mark player presence offline:", err);
+      }
       return null;
     }
   }
 
   async function pollNearby(options = {}) {
-    if (!isSignedIn()) {
+    if (authBlocked || !isSignedIn()) {
+      stopPolling();
       clearLayer();
       return null;
     }
@@ -374,6 +449,7 @@
     if (!window.map?.getCenter) return null;
 
     const now = Date.now();
+    if (now < nextPollRetryAt) return null;
     if (!options.force && now - lastPollAt < MIN_POLL_INTERVAL_MS) return null;
     if (pollInFlight) return null;
 
@@ -389,9 +465,13 @@
 
       renderLayer(data.presences || []);
       lastPollAt = Date.now();
+      nextPollRetryAt = 0;
       return data.presences || [];
     } catch (err) {
-      console.warn("Could not load nearby player presence:", err);
+      if (!handleAuthError(err)) {
+        nextPollRetryAt = Date.now() + ERROR_BACKOFF_MS;
+        console.warn("Could not load nearby player presence:", err);
+      }
       return null;
     } finally {
       pollInFlight = false;
@@ -399,7 +479,7 @@
   }
 
   function startPolling() {
-    if (pollTimer) return;
+    if (pollTimer || authBlocked || !isSignedIn()) return;
 
     pollTimer = setInterval(() => {
       pollNearby();
@@ -426,6 +506,7 @@
 
   function statusText(extra = "") {
     if (extra) return extra;
+    if (authBlocked) return "GridWild session expired. Log in again to use HUD presence.";
     if (!isSignedIn()) return "Sign in to share and see live HUD players.";
     if (publishVisibility !== "visible") return "You are hidden from other players' HUDs.";
     if (!getLastKnownLocation()) return "Visible once GridWild gets your location.";
@@ -515,6 +596,11 @@
   window.addEventListener("gwBootstrapReady", handleBootstrap);
 
   window.addEventListener("gwAccountChanged", () => {
+    authBlocked = false;
+    nextHeartbeatRetryAt = 0;
+    nextPollRetryAt = 0;
+    lastPollAt = 0;
+
     if (!isSignedIn()) {
       stopPolling();
       clearLayer();

@@ -3,7 +3,6 @@
     manifest: null,
     heat: "assets/dc_heat.csv",
     observerDictionary: "assets/observer_dictionary.json",
-    squareSummary: "assets/squares_genus_summary.json",
     superchunkBase: "assets/square_genera_superchunks",
   };
 
@@ -11,7 +10,6 @@
     catalogPromise: null,
     catalog: null,
     manifestPromise: null,
-    squareSummaryPromise: null,
   };
 
   function trimTrailingSlash(value) {
@@ -104,15 +102,6 @@
     return state.manifestPromise;
   }
 
-  async function loadSquareSummary() {
-    if (state.squareSummaryPromise) return state.squareSummaryPromise;
-    state.squareSummaryPromise = (async () => {
-      const url = await assetUrl("squareSummary");
-      return fetchJson(url, "GridWild square summary");
-    })();
-    return state.squareSummaryPromise;
-  }
-
   async function superchunkUrl(superIx, superIy) {
     const catalog = await getCatalog();
     const base = trimTrailingSlash(catalog.urls.superchunkBase);
@@ -124,7 +113,6 @@
     getCatalog,
     assetUrl,
     loadManifest,
-    loadSquareSummary,
     superchunkUrl,
     localCatalog,
   };

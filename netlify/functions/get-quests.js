@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,6 +8,7 @@ const supabase = createClient(
 
 exports.handler = async function (event) {
   try {
+    await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const { player_id } = body;
 
@@ -42,6 +44,7 @@ exports.handler = async function (event) {
   )
 `)
       .eq("is_active", true)
+      .eq("created_by", player_id)
       .eq("player_quests.player_id", player_id)
       .eq("quest_evidence.player_id", player_id)
       .order("created_at", { ascending: false });
@@ -54,7 +57,7 @@ exports.handler = async function (event) {
     };
   } catch (err) {
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }
