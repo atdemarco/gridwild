@@ -24,19 +24,17 @@
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      const local = raw
-  ? { ...DEFAULT_CHARACTER, ...JSON.parse(raw) }
-  : { ...DEFAULT_CHARACTER };
+      const local = raw ? { ...DEFAULT_CHARACTER, ...JSON.parse(raw) } : { ...DEFAULT_CHARACTER };
 
-const player = window.__gwState?.player || {};
+      const player = window.__gwState?.player || {};
 
-return {
-  ...local,
-  displayName: player.display_name || local.displayName,
-  archetype: player.archetype || local.archetype,
-  icon: player.icon || local.icon,
-  color: player.color || local.color
-};
+      return {
+        ...local,
+        displayName: player.display_name || local.displayName,
+        archetype: player.archetype || local.archetype,
+        icon: player.icon || local.icon,
+        color: player.color || local.color
+      };
     } catch {
       return { ...DEFAULT_CHARACTER };
     }
@@ -59,7 +57,8 @@ return {
   }
 
   function homeNicheBadgeHtml() {
-    const home = window.GridWildLocalNiches?.getHomeNiche?.() || window.__gwState?.homeNiche || null;
+    const home =
+      window.GridWildLocalNiches?.getHomeNiche?.() || window.__gwState?.homeNiche || null;
     const title = home?.short_title || home?.title || "";
     if (!title) return "";
 
@@ -90,7 +89,7 @@ return {
     if (!el) return;
 
     const c = load();
-    const archetype = ARCHETYPES.find(a => a.id === c.archetype) || ARCHETYPES[0];
+    const archetype = ARCHETYPES.find((a) => a.id === c.archetype) || ARCHETYPES[0];
     const equipped = window.GridWildEconomy?.getEquippedItems?.() || {};
 
     el.innerHTML = `
@@ -151,14 +150,14 @@ return {
     const c = load();
 
     if (!document.getElementById("gwCharacterModalZFix")) {
-    const style = document.createElement("style");
-    style.id = "gwCharacterModalZFix";
-    style.textContent = `
+      const style = document.createElement("style");
+      style.id = "gwCharacterModalZFix";
+      style.textContent = `
         .gw-character-modal-backdrop {
         z-index: 100001 !important;
         }
     `;
-    document.head.appendChild(style);
+      document.head.appendChild(style);
     }
 
     const root = document.createElement("div");
@@ -183,29 +182,39 @@ return {
           <div class="gw-quest-field">
             <label>Explorer type</label>
             <select id="gwCharTypeInput">
-              ${ARCHETYPES.map(a => `
+              ${ARCHETYPES.map(
+                (a) => `
                 <option value="${esc(a.id)}" ${a.id === c.archetype ? "selected" : ""}>
                   ${esc(a.icon)} ${esc(a.label)}
                 </option>
-              `).join("")}
+              `
+              ).join("")}
             </select>
           </div>
 
           <div class="gw-quest-field">
             <label>Icon</label>
             <select id="gwCharIconInput">
-              ${["🌿","🪲","🐦","🍄","🏙️","🌙","🦋","🐝","🦊","🧭"].map(icon => `
+              ${["🌿", "🪲", "🐦", "🍄", "🏙️", "🌙", "🦋", "🐝", "🦊", "🧭"]
+                .map(
+                  (icon) => `
                 <option value="${esc(icon)}" ${icon === c.icon ? "selected" : ""}>${esc(icon)}</option>
-              `).join("")}
+              `
+                )
+                .join("")}
             </select>
           </div>
 
           <div class="gw-quest-field">
             <label>Color theme</label>
             <select id="gwCharColorInput">
-              ${["fern","moss","amber","lichen","night","river"].map(color => `
+              ${["fern", "moss", "amber", "lichen", "night", "river"]
+                .map(
+                  (color) => `
                 <option value="${esc(color)}" ${color === c.color ? "selected" : ""}>${esc(color)}</option>
-              `).join("")}
+              `
+                )
+                .join("")}
             </select>
           </div>
         </div>
@@ -219,7 +228,7 @@ return {
 
     document.body.appendChild(root);
 
-    root.onclick = evt => {
+    root.onclick = (evt) => {
       if (evt.target === root) root.remove();
     };
 
@@ -227,10 +236,9 @@ return {
 
     root.querySelector("#gwCharSaveBtn").onclick = async () => {
       const archetype = root.querySelector("#gwCharTypeInput").value;
-      const fallback = ARCHETYPES.find(a => a.id === archetype) || ARCHETYPES[0];
+      const fallback = ARCHETYPES.find((a) => a.id === archetype) || ARCHETYPES[0];
 
-      const displayName =
-        root.querySelector("#gwCharNameInput").value.trim() || "New Wanderer";
+      const displayName = root.querySelector("#gwCharNameInput").value.trim() || "New Wanderer";
 
       const nextCharacter = save({
         displayName,
@@ -267,8 +275,8 @@ return {
   }
 
   window.addEventListener("gwEconomyChanged", () => {
-      renderSummary();
-    });
+    renderSummary();
+  });
 
   window.GridWildCharacter = {
     load,

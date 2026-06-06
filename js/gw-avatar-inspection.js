@@ -44,7 +44,9 @@
   }
 
   function archetypeLabel(archetype) {
-    const characterDef = window.GridWildCharacter?.ARCHETYPES?.find?.(item => item.id === archetype);
+    const characterDef = window.GridWildCharacter?.ARCHETYPES?.find?.(
+      (item) => item.id === archetype
+    );
     return characterDef?.label || ARCHETYPE_LABELS[archetype] || "Explorer";
   }
 
@@ -54,7 +56,7 @@
 
     SLOT_LABELS.forEach(([slot]) => {
       const itemId = row?.[slot];
-      out[slot] = itemId ? catalog.find(item => item.id === itemId) || null : null;
+      out[slot] = itemId ? catalog.find((item) => item.id === itemId) || null : null;
     });
 
     return out;
@@ -78,12 +80,9 @@
 
   function hasPlayerStats(data) {
     const stats = data?.stats || {};
-    return [
-      "wildpoints",
-      "quests_completed",
-      "parties_joined",
-      "achievements_unlocked"
-    ].some(key => Object.prototype.hasOwnProperty.call(stats, key));
+    return ["wildpoints", "quests_completed", "parties_joined", "achievements_unlocked"].some(
+      (key) => Object.prototype.hasOwnProperty.call(stats, key)
+    );
   }
 
   function avatarStateForPlayer(data = {}) {
@@ -336,16 +335,14 @@
     let store = {};
 
     if (Array.isArray(dbRows)) {
-      dbRows.forEach(row => {
+      dbRows.forEach((row) => {
         store[row.achievement_id] = { unlocked: !!row.unlocked };
       });
     } else if (window.GridWildAchievements?.getStore) {
       store = window.GridWildAchievements.getStore() || {};
     }
 
-    return defs
-      .filter(def => store[def.id]?.unlocked)
-      .slice(0, limit);
+    return defs.filter((def) => store[def.id]?.unlocked).slice(0, limit);
   }
 
   function renderEquippedRows(equipped, options = {}) {
@@ -375,9 +372,13 @@
 
     return `
       <div class="gw-avatar-flair-list">
-        ${flair.map(def => `
+        ${flair
+          .map(
+            (def) => `
           <span class="gw-avatar-flair">${esc(def.icon || "")} ${esc(def.name)}</span>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
     `;
   }
@@ -393,7 +394,9 @@
 
     const equipped = avatarState.equipped || {};
     const flair = getUnlockedFlair();
-    const title = equipped.title?.name ? cleanTitle(equipped.title.name) : avatarState.archetypeLabel;
+    const title = equipped.title?.name
+      ? cleanTitle(equipped.title.name)
+      : avatarState.archetypeLabel;
 
     root.innerHTML = `
       <div class="gw-store-modal gw-avatar-inspection-modal" role="dialog" aria-modal="true" aria-labelledby="gwAvatarInspectionTitle">
@@ -449,16 +452,18 @@
     const avatarState = avatarStateForPlayer(data);
     const equipped = avatarState.equipped || {};
     const stats = data.stats || {};
-    const title = equipped.title?.name ? cleanTitle(equipped.title.name) : avatarState.archetypeLabel;
+    const title = equipped.title?.name
+      ? cleanTitle(equipped.title.name)
+      : avatarState.archetypeLabel;
     const niche = data.home_niche || null;
     const hasHomeNicheResult = Object.prototype.hasOwnProperty.call(data, "home_niche");
-    const nicheName = niche?.short_title || niche?.title ||
+    const nicheName =
+      niche?.short_title ||
+      niche?.title ||
       (currentView.loading && !hasHomeNicheResult ? "Loading..." : "No home niche selected");
-    const nicheMeta = [
-      niche?.theme,
-      niche?.primary_place_label,
-      niche?.niche_type
-    ].filter(Boolean).join(" \u00b7 ");
+    const nicheMeta = [niche?.theme, niche?.primary_place_label, niche?.niche_type]
+      .filter(Boolean)
+      .join(" \u00b7 ");
 
     root.innerHTML = `
       <div class="gw-store-modal gw-avatar-inspection-modal" role="dialog" aria-modal="true" aria-labelledby="gwAvatarInspectionTitle">
@@ -486,12 +491,14 @@
             </div>
           </div>
 
-          ${window.GridWildPlayerInteractions?.renderAvatarActionsHtml?.({
-            targetPlayerId: currentView.playerId,
-            player: data.player,
-            presence: data.presence,
-            active_party: data.active_party
-          }) || ""}
+          ${
+            window.GridWildPlayerInteractions?.renderAvatarActionsHtml?.({
+              targetPlayerId: currentView.playerId,
+              player: data.player,
+              presence: data.presence,
+              active_party: data.active_party
+            }) || ""
+          }
 
           <div class="gw-avatar-panel-section">
             <div class="gw-avatar-section-title">Field Stats</div>
@@ -556,7 +563,7 @@
 
   function openRoot(view) {
     injectStyles();
-    document.querySelectorAll(".gw-store-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".gw-store-backdrop").forEach((el) => el.remove());
 
     const root = document.createElement("div");
     root.className = "gw-store-backdrop gw-avatar-inspection-backdrop";
@@ -565,11 +572,11 @@
 
     document.body.appendChild(root);
 
-    root.addEventListener("click", evt => {
+    root.addEventListener("click", (evt) => {
       if (evt.target === root) close();
     });
 
-    root.addEventListener("keydown", evt => {
+    root.addEventListener("keydown", (evt) => {
       if (evt.key === "Escape") close();
     });
 
@@ -610,12 +617,13 @@
     }
 
     window.GridWildAPI.getPlayerInfo(playerId)
-      .then(result => {
+      .then((result) => {
         if (
           currentView.kind !== "player" ||
           currentView.playerId !== String(playerId) ||
           currentView.requestId !== requestId
-        ) return;
+        )
+          return;
 
         const merged = mergePlayerData(currentView.data, result || {});
         playerCache.set(String(playerId), merged);
@@ -624,13 +632,14 @@
         currentView.error = null;
         refreshOpen();
       })
-      .catch(err => {
+      .catch((err) => {
         console.warn("Could not load player info:", err);
         if (
           currentView.kind !== "player" ||
           currentView.playerId !== String(playerId) ||
           currentView.requestId !== requestId
-        ) return;
+        )
+          return;
 
         currentView.loading = false;
         currentView.error = err?.message || "Player info is unavailable.";
@@ -663,11 +672,13 @@
   }
 
   function bindButtons(root = document) {
-    root.querySelectorAll("[data-open-avatar-inspection], #gwOpenAvatarInspectionBtn").forEach(btn => {
-      if (btn.dataset.avatarInspectionBound === "true") return;
-      btn.dataset.avatarInspectionBound = "true";
-      btn.addEventListener("click", open);
-    });
+    root
+      .querySelectorAll("[data-open-avatar-inspection], #gwOpenAvatarInspectionBtn")
+      .forEach((btn) => {
+        if (btn.dataset.avatarInspectionBound === "true") return;
+        btn.dataset.avatarInspectionBound = "true";
+        btn.addEventListener("click", open);
+      });
   }
 
   window.addEventListener("gwEconomyChanged", refreshOpen);

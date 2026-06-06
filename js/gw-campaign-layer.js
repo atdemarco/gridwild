@@ -10,33 +10,33 @@
   let layer = null;
   let lastSurveyInfoOpen = { id: null, at: 0 };
 
-function loadState() {
-  const rows = window.__gwState?.playerSurveys;
+  function loadState() {
+    const rows = window.__gwState?.playerSurveys;
 
-  if (Array.isArray(rows)) {
-    const out = {};
+    if (Array.isArray(rows)) {
+      const out = {};
 
-    rows.forEach(row => {
-      out[row.survey_id] = {
-        joined: !!row.joined,
-        visible: !!row.visible
-      };
-    });
+      rows.forEach((row) => {
+        out[row.survey_id] = {
+          joined: !!row.joined,
+          visible: !!row.visible
+        };
+      });
 
-    return out;
+      return out;
+    }
+
+    try {
+      return JSON.parse(localStorage.getItem(STATE_KEY) || "{}") || {};
+    } catch {
+      return {};
+    }
   }
 
-  try {
-    return JSON.parse(localStorage.getItem(STATE_KEY) || "{}") || {};
-  } catch {
-    return {};
+  function saveState(state) {
+    localStorage.setItem(STATE_KEY, JSON.stringify(state || {}));
+    window.dispatchEvent(new CustomEvent("gwSurveyStateChanged"));
   }
-}
-
-function saveState(state) {
-  localStorage.setItem(STATE_KEY, JSON.stringify(state || {}));
-  window.dispatchEvent(new CustomEvent("gwSurveyStateChanged"));
-}
 
   function getSurveyState(id) {
     const state = loadState();
@@ -45,51 +45,53 @@ function saveState(state) {
 
   function joinedSurveyIds() {
     const state = loadState();
-    return Object.keys(state).filter(id => state[id]?.joined);
+    return Object.keys(state).filter((id) => state[id]?.joined);
   }
 
-function setSurveyState(id, patch) {
-  const state = loadState();
+  function setSurveyState(id, patch) {
+    const state = loadState();
 
-  state[id] = {
-    ...(state[id] || {}),
-    ...patch
-  };
+    state[id] = {
+      ...(state[id] || {}),
+      ...patch
+    };
 
-  if (!state[id].joined) {
-    state[id].visible = false;
-  }
-
-  // Immediate local/runtime update.
-  window.__gwState = window.__gwState || {};
-  window.__gwState.playerSurveys = [
-    ...(window.__gwState.playerSurveys || []).filter(x => x.survey_id !== id),
-    {
-      survey_id: id,
-      joined: !!state[id].joined,
-      visible: !!state[id].visible
+    if (!state[id].joined) {
+      state[id].visible = false;
     }
-  ];
 
-  saveState(state);
-  render();
-
-  // DB sync.
-  window.GridWildAPI?.setPlayerSurveyState?.(id, {
-    joined: !!state[id].joined,
-    visible: !!state[id].visible
-  }).then(result => {
+    // Immediate local/runtime update.
     window.__gwState = window.__gwState || {};
     window.__gwState.playerSurveys = [
-      ...(window.__gwState.playerSurveys || []).filter(x => x.survey_id !== id),
-      result.player_survey
+      ...(window.__gwState.playerSurveys || []).filter((x) => x.survey_id !== id),
+      {
+        survey_id: id,
+        joined: !!state[id].joined,
+        visible: !!state[id].visible
+      }
     ];
 
-    window.dispatchEvent(new CustomEvent("gwSurveyStateChanged"));
-  }).catch(err => {
-    console.warn("Could not sync survey state:", err);
-  });
-}
+    saveState(state);
+    render();
+
+    // DB sync.
+    window.GridWildAPI?.setPlayerSurveyState?.(id, {
+      joined: !!state[id].joined,
+      visible: !!state[id].visible
+    })
+      .then((result) => {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.playerSurveys = [
+          ...(window.__gwState.playerSurveys || []).filter((x) => x.survey_id !== id),
+          result.player_survey
+        ];
+
+        window.dispatchEvent(new CustomEvent("gwSurveyStateChanged"));
+      })
+      .catch((err) => {
+        console.warn("Could not sync survey state:", err);
+      });
+  }
 
   function isJoined(id) {
     return !!getSurveyState(id).joined;
@@ -143,7 +145,7 @@ function setSurveyState(id, patch) {
     persistSurveyViewPreference(next);
 
     if (next) {
-      joinedSurveyIds().forEach(id => {
+      joinedSurveyIds().forEach((id) => {
         const state = getSurveyState(id);
         if (state.joined && !state.visible) {
           setSurveyState(id, { visible: true });
@@ -153,9 +155,11 @@ function setSurveyState(id, patch) {
 
     render();
 
-    window.dispatchEvent(new CustomEvent("gridwild:surveyviewchange", {
-      detail: { showSurveyView: next }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gridwild:surveyviewchange", {
+        detail: { showSurveyView: next }
+      })
+    );
   }
 
   function ensureLayer() {
@@ -176,40 +180,39 @@ function setSurveyState(id, patch) {
   }
 
   function colorForKind(kind) {
-    return {
-      boundary: "#76e7bf",
-      path: "#ffe082",
-      exclusion: "#ff7a6b",
-      dense: "#b68cff",
-      asset: "#f0d18a"
-    }[kind] || "#ffe082";
+    return (
+      {
+        boundary: "#76e7bf",
+        path: "#ffe082",
+        exclusion: "#ff7a6b",
+        dense: "#b68cff",
+        asset: "#f0d18a"
+      }[kind] || "#ffe082"
+    );
   }
-
 
   function defaultGeometryStyle(kind) {
-  const c = colorForKind(kind);
-  return {
-    fillColor: c,
-    lineColor: c,
-    lineWeight: kind === "path" ? 5 : kind === "boundary" ? 3 : 2,
-    fillOpacity: kind === "path" ? 0 : kind === "boundary" ? 0.10 : kind === "exclusion" ? 0.20 : 0.22
-  };
-}
-
-function getSurveyGeometryStyle(survey, kind, index = 0) {
-  const styles = survey?.geometries?.styles || {};
-
-  if (kind === "boundary") {
-    return { ...defaultGeometryStyle(kind), ...(styles.boundary || {}) };
+    const c = colorForKind(kind);
+    return {
+      fillColor: c,
+      lineColor: c,
+      lineWeight: kind === "path" ? 5 : kind === "boundary" ? 3 : 2,
+      fillOpacity:
+        kind === "path" ? 0 : kind === "boundary" ? 0.1 : kind === "exclusion" ? 0.2 : 0.22
+    };
   }
 
-  const key =
-    kind === "path" ? "paths" :
-    kind === "exclusion" ? "exclusions" :
-    "denseZones";
+  function getSurveyGeometryStyle(survey, kind, index = 0) {
+    const styles = survey?.geometries?.styles || {};
 
-  return { ...defaultGeometryStyle(kind), ...((styles[key] || [])[index] || {}) };
-}
+    if (kind === "boundary") {
+      return { ...defaultGeometryStyle(kind), ...(styles.boundary || {}) };
+    }
+
+    const key = kind === "path" ? "paths" : kind === "exclusion" ? "exclusions" : "denseZones";
+
+    return { ...defaultGeometryStyle(kind), ...((styles[key] || [])[index] || {}) };
+  }
 
   function esc(s) {
     return String(s ?? "")
@@ -305,33 +308,41 @@ function getSurveyGeometryStyle(survey, kind, index = 0) {
     const latlng = evt?.latlng || map.getCenter();
     L.popup({ autoPan: true })
       .setLatLng(latlng)
-      .setContent(`
+      .setContent(
+        `
         <b>${esc(survey.name || "Untitled Survey")}</b><br>
         <span>${esc(survey.description || "No description yet.")}</span>
-      `)
+      `
+      )
       .openOn(map);
   }
 
   function bindSurveyHudInfo(target, survey) {
     if (!target?.on || !survey?.id) return target;
 
-    target.on("click", evt => openSurveyHudInfo(survey, evt));
-    target.on("dblclick", evt => openSurveyHudInfo(survey, evt));
+    target.on("click", (evt) => openSurveyHudInfo(survey, evt));
+    target.on("dblclick", (evt) => openSurveyHudInfo(survey, evt));
     return target;
   }
 
   function addPolygon(points, kind, style, survey) {
     if (!Array.isArray(points) || !points.length) return;
 
-    return bindSurveyHudInfo(L.polygon(points.map(p => [p.lat, p.lng]), {
-      pane: PANE,
-      color: style.lineColor,
-      weight: style.lineWeight,
-      fillColor: style.fillColor,
-      fillOpacity: style.fillOpacity,
-      interactive: true,
-      bubblingMouseEvents: false
-    }).addTo(layer), survey);
+    return bindSurveyHudInfo(
+      L.polygon(
+        points.map((p) => [p.lat, p.lng]),
+        {
+          pane: PANE,
+          color: style.lineColor,
+          weight: style.lineWeight,
+          fillColor: style.fillColor,
+          fillOpacity: style.fillOpacity,
+          interactive: true,
+          bubblingMouseEvents: false
+        }
+      ).addTo(layer),
+      survey
+    );
   }
 
   function renderSurvey(c) {
@@ -342,21 +353,24 @@ function getSurveyGeometryStyle(survey, kind, index = 0) {
         addPolygon(g.boundary, "boundary", getSurveyGeometryStyle(c, "boundary", 0), c);
       }
 
-      g.boundary.forEach(obj => {
+      g.boundary.forEach((obj) => {
         if (obj?.geojson) {
-          bindSurveyHudInfo(L.geoJSON(obj.geojson, {
-            pane: PANE,
-            interactive: true,
-            bubblingMouseEvents: false,
-            onEachFeature: (_feature, featureLayer) => {
-              bindSurveyHudInfo(featureLayer, c);
-            },
-            style: {
-              color: colorForKind("boundary"),
-              weight: 3,
-              fillOpacity: 0.08
-            }
-          }).addTo(layer), c);
+          bindSurveyHudInfo(
+            L.geoJSON(obj.geojson, {
+              pane: PANE,
+              interactive: true,
+              bubblingMouseEvents: false,
+              onEachFeature: (_feature, featureLayer) => {
+                bindSurveyHudInfo(featureLayer, c);
+              },
+              style: {
+                color: colorForKind("boundary"),
+                weight: 3,
+                fillOpacity: 0.08
+              }
+            }).addTo(layer),
+            c
+          );
         }
       });
     }
@@ -366,15 +380,21 @@ function getSurveyGeometryStyle(survey, kind, index = 0) {
 
       const s = getSurveyGeometryStyle(c, "path", index);
 
-      bindSurveyHudInfo(L.polyline(path.map(p => [p.lat, p.lng]), {
-        pane: PANE,
-        color: s.lineColor,
-        weight: s.lineWeight,
-        opacity: 0.95,
-        dashArray: "8 7",
-        interactive: true,
-        bubblingMouseEvents: false
-      }).addTo(layer), c);
+      bindSurveyHudInfo(
+        L.polyline(
+          path.map((p) => [p.lat, p.lng]),
+          {
+            pane: PANE,
+            color: s.lineColor,
+            weight: s.lineWeight,
+            opacity: 0.95,
+            dashArray: "8 7",
+            interactive: true,
+            bubblingMouseEvents: false
+          }
+        ).addTo(layer),
+        c
+      );
     });
 
     (g.exclusions || []).forEach((poly, index) => {
@@ -385,7 +405,7 @@ function getSurveyGeometryStyle(survey, kind, index = 0) {
       addPolygon(poly, "dense", getSurveyGeometryStyle(c, "dense", index), c);
     });
 
-    (g.assets || []).forEach(a => {
+    (g.assets || []).forEach((a) => {
       if (!Number.isFinite(Number(a.lat)) || !Number.isFinite(Number(a.lng))) return;
 
       const latlng = L.latLng(Number(a.lat), Number(a.lng));
@@ -402,12 +422,12 @@ function getSurveyGeometryStyle(survey, kind, index = 0) {
         })
       });
 
-      marker.on("click", evt => {
+      marker.on("click", (evt) => {
         stopSurveyHudEvent(evt);
         flashLabel(latlng, a.name || a.type || "Survey asset");
         openSurveyHudInfo(c, evt);
       });
-      marker.on("dblclick", evt => openSurveyHudInfo(c, evt));
+      marker.on("dblclick", (evt) => openSurveyHudInfo(c, evt));
 
       marker.addTo(layer);
     });
@@ -422,25 +442,25 @@ function getSurveyGeometryStyle(survey, kind, index = 0) {
     if (!isSurveyViewEnabled()) return;
 
     const surveys = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
-    surveys.forEach(c => {
+    surveys.forEach((c) => {
       if (isVisible(c.id)) renderSurvey(c);
     });
   }
 
-window.GridWildSurveyLayer = {
-  loadState,
-  getSurveyState,
-  setSurveyState,
-  isJoined,
-  isVisible,
-  join,
-  leave,
-  show,
-  hide,
-  isSurveyViewEnabled,
-  setSurveyViewEnabled,
-  render
-};
+  window.GridWildSurveyLayer = {
+    loadState,
+    getSurveyState,
+    setSurveyState,
+    isJoined,
+    isVisible,
+    join,
+    leave,
+    show,
+    hide,
+    isSurveyViewEnabled,
+    setSurveyViewEnabled,
+    render
+  };
 
   document.addEventListener("DOMContentLoaded", () => {
     setTimeout(render, 100);

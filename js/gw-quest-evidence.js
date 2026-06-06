@@ -47,7 +47,7 @@
     const runtime = window.GridWildQuests?.getVisibleQuests?.() || [];
     const local = loadQuests();
 
-    [...runtime, ...local].forEach(q => {
+    [...runtime, ...local].forEach((q) => {
       if (!q) return;
       const status = String(q.status || "").toLowerCase();
       if (q.archived || q.archivedAt || status === "completed" || status === "complete") return;
@@ -75,17 +75,16 @@
   }
 
   function getAllEvidenceObservations() {
-  // Reward evidence must exist on iNaturalist before the server can verify it.
-  return window.GridWildRecentINat?.getRecentObservations?.() || [];
-}
+    // Reward evidence must exist on iNaturalist before the server can verify it.
+    return window.GridWildRecentINat?.getRecentObservations?.() || [];
+  }
 
   function syncQuestStateFromData(data) {
     if (!data) return;
 
     window.__gwState = window.__gwState || {};
     window.__gwState.quests = data.quests || [];
-    window.__gwState.questEvidence = (data.quests || [])
-      .flatMap(q => q.quest_evidence || []);
+    window.__gwState.questEvidence = (data.quests || []).flatMap((q) => q.quest_evidence || []);
 
     window.GridWildQuests?.renderQuestListIntoPage?.();
     window.refreshQuestBadge?.();
@@ -94,11 +93,11 @@
 
   function refreshQuestStateFromApi() {
     return window.GridWildAPI?.getQuests?.()
-      .then(data => {
+      .then((data) => {
         syncQuestStateFromData(data);
         return data;
       })
-      .catch(err => {
+      .catch((err) => {
         console.warn("Could not refresh quests after evidence change:", err);
         return null;
       });
@@ -111,10 +110,11 @@
 
     window.__gwState = window.__gwState || {};
     const evidence = window.__gwState.questEvidence || [];
-    const already = evidence.some(e =>
-      String(e.quest_id) === String(dbQuestId) &&
-      String(e.obs_id) === id &&
-      isClaimedStatus(e.status)
+    const already = evidence.some(
+      (e) =>
+        String(e.quest_id) === String(dbQuestId) &&
+        String(e.obs_id) === id &&
+        isClaimedStatus(e.status)
     );
 
     if (!already) {
@@ -137,17 +137,16 @@
     const id = obsId(obs);
     if (!dbQuestId || !id || !window.__gwState?.questEvidence) return;
 
-    window.__gwState.questEvidence = window.__gwState.questEvidence.filter(e =>
-      !(
-        String(e.quest_id) === String(dbQuestId) &&
-        String(e.obs_id) === id &&
-        e.status === "claimed"
-      )
+    window.__gwState.questEvidence = window.__gwState.questEvidence.filter(
+      (e) =>
+        !(
+          String(e.quest_id) === String(dbQuestId) &&
+          String(e.obs_id) === id &&
+          e.status === "claimed"
+        )
     );
     window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
   }
-
-
 
   function isTaxonMatch(obs, quest) {
     const want = quest?.recipe?.iconicTaxon || "Any";
@@ -195,11 +194,14 @@
     const [ix, iy] = key.split(",").map(Number);
 
     if (!Number.isFinite(ix) || !Number.isFinite(iy)) return false;
+    if (mode === "target_set") {
+      const cells = Array.isArray(target.cells) ? target.cells : [];
+      return cells.some((cell) => `${Number(cell?.ix)},${Number(cell?.iy)}` === key);
+    }
     if (!Number.isFinite(Number(target.ix)) || !Number.isFinite(Number(target.iy))) return true;
 
     const radius = Number(target.radiusCells ?? 0);
-    return Math.abs(ix - Number(target.ix)) <= radius &&
-           Math.abs(iy - Number(target.iy)) <= radius;
+    return Math.abs(ix - Number(target.ix)) <= radius && Math.abs(iy - Number(target.iy)) <= radius;
   }
 
   function qualifies(obs, quest) {
@@ -219,9 +221,8 @@
     return {
       taxon: {
         ok: isTaxonMatch(obs, quest),
-        label: quest?.recipe?.iconicTaxon === "Any"
-          ? "Any"
-          : `${obs?.iconic_taxon_name || "Unknown"}`
+        label:
+          quest?.recipe?.iconicTaxon === "Any" ? "Any" : `${obs?.iconic_taxon_name || "Unknown"}`
       },
       gps: {
         ok: isEvidenceMatch(obs, quest),
@@ -235,16 +236,25 @@
       },
       location: {
         ok: isLocationMatch(obs, quest),
-        label: quest?.recipe?.targetLocation === "anywhere" ? "Anywhere" : (obs?.lat && obs?.lng ? "In range check" : "No GPS")
+        label:
+          quest?.recipe?.targetLocation === "anywhere"
+            ? "Anywhere"
+            : quest?.recipe?.targetLocation === "target_set"
+              ? obs?.lat && obs?.lng
+                ? "Target square check"
+                : "No GPS"
+              : obs?.lat && obs?.lng
+                ? "In range check"
+                : "No GPS"
       }
     };
   }
 
   function getEvidenceRowsForQuest(quest) {
     return getAllEvidenceObservations()
-      .map(obs => {
+      .map((obs) => {
         const checks = criterionDetails(obs, quest);
-        const ok = Object.values(checks).every(check => check.ok);
+        const ok = Object.values(checks).every((check) => check.ok);
         const channel = getChannelForQuest(quest);
         const lockedTo = claimedQuestForObservationChannel(obs, channel);
 
@@ -263,34 +273,32 @@
   }
 
   function getObservationQuestMatches(obs) {
-    return openQuests().filter(q => qualifies(obs, q));
+    return openQuests().filter((q) => qualifies(obs, q));
   }
 
-    function getCandidatesForQuest(quest) {
-    return getAllEvidenceObservations().filter(o => qualifies(o, quest));
-    }
-
-function claimedQuestForObservationChannel(obs, channel) {
-  const id = obsId(obs);
-  const evidence = window.__gwState?.questEvidence || [];
-  const quests = window.GridWildQuests?.getVisibleQuests?.() || [];
-
-  for (const e of evidence) {
-    if (String(e.obs_id) !== id || !isClaimedStatus(e.status)) continue;
-
-    const q = quests.find(x =>
-      String(x.dbId || x.id) === String(e.quest_id)
-    );
-
-    if (!q) continue;
-
-    if (getChannelForQuest(q) === channel) {
-      return q.id;
-    }
+  function getCandidatesForQuest(quest) {
+    return getAllEvidenceObservations().filter((o) => qualifies(o, quest));
   }
 
-  return null;
-}
+  function claimedQuestForObservationChannel(obs, channel) {
+    const id = obsId(obs);
+    const evidence = window.__gwState?.questEvidence || [];
+    const quests = window.GridWildQuests?.getVisibleQuests?.() || [];
+
+    for (const e of evidence) {
+      if (String(e.obs_id) !== id || !isClaimedStatus(e.status)) continue;
+
+      const q = quests.find((x) => String(x.dbId || x.id) === String(e.quest_id));
+
+      if (!q) continue;
+
+      if (getChannelForQuest(q) === channel) {
+        return q.id;
+      }
+    }
+
+    return null;
+  }
 
   function isObservationClaimedForQuest(obs, quest) {
     const id = obsId(obs);
@@ -298,11 +306,14 @@ function claimedQuestForObservationChannel(obs, channel) {
     const dbEvidence = window.__gwState?.questEvidence || [];
     const dbQuestId = quest.dbId || quest.id;
 
-    if (dbEvidence.some(e =>
-      String(e.quest_id) === String(dbQuestId) &&
-      String(e.obs_id) === String(id) &&
-      isClaimedStatus(e.status)
-    )) {
+    if (
+      dbEvidence.some(
+        (e) =>
+          String(e.quest_id) === String(dbQuestId) &&
+          String(e.obs_id) === String(id) &&
+          isClaimedStatus(e.status)
+      )
+    ) {
       return true;
     }
 
@@ -330,17 +341,20 @@ function claimedQuestForObservationChannel(obs, channel) {
       quest.dbId || quest.id,
       id,
       obs.source || "observation"
-    ).then(() => {
-      return refreshQuestStateFromApi();
-    }).then(() => {
-      if (options.autoComplete !== false) completeQuestIfReady(quest);
-    }).catch(err => {
-      removeOptimisticEvidence(quest, obs);
-      console.warn("Could not sync quest evidence claim:", err);
-      if (options.notifyError !== false) {
-        alert(`Could not verify quest evidence: ${err?.message || "Unknown error"}`);
-      }
-    });
+    )
+      .then(() => {
+        return refreshQuestStateFromApi();
+      })
+      .then(() => {
+        if (options.autoComplete !== false) completeQuestIfReady(quest);
+      })
+      .catch((err) => {
+        removeOptimisticEvidence(quest, obs);
+        console.warn("Could not sync quest evidence claim:", err);
+        if (options.notifyError !== false) {
+          alert(`Could not verify quest evidence: ${err?.message || "Unknown error"}`);
+        }
+      });
 
     return {
       ok: true,
@@ -371,18 +385,20 @@ function claimedQuestForObservationChannel(obs, channel) {
     const activeId = window.__gwState?.activeQuestId;
     if (!activeId) return null;
 
-    return openQuests().find(q =>
-      String(q.dbId || q.id) === String(activeId) ||
-      String(q.id) === String(activeId)
-    ) || null;
+    return (
+      openQuests().find(
+        (q) => String(q.dbId || q.id) === String(activeId) || String(q.id) === String(activeId)
+      ) || null
+    );
   }
 
   function autoClaimDraftsForActiveQuest() {
     const quest = getActiveQuest();
     if (!quest) return 0;
 
-    const candidates = getAllEvidenceObservations()
-      .filter(o => o.source === "draft" && qualifies(o, quest));
+    const candidates = getAllEvidenceObservations().filter(
+      (o) => o.source === "draft" && qualifies(o, quest)
+    );
 
     let claimed = 0;
     for (const obs of candidates) {
@@ -399,14 +415,11 @@ function claimedQuestForObservationChannel(obs, channel) {
     const dbQuestId = quest.dbId || quest.id;
     const evidence = window.__gwState?.questEvidence || [];
     const obs = getAllEvidenceObservations();
-    const byId = new Map(obs.map(o => [obsId(o), o]));
+    const byId = new Map(obs.map((o) => [obsId(o), o]));
 
     return evidence
-      .filter(e =>
-        String(e.quest_id) === String(dbQuestId) &&
-        isClaimedStatus(e.status)
-      )
-      .map(e => byId.get(String(e.obs_id)))
+      .filter((e) => String(e.quest_id) === String(dbQuestId) && isClaimedStatus(e.status))
+      .map((e) => byId.get(String(e.obs_id)))
       .filter(Boolean);
   }
 
@@ -459,7 +472,7 @@ function claimedQuestForObservationChannel(obs, channel) {
       </div>
 
       <div class="gw-quest-progressbar">
-        <div style="width:${Math.min(100, 100 * progress.claimed / Math.max(1, progress.target))}%;"></div>
+        <div style="width:${Math.min(100, (100 * progress.claimed) / Math.max(1, progress.target))}%;"></div>
       </div>
 
       <div class="gw-evidence-selector-listbox" role="listbox" aria-label="Possible quest evidence">
@@ -476,7 +489,11 @@ function claimedQuestForObservationChannel(obs, channel) {
               </tr>
             </thead>
             <tbody>
-              ${rows.length ? rows.map((row, index) => `
+              ${
+                rows.length
+                  ? rows
+                      .map(
+                        (row, index) => `
                 <tr class="${row.already ? "is-linked" : row.ok ? "is-qualified" : "is-unqualified"}">
                   <td>
                     <b>${esc(evidenceObsName(row.obs))}</b>
@@ -491,20 +508,24 @@ function claimedQuestForObservationChannel(obs, channel) {
                       row.already
                         ? `<span class="gw-evidence-badge claimed">Linked</span>`
                         : row.blocked
-                        ? `<span class="gw-evidence-badge blocked">Used</span>`
-                        : row.ok
+                          ? `<span class="gw-evidence-badge blocked">Used</span>`
+                          : row.ok
                             ? `<button class="gw-mini-btn gw-evidence-selector-claim" type="button" data-evidence-key="${esc(evidenceRowKey(row))}">Claim</button>`
                             : `<span class="gw-evidence-badge blocked">Not enough</span>`
                     }
                   </td>
                 </tr>
-              `).join("") : `
+              `
+                      )
+                      .join("")
+                  : `
                 <tr>
                   <td colspan="6">
                     <div class="gw-evidence-selector-empty">No draft or recent observations are available yet.</div>
                   </td>
                 </tr>
-              `}
+              `
+              }
             </tbody>
           </table>
         </div>
@@ -528,7 +549,8 @@ function claimedQuestForObservationChannel(obs, channel) {
       const scrollTop = scroller?.scrollTop || 0;
       const scrollLeft = scroller?.scrollLeft || 0;
 
-      root.querySelector(".gw-evidence-selector-card").innerHTML = renderEvidenceSelectorBody(quest);
+      root.querySelector(".gw-evidence-selector-card").innerHTML =
+        renderEvidenceSelectorBody(quest);
       bindEvidenceSelector(root, quest);
 
       const nextScroller = root.querySelector(".gw-evidence-selector-table-wrap");
@@ -540,16 +562,16 @@ function claimedQuestForObservationChannel(obs, channel) {
 
     root.querySelector(".gw-evidence-selector-close")?.addEventListener("click", close);
     root.querySelector(".gw-evidence-selector-dismiss")?.addEventListener("click", close);
-    root.onclick = evt => {
+    root.onclick = (evt) => {
       if (evt.target === root) close();
     };
 
-    root.querySelectorAll(".gw-evidence-selector-claim").forEach(btn => {
-      btn.addEventListener("click", evt => {
+    root.querySelectorAll(".gw-evidence-selector-claim").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
         evt.stopPropagation();
         const rows = getEvidenceRowsForQuest(quest);
-        const row = rows.find(candidate =>
-          evidenceRowKey(candidate) === String(btn.dataset.evidenceKey)
+        const row = rows.find(
+          (candidate) => evidenceRowKey(candidate) === String(btn.dataset.evidenceKey)
         );
         const obs = row?.obs || null;
         const result = claimObservationForQuest(obs, quest, { autoComplete: false });
@@ -564,7 +586,7 @@ function claimedQuestForObservationChannel(obs, channel) {
       });
     });
 
-    root.querySelector(".gw-evidence-selector-complete")?.addEventListener("click", async evt => {
+    root.querySelector(".gw-evidence-selector-complete")?.addEventListener("click", async (evt) => {
       evt.stopPropagation();
       const ok = await completeQuestIfReady(quest);
       if (ok) close();
@@ -575,7 +597,7 @@ function claimedQuestForObservationChannel(obs, channel) {
   function openEvidenceSelector(quest) {
     if (!quest) return;
 
-    document.querySelectorAll(".gw-evidence-selector-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".gw-evidence-selector-backdrop").forEach((el) => el.remove());
 
     const root = document.createElement("div");
     root.className = "gw-evidence-selector-backdrop";
@@ -634,9 +656,7 @@ function claimedQuestForObservationChannel(obs, channel) {
     const id = obsId(obs);
     const evidence = window.__gwState?.questEvidence || [];
 
-    const claimed = evidence.some(e =>
-      String(e.obs_id) === id && isClaimedStatus(e.status)
-    );
+    const claimed = evidence.some((e) => String(e.obs_id) === id && isClaimedStatus(e.status));
     if (claimed) {
       return `<span class="gw-evidence-badge claimed" title="Already linked to a quest">🔗</span>`;
     }
@@ -671,7 +691,7 @@ function claimedQuestForObservationChannel(obs, channel) {
         </div>
 
         <div class="gw-quest-progressbar">
-          <div style="width:${Math.min(100, 100 * progress.claimed / Math.max(1, progress.target))}%;"></div>
+          <div style="width:${Math.min(100, (100 * progress.claimed) / Math.max(1, progress.target))}%;"></div>
         </div>
 
         <div class="gw-quest-evidence-subtitle">
@@ -681,12 +701,14 @@ function claimedQuestForObservationChannel(obs, channel) {
         ${
           candidates.length
             ? `<div class="gw-list">
-                ${candidates.slice(0, 20).map(o => {
-                  const already = isObservationClaimedForQuest(o, quest);
-                  const lockedTo = claimedQuestForObservationChannel(o, channel);
-                  const blocked = lockedTo && lockedTo !== quest.id;
+                ${candidates
+                  .slice(0, 20)
+                  .map((o) => {
+                    const already = isObservationClaimedForQuest(o, quest);
+                    const lockedTo = claimedQuestForObservationChannel(o, channel);
+                    const blocked = lockedTo && lockedTo !== quest.id;
 
-                  return `
+                    return `
                     <div class="gw-rowline gw-evidence-row" data-obs-id="${esc(obsId(o))}">
                       <span style="min-width:0;">
                         <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
@@ -706,7 +728,8 @@ function claimedQuestForObservationChannel(obs, channel) {
                       }
                     </div>
                   `;
-                }).join("")}
+                  })
+                  .join("")}
               </div>`
             : `<div class="gw-muted" style="font-size:12px;">No matching recent observations yet.</div>`
         }
@@ -746,12 +769,13 @@ function claimedQuestForObservationChannel(obs, channel) {
       bindQuestEvidencePanel(root, quest);
     }
 
-    panel.querySelectorAll(".gw-claim-evidence-btn").forEach(btn => {
-      btn.addEventListener("click", evt => {
+    panel.querySelectorAll(".gw-claim-evidence-btn").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
         evt.stopPropagation();
 
-        const obs = getAllEvidenceObservations()
-          .find(o => obsId(o) === String(btn.dataset.obsId));
+        const obs = getAllEvidenceObservations().find(
+          (o) => obsId(o) === String(btn.dataset.obsId)
+        );
 
         const result = claimObservationForQuest(obs, quest);
         if (!result.ok) {
@@ -764,7 +788,7 @@ function claimedQuestForObservationChannel(obs, channel) {
       });
     });
 
-    panel.querySelector(".gw-auto-claim-btn")?.addEventListener("click", evt => {
+    panel.querySelector(".gw-auto-claim-btn")?.addEventListener("click", (evt) => {
       evt.stopPropagation();
       const n = autoClaimForQuest(quest);
       animateEvidenceClaim(evt.currentTarget);

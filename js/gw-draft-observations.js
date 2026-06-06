@@ -29,24 +29,26 @@
   function isQuotaExceededError(err) {
     if (err?.isGridWildDraftQuotaError) return true;
 
-    return err?.name === "QuotaExceededError" ||
+    return (
+      err?.name === "QuotaExceededError" ||
       err?.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
       err?.name === "GridWildDraftQuotaError" ||
       err?.code === 22 ||
       err?.code === 1014 ||
-      /quota|exceeded/i.test(String(err?.message || ""));
+      /quota|exceeded/i.test(String(err?.message || ""))
+    );
   }
 
   function compactDraftsForStorage(drafts) {
     return (drafts || [])
-      .filter(draft => {
+      .filter((draft) => {
         if (!draft?.id) return false;
         if (draft.id === activeDraftId) return true;
         if ((draft.photos || []).length > 0) return true;
         if (String(draft.notes || "").trim()) return true;
         return draft.handoff?.status && draft.handoff.status !== "not_sent";
       })
-      .map(draft => {
+      .map((draft) => {
         if (draft.status !== "uploaded") return draft;
 
         return {
@@ -96,9 +98,7 @@
       lat,
       lng,
       accuracyMeters: accuracy,
-      cellKey: window.getCellKeyForLatLng
-        ? window.getCellKeyForLatLng(lat, lng)
-        : null
+      cellKey: window.getCellKeyForLatLng ? window.getCellKeyForLatLng(lat, lng) : null
     };
   }
 
@@ -131,12 +131,12 @@
   }
 
   function getDraft(id) {
-    return loadDrafts().find(d => d.id === id) || null;
+    return loadDrafts().find((d) => d.id === id) || null;
   }
 
   function upsertDraft(draft) {
     const drafts = loadDrafts();
-    const idx = drafts.findIndex(d => d.id === draft.id);
+    const idx = drafts.findIndex((d) => d.id === draft.id);
 
     draft.updatedAt = nowISO();
 
@@ -156,7 +156,11 @@
     });
   }
 
-  async function fileToCompressedDataURL(file, maxSide = PRIMARY_CAPTURE_MAX_SIDE, quality = PRIMARY_CAPTURE_QUALITY) {
+  async function fileToCompressedDataURL(
+    file,
+    maxSide = PRIMARY_CAPTURE_MAX_SIDE,
+    quality = PRIMARY_CAPTURE_QUALITY
+  ) {
     const img = new Image();
     img.src = await fileToDataURL(file);
     await img.decode();
@@ -209,7 +213,7 @@
   }
 
   function removePhotoRecordFromDraft(draft, photoId) {
-    draft.photos = draft.photos.filter(photo => photo.id !== photoId);
+    draft.photos = draft.photos.filter((photo) => photo.id !== photoId);
     if (draft.primaryPhotoId === photoId) {
       draft.primaryPhotoId = draft.photos[0]?.id || null;
     }
@@ -298,14 +302,14 @@
   }
 
   function deleteDraft(draftId) {
-    saveDrafts(loadDrafts().filter(d => d.id !== draftId));
+    saveDrafts(loadDrafts().filter((d) => d.id !== draftId));
   }
 
   function removePhoto(draftId, photoId) {
     const draft = getDraft(draftId);
     if (!draft) return null;
 
-    draft.photos = draft.photos.filter(p => p.id !== photoId);
+    draft.photos = draft.photos.filter((p) => p.id !== photoId);
 
     if (draft.primaryPhotoId === photoId) {
       draft.primaryPhotoId = draft.photos[0]?.id || null;
@@ -318,7 +322,7 @@
     const draft = getDraft(draftId);
     if (!draft) return null;
 
-    if (draft.photos.some(p => p.id === photoId)) {
+    if (draft.photos.some((p) => p.id === photoId)) {
       draft.primaryPhotoId = photoId;
     }
 
@@ -329,7 +333,7 @@
     const draft = getDraft(draftId);
     if (!draft) return null;
 
-    const source = draft.photos.find(p => p.id === sourcePhotoId);
+    const source = draft.photos.find((p) => p.id === sourcePhotoId);
     if (!source) return null;
 
     draft.photos.push({
@@ -352,201 +356,208 @@
     return upsertDraft(draft);
   }
 
-  
   function prepareINaturalistHandoff(draftId) {
-  const draft = getDraft(draftId);
-  if (!draft) throw new Error("Draft not found.");
-  if (!draft.photos?.length) throw new Error("Add at least one photo first.");
+    const draft = getDraft(draftId);
+    if (!draft) throw new Error("Draft not found.");
+    if (!draft.photos?.length) throw new Error("Add at least one photo first.");
 
-  const lat = Number(draft.location?.lat);
-  const lng = Number(draft.location?.lng);
-  const acc = Number(draft.location?.accuracyMeters);
+    const lat = Number(draft.location?.lat);
+    const lng = Number(draft.location?.lng);
+    const acc = Number(draft.location?.accuracyMeters);
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    throw new Error("This draft is missing usable location coordinates.");
-  }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new Error("This draft is missing usable location coordinates.");
+    }
 
-  const taxonGuess =
-    draft.suggestedId?.taxonName ||
-    draft.suggestedId?.iconicTaxon ||
-    draft.suggestedId?.kingdom ||
-    "";
+    const taxonGuess =
+      draft.suggestedId?.taxonName ||
+      draft.suggestedId?.iconicTaxon ||
+      draft.suggestedId?.kingdom ||
+      "";
 
-  const handoff = {
-    status: "prepared",
-    preparedAt: nowISO(),
-    destination: "iNaturalist",
-    phase: "manual_export",
-    inatObservationId: null
-  };
+    const handoff = {
+      status: "prepared",
+      preparedAt: nowISO(),
+      destination: "iNaturalist",
+      phase: "manual_export",
+      inatObservationId: null
+    };
 
-  draft.handoff = {
-    ...(draft.handoff || {}),
-    ...handoff
-  };
+    draft.handoff = {
+      ...(draft.handoff || {}),
+      ...handoff
+    };
 
-  upsertDraft(draft);
+    upsertDraft(draft);
 
-  const fieldPacket = {
-    species_guess: taxonGuess || "Unknown organism",
-    observed_on_string: draft.observedAt || draft.createdAt,
-    latitude: lat,
-    longitude: lng,
-    positional_accuracy: Number.isFinite(acc) ? Math.round(acc) : "",
-    captive_cultivated: draft.captiveCultivated === "captive_cultivated",
-    description: [
-      draft.notes || "",
-      "",
-      "Prepared in GridWild.",
-      draft.location?.cellKey ? `GridWild cell: ${draft.location.cellKey}` : ""
-    ].filter(Boolean).join("\n"),
-    photo_count: draft.photos.length
-  };
-
-  return {
-    ok: true,
-    draft,
-    fieldPacket,
-    message: "iNaturalist handoff prepared. No upload has occurred yet."
-  };
-}
-
-async function getINatJWT() {
-  const resp = await fetch("/.netlify/functions/inat-token");
-
-  if (!resp.ok) {
-    throw new Error("Connect iNaturalist first.");
-  }
-
-  const data = await resp.json();
-
-  return data.api_token;
-}
-
-async function getINatJWT() {
-  const resp = await fetch("/.netlify/functions/inat-token");
-
-  if (!resp.ok) {
-    throw new Error("Connect iNaturalist first.");
-  }
-
-  const data = await resp.json();
-  return data.api_token;
-}
-
-function dataUrlToBlob(dataUrl) {
-  const [meta, b64] = dataUrl.split(",");
-  const mime = meta.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-
-  for (let i = 0; i < bin.length; i++) {
-    bytes[i] = bin.charCodeAt(i);
-  }
-
-  return new Blob([bytes], { type: mime });
-}
-
-async function uploadToINaturalist(draftId) {
-  const draft = getDraft(draftId);
-  if (!draft) throw new Error("Draft not found.");
-  if (!draft.photos?.length) throw new Error("Add at least one photo first.");
-
-  const token = await getINatJWT();
-
-  const lat = Number(draft.location?.lat);
-  const lng = Number(draft.location?.lng);
-  const acc = Number(draft.location?.accuracyMeters);
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    throw new Error("This draft is missing usable location coordinates.");
-  }
-
-  const taxonGuess =
-    draft.suggestedId?.taxonName ||
-    draft.suggestedId?.iconicTaxon ||
-    draft.suggestedId?.kingdom ||
-    "Unknown organism";
-
-  const observationPayload = {
-    observation: {
-      species_guess: taxonGuess,
+    const fieldPacket = {
+      species_guess: taxonGuess || "Unknown organism",
       observed_on_string: draft.observedAt || draft.createdAt,
       latitude: lat,
       longitude: lng,
-      positional_accuracy: Number.isFinite(acc) ? Math.round(acc) : null,
-      captive: draft.captiveCultivated === "captive_cultivated",
+      positional_accuracy: Number.isFinite(acc) ? Math.round(acc) : "",
+      captive_cultivated: draft.captiveCultivated === "captive_cultivated",
       description: [
         draft.notes || "",
         "",
-        "Uploaded from GridWild.",
+        "Prepared in GridWild.",
         draft.location?.cellKey ? `GridWild cell: ${draft.location.cellKey}` : ""
-      ].filter(Boolean).join("\n")
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      photo_count: draft.photos.length
+    };
+
+    return {
+      ok: true,
+      draft,
+      fieldPacket,
+      message: "iNaturalist handoff prepared. No upload has occurred yet."
+    };
+  }
+
+  async function getINatJWT() {
+    const resp = await fetch("/.netlify/functions/inat-token");
+
+    if (!resp.ok) {
+      throw new Error("Connect iNaturalist first.");
     }
-  };
 
-  const obsResp = await fetch("https://api.inaturalist.org/v1/observations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(observationPayload)
-  });
+    const data = await resp.json();
 
-  const obsData = await obsResp.json();
-
-  if (!obsResp.ok) {
-    console.warn("iNat observation create failed:", obsData);
-    throw new Error(obsData?.error || obsData?.errors || "iNaturalist observation upload failed.");
+    return data.api_token;
   }
 
-  const obsId = obsData?.id || obsData?.results?.[0]?.id;
-  if (!obsId) {
-    console.warn("Unexpected iNat observation response:", obsData);
-    throw new Error("iNaturalist created an observation but did not return an ID.");
+  async function getINatJWT() {
+    const resp = await fetch("/.netlify/functions/inat-token");
+
+    if (!resp.ok) {
+      throw new Error("Connect iNaturalist first.");
+    }
+
+    const data = await resp.json();
+    return data.api_token;
   }
 
-  for (const photo of draft.photos) {
-    const form = new FormData();
+  function dataUrlToBlob(dataUrl) {
+    const [meta, b64] = dataUrl.split(",");
+    const mime = meta.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
 
-    form.append("observation_photo[observation_id]", String(obsId));
+    for (let i = 0; i < bin.length; i++) {
+      bytes[i] = bin.charCodeAt(i);
+    }
 
-    const blob = dataUrlToBlob(photo.dataUrl);
-    form.append("file", blob, photo.name || "gridwild-photo.jpg");
+    return new Blob([bytes], { type: mime });
+  }
 
-    const photoResp = await fetch("https://api.inaturalist.org/v1/observation_photos", {
+  async function uploadToINaturalist(draftId) {
+    const draft = getDraft(draftId);
+    if (!draft) throw new Error("Draft not found.");
+    if (!draft.photos?.length) throw new Error("Add at least one photo first.");
+
+    const token = await getINatJWT();
+
+    const lat = Number(draft.location?.lat);
+    const lng = Number(draft.location?.lng);
+    const acc = Number(draft.location?.accuracyMeters);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new Error("This draft is missing usable location coordinates.");
+    }
+
+    const taxonGuess =
+      draft.suggestedId?.taxonName ||
+      draft.suggestedId?.iconicTaxon ||
+      draft.suggestedId?.kingdom ||
+      "Unknown organism";
+
+    const observationPayload = {
+      observation: {
+        species_guess: taxonGuess,
+        observed_on_string: draft.observedAt || draft.createdAt,
+        latitude: lat,
+        longitude: lng,
+        positional_accuracy: Number.isFinite(acc) ? Math.round(acc) : null,
+        captive: draft.captiveCultivated === "captive_cultivated",
+        description: [
+          draft.notes || "",
+          "",
+          "Uploaded from GridWild.",
+          draft.location?.cellKey ? `GridWild cell: ${draft.location.cellKey}` : ""
+        ]
+          .filter(Boolean)
+          .join("\n")
+      }
+    };
+
+    const obsResp = await fetch("https://api.inaturalist.org/v1/observations", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
       },
-      body: form
+      body: JSON.stringify(observationPayload)
     });
 
-    const photoData = await photoResp.json();
+    const obsData = await obsResp.json();
 
-    if (!photoResp.ok) {
-      console.warn("iNat photo upload failed:", photoData);
-      throw new Error(photoData?.error || photoData?.errors || "iNaturalist photo upload failed.");
+    if (!obsResp.ok) {
+      console.warn("iNat observation create failed:", obsData);
+      throw new Error(
+        obsData?.error || obsData?.errors || "iNaturalist observation upload failed."
+      );
     }
+
+    const obsId = obsData?.id || obsData?.results?.[0]?.id;
+    if (!obsId) {
+      console.warn("Unexpected iNat observation response:", obsData);
+      throw new Error("iNaturalist created an observation but did not return an ID.");
+    }
+
+    for (const photo of draft.photos) {
+      const form = new FormData();
+
+      form.append("observation_photo[observation_id]", String(obsId));
+
+      const blob = dataUrlToBlob(photo.dataUrl);
+      form.append("file", blob, photo.name || "gridwild-photo.jpg");
+
+      const photoResp = await fetch("https://api.inaturalist.org/v1/observation_photos", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: form
+      });
+
+      const photoData = await photoResp.json();
+
+      if (!photoResp.ok) {
+        console.warn("iNat photo upload failed:", photoData);
+        throw new Error(
+          photoData?.error || photoData?.errors || "iNaturalist photo upload failed."
+        );
+      }
+    }
+
+    draft.status = "uploaded";
+    draft.handoff = {
+      ...(draft.handoff || {}),
+      status: "uploaded",
+      uploadedAt: nowISO(),
+      inatObservationId: obsId
+    };
+
+    upsertDraft(draft);
+
+    return {
+      ok: true,
+      observationId: obsId,
+      url: `https://www.inaturalist.org/observations/${obsId}`
+    };
   }
-
-  draft.status = "uploaded";
-  draft.handoff = {
-    ...(draft.handoff || {}),
-    status: "uploaded",
-    uploadedAt: nowISO(),
-    inatObservationId: obsId
-  };
-
-  upsertDraft(draft);
-
-  return {
-    ok: true,
-    observationId: obsId,
-    url: `https://www.inaturalist.org/observations/${obsId}`
-  };
-}
 
   window.GridWildDraftObservations = {
     loadDrafts,
@@ -564,6 +575,8 @@ async function uploadToINaturalist(draftId) {
     addFilesToActiveDraft,
     prepareINaturalistHandoff,
     getActiveDraftId: () => activeDraftId,
-    setActiveDraftId: id => { activeDraftId = id; }
+    setActiveDraftId: (id) => {
+      activeDraftId = id;
+    }
   };
 })();

@@ -4,7 +4,10 @@ const ACCOUNT_TABLE = "gridwild_accounts";
 const GUEST_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 365;
 
 function hashToken(token) {
-  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(String(token || ""))
+    .digest("hex");
 }
 
 function httpError(statusCode, message) {
@@ -27,8 +30,7 @@ function timingSafeEqualText(a, b) {
 
 function guestSessionSecret() {
   const secret =
-    process.env.GRIDWILD_PLAYER_SESSION_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.GRIDWILD_PLAYER_SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!secret) {
     throw new Error("GRIDWILD_PLAYER_SESSION_SECRET is not configured.");

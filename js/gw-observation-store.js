@@ -36,7 +36,8 @@
 
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error || new Error("Could not open observation cache."));
-      req.onblocked = () => reject(new Error("Observation cache upgrade is blocked by another tab."));
+      req.onblocked = () =>
+        reject(new Error("Observation cache upgrade is blocked by another tab."));
     });
 
     return dbPromise;
@@ -108,7 +109,7 @@
 
     await txDone(tx);
     const seen = new Set();
-    return rows.filter(row => {
+    return rows.filter((row) => {
       const id = String(row?.id || "");
       if (!id || seen.has(id)) return false;
       seen.add(id);

@@ -29,29 +29,30 @@
     const ownedIds = state.ownedItems || [];
     const catalog = window.GridWildStore?.getCatalog?.() || [];
 
-    return catalog.filter(item => ownedIds.includes(item.id));
+    return catalog.filter((item) => ownedIds.includes(item.id));
   }
 
-async function unequipSlot(slot) {
-  const state = window.GridWildEconomy?.load?.();
-  if (!state?.equipped) return;
+  async function unequipSlot(slot) {
+    const state = window.GridWildEconomy?.load?.();
+    if (!state?.equipped) return;
 
-  try {
-    const result = await window.GridWildAPI.setPlayerEquipment(slot, null);
+    try {
+      const result = await window.GridWildAPI.setPlayerEquipment(slot, null);
 
-    window.__gwState = window.__gwState || {};
-    window.__gwState.playerEquipment = result.equipment;
-    state.equipped[slot] = null;
-    window.GridWildEconomy?.save?.(state);
-  } catch (err) {
-    console.warn("Could not sync unequip:", err);
+      window.__gwState = window.__gwState || {};
+      window.__gwState.playerEquipment = result.equipment;
+      state.equipped[slot] = null;
+      window.GridWildEconomy?.save?.(state);
+    } catch (err) {
+      console.warn("Could not sync unequip:", err);
+    }
+
+    window.GridWildCharacter?.renderSummary?.();
   }
-
-  window.GridWildCharacter?.renderSummary?.();
-}
 
   function renderTabs() {
-    return CATEGORIES.map(c => `
+    return CATEGORIES.map(
+      (c) => `
       <button
         class="gw-store-tab ${activeCategory === c.id ? "active" : ""}"
         data-inventory-category="${esc(c.id)}"
@@ -59,7 +60,8 @@ async function unequipSlot(slot) {
       >
         ${esc(c.label)}
       </button>
-    `).join("");
+    `
+    ).join("");
   }
 
   function renderItem(item, state) {
@@ -114,9 +116,10 @@ async function unequipSlot(slot) {
     const state = window.GridWildEconomy?.load?.() || {};
     const owned = getOwnedItems();
 
-    const filtered = activeCategory === "all"
-      ? owned
-      : owned.filter(item => item.category === activeCategory || item.slot === activeCategory);
+    const filtered =
+      activeCategory === "all"
+        ? owned
+        : owned.filter((item) => item.category === activeCategory || item.slot === activeCategory);
 
     root.innerHTML = `
       <div class="gw-store-modal">
@@ -139,7 +142,7 @@ async function unequipSlot(slot) {
         <div class="gw-store-grid">
           ${
             filtered.length
-              ? filtered.map(item => renderItem(item, state)).join("")
+              ? filtered.map((item) => renderItem(item, state)).join("")
               : owned.length
                 ? `<div class="gw-muted">No owned items in this category yet.</div>`
                 : `<div class="gw-muted">No owned items yet. Visit the Store first.</div>`
@@ -158,14 +161,14 @@ async function unequipSlot(slot) {
   }
 
   function bindInside(root) {
-    root.querySelectorAll("[data-inventory-category]").forEach(btn => {
+    root.querySelectorAll("[data-inventory-category]").forEach((btn) => {
       btn.onclick = () => {
         activeCategory = btn.dataset.inventoryCategory || "all";
         renderInto(root);
       };
     });
 
-    root.querySelectorAll("[data-inventory-equip]").forEach(btn => {
+    root.querySelectorAll("[data-inventory-equip]").forEach((btn) => {
       btn.onclick = async () => {
         btn.disabled = true;
         const result = await window.GridWildEconomy?.equipItem?.(btn.dataset.inventoryEquip);
@@ -181,7 +184,7 @@ async function unequipSlot(slot) {
       };
     });
 
-    root.querySelectorAll("[data-inventory-unequip]").forEach(btn => {
+    root.querySelectorAll("[data-inventory-unequip]").forEach((btn) => {
       btn.onclick = async () => {
         btn.disabled = true;
         try {
@@ -210,14 +213,14 @@ async function unequipSlot(slot) {
 
   function open() {
     window.GridWildStore?.ensureStyles?.();
-    document.querySelectorAll(".gw-store-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".gw-store-backdrop").forEach((el) => el.remove());
 
     const root = document.createElement("div");
     root.className = "gw-store-backdrop";
 
     document.body.appendChild(root);
 
-    root.onclick = evt => {
+    root.onclick = (evt) => {
       if (evt.target === root) root.remove();
     };
 

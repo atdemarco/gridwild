@@ -75,9 +75,10 @@
     return `
       <div class="gw-shop-product">
         <div class="gw-shop-img">
-          ${p.image
-            ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}">`
-            : `<div class="gw-shop-placeholder">IMAGE<br>PLACEHOLDER</div>`
+          ${
+            p.image
+              ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}">`
+              : `<div class="gw-shop-placeholder">IMAGE<br>PLACEHOLDER</div>`
           }
         </div>
 
@@ -147,7 +148,7 @@
   }
 
   function bindOutfitter(root = document) {
-    root.querySelectorAll(".gw-shop-plus").forEach(btn => {
+    root.querySelectorAll(".gw-shop-plus").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.productId;
         cart[id] = (cart[id] || 0) + 1;
@@ -155,7 +156,7 @@
       });
     });
 
-    root.querySelectorAll(".gw-shop-minus").forEach(btn => {
+    root.querySelectorAll(".gw-shop-minus").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.productId;
         cart[id] = Math.max(0, (cart[id] || 0) - 1);

@@ -4,10 +4,7 @@ const { requireChatRoomAccess } = require("./_chat-room-access");
 const { interactionTableHint } = require("./_player-interactions");
 
 const CHAT_TABLE = "chat_messages";
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function httpError(statusCode, message) {
   const err = new Error(message);
@@ -27,15 +24,15 @@ function tableHint(err) {
 }
 
 function cleanText(value, maxLength) {
-  return String(value || "").trim().slice(0, maxLength);
+  return String(value || "")
+    .trim()
+    .slice(0, maxLength);
 }
 
 function cleanCoordinate(value, min, max) {
   if (value == null || value === "") return null;
   const number = Number(value);
-  return Number.isFinite(number) && number >= min && number <= max
-    ? number
-    : null;
+  return Number.isFinite(number) && number >= min && number <= max ? number : null;
 }
 
 function normalizeSharePayload(payload = {}) {
@@ -48,9 +45,7 @@ function normalizeSharePayload(payload = {}) {
   const title = cleanText(payload.title, 180);
   if (!title) throw httpError(400, "A shared item title is required.");
 
-  const count = payload.count == null || payload.count === ""
-    ? null
-    : Number(payload.count);
+  const count = payload.count == null || payload.count === "" ? null : Number(payload.count);
   return {
     kind,
     id: cleanText(payload.id, 180) || null,
@@ -67,7 +62,9 @@ function normalizeMessage(body) {
   const supportedTypes = new Set(["text", "location", "share"]);
   const requestedType = cleanText(body.message_type, 24);
   const messageType = supportedTypes.has(requestedType) ? requestedType : "text";
-  const text = String(body.body || "").trim().slice(0, 500);
+  const text = String(body.body || "")
+    .trim()
+    .slice(0, 500);
 
   if (messageType === "text") {
     if (!text) throw httpError(400, "Message text is required.");

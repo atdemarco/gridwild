@@ -2,23 +2,18 @@ const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { applyPartyTimingToRows } = require("./_party-duration");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function haversineMeters(a, b) {
   const R = 6371000;
-  const toRad = d => d * Math.PI / 180;
+  const toRad = (d) => (d * Math.PI) / 180;
 
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
 
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
 
   return 2 * R * Math.asin(Math.sqrt(x));
 }
@@ -35,11 +30,11 @@ function routeDistanceMeters(points) {
 }
 
 function getQuestIdFromEvents(events) {
-  const linked = (events || []).find(event => event?.payload?.quest_id);
+  const linked = (events || []).find((event) => event?.payload?.quest_id);
   return linked?.payload?.quest_id || null;
 }
 
-exports.handler = async function(event) {
+exports.handler = async function (event) {
   try {
     await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
@@ -56,7 +51,7 @@ exports.handler = async function(event) {
 
     if (memberError) throw memberError;
 
-    const partyIds = [...new Set((myMemberships || []).map(row => row.party_id).filter(Boolean))];
+    const partyIds = [...new Set((myMemberships || []).map((row) => row.party_id).filter(Boolean))];
 
     if (!partyIds.length) {
       return {
@@ -72,9 +67,11 @@ exports.handler = async function(event) {
 
     if (partiesError) throw partiesError;
 
-    const timedParties = await applyPartyTimingToRows(supabase, parties || [], { playerId: player_id });
+    const timedParties = await applyPartyTimingToRows(supabase, parties || [], {
+      playerId: player_id
+    });
     const historyParties = timedParties
-      .filter(p => p?.status === "ended" || p?.ended_at)
+      .filter((p) => p?.status === "ended" || p?.ended_at)
       .slice(0, Math.max(1, Math.min(100, Number(limit) || 25)));
 
     if (!historyParties.length) {
@@ -84,22 +81,11 @@ exports.handler = async function(event) {
       };
     }
 
-    const historyIds = historyParties.map(p => p.id);
+    const historyIds = historyParties.map((p) => p.id);
 
-    const [
-      evidenceResult,
-      memberCountResult,
-      routeResult,
-      eventResult
-    ] = await Promise.all([
-      supabase
-        .from("party_evidence")
-        .select("party_id, status")
-        .in("party_id", historyIds),
-      supabase
-        .from("party_members")
-        .select("party_id")
-        .in("party_id", historyIds),
+    const [evidenceResult, memberCountResult, routeResult, eventResult] = await Promise.all([
+      supabase.from("party_evidence").select("party_id, status").in("party_id", historyIds),
+      supabase.from("party_members").select("party_id").in("party_id", historyIds),
       supabase
         .from("party_route_points")
         .select("party_id, lat, lng, created_at")
@@ -118,16 +104,18 @@ exports.handler = async function(event) {
     if (routeResult.error) throw routeResult.error;
     if (eventResult.error) throw eventResult.error;
 
-    const statsByParty = new Map(historyIds.map(id => [
-      id,
-      {
-        progress: 0,
-        excluded: 0,
-        memberCount: 0,
-        route: [],
-        events: []
-      }
-    ]));
+    const statsByParty = new Map(
+      historyIds.map((id) => [
+        id,
+        {
+          progress: 0,
+          excluded: 0,
+          memberCount: 0,
+          route: [],
+          events: []
+        }
+      ])
+    );
 
     for (const row of evidenceResult.data || []) {
       const stats = statsByParty.get(row.party_id);
@@ -154,12 +142,10 @@ exports.handler = async function(event) {
       if (stats) stats.events.push(row);
     }
 
-    const membershipByParty = new Map(
-      (myMemberships || []).map(row => [row.party_id, row])
-    );
+    const membershipByParty = new Map((myMemberships || []).map((row) => [row.party_id, row]));
 
     const rows = historyParties
-      .map(party => {
+      .map((party) => {
         const stats = statsByParty.get(party.id) || {};
         const membership = membershipByParty.get(party.id) || {};
 
@@ -174,9 +160,9 @@ exports.handler = async function(event) {
           my_joined_at: membership.joined_at || null
         };
       })
-      .sort((a, b) =>
-        new Date(b.ended_at || b.created_at || 0) -
-        new Date(a.ended_at || a.created_at || 0)
+      .sort(
+        (a, b) =>
+          new Date(b.ended_at || b.created_at || 0) - new Date(a.ended_at || a.created_at || 0)
       );
 
     return {

@@ -6,6 +6,8 @@
 (function () {
   const QUEST_PANE = "gwQuestPane";
   const HUD_COLLAPSED_KEY = "gw_quest_hud_collapsed";
+  const TARGET_SET_MIN_ZOOM = 18;
+  const TARGET_SET_VISIBLE_GLYPH_CAP = 36;
 
   let questLayer = null;
   let targetLayer = null;
@@ -16,6 +18,8 @@
   let hudChip = null;
   let hudRaiseTab = null;
   let raiseTabPositionBound = false;
+  let targetSetMotionBound = false;
+  let targetSetRenderPending = false;
   let activeQuest = null;
 
   function ensurePaneAndLayers() {
@@ -32,6 +36,7 @@
     }
 
     injectStyles();
+    bindTargetSetMotion();
   }
 
   function injectStyles() {
@@ -56,6 +61,55 @@
         fill: rgba(118,231,191,0.10);
         filter: drop-shadow(0 0 10px rgba(118,231,191,0.55));
         animation: gwQuestPulse 1.65s ease-in-out infinite;
+      }
+
+      .gw-quest-target-glyph-cell {
+        stroke: rgba(255,126,126,0.92);
+        stroke-width: 1.6;
+        stroke-dasharray: 4 4;
+        fill: rgba(255,126,126,0.10);
+        filter: drop-shadow(0 0 6px rgba(255,126,126,0.60));
+      }
+
+      .gw-quest-target-glyph {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        box-sizing: border-box;
+        border: 2px solid rgba(255,126,126,0.96);
+        box-shadow:
+          0 0 0 4px rgba(255,126,126,0.14),
+          0 0 16px rgba(255,126,126,0.70);
+        position: relative;
+        animation: gwQuestTargetGlyph 1.25s ease-in-out infinite;
+      }
+
+      .gw-quest-target-glyph::before,
+      .gw-quest-target-glyph::after {
+        content: "";
+        position: absolute;
+        background: rgba(255,247,223,0.92);
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .gw-quest-target-glyph::before {
+        width: 2px;
+        height: 14px;
+      }
+
+      .gw-quest-target-glyph::after {
+        width: 14px;
+        height: 2px;
+      }
+
+      .gw-quest-target-polygon {
+        stroke: rgba(255,126,126,0.92);
+        stroke-width: 2;
+        stroke-dasharray: 8 6;
+        fill: rgba(255,126,126,0.08);
+        filter: drop-shadow(0 0 8px rgba(255,126,126,0.50));
       }
 
       .gw-quest-tether {
@@ -188,7 +242,36 @@
         background: rgba(118,231,191,0.18);
       }
 
-      .gw-active-quest-chip.is-collapsed .gw-active-quest-evidence-btn {
+      .gw-active-quest-abandon-btn {
+        flex: 0 0 auto;
+        width: 30px;
+        height: 30px;
+        display: inline-grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(255,126,126,0.42);
+        border-radius: 10px;
+        color: #ff9b9b;
+        background: rgba(255,126,126,0.10);
+        cursor: pointer;
+      }
+
+      .gw-active-quest-abandon-btn svg {
+        width: 17px;
+        height: 17px;
+        stroke: currentColor;
+        stroke-width: 2.3;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .gw-active-quest-abandon-btn:hover {
+        background: rgba(255,126,126,0.18);
+      }
+
+      .gw-active-quest-chip.is-collapsed .gw-active-quest-evidence-btn,
+      .gw-active-quest-chip.is-collapsed .gw-active-quest-abandon-btn {
         display: none;
       }
 
@@ -307,6 +390,11 @@
         50% { transform: scale(1.08); opacity: 1; }
       }
 
+      @keyframes gwQuestTargetGlyph {
+        0%, 100% { opacity: 0.70; transform: scale(0.94); }
+        50% { opacity: 1; transform: scale(1.06); }
+      }
+
       @keyframes gwQuestDash {
         from { stroke-dashoffset: 0; }
         to { stroke-dashoffset: -18; }
@@ -317,7 +405,10 @@
   }
 
   function clear() {
+    activeQuest = null;
     targetLayer?.clearLayers();
+    questLayer?.clearLayers();
+    targetSetRenderPending = false;
     clearTetherLine();
     if (pulseMarker) {
       pulseMarker.remove();
@@ -331,17 +422,19 @@
   }
 
   function closeOpenSheetsAndModals() {
-    document.querySelectorAll(".gw-quest-modal-backdrop, .gw-codex-backdrop").forEach(el => el.remove());
+    document
+      .querySelectorAll(".gw-quest-modal-backdrop, .gw-codex-backdrop")
+      .forEach((el) => el.remove());
 
-    document.querySelectorAll(".gw-sheet.is-open").forEach(el => {
+    document.querySelectorAll(".gw-sheet.is-open").forEach((el) => {
       el.classList.remove("is-open");
     });
 
-    document.querySelectorAll(".gw-backdrop.is-open").forEach(el => {
+    document.querySelectorAll(".gw-backdrop.is-open").forEach((el) => {
       el.classList.remove("is-open");
     });
 
-    document.querySelectorAll(".gw-navbtn.is-active").forEach(el => {
+    document.querySelectorAll(".gw-navbtn.is-active").forEach((el) => {
       el.classList.remove("is-active");
     });
   }
@@ -366,6 +459,207 @@
     return map.options.crs.unproject(L.point(x, y));
   }
 
+  function targetSetCellKey(ix, iy) {
+    return `${ix},${iy}`;
+  }
+
+  function pointCellKey(lat, lng) {
+    const p = map.options.crs.project(L.latLng(lat, lng));
+    const ix = Math.floor(p.x / GRID_SIZE_M);
+    const iy = Math.floor(p.y / GRID_SIZE_M);
+    return {
+      ix,
+      iy,
+      key: targetSetCellKey(ix, iy)
+    };
+  }
+
+  function normalizeTargetSetCells(rawCells = []) {
+    const seen = new Set();
+    return (Array.isArray(rawCells) ? rawCells : [])
+      .map((cell) => {
+        const ix = Math.round(Number(cell?.ix));
+        const iy = Math.round(Number(cell?.iy));
+        if (!Number.isFinite(ix) || !Number.isFinite(iy)) return null;
+        const key = targetSetCellKey(ix, iy);
+        if (seen.has(key)) return null;
+        seen.add(key);
+        const center = centerOfCell(ix, iy);
+        return {
+          ix,
+          iy,
+          key,
+          lat: center.lat,
+          lng: center.lng
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function targetSortOrigin() {
+    return getUserLatLng() || map.getCenter();
+  }
+
+  function representativeTargetSetCell(cells = []) {
+    if (!cells.length) return null;
+    const origin = targetSortOrigin();
+    return (
+      cells
+        .map((cell) => ({
+          cell,
+          distance: origin ? L.latLng(cell.lat, cell.lng).distanceTo(origin) : Infinity
+        }))
+        .sort((a, b) => a.distance - b.distance || a.cell.key.localeCompare(b.cell.key))[0]?.cell ||
+      cells[0]
+    );
+  }
+
+  function visibleTargetSetCells(target) {
+    if (!target?.cells?.length || map.getZoom() < TARGET_SET_MIN_ZOOM) return [];
+
+    const bounds = map.getBounds();
+    const origin = targetSortOrigin();
+    return target.cells
+      .filter((cell) => bounds.contains([cell.lat, cell.lng]))
+      .map((cell) => ({
+        cell,
+        distance: origin ? L.latLng(cell.lat, cell.lng).distanceTo(origin) : Infinity
+      }))
+      .sort((a, b) => a.distance - b.distance || a.cell.key.localeCompare(b.cell.key))
+      .slice(0, TARGET_SET_VISIBLE_GLYPH_CAP)
+      .map((entry) => entry.cell);
+  }
+
+  function renderTargetSetGeometry(target = activeQuest?.__gwNormalizedTarget) {
+    if (!targetLayer || !target || target.mode !== "target_set") return;
+
+    targetLayer.clearLayers();
+
+    visibleTargetSetCells(target).forEach((cell) => {
+      const bounds = cellBounds(cell.ix, cell.iy, 0);
+      L.rectangle(bounds, {
+        pane: QUEST_PANE,
+        interactive: false,
+        className: "gw-quest-target-glyph-cell"
+      }).addTo(targetLayer);
+
+      L.marker(bounds.getCenter(), {
+        pane: QUEST_PANE,
+        interactive: false,
+        icon: L.divIcon({
+          className: "",
+          html: `<div class="gw-quest-target-glyph"></div>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        })
+      }).addTo(targetLayer);
+    });
+  }
+
+  function scheduleTargetSetRender() {
+    const target = activeQuest?.__gwNormalizedTarget;
+    if (!target || target.mode !== "target_set") return;
+    if (targetSetRenderPending) return;
+
+    targetSetRenderPending = true;
+    const render = () => {
+      targetSetRenderPending = false;
+      renderTargetSetGeometry();
+    };
+
+    if (window.GridWildMapMotionQueue?.requestFrame) {
+      window.GridWildMapMotionQueue.requestFrame("quest-target-set", render);
+    } else {
+      requestAnimationFrame(render);
+    }
+  }
+
+  function bindTargetSetMotion() {
+    if (targetSetMotionBound) return;
+    targetSetMotionBound = true;
+
+    if (window.GridWildMapMotionQueue?.subscribe) {
+      window.GridWildMapMotionQueue.subscribe("quest-target-set-motion", scheduleTargetSetRender);
+    } else {
+      map.on("move zoom resize viewreset zoomend moveend", scheduleTargetSetRender);
+    }
+  }
+
+  function normalizeTargetSet(raw = {}) {
+    const cells = normalizeTargetSetCells(raw.cells);
+    const representative = representativeTargetSetCell(cells) || null;
+    const cellKeySet = new Set(cells.map((cell) => cell.key));
+
+    return {
+      ...raw,
+      mode: "target_set",
+      radiusCells: 0,
+      cells,
+      cellKeySet,
+      lat: representative?.lat ?? Number(raw.lat),
+      lng: representative?.lng ?? Number(raw.lng),
+      ix: representative?.ix ?? Number(raw.ix),
+      iy: representative?.iy ?? Number(raw.iy),
+      cellKey: representative?.key || raw.cellKey || "",
+      label: raw.patchName || raw.label || "Patch target cells"
+    };
+  }
+
+  function normalizePolygonRings(rawRings = []) {
+    return (Array.isArray(rawRings) ? rawRings : [])
+      .map((ring) =>
+        (Array.isArray(ring) ? ring : [])
+          .map((point) => ({
+            lat: Number(point?.lat),
+            lng: Number(point?.lng)
+          }))
+          .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+      )
+      .filter((ring) => ring.length >= 3);
+  }
+
+  function pointInRing(point, ring = []) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const pi = ring[i];
+      const pj = ring[j];
+      const intersects =
+        pi.lat > point.lat !== pj.lat > point.lat &&
+        point.lng <
+          ((pj.lng - pi.lng) * (point.lat - pi.lat)) / (pj.lat - pi.lat || 1e-12) + pi.lng;
+      if (intersects) inside = !inside;
+    }
+    return inside;
+  }
+
+  function pointInRings(point, rings = []) {
+    return rings.some((ring) => pointInRing(point, ring));
+  }
+
+  function normalizePatchPolygonTarget(raw = {}) {
+    const rings = normalizePolygonRings(raw.rings);
+    const points = rings.flat();
+    const centroid =
+      Number.isFinite(Number(raw.lat)) && Number.isFinite(Number(raw.lng))
+        ? { lat: Number(raw.lat), lng: Number(raw.lng) }
+        : points.length
+          ? {
+              lat: points.reduce((sum, point) => sum + point.lat, 0) / points.length,
+              lng: points.reduce((sum, point) => sum + point.lng, 0) / points.length
+            }
+          : null;
+
+    return {
+      ...raw,
+      mode: "patch_polygon",
+      rings,
+      radiusCells: null,
+      lat: centroid?.lat ?? Number(raw.lat),
+      lng: centroid?.lng ?? Number(raw.lng),
+      label: raw.patchName || raw.label || "Patch polygon"
+    };
+  }
+
   function fallbackTargetForQuest(quest) {
     const r = quest.recipe || {};
     const c = map.getCenter();
@@ -380,10 +674,14 @@
       ix,
       iy,
       cellKey: `${ix},${iy}`,
-      radiusCells: r.targetLocation === "specific_square" ? 0 :
-                   r.targetLocation === "area_20x20" ? 10 :
-                   r.targetLocation === "anywhere" ? null :
-                   1,
+      radiusCells:
+        r.targetLocation === "specific_square"
+          ? 0
+          : r.targetLocation === "area_20x20"
+            ? 10
+            : r.targetLocation === "anywhere"
+              ? null
+              : 1,
       label: "Current map center"
     };
   }
@@ -400,6 +698,14 @@
       };
     }
 
+    if ((r.targetLocation || raw.mode) === "target_set") {
+      return normalizeTargetSet(raw);
+    }
+
+    if ((r.targetLocation || raw.mode) === "patch_polygon") {
+      return normalizePatchPolygonTarget(raw);
+    }
+
     let ix = Number(raw.ix);
     let iy = Number(raw.iy);
 
@@ -414,9 +720,11 @@
     const mode = r.targetLocation || raw.mode || "area_3x3";
     const radiusCells = Number.isFinite(Number(raw.radiusCells))
       ? Number(raw.radiusCells)
-      : mode === "specific_square" ? 0
-      : mode === "area_20x20" ? 10
-      : 1;
+      : mode === "specific_square"
+        ? 0
+        : mode === "area_20x20"
+          ? 10
+          : 1;
 
     const center = centerOfCell(ix, iy);
 
@@ -447,6 +755,13 @@
     return null;
   }
 
+  function targetLatLng(target) {
+    const lat = Number(target?.lat);
+    const lng = Number(target?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return L.latLng(lat, lng);
+  }
+
   function isHudCollapsed() {
     return localStorage.getItem(HUD_COLLAPSED_KEY) === "1";
   }
@@ -474,7 +789,10 @@
     const btnRect = navBtn.getBoundingClientRect();
     const navRect = nav.getBoundingClientRect();
     hudRaiseTab.style.setProperty("--gw-raise-tab-left", `${btnRect.left + btnRect.width / 2}px`);
-    hudRaiseTab.style.setProperty("--gw-raise-tab-bottom", `${Math.max(0, window.innerHeight - navRect.top - 10)}px`);
+    hudRaiseTab.style.setProperty(
+      "--gw-raise-tab-bottom",
+      `${Math.max(0, window.innerHeight - navRect.top - 10)}px`
+    );
   }
 
   function bindRaiseTabPositioning() {
@@ -533,6 +851,13 @@
     }
   }
 
+  function initialHudSubText(target) {
+    if (target?.mode === "anywhere") return "Anywhere target - scan when ready";
+    if (target?.mode === "target_set") return "Target squares marked on HUD";
+    if (target?.mode === "patch_polygon") return "Patch unknowns constrained to polygon";
+    return "Drawing field tether...";
+  }
+
   function makeHudChip(quest, target) {
     hudChip = document.createElement("div");
     hudChip.className = "gw-active-quest-chip";
@@ -541,9 +866,15 @@
         <div class="gw-active-quest-kicker">Active Quest</div>
         <div class="gw-active-quest-title">${escapeHtml(quest.title || "Field quest")}</div>
         <div class="gw-active-quest-sub" id="gwActiveQuestSub">
-          ${target.mode === "anywhere" ? "Anywhere target · scan when ready" : "Drawing field tether..."}
+          ${initialHudSubText(target)}
         </div>
       </div>
+      <button class="gw-active-quest-abandon-btn" type="button" aria-label="Abandon quest" title="Abandon quest">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M6 6l12 12"></path>
+          <path d="M18 6L6 18"></path>
+        </svg>
+      </button>
       <button class="gw-active-quest-evidence-btn" type="button" aria-label="Open quest evidence selector" title="Claim evidence">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M9 11l2 2 4-5"></path>
@@ -558,12 +889,35 @@
       </button>
     `;
 
-    hudChip.querySelector(".gw-active-quest-evidence-btn")?.addEventListener("click", evt => {
+    hudChip.querySelector(".gw-active-quest-evidence-btn")?.addEventListener("click", (evt) => {
       evt.stopPropagation();
       window.GridWildQuestEvidence?.openEvidenceSelector?.(quest);
     });
 
-    hudChip.querySelector(".gw-active-quest-collapse-btn")?.addEventListener("click", evt => {
+    hudChip
+      .querySelector(".gw-active-quest-abandon-btn")
+      ?.addEventListener("click", async (evt) => {
+        evt.stopPropagation();
+        if (!window.GridWildQuests?.abandonQuest) {
+          alert("Quest controls are not loaded.");
+          return;
+        }
+
+        const ok = await window.GridWildQuests.openQuestConfirmDialog({
+          title: "Abandon Quest?",
+          message: "This quest will disappear from your active quest list.",
+          subject: quest.title || "Untitled Quest",
+          confirmLabel: "Abandon",
+          cancelLabel: "Keep Quest",
+          danger: true
+        });
+        if (!ok) return;
+
+        const abandoned = await window.GridWildQuests.abandonQuest(quest.dbId || quest.id);
+        if (abandoned) clear();
+      });
+
+    hudChip.querySelector(".gw-active-quest-collapse-btn")?.addEventListener("click", (evt) => {
       evt.stopPropagation();
       setHudCollapsed(!isHudCollapsed());
     });
@@ -574,8 +928,9 @@
         return;
       }
 
-      if (target.mode !== "anywhere") {
-        map.flyTo([target.lat, target.lng], Math.max(map.getZoom(), 18), { duration: 0.65 });
+      const targetLL = targetLatLng(target);
+      if (target.mode !== "anywhere" && targetLL) {
+        map.flyTo(targetLL, Math.max(map.getZoom(), 18), { duration: 0.65 });
       }
     });
 
@@ -585,6 +940,25 @@
 
   function drawTargetGeometry(quest, target) {
     if (target.mode === "anywhere") return;
+    if (target.mode === "target_set") {
+      renderTargetSetGeometry(target);
+      return;
+    }
+    if (target.mode === "patch_polygon") {
+      if (target.rings?.length) {
+        target.rings.forEach((ring) => {
+          L.polygon(
+            ring.map((point) => [point.lat, point.lng]),
+            {
+              pane: QUEST_PANE,
+              interactive: false,
+              className: "gw-quest-target-polygon"
+            }
+          ).addTo(targetLayer);
+        });
+      }
+      return;
+    }
 
     const bounds = cellBounds(target.ix, target.iy, target.radiusCells);
     const isSpecific = target.radiusCells === 0;
@@ -655,7 +1029,14 @@
     }
 
     const userLL = getUserLatLng();
-    const targetLL = L.latLng(target.lat, target.lng);
+    const targetLL = targetLatLng(target);
+
+    if (!targetLL) {
+      clearTetherLine();
+      if (distEl) distEl.textContent = target.mode === "target_set" ? "HUD" : "GPS";
+      if (subEl) subEl.textContent = initialHudSubText(target);
+      return;
+    }
 
     if (!userLL) {
       clearTetherLine();
@@ -669,6 +1050,30 @@
     updateTetherLine(userLL, targetLL);
 
     if (distEl) distEl.textContent = formatMeters(d);
+
+    if (subEl && target.mode === "target_set") {
+      const status = activeTargetStatus(userLL.lat, userLL.lng);
+      if (status.inside) {
+        subEl.textContent = "Target square reached - scan nature to complete";
+      } else if (d <= 50) {
+        subEl.textContent = "Target squares nearby";
+      } else {
+        subEl.textContent = `${target.label || target.cellKey || "Patch targets"} - target squares marked`;
+      }
+      return;
+    }
+
+    if (subEl && target.mode === "patch_polygon") {
+      const status = activeTargetStatus(userLL.lat, userLL.lng);
+      if (status.inside) {
+        subEl.textContent = "Inside Patch - identify an unknown";
+      } else if (d <= 50) {
+        subEl.textContent = "Patch boundary nearby";
+      } else {
+        subEl.textContent = `${target.label || "Patch"} - identify unknowns inside`;
+      }
+      return;
+    }
 
     if (subEl) {
       if (d <= Math.max(12, GRID_SIZE_M * (target.radiusCells + 1))) {
@@ -697,13 +1102,31 @@
       return { inside: false, questId: activeQuest.id || null, targetKey: target.cellKey || "" };
     }
 
+    if (target.mode === "target_set") {
+      const cell = pointCellKey(latNum, lngNum);
+      const inside = target.cellKeySet?.has?.(cell.key) || false;
+      return {
+        inside,
+        questId: activeQuest.id || null,
+        targetKey: inside ? cell.key : target.cellKey || "target_set"
+      };
+    }
+
+    if (target.mode === "patch_polygon") {
+      const inside = pointInRings({ lat: latNum, lng: lngNum }, target.rings || []);
+      return {
+        inside,
+        questId: activeQuest.id || null,
+        targetKey: target.patchId || target.label || "patch_polygon"
+      };
+    }
+
     const p = map.options.crs.project(L.latLng(latNum, lngNum));
     const ix = Math.floor(p.x / GRID_SIZE_M);
     const iy = Math.floor(p.y / GRID_SIZE_M);
     const radius = Math.max(0, Number(target.radiusCells) || 0);
     const inside =
-      Math.abs(ix - Number(target.ix)) <= radius &&
-      Math.abs(iy - Number(target.iy)) <= radius;
+      Math.abs(ix - Number(target.ix)) <= radius && Math.abs(iy - Number(target.iy)) <= radius;
 
     return {
       inside,
@@ -729,12 +1152,9 @@
     makeHudChip(quest, activeQuest.__gwNormalizedTarget);
     updateTetherAndHud();
 
-    if (activeQuest.__gwNormalizedTarget.mode !== "anywhere") {
-      map.flyTo(
-        [activeQuest.__gwNormalizedTarget.lat, activeQuest.__gwNormalizedTarget.lng],
-        Math.max(map.getZoom(), 18),
-        { duration: 0.75 }
-      );
+    const targetLL = targetLatLng(activeQuest.__gwNormalizedTarget);
+    if (activeQuest.__gwNormalizedTarget.mode !== "anywhere" && targetLL) {
+      map.flyTo(targetLL, Math.max(map.getZoom(), 18), { duration: 0.75 });
     }
   }
 
@@ -750,20 +1170,20 @@
   window.addEventListener("gridwild:unitschange", updateTetherAndHud);
   window.addEventListener("gwUserLocationUpdated", updateTetherAndHud);
 
-  window.addEventListener("gwQuestStarted", evt => {
+  window.addEventListener("gwQuestStarted", (evt) => {
     // Do not auto-embark newly created quests; user explicitly chooses Embark.
     // This listener is here for later sparkle/toast hooks.
   });
 
   function showRewardPopup(quest) {
-  const old = document.getElementById("gwQuestRewardPopup");
-  if (old) old.remove();
+    const old = document.getElementById("gwQuestRewardPopup");
+    if (old) old.remove();
 
-  const root = document.createElement("div");
-  root.id = "gwQuestRewardPopup";
-  root.className = "gw-quest-reward-backdrop";
+    const root = document.createElement("div");
+    root.id = "gwQuestRewardPopup";
+    root.className = "gw-quest-reward-backdrop";
 
-  root.innerHTML = `
+    root.innerHTML = `
     <div class="gw-quest-reward-card">
       <div class="gw-quest-reward-kicker">Quest Complete</div>
       <div class="gw-quest-reward-title">${escapeHtml(quest?.title || "Field quest")}</div>
@@ -773,38 +1193,36 @@
     </div>
   `;
 
-  document.body.appendChild(root);
+    document.body.appendChild(root);
 
-  root.querySelector("#gwQuestRewardClose").onclick = () => root.remove();
+    root.querySelector("#gwQuestRewardClose").onclick = () => root.remove();
 
-  setTimeout(() => {
-    if (document.body.contains(root)) root.remove();
-  }, 4500);
-}
-
-function completeQuest(quest) {
-  if (activeQuest?.id === quest?.id) {
-    clear();
-    activeQuest = null;
+    setTimeout(() => {
+      if (document.body.contains(root)) root.remove();
+    }, 4500);
   }
 
-  if (window.__gwState?.activeQuestId === quest?.id) {
-    delete window.__gwState.activeQuestId;
-    window.refreshQuestBadge?.();
+  function completeQuest(quest) {
+    if (activeQuest?.id === quest?.id) {
+      clear();
+      activeQuest = null;
+    }
+
+    if (window.__gwState?.activeQuestId === quest?.id) {
+      delete window.__gwState.activeQuestId;
+      window.refreshQuestBadge?.();
+    }
+
+    showRewardPopup(quest);
   }
 
-  showRewardPopup(quest);
-}
-
-
- window.GridWildQuestLayer = {
-  embark,
-  clear,
-  completeQuest,
-  activeTargetStatus,
-  showRewardPopup,
-  update: updateTetherAndHud,
-  getActiveQuest: () => activeQuest
-};
-
+  window.GridWildQuestLayer = {
+    embark,
+    clear,
+    completeQuest,
+    activeTargetStatus,
+    showRewardPopup,
+    update: updateTetherAndHud,
+    getActiveQuest: () => activeQuest
+  };
 })();

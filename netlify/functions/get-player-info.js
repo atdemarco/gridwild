@@ -1,10 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const { accountTableHint, requireAccountSession } = require("./_gridwild-account-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function isMissingOptionalTable(err) {
   const message = String(err?.message || "");
@@ -36,11 +33,7 @@ exports.handler = async function (event) {
         .select("id, display_name, archetype, icon, color, wildpoints")
         .eq("id", targetPlayerId)
         .maybeSingle(),
-      supabase
-        .from("player_equipment")
-        .select("*")
-        .eq("player_id", targetPlayerId)
-        .maybeSingle(),
+      supabase.from("player_equipment").select("*").eq("player_id", targetPlayerId).maybeSingle(),
       supabase
         .from("player_quests")
         .select("quest_id", { count: "exact", head: true })

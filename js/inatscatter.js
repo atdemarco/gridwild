@@ -1,15 +1,17 @@
-window.maybeRefreshDynamicINat = async function(force = false, cellKey = null) {
+window.maybeRefreshDynamicINat = async function (force = false, cellKey = null) {
   const state = window.__gwState || {};
 
   if (!state.dynamicINatEnabled) return;
 
-  const key = cellKey || (() => {
-    const c = map.getCenter();
-    const p = map.options.crs.project(c);
-    const ix = Math.floor(p.x / GRID_SIZE_M);
-    const iy = Math.floor(p.y / GRID_SIZE_M);
-    return `${ix},${iy}`;
-  })();
+  const key =
+    cellKey ||
+    (() => {
+      const c = map.getCenter();
+      const p = map.options.crs.project(c);
+      const ix = Math.floor(p.x / GRID_SIZE_M);
+      const iy = Math.floor(p.y / GRID_SIZE_M);
+      return `${ix},${iy}`;
+    })();
 
   if (!force && key === state.lastDynamicFetchCellKey) return;
 
@@ -18,55 +20,53 @@ window.maybeRefreshDynamicINat = async function(force = false, cellKey = null) {
 };
 
 async function fetchINatObservationsNearCenter() {
-	
-	const c = map.getCenter();
-	const lat = c.lat;
-	const lng = c.lng;
-	console.log(`Beginning iNat query...`);
+  const c = map.getCenter();
+  const lat = c.lat;
+  const lng = c.lng;
+  console.log(`Beginning iNat query...`);
 
-	const INAT_MAX_RESULTS = 200; // 1000;
-	const INAT_RADIUS_KM = 0.03; // 0.05 km = 50 meters
+  const INAT_MAX_RESULTS = 200; // 1000;
+  const INAT_RADIUS_KM = 0.03; // 0.05 km = 50 meters
 
- // ─────────────────────────────────────────────────────────────
-// iNat points layer (global so UI can toggle it)
-// ─────────────────────────────────────────────────────────────
-window.iNatLayer = window.iNatLayer || L.layerGroup().addTo(map);
+  // ─────────────────────────────────────────────────────────────
+  // iNat points layer (global so UI can toggle it)
+  // ─────────────────────────────────────────────────────────────
+  window.iNatLayer = window.iNatLayer || L.layerGroup().addTo(map);
 
-// Subtle category palette (unobtrusive)
-const ICONIC_STYLE = {
-  Insecta:          { fillColor: "#d08b1e", fillOpacity: 0.85 },
-  Plantae:          { fillColor: "#2c8a4a", fillOpacity: 0.85 },
-  Fungi:            { fillColor: "#7a4bb3", fillOpacity: 0.85 },
-  Mammalia:         { fillColor: "#7a5a3a", fillOpacity: 0.85 },
-  Aves:             { fillColor: "#1c8a8a", fillOpacity: 0.85 },
-  Reptilia:         { fillColor: "#5b7a2a", fillOpacity: 0.85 },
-  Amphibia:         { fillColor: "#2a7a66", fillOpacity: 0.85 },
-  Actinopterygii:   { fillColor: "#2f6fb3", fillOpacity: 0.85 },
-  Mollusca:         { fillColor: "#8a6d4a", fillOpacity: 0.85 },
-  Arachnida:        { fillColor: "#6b5b5b", fillOpacity: 0.85 },
-  Unknown:          { fillColor: "#666666", fillOpacity: 0.75 }
-};
-
-function styleForObs(obs) {
-  const iconic = obs?.taxon?.iconic_taxon_name || "Unknown";
-  const s = ICONIC_STYLE[iconic] || ICONIC_STYLE.Unknown;
-
-  // Keep markers small + quiet
-  return {
-    radius: 4,
-    stroke: false,
-    fill: true,
-    ...s
+  // Subtle category palette (unobtrusive)
+  const ICONIC_STYLE = {
+    Insecta: { fillColor: "#d08b1e", fillOpacity: 0.85 },
+    Plantae: { fillColor: "#2c8a4a", fillOpacity: 0.85 },
+    Fungi: { fillColor: "#7a4bb3", fillOpacity: 0.85 },
+    Mammalia: { fillColor: "#7a5a3a", fillOpacity: 0.85 },
+    Aves: { fillColor: "#1c8a8a", fillOpacity: 0.85 },
+    Reptilia: { fillColor: "#5b7a2a", fillOpacity: 0.85 },
+    Amphibia: { fillColor: "#2a7a66", fillOpacity: 0.85 },
+    Actinopterygii: { fillColor: "#2f6fb3", fillOpacity: 0.85 },
+    Mollusca: { fillColor: "#8a6d4a", fillOpacity: 0.85 },
+    Arachnida: { fillColor: "#6b5b5b", fillOpacity: 0.85 },
+    Unknown: { fillColor: "#666666", fillOpacity: 0.75 }
   };
-}
+
+  function styleForObs(obs) {
+    const iconic = obs?.taxon?.iconic_taxon_name || "Unknown";
+    const s = ICONIC_STYLE[iconic] || ICONIC_STYLE.Unknown;
+
+    // Keep markers small + quiet
+    return {
+      radius: 4,
+      stroke: false,
+      fill: true,
+      ...s
+    };
+  }
   // END iNat points layer (global so UI can toggle it)
 
-	// Optional: style knobs
-	const INAT_POINT_RADIUS = 4;
-	const INAT_POINT_OPACITY = 0.9;
+  // Optional: style knobs
+  const INAT_POINT_RADIUS = 4;
+  const INAT_POINT_OPACITY = 0.9;
 
-	const INAT_PER_PAGE = 200; // How many obs to fetch (iNat caps per_page; 200 is typical max)
-
+  const INAT_PER_PAGE = 200; // How many obs to fetch (iNat caps per_page; 200 is typical max)
 
   // Build base URL (without page param yet)
   const baseUrl = new URL("https://api.inaturalist.org/v1/observations");
@@ -85,16 +85,12 @@ function styleForObs(obs) {
     baseUrl.searchParams.set("iconic_taxa", iconicTaxa.join(","));
   }
   // END Apply filters from sidebar (iconic_taxa)
-  
-
 
   let allResults = [];
   let page = 1;
-  
-  
+
   // Paging loop
   while (allResults.length < INAT_MAX_RESULTS) {
-
     const url = new URL(baseUrl.toString());
     url.searchParams.set("page", page.toString());
 
@@ -136,7 +132,7 @@ function styleForObs(obs) {
     )} lon=${lng.toFixed(6)}`
   );
 
-  // Clear prior points 
+  // Clear prior points
   window.iNatLayer.clearLayers();
 
   for (const obs of allResults) {
@@ -155,7 +151,7 @@ function styleForObs(obs) {
 
     marker.addTo(window.iNatLayer);
   }
-  
+
   // Update grid heat
   if (typeof window.updateGridHeatmap === "function") {
     window.updateGridHeatmap(allResults);

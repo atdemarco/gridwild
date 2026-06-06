@@ -44,10 +44,7 @@
 
   function getMetricsForCell(col, row) {
     const key = cellId(col, row);
-    const m =
-      window.__richGridMetrics?.get?.(key) ||
-      window.__staticGridCounts?.get?.(key) ||
-      null;
+    const m = window.__richGridMetrics?.get?.(key) || window.__staticGridCounts?.get?.(key) || null;
 
     if (!m) {
       return {
@@ -66,7 +63,7 @@
     const nCaptive = metricNumber(m.n_captive);
     const lastMs = metricNumber(m.last_observed_ms);
     const recency = lastMs
-      ? clamp01(1 - ((Date.now() - lastMs) / (365 * 8 * 24 * 60 * 60 * 1000)))
+      ? clamp01(1 - (Date.now() - lastMs) / (365 * 8 * 24 * 60 * 60 * 1000))
       : 0;
 
     return {
@@ -94,7 +91,10 @@
       col,
       lat: center.lat,
       lng: center.lng,
-      bounds: [[sw.lat, sw.lng], [ne.lat, ne.lng]],
+      bounds: [
+        [sw.lat, sw.lng],
+        [ne.lat, ne.lng]
+      ],
       center: { lat: center.lat, lng: center.lng },
       metrics: getMetricsForCell(col, row),
       osm: defaultOsmPrior()
@@ -110,7 +110,9 @@
     const warnings = [];
 
     if (count > opts.highVisibleCellWarning) {
-      warnings.push(`Visible graph is using all ${count.toLocaleString()} cells; zooming in may run faster.`);
+      warnings.push(
+        `Visible graph is using all ${count.toLocaleString()} cells; zooming in may run faster.`
+      );
     }
 
     const cells = [];
@@ -154,7 +156,10 @@
 
     if (value === "crossing") return "strong";
     if (value === "near") return "weak";
-    if (Number.isFinite(distanceM) && distanceM <= (options.roadNearDistanceM ?? DEFAULTS.roadNearDistanceM)) {
+    if (
+      Number.isFinite(distanceM) &&
+      distanceM <= (options.roadNearDistanceM ?? DEFAULTS.roadNearDistanceM)
+    ) {
       return "weak";
     }
     return "none";
@@ -166,27 +171,43 @@
     const nearestRoadDistanceM = Number(raw.nearestRoadDistanceM);
     const landuseClass =
       raw.landuseClass ||
-      (raw.insideBuilding ? "building" :
-        raw.insideWater ? "water" :
-          raw.insideWood ? "wood" :
-            raw.insideGrass ? "grass" :
-              raw.insidePark ? "park" : "unclassified");
+      (raw.insideBuilding
+        ? "building"
+        : raw.insideWater
+          ? "water"
+          : raw.insideWood
+            ? "wood"
+            : raw.insideGrass
+              ? "grass"
+              : raw.insidePark
+                ? "park"
+                : "unclassified");
 
     return {
       nearestPathId: raw.nearestPathId || null,
       nearestPathDistanceM: Number.isFinite(nearestPathDistanceM) ? nearestPathDistanceM : Infinity,
-      nearestPathSide: raw.nearestPathSide === "left" || raw.nearestPathSide === "right"
-        ? raw.nearestPathSide
-        : "none",
+      nearestPathSide:
+        raw.nearestPathSide === "left" || raw.nearestPathSide === "right"
+          ? raw.nearestPathSide
+          : "none",
       isPathAdjacent:
         raw.isPathAdjacent === true ||
-        (Number.isFinite(nearestPathDistanceM) && nearestPathDistanceM <= (options.pathAdjacentDistanceM ?? DEFAULTS.pathAdjacentDistanceM)),
+        (Number.isFinite(nearestPathDistanceM) &&
+          nearestPathDistanceM <=
+            (options.pathAdjacentDistanceM ?? DEFAULTS.pathAdjacentDistanceM)),
       nearestRoadDistanceM: Number.isFinite(nearestRoadDistanceM) ? nearestRoadDistanceM : Infinity,
-      roadBarrierClass: normalizeRoadBarrierClass(raw.roadBarrierClass, nearestRoadDistanceM, options),
-      nearestWaterDistanceM: Number.isFinite(nearestWaterDistanceM) ? nearestWaterDistanceM : Infinity,
+      roadBarrierClass: normalizeRoadBarrierClass(
+        raw.roadBarrierClass,
+        nearestRoadDistanceM,
+        options
+      ),
+      nearestWaterDistanceM: Number.isFinite(nearestWaterDistanceM)
+        ? nearestWaterDistanceM
+        : Infinity,
       isWetEdge:
         raw.isWetEdge === true ||
-        (Number.isFinite(nearestWaterDistanceM) && nearestWaterDistanceM <= (options.wetEdgeDistanceM ?? DEFAULTS.wetEdgeDistanceM)),
+        (Number.isFinite(nearestWaterDistanceM) &&
+          nearestWaterDistanceM <= (options.wetEdgeDistanceM ?? DEFAULTS.wetEdgeDistanceM)),
       insideBuilding: raw.insideBuilding === true,
       insidePark: raw.insidePark === true,
       insideWood: raw.insideWood === true,
@@ -201,7 +222,7 @@
 
   function computeOsmPriorsForCells(cells, osmFeatures = null, options = {}) {
     const opts = { ...DEFAULTS, ...options };
-    return cells.map(cell => {
+    return cells.map((cell) => {
       const out = { ...cell };
       let raw = null;
 

@@ -61,437 +61,501 @@
   };
 
   const TARGET_LOCATION_LABELS = {
-  specific_square: "Specific square",
-  area_3x3: "Area range: 3×3 squares",
-  area_20x20: "Area range: 20×20 squares",
-  anywhere: "Anywhere"
-};
-
-const CAMPAIGNS = {
-  none: {
-    id: "none",
-    name: "None",
-    description: "No survey association. This is a standalone quest.",
-    anatomy: ["Standalone quest", "No survey scoring", "No shared survey boundary"]
-  },
-  front_yard: {
-    id: "front_yard",
-    name: "My Front Yard",
-    description: "A tiny personal biodiversity atlas for the immediate home territory.",
-    anatomy: ["Permanent home survey", "Small location radius", "Good for daily phenology"]
-  },
-  georgetown_ark: {
-    id: "georgetown_ark",
-    name: "Georgetown Ark Project",
-    description: "A campus-scale biodiversity rescue and discovery survey.",
-    anatomy: ["Urban campus survey", "Student-friendly quests", "Restoration / stewardship framing"]
-  },
-  wildsumaco: {
-    id: "wildsumaco",
-    name: "WildSumaco Research Station",
-    description: "Persistent biomarathon for visitors documenting life across a tropical field station.",
-    anatomy: ["Station boundary placeholder", "Visitor sampling routes", "Future KML / drawn polygon support"]
-  },
-  weekend_bioblitz: {
-    id: "weekend_bioblitz",
-    name: "Weekend Bioblitz",
-    description: "Short, time-boxed burst survey for rapid local biodiversity discovery.",
-    anatomy: ["Temporary survey", "High activity window", "Good for group events"]
-  }
-};
-
-
-
-
-const QUEST_REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
-const QUEST_LOCALE_CACHE_KEY = "gw_quest_locale_v1";
-
-let questLocale = loadCachedQuestLocale();
-let localeLookupController = null;
-let localeLookupTimer = null;
-
-function formatQuestCoord(value, axis) {
-  const n = Math.abs(Number(value) || 0).toFixed(4);
-  const suffix = axis === "lat"
-    ? Number(value) >= 0 ? "N" : "S"
-    : Number(value) >= 0 ? "E" : "W";
-  return `${n}${suffix}`;
-}
-
-function formatQuestCoords(lat, lng) {
-  return `${formatQuestCoord(lat, "lat")}, ${formatQuestCoord(lng, "lng")}`;
-}
-
-function hashString(value) {
-  let h = 2166136261;
-  const s = String(value || "");
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function seededRandom(seed) {
-  let t = hashString(seed) || 1;
-  return function () {
-    t += 0x6D2B79F5;
-    let r = t;
-    r = Math.imul(r ^ (r >>> 15), r | 1);
-    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    specific_square: "Specific square",
+    area_3x3: "Area range: 3×3 squares",
+    area_20x20: "Area range: 20×20 squares",
+    target_set: "Target squares",
+    patch_polygon: "Patch polygon",
+    anywhere: "Anywhere"
   };
-}
 
-function seededInt(rand, min, max) {
-  return Math.floor(rand() * (max - min + 1)) + min;
-}
+  const CAMPAIGNS = {
+    none: {
+      id: "none",
+      name: "None",
+      description: "No survey association. This is a standalone quest.",
+      anatomy: ["Standalone quest", "No survey scoring", "No shared survey boundary"]
+    },
+    front_yard: {
+      id: "front_yard",
+      name: "My Front Yard",
+      description: "A tiny personal biodiversity atlas for the immediate home territory.",
+      anatomy: ["Permanent home survey", "Small location radius", "Good for daily phenology"]
+    },
+    georgetown_ark: {
+      id: "georgetown_ark",
+      name: "Georgetown Ark Project",
+      description: "A campus-scale biodiversity rescue and discovery survey.",
+      anatomy: [
+        "Urban campus survey",
+        "Student-friendly quests",
+        "Restoration / stewardship framing"
+      ]
+    },
+    wildsumaco: {
+      id: "wildsumaco",
+      name: "WildSumaco Research Station",
+      description:
+        "Persistent biomarathon for visitors documenting life across a tropical field station.",
+      anatomy: [
+        "Station boundary placeholder",
+        "Visitor sampling routes",
+        "Future KML / drawn polygon support"
+      ]
+    },
+    weekend_bioblitz: {
+      id: "weekend_bioblitz",
+      name: "Weekend Bioblitz",
+      description: "Short, time-boxed burst survey for rapid local biodiversity discovery.",
+      anatomy: ["Temporary survey", "High activity window", "Good for group events"]
+    }
+  };
 
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
+  const QUEST_REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
+  const QUEST_LOCALE_CACHE_KEY = "gw_quest_locale_v1";
 
-function loadCachedQuestLocale() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(QUEST_LOCALE_CACHE_KEY) || "null");
-    if (!parsed || typeof parsed !== "object") return null;
-    if (!Number.isFinite(Number(parsed.lat)) || !Number.isFinite(Number(parsed.lng))) return null;
-    return parsed;
-  } catch {
-    return null;
+  let questLocale = loadCachedQuestLocale();
+  let localeLookupController = null;
+  let localeLookupTimer = null;
+
+  function formatQuestCoord(value, axis) {
+    const n = Math.abs(Number(value) || 0).toFixed(4);
+    const suffix =
+      axis === "lat" ? (Number(value) >= 0 ? "N" : "S") : Number(value) >= 0 ? "E" : "W";
+    return `${n}${suffix}`;
   }
-}
 
-function saveQuestLocale(locale) {
-  questLocale = locale;
-  window.__gwQuestLocale = locale;
-  try {
-    localStorage.setItem(QUEST_LOCALE_CACHE_KEY, JSON.stringify(locale));
-  } catch {}
-}
+  function formatQuestCoords(lat, lng) {
+    return `${formatQuestCoord(lat, "lat")}, ${formatQuestCoord(lng, "lng")}`;
+  }
 
-function compactLocaleName(name) {
-  return String(name || "")
-    .split(",")
-    .map(part => part.trim())
-    .filter(Boolean)[0] || "";
-}
+  function hashString(value) {
+    let h = 2166136261;
+    const s = String(value || "");
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
 
-function localeNameFromReverse(data) {
-  const address = data?.address || {};
-  return address.neighbourhood ||
-    address.suburb ||
-    address.quarter ||
-    address.city_district ||
-    address.borough ||
-    address.hamlet ||
-    address.village ||
-    address.town ||
-    address.city ||
-    address.municipality ||
-    address.county ||
-    compactLocaleName(data?.name) ||
-    compactLocaleName(data?.display_name);
-}
+  function seededRandom(seed) {
+    let t = hashString(seed) || 1;
+    return function () {
+      t += 0x6d2b79f5;
+      let r = t;
+      r = Math.imul(r ^ (r >>> 15), r | 1);
+      r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+  }
 
-function questReverseUrl(lat, lng) {
-  const params = new URLSearchParams({
-    lat: String(lat),
-    lon: String(lng),
-    format: "jsonv2",
-    zoom: "16",
-    addressdetails: "1"
-  });
-  return `${QUEST_REVERSE_ENDPOINT}?${params.toString()}`;
-}
+  function seededInt(rand, min, max) {
+    return Math.floor(rand() * (max - min + 1)) + min;
+  }
 
-function getGpsFix() {
-  if (typeof lastFix !== "undefined" && lastFix) {
-    const lat = Number(lastFix.latitude);
-    const lng = Number(lastFix.longitude);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      return { lat, lng, accuracy: Number(lastFix.accuracy) || null, source: "gps" };
+  function todayKey() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function loadCachedQuestLocale() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(QUEST_LOCALE_CACHE_KEY) || "null");
+      if (!parsed || typeof parsed !== "object") return null;
+      if (!Number.isFinite(Number(parsed.lat)) || !Number.isFinite(Number(parsed.lng))) return null;
+      return parsed;
+    } catch {
+      return null;
     }
   }
-  return null;
-}
 
-function getFallbackMapFix() {
-  if (typeof map === "undefined" || !map?.getCenter) return null;
-  const c = map.getCenter();
-  return { lat: c.lat, lng: c.lng, accuracy: null, source: "map" };
-}
+  function saveQuestLocale(locale) {
+    questLocale = locale;
+    window.__gwQuestLocale = locale;
+    try {
+      localStorage.setItem(QUEST_LOCALE_CACHE_KEY, JSON.stringify(locale));
+    } catch {}
+  }
 
-function makeCoordinateLocale(fix, label = null) {
-  const coordLabel = formatQuestCoords(fix.lat, fix.lng);
-  const shortLabel = compactLocaleName(label) || compactLocaleName(questLocale?.shortLabel) || "your area";
-  return {
-    lat: fix.lat,
-    lng: fix.lng,
-    accuracy: fix.accuracy || null,
-    label: label || questLocale?.label || coordLabel,
-    shortLabel,
-    seedKey: `${shortLabel}|${Math.round(fix.lat * 1000)}|${Math.round(fix.lng * 1000)}`,
-    source: fix.source || "gps",
-    updatedAt: nowISO()
-  };
-}
+  function compactLocaleName(name) {
+    return (
+      String(name || "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)[0] || ""
+    );
+  }
 
-function getQuestLocale() {
-  const fix = getGpsFix() || getFallbackMapFix();
-  if (!fix) {
-    return questLocale || {
-      lat: 38.911325,
-      lng: -77.076678,
-      accuracy: null,
-      label: "Current map area",
-      shortLabel: "your area",
-      seedKey: "your area",
-      source: "fallback",
+  function localeNameFromReverse(data) {
+    const address = data?.address || {};
+    return (
+      address.neighbourhood ||
+      address.suburb ||
+      address.quarter ||
+      address.city_district ||
+      address.borough ||
+      address.hamlet ||
+      address.village ||
+      address.town ||
+      address.city ||
+      address.municipality ||
+      address.county ||
+      compactLocaleName(data?.name) ||
+      compactLocaleName(data?.display_name)
+    );
+  }
+
+  function questReverseUrl(lat, lng) {
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lon: String(lng),
+      format: "jsonv2",
+      zoom: "16",
+      addressdetails: "1"
+    });
+    return `${QUEST_REVERSE_ENDPOINT}?${params.toString()}`;
+  }
+
+  function getGpsFix() {
+    if (typeof lastFix !== "undefined" && lastFix) {
+      const lat = Number(lastFix.latitude);
+      const lng = Number(lastFix.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return { lat, lng, accuracy: Number(lastFix.accuracy) || null, source: "gps" };
+      }
+    }
+    return null;
+  }
+
+  function getFallbackMapFix() {
+    if (typeof map === "undefined" || !map?.getCenter) return null;
+    const c = map.getCenter();
+    return { lat: c.lat, lng: c.lng, accuracy: null, source: "map" };
+  }
+
+  function makeCoordinateLocale(fix, label = null) {
+    const coordLabel = formatQuestCoords(fix.lat, fix.lng);
+    const shortLabel =
+      compactLocaleName(label) || compactLocaleName(questLocale?.shortLabel) || "your area";
+    return {
+      lat: fix.lat,
+      lng: fix.lng,
+      accuracy: fix.accuracy || null,
+      label: label || questLocale?.label || coordLabel,
+      shortLabel,
+      seedKey: `${shortLabel}|${Math.round(fix.lat * 1000)}|${Math.round(fix.lng * 1000)}`,
+      source: fix.source || "gps",
       updatedAt: nowISO()
     };
   }
 
-  const cachedClose = localeMatchesFix(fix);
+  function getQuestLocale() {
+    const fix = getGpsFix() || getFallbackMapFix();
+    if (!fix) {
+      return (
+        questLocale || {
+          lat: 38.911325,
+          lng: -77.076678,
+          accuracy: null,
+          label: "Current map area",
+          shortLabel: "your area",
+          seedKey: "your area",
+          source: "fallback",
+          updatedAt: nowISO()
+        }
+      );
+    }
 
-  return cachedClose ? questLocale : makeCoordinateLocale(fix);
-}
+    const cachedClose = localeMatchesFix(fix);
 
-function localeMatchesFix(fix) {
-  return !!(
-    fix &&
-    questLocale &&
-    Number.isFinite(Number(questLocale.lat)) &&
-    Number.isFinite(Number(questLocale.lng)) &&
-    Math.abs(Number(questLocale.lat) - fix.lat) < 0.01 &&
-    Math.abs(Number(questLocale.lng) - fix.lng) < 0.01
-  );
-}
-
-function refreshDailyQuestSurfaces() {
-  DAILY_QUESTS = generateDailyQuests();
-
-  const dailyBody = document.getElementById("gwDailyQuestListBody");
-  if (dailyBody) {
-    dailyBody.innerHTML = renderDailyQuestsHtml();
+    return cachedClose ? questLocale : makeCoordinateLocale(fix);
   }
-}
 
-async function lookupQuestLocale(fix) {
-  if (!fix) return;
+  function localeMatchesFix(fix) {
+    return !!(
+      fix &&
+      questLocale &&
+      Number.isFinite(Number(questLocale.lat)) &&
+      Number.isFinite(Number(questLocale.lng)) &&
+      Math.abs(Number(questLocale.lat) - fix.lat) < 0.01 &&
+      Math.abs(Number(questLocale.lng) - fix.lng) < 0.01
+    );
+  }
 
-  localeLookupController?.abort();
-  localeLookupController = new AbortController();
+  function refreshDailyQuestSurfaces() {
+    DAILY_QUESTS = generateDailyQuests();
 
-  const provisional = makeCoordinateLocale(fix);
-  saveQuestLocale(provisional);
-  refreshDailyQuestSurfaces();
-
-  try {
-    const response = await fetch(questReverseUrl(fix.lat, fix.lng), {
-      signal: localeLookupController.signal,
-      headers: { "Accept": "application/json" }
-    });
-    if (!response.ok) throw new Error(`Locale lookup failed (${response.status})`);
-
-    const data = await response.json();
-    const name = localeNameFromReverse(data);
-    if (!name) return;
-
-    const resolved = makeCoordinateLocale(fix, name);
-    resolved.displayName = data?.display_name || name;
-    saveQuestLocale(resolved);
-    refreshDailyQuestSurfaces();
-  } catch (err) {
-    if (err.name !== "AbortError") {
-      console.warn("GridWild quest locale lookup failed:", err);
+    const dailyBody = document.getElementById("gwDailyQuestListBody");
+    if (dailyBody) {
+      dailyBody.innerHTML = renderDailyQuestsHtml();
     }
   }
-}
 
-function scheduleQuestLocaleRefresh(fix = getGpsFix()) {
-  if (!fix) return;
-  clearTimeout(localeLookupTimer);
-  localeLookupTimer = setTimeout(() => lookupQuestLocale(fix), 400);
-}
+  async function lookupQuestLocale(fix) {
+    if (!fix) return;
 
-function cellTargetFromLatLng(lat, lng, mode = "specific_square") {
-  const p = map.options.crs.project(L.latLng(lat, lng));
-  const ix = Math.floor(p.x / GRID_SIZE_M);
-  const iy = Math.floor(p.y / GRID_SIZE_M);
+    localeLookupController?.abort();
+    localeLookupController = new AbortController();
 
-  const radiusCells = {
-    specific_square: 0,
-    area_3x3: 1,
-    area_20x20: 10,
-    anywhere: null
-  }[mode];
+    const provisional = makeCoordinateLocale(fix);
+    saveQuestLocale(provisional);
+    refreshDailyQuestSurfaces();
 
-  return {
-    mode,
-    lat,
-    lng,
-    ix,
-    iy,
-    cellKey: `${ix},${iy}`,
-    radiusCells,
-    label: TARGET_LOCATION_LABELS[mode] || mode
-  };
-}
+    try {
+      const response = await fetch(questReverseUrl(fix.lat, fix.lng), {
+        signal: localeLookupController.signal,
+        headers: { Accept: "application/json" }
+      });
+      if (!response.ok) throw new Error(`Locale lookup failed (${response.status})`);
 
-function cellTargetFromIndices(ix, iy, mode = "specific_square") {
-  const x = (ix + 0.5) * GRID_SIZE_M;
-  const y = (iy + 0.5) * GRID_SIZE_M;
-  const ll = map.options.crs.unproject(L.point(x, y));
-  return cellTargetFromLatLng(ll.lat, ll.lng, mode);
-}
+      const data = await response.json();
+      const name = localeNameFromReverse(data);
+      if (!name) return;
 
-function targetOffsetForMode(mode) {
-  if (mode === "specific_square") return 2;
-  if (mode === "area_3x3") return 4;
-  if (mode === "area_20x20") return 12;
-  return 0;
-}
+      const resolved = makeCoordinateLocale(fix, name);
+      resolved.displayName = data?.display_name || name;
+      saveQuestLocale(resolved);
+      refreshDailyQuestSurfaces();
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        console.warn("GridWild quest locale lookup failed:", err);
+      }
+    }
+  }
 
-function makeLocaleTarget(mode, salt = "") {
-  if (mode === "anywhere") {
+  function scheduleQuestLocaleRefresh(fix = getGpsFix()) {
+    if (!fix) return;
+    clearTimeout(localeLookupTimer);
+    localeLookupTimer = setTimeout(() => lookupQuestLocale(fix), 400);
+  }
+
+  function cellTargetFromLatLng(lat, lng, mode = "specific_square") {
+    const p = map.options.crs.project(L.latLng(lat, lng));
+    const ix = Math.floor(p.x / GRID_SIZE_M);
+    const iy = Math.floor(p.y / GRID_SIZE_M);
+
+    const radiusCells = {
+      specific_square: 0,
+      area_3x3: 1,
+      area_20x20: 10,
+      anywhere: null
+    }[mode];
+
     return {
-      mode: "anywhere",
-      label: "Anywhere",
-      radiusCells: null,
-      placeName: getQuestLocale().shortLabel
+      mode,
+      lat,
+      lng,
+      ix,
+      iy,
+      cellKey: `${ix},${iy}`,
+      radiusCells,
+      label: TARGET_LOCATION_LABELS[mode] || mode
     };
   }
 
-  const locale = getQuestLocale();
-  const base = cellTargetFromLatLng(locale.lat, locale.lng, mode);
-  const rand = seededRandom(`${todayKey()}|${locale.seedKey}|${mode}|${salt}`);
-  const maxOffset = targetOffsetForMode(mode);
-  const dx = seededInt(rand, -maxOffset, maxOffset);
-  const dy = seededInt(rand, -maxOffset, maxOffset);
-  const target = cellTargetFromIndices(base.ix + dx, base.iy + dy, mode);
-
-  return {
-    ...target,
-    placeName: locale.shortLabel,
-    localeLabel: locale.label,
-    localeSeed: locale.seedKey,
-    source: locale.source
-  };
-}
-
-function makeTodayQuestSeed(title, recipe, forcedTargetLocation) {
-  const targetLocation = forcedTargetLocation || recipe.targetLocation || "area_3x3";
-  const locale = getQuestLocale();
-  const target = makeLocaleTarget(targetLocation, title);
-  const titleTemplate = String(title || "");
-  const titleText = titleTemplate.replaceAll("{locale}", locale.shortLabel);
-  const fullRecipe = {
-    range: targetLocation === "anywhere" ? "anywhere" : "here",
-    iconicTaxon: recipe.iconicTaxon || "Any",
-    objectiveType: recipe.objectiveType || "any_observation",
-    difficulty: Number(recipe.difficulty || 1),
-    timeframe: "today",
-    evidence: recipe.evidence || "photo_gps20",
-    surveyId: recipe.surveyId || "none",
-    targetLocation,
-    target,
-    quantity: recipe.quantity || recipe.targetCount || 1
-  };
-
-  return {
-    title: titleText,
-    description: buildQuestDescription(fullRecipe, locale),
-    recipe: fullRecipe
-  };
-}
-
-function generateDailyQuests() {
-  const locale = getQuestLocale();
-  const extraModeRand = seededRandom(`${todayKey()}|${locale.seedKey}|extra-mode`);
-
-  const required = [
-    makeTodayQuestSeed(
-      "Open-world wander: observe anything around {locale}",
-      { iconicTaxon: "Any", objectiveType: "any_observation", difficulty: 1 },
-      "anywhere"
-    ),
-    makeTodayQuestSeed(
-      "Sort unknowns around {locale}",
-      { iconicTaxon: "Any", objectiveType: "identify_unknowns", difficulty: 2, evidence: "identification", quantity: 3 },
-      "anywhere"
-    ),
-    makeTodayQuestSeed(
-      "{locale} pinpoint survey",
-      { iconicTaxon: "Plantae", objectiveType: "any_observation", difficulty: 2 },
-      "specific_square"
-    ),
-    makeTodayQuestSeed(
-      "{locale} 3x3 sweep",
-      { iconicTaxon: "Insecta", objectiveType: "underobserved", difficulty: 3 },
-      "area_3x3"
-    )
-  ];
-
-  const fieldExtras = [
-    makeTodayQuestSeed(
-      "Find fungi, lichens, or decomposers in {locale}",
-      { iconicTaxon: "Fungi", objectiveType: "underobserved", difficulty: 3 },
-      "area_20x20"
-    ),
-    makeTodayQuestSeed(
-      `Add one new taxon to ${locale.shortLabel}`,
-      { iconicTaxon: "Any", objectiveType: "new_square_taxon", difficulty: 4 },
-      ["specific_square", "area_3x3", "area_20x20", "anywhere"][seededInt(extraModeRand, 0, 3)]
-    )
-  ];
-
-  const identifyExtras = [
-    makeTodayQuestSeed(
-      "Give one careful broad ID near {locale}",
-      { iconicTaxon: "Any", objectiveType: "identify_unknowns", difficulty: 3, evidence: "identification", quantity: 1 },
-      "anywhere"
-    ),
-    makeTodayQuestSeed(
-      "Coarse-sort five unknowns around {locale}",
-      { iconicTaxon: "Any", objectiveType: "identify_unknowns", difficulty: 4, evidence: "identification", quantity: 5 },
-      "anywhere"
-    )
-  ];
-
-  const identifyExtra = identifyExtras[seededInt(extraModeRand, 0, identifyExtras.length - 1)];
-
-  return [...required, ...fieldExtras, identifyExtra];
-}
-
-let DAILY_QUESTS = generateDailyQuests();
-let sharedSurveyOpened = false;
-
-
-const DAILY_QUESTS_ORIGINAL = [
-  {
-    title: "Photograph one plant in the current area",
-    recipe: { iconicTaxon: "Plantae", objectiveType: "any_observation", difficulty: 1, targetLocation: "area_3x3", timeframe: "today", surveyId: "none" }
-  },
-  {
-    title: "Find an insect or spider near you",
-    recipe: { iconicTaxon: "Insecta", objectiveType: "underobserved", difficulty: 2, targetLocation: "area_3x3", timeframe: "today", surveyId: "none" }
-  },
-  {
-    title: "Refresh one fading fog cell",
-    recipe: { iconicTaxon: "Any", objectiveType: "revisit_fading", difficulty: 2, targetLocation: "specific_square", timeframe: "today", surveyId: "none" }
-  },
-  {
-    title: "Look for fungi, lichens, or decomposers",
-    recipe: { iconicTaxon: "Fungi", objectiveType: "underobserved", difficulty: 3, targetLocation: "area_20x20", timeframe: "today", surveyId: "none" }
-  },
-  {
-    title: "Add one new taxon to this neighborhood",
-    recipe: { iconicTaxon: "Any", objectiveType: "new_square_taxon", difficulty: 4, targetLocation: "area_20x20", timeframe: "today", surveyId: "none" }
+  function cellTargetFromIndices(ix, iy, mode = "specific_square") {
+    const x = (ix + 0.5) * GRID_SIZE_M;
+    const y = (iy + 0.5) * GRID_SIZE_M;
+    const ll = map.options.crs.unproject(L.point(x, y));
+    return cellTargetFromLatLng(ll.lat, ll.lng, mode);
   }
-];
 
+  function targetOffsetForMode(mode) {
+    if (mode === "specific_square") return 2;
+    if (mode === "area_3x3") return 4;
+    if (mode === "area_20x20") return 12;
+    return 0;
+  }
 
+  function makeLocaleTarget(mode, salt = "") {
+    if (mode === "anywhere") {
+      return {
+        mode: "anywhere",
+        label: "Anywhere",
+        radiusCells: null,
+        placeName: getQuestLocale().shortLabel
+      };
+    }
+
+    const locale = getQuestLocale();
+    const base = cellTargetFromLatLng(locale.lat, locale.lng, mode);
+    const rand = seededRandom(`${todayKey()}|${locale.seedKey}|${mode}|${salt}`);
+    const maxOffset = targetOffsetForMode(mode);
+    const dx = seededInt(rand, -maxOffset, maxOffset);
+    const dy = seededInt(rand, -maxOffset, maxOffset);
+    const target = cellTargetFromIndices(base.ix + dx, base.iy + dy, mode);
+
+    return {
+      ...target,
+      placeName: locale.shortLabel,
+      localeLabel: locale.label,
+      localeSeed: locale.seedKey,
+      source: locale.source
+    };
+  }
+
+  function makeTodayQuestSeed(title, recipe, forcedTargetLocation) {
+    const targetLocation = forcedTargetLocation || recipe.targetLocation || "area_3x3";
+    const locale = getQuestLocale();
+    const target = makeLocaleTarget(targetLocation, title);
+    const titleTemplate = String(title || "");
+    const titleText = titleTemplate.replaceAll("{locale}", locale.shortLabel);
+    const fullRecipe = {
+      range: targetLocation === "anywhere" ? "anywhere" : "here",
+      iconicTaxon: recipe.iconicTaxon || "Any",
+      objectiveType: recipe.objectiveType || "any_observation",
+      difficulty: Number(recipe.difficulty || 1),
+      timeframe: "today",
+      evidence: recipe.evidence || "photo_gps20",
+      surveyId: recipe.surveyId || "none",
+      targetLocation,
+      target,
+      quantity: recipe.quantity || recipe.targetCount || 1
+    };
+
+    return {
+      title: titleText,
+      description: buildQuestDescription(fullRecipe, locale),
+      recipe: fullRecipe
+    };
+  }
+
+  function generateDailyQuests() {
+    const locale = getQuestLocale();
+    const extraModeRand = seededRandom(`${todayKey()}|${locale.seedKey}|extra-mode`);
+
+    const required = [
+      makeTodayQuestSeed(
+        "Open-world wander: observe anything around {locale}",
+        { iconicTaxon: "Any", objectiveType: "any_observation", difficulty: 1 },
+        "anywhere"
+      ),
+      makeTodayQuestSeed(
+        "Sort unknowns around {locale}",
+        {
+          iconicTaxon: "Any",
+          objectiveType: "identify_unknowns",
+          difficulty: 2,
+          evidence: "identification",
+          quantity: 3
+        },
+        "anywhere"
+      ),
+      makeTodayQuestSeed(
+        "{locale} pinpoint survey",
+        { iconicTaxon: "Plantae", objectiveType: "any_observation", difficulty: 2 },
+        "specific_square"
+      ),
+      makeTodayQuestSeed(
+        "{locale} 3x3 sweep",
+        { iconicTaxon: "Insecta", objectiveType: "underobserved", difficulty: 3 },
+        "area_3x3"
+      )
+    ];
+
+    const fieldExtras = [
+      makeTodayQuestSeed(
+        "Find fungi, lichens, or decomposers in {locale}",
+        { iconicTaxon: "Fungi", objectiveType: "underobserved", difficulty: 3 },
+        "area_20x20"
+      ),
+      makeTodayQuestSeed(
+        `Add one new taxon to ${locale.shortLabel}`,
+        { iconicTaxon: "Any", objectiveType: "new_square_taxon", difficulty: 4 },
+        ["specific_square", "area_3x3", "area_20x20", "anywhere"][seededInt(extraModeRand, 0, 3)]
+      )
+    ];
+
+    const identifyExtras = [
+      makeTodayQuestSeed(
+        "Give one careful broad ID near {locale}",
+        {
+          iconicTaxon: "Any",
+          objectiveType: "identify_unknowns",
+          difficulty: 3,
+          evidence: "identification",
+          quantity: 1
+        },
+        "anywhere"
+      ),
+      makeTodayQuestSeed(
+        "Coarse-sort five unknowns around {locale}",
+        {
+          iconicTaxon: "Any",
+          objectiveType: "identify_unknowns",
+          difficulty: 4,
+          evidence: "identification",
+          quantity: 5
+        },
+        "anywhere"
+      )
+    ];
+
+    const identifyExtra = identifyExtras[seededInt(extraModeRand, 0, identifyExtras.length - 1)];
+
+    return [...required, ...fieldExtras, identifyExtra];
+  }
+
+  let DAILY_QUESTS = generateDailyQuests();
+  let sharedSurveyOpened = false;
+
+  const DAILY_QUESTS_ORIGINAL = [
+    {
+      title: "Photograph one plant in the current area",
+      recipe: {
+        iconicTaxon: "Plantae",
+        objectiveType: "any_observation",
+        difficulty: 1,
+        targetLocation: "area_3x3",
+        timeframe: "today",
+        surveyId: "none"
+      }
+    },
+    {
+      title: "Find an insect or spider near you",
+      recipe: {
+        iconicTaxon: "Insecta",
+        objectiveType: "underobserved",
+        difficulty: 2,
+        targetLocation: "area_3x3",
+        timeframe: "today",
+        surveyId: "none"
+      }
+    },
+    {
+      title: "Refresh one fading fog cell",
+      recipe: {
+        iconicTaxon: "Any",
+        objectiveType: "revisit_fading",
+        difficulty: 2,
+        targetLocation: "specific_square",
+        timeframe: "today",
+        surveyId: "none"
+      }
+    },
+    {
+      title: "Look for fungi, lichens, or decomposers",
+      recipe: {
+        iconicTaxon: "Fungi",
+        objectiveType: "underobserved",
+        difficulty: 3,
+        targetLocation: "area_20x20",
+        timeframe: "today",
+        surveyId: "none"
+      }
+    },
+    {
+      title: "Add one new taxon to this neighborhood",
+      recipe: {
+        iconicTaxon: "Any",
+        objectiveType: "new_square_taxon",
+        difficulty: 4,
+        targetLocation: "area_20x20",
+        timeframe: "today",
+        surveyId: "none"
+      }
+    }
+  ];
 
   function loadQuests() {
     try {
@@ -529,7 +593,7 @@ const DAILY_QUESTS_ORIGINAL = [
     return "Mythic";
   }
 
-    function statusLabel(status) {
+  function statusLabel(status) {
     const s = String(status || "paused").toLowerCase();
 
     if (s === "active") return "Active";
@@ -542,33 +606,35 @@ const DAILY_QUESTS_ORIGINAL = [
     if (s === "abandoned") return "Abandoned";
 
     return "Paused";
-    }
+  }
 
-    function statusClass(status) {
+  function statusClass(status) {
     const s = String(status || "paused").toLowerCase();
     if (s === "complete") return "completed";
     if (s === "expired") return "stale";
     return s;
-    }
+  }
 
   function estimateRewardXP(recipe) {
     const difficulty = Number(recipe.difficulty || 1);
-    const rangeBonus = {
-      here: 0,
-      "1min": 5,
-      "5min": 15,
-      "15min": 30,
-      anywhere: 10
-    }[recipe.range] ?? 0;
+    const rangeBonus =
+      {
+        here: 0,
+        "1min": 5,
+        "5min": 15,
+        "15min": 30,
+        anywhere: 10
+      }[recipe.range] ?? 0;
 
-    const objectiveBonus = {
-      any_observation: 10,
-      new_square_taxon: 35,
-      underobserved: 45,
-      revisit_fading: 30,
-      leaderboard: 50,
-      identify_unknowns: 40
-    }[recipe.objectiveType] ?? 10;
+    const objectiveBonus =
+      {
+        any_observation: 10,
+        new_square_taxon: 35,
+        underobserved: 45,
+        revisit_fading: 30,
+        leaderboard: 50,
+        identify_unknowns: 40
+      }[recipe.objectiveType] ?? 10;
 
     return Math.round(20 + difficulty * 20 + rangeBonus + objectiveBonus);
   }
@@ -587,6 +653,9 @@ const DAILY_QUESTS_ORIGINAL = [
 
     if (isIdentificationQuest(recipe)) {
       const count = Number.isFinite(quantity) && quantity > 1 ? quantity : 1;
+      if ((recipe?.targetLocation || target.mode) === "patch_polygon") {
+        return `Add ${count} identification${count === 1 ? "" : "s"} to unknown iNaturalist observations inside ${target.patchName || target.label || "this Patch"}.`;
+      }
       return `Add ${count} identification${count === 1 ? "" : "s"} to currently unknown iNaturalist observations around ${place}.`;
     }
 
@@ -594,419 +663,427 @@ const DAILY_QUESTS_ORIGINAL = [
       return `${objective} Seeded from your GPS locale near ${place}; any qualifying observation around this area counts.`;
     }
 
+    if ((recipe?.targetLocation || target.mode) === "target_set") {
+      const targetLabel = target.patchName || target.label || "the marked target squares";
+      return `${objective} Observe in one marked target square for ${targetLabel}.`;
+    }
+
     const scope = TARGET_LOCATION_LABELS[recipe?.targetLocation || target.mode] || "local target";
     return `${objective} Seeded from your GPS locale near ${place}; head for the ${scope.toLowerCase()} generated from this local grid.`;
   }
 
- function isArchivedQuest(q) {
-  return q?.archived === true ||
-    q?.archived === "true" ||
-    !!q?.archivedAt ||
-    String(q?.status || "").toLowerCase() === "archived";
-}
-
-function isAbandonedQuest(q) {
-  return String(q?.status || "").toLowerCase() === "abandoned";
-}
-
-function normalizeDbQuest(q) {
-  const playerQuest = q.player_quests?.[0] || null;
-  const storedRecipe = q.recipe && typeof q.recipe === "object" ? q.recipe : {};
-
-  const recipe = {
-    range: storedRecipe.range || "anywhere",
-    iconicTaxon: storedRecipe.iconicTaxon || "Any",
-    objectiveType: storedRecipe.objectiveType || (q.quest_type === "identify" ? "identify_unknowns" : "any_observation"),
-    difficulty: Number(storedRecipe.difficulty || 1),
-    timeframe: storedRecipe.timeframe || "today",
-    evidence: storedRecipe.evidence || "photo_gps20",
-    targetLocation: storedRecipe.targetLocation || storedRecipe.target?.mode || "anywhere",
-    target: storedRecipe.target || null,
-    surveyId: storedRecipe.surveyId || "none",
-    quantity: storedRecipe.quantity || storedRecipe.targetCount || 1
-  };
-
-  return {
-    id: q.id,
-    dbId: q.id,
-    source: "db",
-    title: q.title || "Untitled Quest",
-    createdAt: q.created_at || nowISO(),
-    status: playerQuest?.status || q.status || "available",
-    archived: false,
-    archivedAt: null,
-    startedAt: playerQuest?.accepted_at || q.accepted_at || null,
-    completedAt: playerQuest?.completed_at || q.completed_at || null,
-    pointValue: q.reward_wildpoints || 0,
-    description: q.description || "",
-    recipe
-  };
-}
-
-function getDbQuests() {
-  const quests = window.__gwState?.quests || [];
-  return Array.isArray(quests) ? quests.map(normalizeDbQuest) : [];
-}
-
-function isPlayerTrackedQuest(q) {
-  const status = String(q?.status || "").toLowerCase();
-  return !["", "available", "unavailable"].includes(status);
-}
-
-function isIdentificationQuest(questOrRecipe) {
-  if (window.GridWildIdentify?.isIdentificationQuest) {
-    return window.GridWildIdentify.isIdentificationQuest(questOrRecipe);
+  function isArchivedQuest(q) {
+    return (
+      q?.archived === true ||
+      q?.archived === "true" ||
+      !!q?.archivedAt ||
+      String(q?.status || "").toLowerCase() === "archived"
+    );
   }
 
-  const r = questOrRecipe?.recipe || questOrRecipe || {};
-  return (
-    String(questOrRecipe?.quest_type || "").toLowerCase() === "identify" ||
-    r.objectiveType === "identify_unknowns" ||
-    r.evidence === "identification" ||
-    r.evidenceType === "identification"
-  );
-}
+  function isAbandonedQuest(q) {
+    return String(q?.status || "").toLowerCase() === "abandoned";
+  }
 
-function updateRuntimeQuestPlayerState(questId, playerQuest, patch = {}) {
-  window.__gwState = window.__gwState || {};
-  const nextStatus = playerQuest?.status || patch.status || null;
+  function normalizeDbQuest(q) {
+    const playerQuest = q.player_quests?.[0] || null;
+    const storedRecipe = q.recipe && typeof q.recipe === "object" ? q.recipe : {};
 
-  window.__gwState.quests = (window.__gwState.quests || []).map(q => {
-    const isTarget = String(q.id) === String(questId);
-
-    if (!isTarget) {
-      const pq = q.player_quests?.[0] || null;
-      const currentStatus = pq?.status || q.status;
-
-      if (nextStatus === "active" && currentStatus === "active") {
-        return {
-          ...q,
-          status: "paused",
-          player_quests: pq
-            ? [{ ...pq, status: "paused" }]
-            : q.player_quests
-        };
-      }
-
-      return q;
-    }
+    const recipe = {
+      range: storedRecipe.range || "anywhere",
+      iconicTaxon: storedRecipe.iconicTaxon || "Any",
+      objectiveType:
+        storedRecipe.objectiveType ||
+        (q.quest_type === "identify" ? "identify_unknowns" : "any_observation"),
+      difficulty: Number(storedRecipe.difficulty || 1),
+      timeframe: storedRecipe.timeframe || "today",
+      evidence: storedRecipe.evidence || "photo_gps20",
+      targetLocation: storedRecipe.targetLocation || storedRecipe.target?.mode || "anywhere",
+      target: storedRecipe.target || null,
+      surveyId: storedRecipe.surveyId || "none",
+      quantity: storedRecipe.quantity || storedRecipe.targetCount || 1
+    };
 
     return {
-      ...q,
-      status: nextStatus || q.status,
-      accepted_at: playerQuest?.accepted_at || patch.accepted_at || q.accepted_at || null,
-      completed_at: playerQuest?.completed_at || patch.completed_at || q.completed_at || null,
-      player_quests: playerQuest
-        ? [playerQuest]
-        : q.player_quests
+      id: q.id,
+      dbId: q.id,
+      source: "db",
+      title: q.title || "Untitled Quest",
+      createdAt: q.created_at || nowISO(),
+      status: playerQuest?.status || q.status || "available",
+      archived: false,
+      archivedAt: null,
+      startedAt: playerQuest?.accepted_at || q.accepted_at || null,
+      completedAt: playerQuest?.completed_at || q.completed_at || null,
+      pointValue: q.reward_wildpoints || 0,
+      description: q.description || "",
+      recipe
     };
-  });
-}
-
-function getVisibleQuests() {
-  return getDbQuests()
-    .filter(q => isPlayerTrackedQuest(q) && !isArchivedQuest(q) && !isAbandonedQuest(q));
-}
-
-async function acceptAndEmbarkQuest(quest) {
-  if (!quest) return null;
-
-  if (isIdentificationQuest(quest)) {
-    const ok = await window.GridWildIdentify?.ensureLinkedAccount?.({
-      reason: "accept",
-      quest
-    });
-    if (!ok) return null;
   }
 
-  if (quest.source === "db" || quest.dbId) {
-    const questId = quest.dbId || quest.id;
-    const accepted = await window.GridWildAPI.acceptQuest(questId);
-    await window.GridWildAPI.setActiveQuest(questId);
+  function getDbQuests() {
+    const quests = window.__gwState?.quests || [];
+    return Array.isArray(quests) ? quests.map(normalizeDbQuest) : [];
+  }
 
-    quest.status = "active";
-    quest.startedAt = accepted.player_quest?.accepted_at || quest.startedAt || nowISO();
+  function isPlayerTrackedQuest(q) {
+    const status = String(q?.status || "").toLowerCase();
+    return !["", "available", "unavailable"].includes(status);
+  }
+
+  function isIdentificationQuest(questOrRecipe) {
+    if (window.GridWildIdentify?.isIdentificationQuest) {
+      return window.GridWildIdentify.isIdentificationQuest(questOrRecipe);
+    }
+
+    const r = questOrRecipe?.recipe || questOrRecipe || {};
+    return (
+      String(questOrRecipe?.quest_type || "").toLowerCase() === "identify" ||
+      r.objectiveType === "identify_unknowns" ||
+      r.evidence === "identification" ||
+      r.evidenceType === "identification"
+    );
+  }
+
+  function updateRuntimeQuestPlayerState(questId, playerQuest, patch = {}) {
+    window.__gwState = window.__gwState || {};
+    const nextStatus = playerQuest?.status || patch.status || null;
+
+    window.__gwState.quests = (window.__gwState.quests || []).map((q) => {
+      const isTarget = String(q.id) === String(questId);
+
+      if (!isTarget) {
+        const pq = q.player_quests?.[0] || null;
+        const currentStatus = pq?.status || q.status;
+
+        if (nextStatus === "active" && currentStatus === "active") {
+          return {
+            ...q,
+            status: "paused",
+            player_quests: pq ? [{ ...pq, status: "paused" }] : q.player_quests
+          };
+        }
+
+        return q;
+      }
+
+      return {
+        ...q,
+        status: nextStatus || q.status,
+        accepted_at: playerQuest?.accepted_at || patch.accepted_at || q.accepted_at || null,
+        completed_at: playerQuest?.completed_at || patch.completed_at || q.completed_at || null,
+        player_quests: playerQuest ? [playerQuest] : q.player_quests
+      };
+    });
+  }
+
+  function getVisibleQuests() {
+    return getDbQuests().filter(
+      (q) => isPlayerTrackedQuest(q) && !isArchivedQuest(q) && !isAbandonedQuest(q)
+    );
+  }
+
+  async function acceptAndEmbarkQuest(quest) {
+    if (!quest) return null;
+
+    if (isIdentificationQuest(quest)) {
+      const ok = await window.GridWildIdentify?.ensureLinkedAccount?.({
+        reason: "accept",
+        quest
+      });
+      if (!ok) return null;
+    }
+
+    if (quest.source === "db" || quest.dbId) {
+      const questId = quest.dbId || quest.id;
+      const accepted = await window.GridWildAPI.acceptQuest(questId);
+      await window.GridWildAPI.setActiveQuest(questId);
+
+      quest.status = "active";
+      quest.startedAt = accepted.player_quest?.accepted_at || quest.startedAt || nowISO();
+
+      window.__gwState = window.__gwState || {};
+      window.__gwState.activeQuestId = questId;
+      updateRuntimeQuestPlayerState(questId, accepted.player_quest, {
+        status: "active",
+        accepted_at: quest.startedAt
+      });
+
+      window.refreshQuestBadge?.();
+      renderQuestListIntoPage();
+
+      if (window.GridWildQuestLayer) {
+        window.GridWildQuestLayer.embark(quest);
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("gwQuestEmbarked", {
+          detail: { quest }
+        })
+      );
+
+      return quest;
+    }
+
+    const activeQuest = embarkQuest(quest.id);
+
+    window.dispatchEvent(
+      new CustomEvent("gwQuestEmbarked", {
+        detail: { quest: activeQuest || quest }
+      })
+    );
+
+    return activeQuest || quest;
+  }
+
+  function getArchivedQuests() {
+    return [
+      ...getDbQuests().filter((q) => isArchivedQuest(q)),
+      ...loadQuests().filter((q) => isArchivedQuest(q))
+    ];
+  }
+
+  function embarkQuest(questId) {
+    const quests = loadQuests();
+    let activeQuest = null;
+
+    quests.forEach((q) => {
+      if (q.archived) return;
+
+      if (q.id === questId) {
+        q.status = "active";
+        q.startedAt = q.startedAt || nowISO();
+        activeQuest = q;
+      } else if (q.status === "active") {
+        q.status = "paused";
+      }
+    });
+
+    saveQuests(quests);
+    renderQuestListIntoPage();
+    window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
+    window.refreshQuestBadge?.();
+
+    if (activeQuest && window.GridWildQuestLayer) {
+      window.GridWildQuestLayer.embark(activeQuest);
+    }
+
+    return activeQuest;
+  }
+
+  async function archiveQuest(questId) {
+    const dbQuest = getDbQuests().find((q) => String(q.id) === String(questId));
+
+    if (dbQuest?.source === "db" || dbQuest?.dbId) {
+      try {
+        const result = await window.GridWildAPI.archiveQuest(dbQuest.dbId || dbQuest.id);
+
+        updateRuntimeQuestPlayerState(dbQuest.dbId || dbQuest.id, result.player_quest, {
+          status: "archived"
+        });
+
+        if (String(window.__gwState?.activeQuestId || "") === String(dbQuest.dbId || dbQuest.id)) {
+          await window.GridWildAPI.setActiveQuest(null);
+          window.__gwState.activeQuestId = null;
+          window.GridWildQuestLayer?.clear?.();
+        }
+
+        renderQuestListIntoPage();
+        window.refreshQuestBadge?.();
+        window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
+
+        return true;
+      } catch (err) {
+        console.error("Archive quest failed:", err);
+        alert(`Could not archive quest: ${err.message}`);
+        return false;
+      }
+    }
+
+    const quests = loadQuests();
+    const q = quests.find((x) => x.id === questId);
+    if (!q) return false;
+
+    const wasActive = q.status === "active";
+
+    q.archived = true;
+    q.archivedAt = nowISO();
+
+    // Archiving ends the current field action.
+    if (wasActive) {
+      q.status = "paused";
+      if (window.GridWildQuestLayer?.clear) {
+        window.GridWildQuestLayer.clear();
+      }
+      if (window.__gwState?.activeQuestId === q.id) {
+        delete window.__gwState.activeQuestId;
+        window.refreshQuestBadge?.();
+      }
+    }
+
+    saveQuests(quests);
+    renderQuestListIntoPage();
+    window.refreshQuestBadge?.();
+    window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
+
+    return true;
+  }
+
+  async function abandonQuest(questId) {
+    const dbQuest = getDbQuests().find((q) => String(q.id) === String(questId));
+
+    if (dbQuest?.source === "db" || dbQuest?.dbId) {
+      try {
+        const id = dbQuest.dbId || dbQuest.id;
+        const result = await window.GridWildAPI.abandonQuest(id);
+
+        updateRuntimeQuestPlayerState(id, result.player_quest, {
+          status: "abandoned"
+        });
+
+        if (result.deactivated_quest) {
+          window.__gwState.quests = (window.__gwState.quests || []).filter(
+            (q) => String(q.id) !== String(id)
+          );
+        }
+
+        if (String(window.__gwState?.activeQuestId || "") === String(id)) {
+          window.__gwState.activeQuestId = null;
+          window.GridWildQuestLayer?.clear?.();
+        }
+
+        renderQuestListIntoPage();
+        window.refreshQuestBadge?.();
+        window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
+
+        return true;
+      } catch (err) {
+        console.error("Abandon quest failed:", err);
+        alert(`Could not abandon quest: ${err.message}`);
+        return false;
+      }
+    }
+
+    const quests = loadQuests();
+    const q = quests.find((x) => x.id === questId);
+    if (!q) return false;
+
+    const next = quests.filter((x) => x.id !== questId);
+    saveQuests(next);
+
+    if (window.__gwState?.activeQuestId === questId) {
+      window.__gwState.activeQuestId = null;
+      window.GridWildQuestLayer?.clear?.();
+    }
+
+    renderQuestListIntoPage();
+    window.refreshQuestBadge?.();
+    window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
+
+    return true;
+  }
+
+  function getRuntimePartyIdForQuest(questId) {
+    const id = String(questId || "");
+    if (!id) return null;
+
+    const activeParty = window.__gwState?.party;
+    const activeLinked = (window.__gwState?.partyEvents || []).some(
+      (e) => String(e?.payload?.quest_id || "") === id
+    );
+
+    if (activeParty?.id && activeLinked) return activeParty.id;
+
+    const parties = window.GridWildParty?.getAllParties?.() || [];
+    const party = parties.find((p) => String(p.linkedQuestId || "") === id);
+
+    return party?.id || null;
+  }
+
+  async function hydratePartyForQuest(questId) {
+    const runtimePartyId = getRuntimePartyIdForQuest(questId);
+    if (runtimePartyId) return runtimePartyId;
+
+    const result = await window.GridWildAPI?.getPartyForQuest?.(questId);
+    if (!result?.party?.id) return null;
 
     window.__gwState = window.__gwState || {};
-    window.__gwState.activeQuestId = questId;
-    updateRuntimeQuestPlayerState(questId, accepted.player_quest, {
-      status: "active",
-      accepted_at: quest.startedAt
-    });
+    const snapshot = {
+      party: result.party,
+      members: result.members || [],
+      events: result.events || [],
+      evidence: result.evidence || [],
+      progress: result.progress || 0,
+      route: []
+    };
 
-    window.refreshQuestBadge?.();
-    renderQuestListIntoPage();
-
-    if (window.GridWildQuestLayer) {
-      window.GridWildQuestLayer.embark(quest);
-    }
-
-    window.dispatchEvent(new CustomEvent("gwQuestEmbarked", {
-      detail: { quest }
-    }));
-
-    return quest;
-  }
-
-  const activeQuest = embarkQuest(quest.id);
-
-  window.dispatchEvent(new CustomEvent("gwQuestEmbarked", {
-    detail: { quest: activeQuest || quest }
-  }));
-
-  return activeQuest || quest;
-}
-
-function getArchivedQuests() {
-  return [
-    ...getDbQuests().filter(q => isArchivedQuest(q)),
-    ...loadQuests().filter(q => isArchivedQuest(q))
-  ];
-}
-
-function embarkQuest(questId) {
-  const quests = loadQuests();
-  let activeQuest = null;
-
-  quests.forEach(q => {
-    if (q.archived) return;
-
-    if (q.id === questId) {
-      q.status = "active";
-      q.startedAt = q.startedAt || nowISO();
-      activeQuest = q;
-    } else if (q.status === "active") {
-      q.status = "paused";
-    }
-  });
-
-  saveQuests(quests);
-  renderQuestListIntoPage();
-  window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
-  window.refreshQuestBadge?.();
-
-  if (activeQuest && window.GridWildQuestLayer) {
-    window.GridWildQuestLayer.embark(activeQuest);
-  }
-
-  return activeQuest;
-}
-
-async function archiveQuest(questId) {
-  const dbQuest = getDbQuests().find(q => String(q.id) === String(questId));
-
-  if (dbQuest?.source === "db" || dbQuest?.dbId) {
     try {
-      const result = await window.GridWildAPI.archiveQuest(dbQuest.dbId || dbQuest.id);
-
-      updateRuntimeQuestPlayerState(dbQuest.dbId || dbQuest.id, result.player_quest, {
-        status: "archived"
-      });
-
-      if (String(window.__gwState?.activeQuestId || "") === String(dbQuest.dbId || dbQuest.id)) {
-        await window.GridWildAPI.setActiveQuest(null);
-        window.__gwState.activeQuestId = null;
-        window.GridWildQuestLayer?.clear?.();
-      }
-
-      renderQuestListIntoPage();
-      window.refreshQuestBadge?.();
-      window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
-
-      return true;
+      const routeData = await window.GridWildAPI?.getPartyRoute?.(result.party.id);
+      snapshot.route = routeData?.route || [];
     } catch (err) {
-      console.error("Archive quest failed:", err);
-      alert(`Could not archive quest: ${err.message}`);
-      return false;
+      console.warn("Could not load quest party route:", err);
     }
+
+    window.GridWildParty?.rememberPartySnapshot?.(snapshot);
+
+    if (!window.GridWildPartyLive?.getActivePartyId?.()) {
+      window.__gwState.party = result.party;
+      window.__gwState.partyMembers = snapshot.members;
+      window.__gwState.partyEvents = snapshot.events;
+      window.__gwState.partyEvidence = snapshot.evidence;
+      window.__gwState.partyProgress = snapshot.progress;
+      window.__gwState.partyRoute = snapshot.route;
+      window.__gwState.partyRoutePartyId = result.party.id;
+    }
+
+    return result.party.id;
   }
 
-  const quests = loadQuests();
-  const q = quests.find(x => x.id === questId);
-  if (!q) return false;
-
-  const wasActive = q.status === "active";
-
-  q.archived = true;
-  q.archivedAt = nowISO();
-
-  // Archiving ends the current field action.
-  if (wasActive) {
-    q.status = "paused";
-    if (window.GridWildQuestLayer?.clear) {
-        window.GridWildQuestLayer.clear();
-    }
-    if (window.__gwState?.activeQuestId === q.id) {
-      delete window.__gwState.activeQuestId;
-      window.refreshQuestBadge?.();
-    }
-  }
-
-  saveQuests(quests);
-  renderQuestListIntoPage();
-  window.refreshQuestBadge?.();
-  window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
-
-  return true;
-}
-
-async function abandonQuest(questId) {
-  const dbQuest = getDbQuests().find(q => String(q.id) === String(questId));
-
-  if (dbQuest?.source === "db" || dbQuest?.dbId) {
+  async function openQuestPartyRecap(questId) {
     try {
-      const id = dbQuest.dbId || dbQuest.id;
-      const result = await window.GridWildAPI.abandonQuest(id);
+      const partyId = await hydratePartyForQuest(questId);
 
-      updateRuntimeQuestPlayerState(id, result.player_quest, {
-        status: "abandoned"
-      });
-
-      if (result.deactivated_quest) {
-        window.__gwState.quests = (window.__gwState.quests || [])
-          .filter(q => String(q.id) !== String(id));
+      if (!partyId) {
+        alert("No party recap is linked to this quest yet.");
+        return;
       }
 
-      if (String(window.__gwState?.activeQuestId || "") === String(id)) {
-        window.__gwState.activeQuestId = null;
-        window.GridWildQuestLayer?.clear?.();
-      }
+      document.querySelectorAll(".gw-quest-modal-backdrop").forEach((el) => el.remove());
 
-      renderQuestListIntoPage();
-      window.refreshQuestBadge?.();
-      window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
-
-      return true;
+      window.GridWildParty?.openPartyRecap?.(partyId);
     } catch (err) {
-      console.error("Abandon quest failed:", err);
-      alert(`Could not abandon quest: ${err.message}`);
-      return false;
+      console.error("Could not open quest party recap:", err);
+      alert(`Could not open party recap: ${err.message}`);
     }
   }
 
-  const quests = loadQuests();
-  const q = quests.find(x => x.id === questId);
-  if (!q) return false;
+  async function updateCompletedQuestPartyButton(root, questId) {
+    const btn = root.querySelector("#gwQuestPartyBtn");
+    if (!btn) return;
 
-  const next = quests.filter(x => x.id !== questId);
-  saveQuests(next);
+    try {
+      const partyId = await hydratePartyForQuest(questId);
+      if (!partyId || !document.body.contains(root)) return;
 
-  if (window.__gwState?.activeQuestId === questId) {
-    window.__gwState.activeQuestId = null;
-    window.GridWildQuestLayer?.clear?.();
-  }
-
-  renderQuestListIntoPage();
-  window.refreshQuestBadge?.();
-  window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
-
-  return true;
-}
-
-function getRuntimePartyIdForQuest(questId) {
-  const id = String(questId || "");
-  if (!id) return null;
-
-  const activeParty = window.__gwState?.party;
-  const activeLinked = (window.__gwState?.partyEvents || [])
-    .some(e => String(e?.payload?.quest_id || "") === id);
-
-  if (activeParty?.id && activeLinked) return activeParty.id;
-
-  const parties = window.GridWildParty?.getAllParties?.() || [];
-  const party = parties.find(p => String(p.linkedQuestId || "") === id);
-
-  return party?.id || null;
-}
-
-async function hydratePartyForQuest(questId) {
-  const runtimePartyId = getRuntimePartyIdForQuest(questId);
-  if (runtimePartyId) return runtimePartyId;
-
-  const result = await window.GridWildAPI?.getPartyForQuest?.(questId);
-  if (!result?.party?.id) return null;
-
-  window.__gwState = window.__gwState || {};
-  const snapshot = {
-    party: result.party,
-    members: result.members || [],
-    events: result.events || [],
-    evidence: result.evidence || [],
-    progress: result.progress || 0,
-    route: []
-  };
-
-  try {
-    const routeData = await window.GridWildAPI?.getPartyRoute?.(result.party.id);
-    snapshot.route = routeData?.route || [];
-  } catch (err) {
-    console.warn("Could not load quest party route:", err);
-  }
-
-  window.GridWildParty?.rememberPartySnapshot?.(snapshot);
-
-  if (!window.GridWildPartyLive?.getActivePartyId?.()) {
-    window.__gwState.party = result.party;
-    window.__gwState.partyMembers = snapshot.members;
-    window.__gwState.partyEvents = snapshot.events;
-    window.__gwState.partyEvidence = snapshot.evidence;
-    window.__gwState.partyProgress = snapshot.progress;
-    window.__gwState.partyRoute = snapshot.route;
-    window.__gwState.partyRoutePartyId = result.party.id;
-  }
-
-  return result.party.id;
-}
-
-async function openQuestPartyRecap(questId) {
-  try {
-    const partyId = await hydratePartyForQuest(questId);
-
-    if (!partyId) {
-      alert("No party recap is linked to this quest yet.");
-      return;
+      btn.disabled = false;
+      btn.textContent = "View Party";
+      btn.dataset.partyId = partyId;
+    } catch (err) {
+      console.warn("Could not find linked quest party:", err);
     }
-
-    document
-      .querySelectorAll(".gw-quest-modal-backdrop")
-      .forEach(el => el.remove());
-
-    window.GridWildParty?.openPartyRecap?.(partyId);
-  } catch (err) {
-    console.error("Could not open quest party recap:", err);
-    alert(`Could not open party recap: ${err.message}`);
   }
-}
 
-async function updateCompletedQuestPartyButton(root, questId) {
-  const btn = root.querySelector("#gwQuestPartyBtn");
-  if (!btn) return;
+  function openQuestArchive() {
+    injectStyles();
 
-  try {
-    const partyId = await hydratePartyForQuest(questId);
-    if (!partyId || !document.body.contains(root)) return;
+    document.querySelectorAll(".gw-quest-modal-backdrop").forEach((el) => el.remove());
 
-    btn.disabled = false;
-    btn.textContent = "View Party";
-    btn.dataset.partyId = partyId;
-  } catch (err) {
-    console.warn("Could not find linked quest party:", err);
-  }
-}
+    const archived = getArchivedQuests();
 
-function openQuestArchive() {
-  injectStyles();
+    const root = document.createElement("div");
+    root.className = "gw-quest-modal-backdrop";
 
-  document
-    .querySelectorAll(".gw-quest-modal-backdrop")
-    .forEach(el => el.remove());
-
-  const archived = getArchivedQuests();
-
-  const root = document.createElement("div");
-  root.className = "gw-quest-modal-backdrop";
-
-  root.innerHTML = `
+    root.innerHTML = `
     <div class="gw-quest-modal">
       <div class="gw-quest-modal-title">Archive of Quests</div>
       <div class="gw-quest-modal-subtitle">
@@ -1017,9 +1094,10 @@ function openQuestArchive() {
         archived.length
           ? `
             <div class="gw-list">
-              ${archived.map(q => {
-                const r = q.recipe || {};
-                return `
+              ${archived
+                .map((q) => {
+                  const r = q.recipe || {};
+                  return `
                   <div class="gw-rowline">
                     <span style="display:flex;align-items:center;gap:10px;min-width:0;">
                       <span class="gw-quest-icon">${esc(getFlavorIcon(q))}</span>
@@ -1036,7 +1114,8 @@ function openQuestArchive() {
                     <span class="gw-quest-pill archived">Archived</span>
                   </div>
                 `;
-              }).join("")}
+                })
+                .join("")}
             </div>
           `
           : `<div class="gw-muted">No archived quests yet.</div>`
@@ -1048,35 +1127,35 @@ function openQuestArchive() {
     </div>
   `;
 
-  document.body.appendChild(root);
+    document.body.appendChild(root);
 
-  root.addEventListener("click", evt => {
-    if (evt.target === root) closeModal(root);
-  });
-
-  root.querySelector("#gwQuestArchiveCloseBtn").onclick = () => closeModal(root);
-
-  root.querySelectorAll(".gw-rowline").forEach((row, idx) => {
-    row.style.cursor = "pointer";
-    row.addEventListener("click", () => {
-      const quest = archived[idx];
-      if (quest) openQuestStatus(quest.id);
+    root.addEventListener("click", (evt) => {
+      if (evt.target === root) closeModal(root);
     });
-  });
-}
+
+    root.querySelector("#gwQuestArchiveCloseBtn").onclick = () => closeModal(root);
+
+    root.querySelectorAll(".gw-rowline").forEach((row, idx) => {
+      row.style.cursor = "pointer";
+      row.addEventListener("click", () => {
+        const quest = archived[idx];
+        if (quest) openQuestStatus(quest.id);
+      });
+    });
+  }
 
   function makeQuest(recipe) {
     const fullRecipe = {
-    range: recipe.range || "here",
-    iconicTaxon: recipe.iconicTaxon || "Any",
-    objectiveType: recipe.objectiveType || "any_observation",
-    difficulty: Number(recipe.difficulty || 1),
-    timeframe: recipe.timeframe || "today",
-    evidence: recipe.evidence || "photo_gps20",
-    targetLocation: recipe.targetLocation || "area_3x3",
-    target: recipe.target || null,
-    surveyId: recipe.surveyId || "none",
-    quantity: recipe.quantity || recipe.targetCount || 1
+      range: recipe.range || "here",
+      iconicTaxon: recipe.iconicTaxon || "Any",
+      objectiveType: recipe.objectiveType || "any_observation",
+      difficulty: Number(recipe.difficulty || 1),
+      timeframe: recipe.timeframe || "today",
+      evidence: recipe.evidence || "photo_gps20",
+      targetLocation: recipe.targetLocation || "area_3x3",
+      target: recipe.target || null,
+      surveyId: recipe.surveyId || "none",
+      quantity: recipe.quantity || recipe.targetCount || 1
     };
 
     return {
@@ -1094,57 +1173,62 @@ function openQuestArchive() {
     };
   }
 
-async function startQuestFromRecipe(recipe, options = {}) {
-  const title = options.title || buildQuestTitle(recipe);
-  const source = options.source || "manual";
-  const rewardXP = Number(options.rewardXP);
+  async function startQuestFromRecipe(recipe, options = {}) {
+    const title = options.title || buildQuestTitle(recipe);
+    const source = options.source || "manual";
+    const rewardXP = Number(options.rewardXP);
 
-  const quest = makeQuest(recipe);
-  quest.title = title;
-  quest.source = source;
-  quest.description = options.description || recipe.description || quest.description || buildQuestDescription(quest.recipe);
-  if (Number.isFinite(rewardXP) && rewardXP > 0) {
-    quest.pointValue = Math.round(rewardXP);
-  }
-
-  try {
-    const result = await window.GridWildAPI.createQuest({
-      title: quest.title,
-      description: quest.description,
-      quest_type: isIdentificationQuest(quest) ? "identify" : "explore",
-      recipe: quest.recipe,
-      source
-    });
-
-    const data = await window.GridWildAPI.getQuests();
-
-    window.__gwState = window.__gwState || {};
-    window.__gwState.quests = data.quests || [];
-    window.__gwState.questEvidence = (data.quests || [])
-      .flatMap(q => q.quest_evidence || []);
-
-    const dbQuest = result.quest;
-    const normalized = normalizeDbQuest(dbQuest);
-
-    renderQuestListIntoPage();
-
-    if (options.autoEmbark === true) {
-      await acceptAndEmbarkQuest(normalized);
-    } else if (options.openStatus !== false) {
-      openQuestStatus(normalized.id);
+    const quest = makeQuest(recipe);
+    quest.title = title;
+    quest.source = source;
+    quest.description =
+      options.description ||
+      recipe.description ||
+      quest.description ||
+      buildQuestDescription(quest.recipe);
+    if (Number.isFinite(rewardXP) && rewardXP > 0) {
+      quest.pointValue = Math.round(rewardXP);
     }
 
-    window.dispatchEvent(new CustomEvent("gwQuestStarted", {
-      detail: { quest: normalized }
-    }));
+    try {
+      const result = await window.GridWildAPI.createQuest({
+        title: quest.title,
+        description: quest.description,
+        quest_type: isIdentificationQuest(quest) ? "identify" : "explore",
+        recipe: quest.recipe,
+        source
+      });
 
-    return normalized;
-  } catch (err) {
-    console.error("DB quest create failed:", err);
-    alert(`Could not create quest: ${err.message}`);
-    return null;
+      const data = await window.GridWildAPI.getQuests();
+
+      window.__gwState = window.__gwState || {};
+      window.__gwState.quests = data.quests || [];
+      window.__gwState.questEvidence = (data.quests || []).flatMap((q) => q.quest_evidence || []);
+
+      const dbQuest = result.quest;
+      const normalized = normalizeDbQuest(dbQuest);
+
+      renderQuestListIntoPage();
+
+      if (options.autoEmbark === true) {
+        await acceptAndEmbarkQuest(normalized);
+      } else if (options.openStatus !== false) {
+        openQuestStatus(normalized.id);
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("gwQuestStarted", {
+          detail: { quest: normalized }
+        })
+      );
+
+      return normalized;
+    } catch (err) {
+      console.error("DB quest create failed:", err);
+      alert(`Could not create quest: ${err.message}`);
+      return null;
+    }
   }
-}
 
   function getFlavorIcon(quest) {
     const recipe = quest?.recipe || {};
@@ -1160,7 +1244,9 @@ async function startQuestFromRecipe(recipe, options = {}) {
       return `${count} identification${count === 1 ? "" : "s"}`;
     }
 
-    return recipe.evidence === "photo_gps20" ? "Photo + GPS <=20 m" : String(recipe.evidence || "Evidence");
+    return recipe.evidence === "photo_gps20"
+      ? "Photo + GPS <=20 m"
+      : String(recipe.evidence || "Evidence");
   }
 
   function injectStyles() {
@@ -1565,7 +1651,7 @@ async function startQuestFromRecipe(recipe, options = {}) {
   } = {}) {
     injectStyles();
 
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       const root = document.createElement("div");
       root.className = "gw-quest-modal-backdrop gw-quest-confirm-backdrop";
       root.setAttribute("role", "dialog");
@@ -1584,7 +1670,7 @@ async function startQuestFromRecipe(recipe, options = {}) {
         </div>
       `;
 
-      const finish = value => {
+      const finish = (value) => {
         root.remove();
         resolve(value);
       };
@@ -1593,10 +1679,10 @@ async function startQuestFromRecipe(recipe, options = {}) {
 
       root.querySelector("#gwQuestConfirmCancelBtn").onclick = () => finish(false);
       root.querySelector("#gwQuestConfirmOkBtn").onclick = () => finish(true);
-      root.addEventListener("click", evt => {
+      root.addEventListener("click", (evt) => {
         if (evt.target === root) finish(false);
       });
-      root.addEventListener("keydown", evt => {
+      root.addEventListener("keydown", (evt) => {
         if (evt.key === "Escape") finish(false);
       });
 
@@ -1605,25 +1691,24 @@ async function startQuestFromRecipe(recipe, options = {}) {
   }
 
   function openQuestStatus(questId) {
-
-    document
-      .querySelectorAll(".gw-quest-modal-backdrop")
-      .forEach(el => el.remove());
+    document.querySelectorAll(".gw-quest-modal-backdrop").forEach((el) => el.remove());
 
     injectStyles();
 
     const quest =
-      getVisibleQuests().find(q => q.id === questId) ||
-      getDbQuests().find(q => q.id === questId) ||
-      getArchivedQuests().find(q => q.id === questId) ||
-      loadQuests().find(q => q.id === questId);
+      getVisibleQuests().find((q) => q.id === questId) ||
+      getDbQuests().find((q) => q.id === questId) ||
+      getArchivedQuests().find((q) => q.id === questId) ||
+      loadQuests().find((q) => q.id === questId);
 
     if (!quest) return;
 
     const r = quest.recipe || {};
     const obj = OBJECTIVES[r.objectiveType] || OBJECTIVES.any_observation;
     const tax = TAXON_FLAVORS[r.iconicTaxon] || TAXON_FLAVORS.Any;
-    const isCompletedQuest = ["completed", "complete"].includes(String(quest.status || "").toLowerCase());
+    const isCompletedQuest = ["completed", "complete"].includes(
+      String(quest.status || "").toLowerCase()
+    );
     const isArchived = isArchivedQuest(quest);
     const isActiveQuest = String(quest.status || "").toLowerCase() === "active";
 
@@ -1674,11 +1759,12 @@ async function startQuestFromRecipe(recipe, options = {}) {
           </div>
         </div>
 
-        ${isIdentificationQuest(quest) && window.GridWildIdentify
-          ? window.GridWildIdentify.renderQuestEvidencePanel(quest)
-          : window.GridWildQuestEvidence
-            ? window.GridWildQuestEvidence.renderQuestEvidencePanel(quest)
-            : `
+        ${
+          isIdentificationQuest(quest) && window.GridWildIdentify
+            ? window.GridWildIdentify.renderQuestEvidencePanel(quest)
+            : window.GridWildQuestEvidence
+              ? window.GridWildQuestEvidence.renderQuestEvidencePanel(quest)
+              : `
               <div class="gw-quest-modal-subtitle" style="margin-top:14px;">
                 Evidence matching is not loaded yet.
               </div>
@@ -1687,15 +1773,23 @@ async function startQuestFromRecipe(recipe, options = {}) {
 
       <div class="gw-quest-actions gw-quest-actions-four">
       <button class="gw-quest-btn secondary" id="gwQuestCloseBtn">Close</button>
-      ${isCompletedQuest ? `
+      ${
+        isCompletedQuest
+          ? `
         <button class="gw-quest-btn primary" id="gwQuestArchiveBtn">Archive</button>
-      ` : isArchived ? `
+      `
+          : isArchived
+            ? `
         <button class="gw-quest-btn secondary" type="button" disabled>Archived</button>
-      ` : isActiveQuest ? `
+      `
+            : isActiveQuest
+              ? `
         <button class="gw-quest-btn danger" id="gwQuestAbandonBtn">Abandon</button>
-      ` : `
+      `
+              : `
         <button class="gw-quest-btn primary" id="gwQuestEmbarkBtn">Embark!</button>
-      `}
+      `
+      }
       <button class="gw-quest-btn secondary" id="gwQuestPartyBtn" ${isCompletedQuest || isArchived ? "disabled" : ""}>Start Party</button>
       <button class="gw-quest-btn secondary" id="gwQuestCompleteBtn" ${isCompletedQuest || isArchived ? "disabled" : ""}>
         ${isCompletedQuest ? "Completed" : isArchived ? "Archived" : "Mark Complete"}
@@ -1708,109 +1802,107 @@ async function startQuestFromRecipe(recipe, options = {}) {
       window.GridWildQuestEvidence?.bindQuestEvidencePanel?.(root, quest);
     }
 
-    root.addEventListener("click", evt => {
+    root.addEventListener("click", (evt) => {
       if (evt.target === root) closeModal(root);
     });
 
     root.querySelector("#gwQuestCloseBtn").onclick = () => {
-      document
-        .querySelectorAll(".gw-quest-modal-backdrop")
-        .forEach(el => el.remove());
+      document.querySelectorAll(".gw-quest-modal-backdrop").forEach((el) => el.remove());
     };
 
     if (isCompletedQuest) {
       updateCompletedQuestPartyButton(root, quest.dbId || quest.id);
     }
 
- root.querySelector("#gwQuestArchiveBtn")?.addEventListener("click", async () => {
-  const ok = await archiveQuest(quest.dbId || quest.id);
-  if (ok) {
-    closeModal(root);
-    openQuestArchive();
-  }
-});
+    root.querySelector("#gwQuestArchiveBtn")?.addEventListener("click", async () => {
+      const ok = await archiveQuest(quest.dbId || quest.id);
+      if (ok) {
+        closeModal(root);
+        openQuestArchive();
+      }
+    });
 
- root.querySelector("#gwQuestAbandonBtn")?.addEventListener("click", async () => {
-  const ok = await openQuestConfirmDialog({
-    title: "Abandon Quest?",
-    message: "This quest will disappear from your quest list.",
-    subject: quest.title || "Untitled Quest",
-    confirmLabel: "Abandon",
-    cancelLabel: "Keep Quest",
-    danger: true
-  });
-  if (!ok) return;
-
-  const abandoned = await abandonQuest(quest.dbId || quest.id);
-  if (abandoned) closeModal(root);
-});
-
- root.querySelector("#gwQuestEmbarkBtn")?.addEventListener("click", async () => {
-  try {
-    const acceptedQuest = await acceptAndEmbarkQuest(quest);
-    if (acceptedQuest) closeModal(root);
-  } catch (err) {
-    console.error("Accept quest failed:", err);
-    alert(`Could not accept quest: ${err.message}`);
-  }
-});
-
-root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", async evt => {
-  if (isCompletedQuest) {
-    evt.preventDefault();
-    await openQuestPartyRecap(quest.dbId || quest.id);
-    return;
-  }
-
-  if (!window.GridWildParty?.createPartyFromQuest) {
-    alert("Party system is not loaded.");
-    return;
-  }
-
-  try {
-    if (isIdentificationQuest(quest)) {
-      const ok = await window.GridWildIdentify?.ensureLinkedAccount?.({
-        reason: "accept",
-        quest
+    root.querySelector("#gwQuestAbandonBtn")?.addEventListener("click", async () => {
+      const ok = await openQuestConfirmDialog({
+        title: "Abandon Quest?",
+        message: "This quest will disappear from your quest list.",
+        subject: quest.title || "Untitled Quest",
+        confirmLabel: "Abandon",
+        cancelLabel: "Keep Quest",
+        danger: true
       });
       if (!ok) return;
-    }
 
-    if (quest.source === "db" || quest.dbId) {
-      const questId = quest.dbId || quest.id;
-      const accepted = await window.GridWildAPI.acceptQuest(questId);
-      await window.GridWildAPI.setActiveQuest(questId);
+      const abandoned = await abandonQuest(quest.dbId || quest.id);
+      if (abandoned) closeModal(root);
+    });
 
-      quest.status = "active";
+    root.querySelector("#gwQuestEmbarkBtn")?.addEventListener("click", async () => {
+      try {
+        const acceptedQuest = await acceptAndEmbarkQuest(quest);
+        if (acceptedQuest) closeModal(root);
+      } catch (err) {
+        console.error("Accept quest failed:", err);
+        alert(`Could not accept quest: ${err.message}`);
+      }
+    });
 
-      quest.startedAt = accepted.player_quest?.accepted_at || quest.startedAt || nowISO();
-
-      window.__gwState = window.__gwState || {};
-      window.__gwState.activeQuestId = questId;
-      updateRuntimeQuestPlayerState(questId, accepted.player_quest, {
-        status: "active",
-        accepted_at: quest.startedAt
-      });
-
-      window.GridWildParty.createPartyFromQuest(quest);
-
-      closeModal(root);
-      renderQuestListIntoPage();
-      window.refreshQuestBadge?.();
-
-      if (window.GridWildQuestLayer) {
-        window.GridWildQuestLayer.embark(quest);
+    root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", async (evt) => {
+      if (isCompletedQuest) {
+        evt.preventDefault();
+        await openQuestPartyRecap(quest.dbId || quest.id);
+        return;
       }
 
-      return;
-    }
+      if (!window.GridWildParty?.createPartyFromQuest) {
+        alert("Party system is not loaded.");
+        return;
+      }
 
-    alert("This old local quest cannot start an online party.");
-  } catch (err) {
-    console.error("Could not start quest party:", err);
-    alert(`Could not start quest party: ${err.message}`);
-  }
-});
+      try {
+        if (isIdentificationQuest(quest)) {
+          const ok = await window.GridWildIdentify?.ensureLinkedAccount?.({
+            reason: "accept",
+            quest
+          });
+          if (!ok) return;
+        }
+
+        if (quest.source === "db" || quest.dbId) {
+          const questId = quest.dbId || quest.id;
+          const accepted = await window.GridWildAPI.acceptQuest(questId);
+          await window.GridWildAPI.setActiveQuest(questId);
+
+          quest.status = "active";
+
+          quest.startedAt = accepted.player_quest?.accepted_at || quest.startedAt || nowISO();
+
+          window.__gwState = window.__gwState || {};
+          window.__gwState.activeQuestId = questId;
+          updateRuntimeQuestPlayerState(questId, accepted.player_quest, {
+            status: "active",
+            accepted_at: quest.startedAt
+          });
+
+          window.GridWildParty.createPartyFromQuest(quest);
+
+          closeModal(root);
+          renderQuestListIntoPage();
+          window.refreshQuestBadge?.();
+
+          if (window.GridWildQuestLayer) {
+            window.GridWildQuestLayer.embark(quest);
+          }
+
+          return;
+        }
+
+        alert("This old local quest cannot start an online party.");
+      } catch (err) {
+        console.error("Could not start quest party:", err);
+        alert(`Could not start quest party: ${err.message}`);
+      }
+    });
 
     root.querySelector("#gwQuestCompleteBtn").onclick = async () => {
       try {
@@ -1821,9 +1913,14 @@ root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", async evt => {
           });
           if (!linked) return;
 
-          const progress = window.GridWildIdentify?.getQuestProgress?.(quest) || { claimed: 0, target: 1 };
+          const progress = window.GridWildIdentify?.getQuestProgress?.(quest) || {
+            claimed: 0,
+            target: 1
+          };
           if (progress.claimed < progress.target) {
-            alert(`This identification quest needs ${progress.target - progress.claimed} more ID claim${progress.target - progress.claimed === 1 ? "" : "s"}.`);
+            alert(
+              `This identification quest needs ${progress.target - progress.claimed} more ID claim${progress.target - progress.claimed === 1 ? "" : "s"}.`
+            );
             return;
           }
         }
@@ -1869,12 +1966,11 @@ root.querySelector("#gwQuestPartyBtn")?.addEventListener("click", async evt => {
 
     const savedSurveys = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
 
-const allSurveyOptions = [
-  ...Object.values(CAMPAIGNS),
-  ...savedSurveys
-];
+    const allSurveyOptions = [...Object.values(CAMPAIGNS), ...savedSurveys];
 
-const surveyRadiosHtml = allSurveyOptions.map(c => `
+    const surveyRadiosHtml = allSurveyOptions
+      .map(
+        (c) => `
   <div class="gw-rowline">
     <label style="display:flex;align-items:center;gap:8px;margin:0;">
       <input
@@ -1894,7 +1990,9 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
       Info
     </button>
   </div>
-`).join("");
+`
+      )
+      .join("");
 
     const root = document.createElement("div");
     root.className = "gw-quest-modal-backdrop";
@@ -2019,14 +2117,14 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
       if (quantity && Number(quantity.value || 0) < 3) quantity.value = "3";
     });
 
-    root.addEventListener("click", evt => {
+    root.addEventListener("click", (evt) => {
       if (evt.target === root) closeModal(root);
     });
 
     root.querySelector("#gwQuestCancelBtn").onclick = () => closeModal(root);
 
     root.querySelector("#gwQuestCreateBtn").onclick = () => {
-        const recipe = {
+      const recipe = {
         targetLocation: root.querySelector("#gwQuestTargetLocation").value,
         surveyId: root.querySelector('input[name="gwQuestSurvey"]:checked')?.value || "none",
         iconicTaxon: root.querySelector("#gwQuestTaxon").value,
@@ -2035,7 +2133,7 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
         timeframe: root.querySelector("#gwQuestTimeframe").value,
         evidence: root.querySelector("#gwQuestEvidence").value,
         quantity: Number(root.querySelector("#gwQuestQuantity").value || 1)
-        };
+      };
 
       const quests = loadQuests();
       const quest = makeQuest(recipe);
@@ -2048,11 +2146,11 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
     };
   }
 
-    function renderQuestListHtml() {
+  function renderQuestListHtml() {
     const quests = getVisibleQuests();
 
     if (!quests.length) {
-        return `
+      return `
         <div class="gw-muted">None yet.</div>
         <button class="gw-mini-btn gw-quest-archive-open-btn" type="button" style="margin-top:10px;width:100%;">
             View Archive
@@ -2062,7 +2160,8 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
 
     return `
         <div class="gw-list">
-        ${quests.map(q => {
+        ${quests
+          .map((q) => {
             const r = q.recipe || {};
             const sClass = statusClass(q.status);
 
@@ -2077,7 +2176,9 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
                         <span class="gw-quest-pill ${esc(sClass)}">${esc(statusLabel(q.status))}</span>
                         <span class="gw-muted gw-quest-difficulty">${esc(difficultyLabel(r.difficulty))}</span>
                         </span>
-                        ${["completed", "complete"].includes(String(q.status || "").toLowerCase()) ? `
+                        ${
+                          ["completed", "complete"].includes(String(q.status || "").toLowerCase())
+                            ? `
                           <button
                             class="gw-mini-btn gw-quest-row-archive-btn"
                             data-quest-id="${esc(q.id)}"
@@ -2085,7 +2186,9 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
                           >
                             Archive
                           </button>
-                        ` : ""}
+                        `
+                            : ""
+                        }
                     </span>
 
                     <span class="gw-quest-row-text">
@@ -2101,87 +2204,87 @@ const surveyRadiosHtml = allSurveyOptions.map(c => `
                 </span>
                 </div>
             `;
-        }).join("")}
+          })
+          .join("")}
         </div>
         <button class="gw-mini-btn gw-quest-archive-open-btn" type="button" style="margin-top:10px;width:100%;">
             View Archive
         </button>
     `;
-    }
-
-    function bindQuestSheetControls(root = document) {
-  injectStyles();
-
-  if (root.dataset.questSheetBound === "true") return;
-  root.dataset.questSheetBound = "true";
-
-  root.addEventListener("click", evt => {
-    const generateBtn = evt.target.closest("#gwGenerateQuestBtn");
-    if (generateBtn && root.contains(generateBtn)) {
-      openQuestRecipeCreator();
-      return;
-    }
-
-    const surveysBtn = evt.target.closest("#gwExploreSurveysBtn");
-    if (surveysBtn && root.contains(surveysBtn)) {
-      openSurveyExplorer();
-      return;
-    }
-
-    const rowArchiveBtn = evt.target.closest(".gw-quest-row-archive-btn");
-    if (rowArchiveBtn && root.contains(rowArchiveBtn)) {
-      evt.preventDefault();
-      evt.stopPropagation();
-      archiveQuest(rowArchiveBtn.dataset.questId);
-      return;
-    }
-
-    const archiveOpenBtn = evt.target.closest(".gw-quest-archive-open-btn");
-    if (archiveOpenBtn && root.contains(archiveOpenBtn)) {
-      openQuestArchive();
-      return;
-    }
-
-    const questRow = evt.target.closest(".gw-quest-row");
-    if (questRow && root.contains(questRow)) {
-      openQuestStatus(questRow.dataset.questId);
-      return;
-    }
-
-    const dailyRow = evt.target.closest(".gw-daily-quest-row");
-    if (dailyRow && root.contains(dailyRow)) {
-      const idx = Number(dailyRow.dataset.dailyQuestIndex);
-      const daily = DAILY_QUESTS[idx];
-      if (daily) {
-        startQuestFromRecipe(daily.recipe, {
-          title: daily.title,
-          description: daily.description,
-          source: "today"
-        });
-      }
-    }
-  });
-}
-
-
-function renderQuestListIntoPage() {
-  const el = document.getElementById("gwQuestListBody");
-  if (!el) return;
-
-  el.innerHTML = renderQuestListHtml();
-
-  // Only bind controls inside the newly replaced quest-list body.
-  bindQuestSheetControls(el);
-}
-
-function renderDailyQuestsHtml() {
-  const locale = getQuestLocale();
-  const fix = getGpsFix();
-  if (fix && !localeMatchesFix(fix)) {
-    scheduleQuestLocaleRefresh(fix);
   }
 
-  return `
+  function bindQuestSheetControls(root = document) {
+    injectStyles();
+
+    if (root.dataset.questSheetBound === "true") return;
+    root.dataset.questSheetBound = "true";
+
+    root.addEventListener("click", (evt) => {
+      const generateBtn = evt.target.closest("#gwGenerateQuestBtn");
+      if (generateBtn && root.contains(generateBtn)) {
+        openQuestRecipeCreator();
+        return;
+      }
+
+      const surveysBtn = evt.target.closest("#gwExploreSurveysBtn");
+      if (surveysBtn && root.contains(surveysBtn)) {
+        openSurveyExplorer();
+        return;
+      }
+
+      const rowArchiveBtn = evt.target.closest(".gw-quest-row-archive-btn");
+      if (rowArchiveBtn && root.contains(rowArchiveBtn)) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        archiveQuest(rowArchiveBtn.dataset.questId);
+        return;
+      }
+
+      const archiveOpenBtn = evt.target.closest(".gw-quest-archive-open-btn");
+      if (archiveOpenBtn && root.contains(archiveOpenBtn)) {
+        openQuestArchive();
+        return;
+      }
+
+      const questRow = evt.target.closest(".gw-quest-row");
+      if (questRow && root.contains(questRow)) {
+        openQuestStatus(questRow.dataset.questId);
+        return;
+      }
+
+      const dailyRow = evt.target.closest(".gw-daily-quest-row");
+      if (dailyRow && root.contains(dailyRow)) {
+        const idx = Number(dailyRow.dataset.dailyQuestIndex);
+        const daily = DAILY_QUESTS[idx];
+        if (daily) {
+          startQuestFromRecipe(daily.recipe, {
+            title: daily.title,
+            description: daily.description,
+            source: "today"
+          });
+        }
+      }
+    });
+  }
+
+  function renderQuestListIntoPage() {
+    const el = document.getElementById("gwQuestListBody");
+    if (!el) return;
+
+    el.innerHTML = renderQuestListHtml();
+
+    // Only bind controls inside the newly replaced quest-list body.
+    bindQuestSheetControls(el);
+  }
+
+  function renderDailyQuestsHtml() {
+    const locale = getQuestLocale();
+    const fix = getGpsFix();
+    if (fix && !localeMatchesFix(fix)) {
+      scheduleQuestLocaleRefresh(fix);
+    }
+
+    return `
     <div class="gw-muted" style="font-size:11px;margin-bottom:8px;">
       Seeded from ${esc(locale.source === "gps" ? "your GPS locale" : "the current map area")}: ${esc(locale.shortLabel)}
     </div>
@@ -2189,9 +2292,7 @@ function renderDailyQuestsHtml() {
       ${DAILY_QUESTS.map((q, idx) => {
         const r = q.recipe || {};
         const t = r.target || {};
-        const quantityText = isIdentificationQuest(r)
-          ? ` - ${Number(r.quantity || 1)} IDs`
-          : "";
+        const quantityText = isIdentificationQuest(r) ? ` - ${Number(r.quantity || 1)} IDs` : "";
         const targetText =
           r.targetLocation === "anywhere"
             ? "Anywhere"
@@ -2204,11 +2305,15 @@ function renderDailyQuestsHtml() {
               <span class="gw-muted" style="display:block;font-size:11px;">
                 ${esc(targetText)} · ${esc(difficultyLabel(r.difficulty))}${esc(quantityText)}
               </span>
-              ${q.description ? `
+              ${
+                q.description
+                  ? `
                 <span class="gw-muted" style="display:block;font-size:10.5px;margin-top:3px;">
                   ${esc(q.description)}
                 </span>
-              ` : ""}
+              `
+                  : ""
+              }
             </span>
             <span class="gw-quest-icon">${esc(TAXON_FLAVORS[r.iconicTaxon]?.icon || "🌎")}</span>
           </div>
@@ -2216,130 +2321,131 @@ function renderDailyQuestsHtml() {
       }).join("")}
     </div>
   `;
-}
-
-function getSurveyById(surveyId) {
-  const saved = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
-  return saved.find(c => c.id === surveyId) || CAMPAIGNS[surveyId] || null;
-}
-
-function isSavedSurvey(surveyId) {
-  const saved = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
-  return saved.some(c => c.id === surveyId);
-}
-
-function currentPlayerId() {
-  return window.GridWildAPI?.getPlayerId?.() || window.__gwState?.player?.id || null;
-}
-
-function isOwnedSurvey(c) {
-  const ownerId = c?.owner_player_id || c?._dbRow?.owner_player_id || null;
-
-  // Local fallback surveys have no DB owner metadata, so treat them as editable by
-  // this client. DB-backed rows are owner-gated.
-  if (!ownerId && isSavedSurvey(c?.id)) return true;
-
-  return !!ownerId && ownerId === currentPlayerId();
-}
-
-function surveyVisibilityLabel(c) {
-  if (CAMPAIGNS[c?.id]) return "Campaign";
-  if (isOwnedSurvey(c)) return "Mine";
-
-  const mode = c?.public_mode || c?.publicMode || c?._dbRow?.public_mode || "private";
-  if (mode === "public") return "Public";
-  if (mode === "unlisted") return "Unlisted";
-  return "Private";
-}
-
-function surveyPublicMode(c) {
-  return c?.public_mode || c?.publicMode || c?._dbRow?.public_mode || "private";
-}
-
-function canShareSurvey(c) {
-  return isOwnedSurvey(c) && ["public", "unlisted"].includes(surveyPublicMode(c));
-}
-
-function surveyShareUrl(surveyId) {
-  const url = new URL(window.location.href);
-  url.searchParams.set("survey", surveyId);
-  return url.toString();
-}
-
-async function copySurveyShareLink(surveyId) {
-  const url = surveyShareUrl(surveyId);
-
-  try {
-    if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
-    await navigator.clipboard.writeText(url);
-    alert("Survey link copied.");
-  } catch {
-    prompt("Survey link", url);
-  }
-}
-
-function addSurveyRowToRuntime(row) {
-  if (!row?.id) return;
-
-  window.__gwState = window.__gwState || {};
-  window.__gwState.surveys = [
-    row,
-    ...(window.__gwState.surveys || []).filter(s => s.id !== row.id)
-  ];
-}
-
-async function openLinkedSurveyFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const surveyId = params.get("survey");
-  if (!surveyId) return;
-  if (sharedSurveyOpened) return;
-
-  if (getSurveyById(surveyId)) {
-    sharedSurveyOpened = true;
-    openSurveyInfo(surveyId);
-    return;
   }
 
-  try {
-    const result = await window.GridWildAPI?.getSurveyById?.(surveyId);
-    if (!result?.survey) return;
-
-    addSurveyRowToRuntime(result.survey);
-    window.GridWildSurveyLayer?.render?.();
-    sharedSurveyOpened = true;
-    openSurveyInfo(surveyId);
-  } catch (err) {
-    console.warn("Could not load shared survey:", err);
-    alert("That survey link is not available.");
+  function getSurveyById(surveyId) {
+    const saved = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
+    return saved.find((c) => c.id === surveyId) || CAMPAIGNS[surveyId] || null;
   }
-}
 
-function openSurveyInfo(surveyId) {
-  injectStyles();
+  function isSavedSurvey(surveyId) {
+    const saved = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
+    return saved.some((c) => c.id === surveyId);
+  }
 
-  const c = getSurveyById(surveyId);
-  if (!c) return;
+  function currentPlayerId() {
+    return window.GridWildAPI?.getPlayerId?.() || window.__gwState?.player?.id || null;
+  }
 
-  const saved = isSavedSurvey(surveyId);
-  const owned = isOwnedSurvey(c);
-  const visibilityLabel = surveyVisibilityLabel(c);
-  const shareable = canShareSurvey(c);
-  const g = c.geometries || {};
+  function isOwnedSurvey(c) {
+    const ownerId = c?.owner_player_id || c?._dbRow?.owner_player_id || null;
 
-  const anatomy = Array.isArray(c.anatomy) && c.anatomy.length
-    ? c.anatomy
-    : [
-        `Boundary: ${g.boundary?.length ? "yes" : "none"}`,
-        `Paths: ${(g.paths || []).length}`,
-        `Exclusions: ${(g.exclusions || []).length}`,
-        `Dense zones: ${(g.denseZones || []).length}`,
-        `Assets: ${(g.assets || []).length}`
-      ];
+    // Local fallback surveys have no DB owner metadata, so treat them as editable by
+    // this client. DB-backed rows are owner-gated.
+    if (!ownerId && isSavedSurvey(c?.id)) return true;
 
-  const root = document.createElement("div");
-  root.className = "gw-quest-modal-backdrop";
+    return !!ownerId && ownerId === currentPlayerId();
+  }
 
-  root.innerHTML = `
+  function surveyVisibilityLabel(c) {
+    if (CAMPAIGNS[c?.id]) return "Campaign";
+    if (isOwnedSurvey(c)) return "Mine";
+
+    const mode = c?.public_mode || c?.publicMode || c?._dbRow?.public_mode || "private";
+    if (mode === "public") return "Public";
+    if (mode === "unlisted") return "Unlisted";
+    return "Private";
+  }
+
+  function surveyPublicMode(c) {
+    return c?.public_mode || c?.publicMode || c?._dbRow?.public_mode || "private";
+  }
+
+  function canShareSurvey(c) {
+    return isOwnedSurvey(c) && ["public", "unlisted"].includes(surveyPublicMode(c));
+  }
+
+  function surveyShareUrl(surveyId) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("survey", surveyId);
+    return url.toString();
+  }
+
+  async function copySurveyShareLink(surveyId) {
+    const url = surveyShareUrl(surveyId);
+
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(url);
+      alert("Survey link copied.");
+    } catch {
+      prompt("Survey link", url);
+    }
+  }
+
+  function addSurveyRowToRuntime(row) {
+    if (!row?.id) return;
+
+    window.__gwState = window.__gwState || {};
+    window.__gwState.surveys = [
+      row,
+      ...(window.__gwState.surveys || []).filter((s) => s.id !== row.id)
+    ];
+  }
+
+  async function openLinkedSurveyFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const surveyId = params.get("survey");
+    if (!surveyId) return;
+    if (sharedSurveyOpened) return;
+
+    if (getSurveyById(surveyId)) {
+      sharedSurveyOpened = true;
+      openSurveyInfo(surveyId);
+      return;
+    }
+
+    try {
+      const result = await window.GridWildAPI?.getSurveyById?.(surveyId);
+      if (!result?.survey) return;
+
+      addSurveyRowToRuntime(result.survey);
+      window.GridWildSurveyLayer?.render?.();
+      sharedSurveyOpened = true;
+      openSurveyInfo(surveyId);
+    } catch (err) {
+      console.warn("Could not load shared survey:", err);
+      alert("That survey link is not available.");
+    }
+  }
+
+  function openSurveyInfo(surveyId) {
+    injectStyles();
+
+    const c = getSurveyById(surveyId);
+    if (!c) return;
+
+    const saved = isSavedSurvey(surveyId);
+    const owned = isOwnedSurvey(c);
+    const visibilityLabel = surveyVisibilityLabel(c);
+    const shareable = canShareSurvey(c);
+    const g = c.geometries || {};
+
+    const anatomy =
+      Array.isArray(c.anatomy) && c.anatomy.length
+        ? c.anatomy
+        : [
+            `Boundary: ${g.boundary?.length ? "yes" : "none"}`,
+            `Paths: ${(g.paths || []).length}`,
+            `Exclusions: ${(g.exclusions || []).length}`,
+            `Dense zones: ${(g.denseZones || []).length}`,
+            `Assets: ${(g.assets || []).length}`
+          ];
+
+    const root = document.createElement("div");
+    root.className = "gw-quest-modal-backdrop";
+
+    root.innerHTML = `
     <div class="gw-quest-modal">
       <div class="gw-quest-modal-title">${esc(c.name || "Untitled Survey")}</div>
       <div class="gw-quest-modal-subtitle">
@@ -2348,80 +2454,87 @@ function openSurveyInfo(surveyId) {
       </div>
 
       <div class="gw-quest-status-grid">
-        ${anatomy.map(x => `
+        ${anatomy
+          .map(
+            (x) => `
           <div class="gw-quest-status-line">
             <span>Survey anatomy</span>
             <span>${esc(x)}</span>
           </div>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
 
       <div class="gw-quest-actions ${shareable ? "gw-quest-actions-four" : owned ? "three" : ""}">
         <button class="gw-quest-btn secondary" id="gwSurveyInfoClose">Close</button>
 
-        ${owned ? `
+        ${
+          owned
+            ? `
           <button class="gw-quest-btn danger" id="gwSurveyInfoDelete">Delete</button>
           <button class="gw-quest-btn primary" id="gwSurveyInfoEdit">Edit</button>
-        ` : ""}
+        `
+            : ""
+        }
 
-        ${shareable ? `
+        ${
+          shareable
+            ? `
           <button class="gw-quest-btn secondary" id="gwSurveyInfoShare">Share</button>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     </div>
   `;
 
-  document.body.appendChild(root);
+    document.body.appendChild(root);
 
-  root.onclick = evt => {
-    if (evt.target === root) root.remove();
-  };
+    root.onclick = (evt) => {
+      if (evt.target === root) root.remove();
+    };
 
-  root.querySelector("#gwSurveyInfoClose").onclick = () => root.remove();
+    root.querySelector("#gwSurveyInfoClose").onclick = () => root.remove();
 
-  root.querySelector("#gwSurveyInfoShare")?.addEventListener("click", () => {
-    copySurveyShareLink(surveyId);
-  });
+    root.querySelector("#gwSurveyInfoShare")?.addEventListener("click", () => {
+      copySurveyShareLink(surveyId);
+    });
 
-  root.querySelector("#gwSurveyInfoEdit")?.addEventListener("click", () => {
-    document
-      .querySelectorAll(".gw-quest-modal-backdrop")
-      .forEach(el => el.remove());
+    root.querySelector("#gwSurveyInfoEdit")?.addEventListener("click", () => {
+      document.querySelectorAll(".gw-quest-modal-backdrop").forEach((el) => el.remove());
 
-    window.GridWildSurveyDesigner?.openExisting?.(surveyId);
-  });
+      window.GridWildSurveyDesigner?.openExisting?.(surveyId);
+    });
 
-  root.querySelector("#gwSurveyInfoDelete")?.addEventListener("click", () => {
-    const ok = confirm(`Delete survey "${c.name || "Untitled Survey"}"? This cannot be undone.`);
-    if (!ok) return;
-
-    window.GridWildSurveyDesigner?.deleteSurvey?.(surveyId)
-    .then(ok => {
+    root.querySelector("#gwSurveyInfoDelete")?.addEventListener("click", () => {
+      const ok = confirm(`Delete survey "${c.name || "Untitled Survey"}"? This cannot be undone.`);
       if (!ok) return;
 
-      root.remove();
+      window.GridWildSurveyDesigner?.deleteSurvey?.(surveyId).then((ok) => {
+        if (!ok) return;
 
-      if (typeof openSurveyExplorer === "function") {
-        openSurveyExplorer();
-      }
+        root.remove();
+
+        if (typeof openSurveyExplorer === "function") {
+          openSurveyExplorer();
+        }
+      });
     });
-  });
-}
+  }
 
-function openSurveyExplorer() {
-  injectStyles();
+  function openSurveyExplorer() {
+    injectStyles();
 
-  const savedSurveys = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
-  const fallbackSurveys = Object.values(CAMPAIGNS).filter(c => c.id !== "none");
+    const savedSurveys = window.GridWildSurveyDesigner?.loadSurveys?.() || [];
+    const fallbackSurveys = Object.values(CAMPAIGNS).filter((c) => c.id !== "none");
 
-  const surveyRows = savedSurveys.length
-    ? savedSurveys
-    : fallbackSurveys;
+    const surveyRows = savedSurveys.length ? savedSurveys : fallbackSurveys;
 
-  const root = document.createElement("div");
-  root.className = "gw-quest-modal-backdrop";
+    const root = document.createElement("div");
+    root.className = "gw-quest-modal-backdrop";
 
-  root.innerHTML = `
+    root.innerHTML = `
     <div class="gw-quest-modal">
       <div class="gw-quest-modal-title">Survey Explorer</div>
       <div class="gw-quest-modal-subtitle">
@@ -2429,13 +2542,14 @@ function openSurveyExplorer() {
       </div>
 
       <div class="gw-list">
-        ${surveyRows.map(c => {
-          const joined = window.GridWildSurveyLayer?.isJoined?.(c.id) || false;
-          const visible = window.GridWildSurveyLayer?.isVisible?.(c.id) || false;
-          const hasSavedGeometry = savedSurveys.some(x => x.id === c.id);
-          const visibilityLabel = surveyVisibilityLabel(c);
+        ${surveyRows
+          .map((c) => {
+            const joined = window.GridWildSurveyLayer?.isJoined?.(c.id) || false;
+            const visible = window.GridWildSurveyLayer?.isVisible?.(c.id) || false;
+            const hasSavedGeometry = savedSurveys.some((x) => x.id === c.id);
+            const visibilityLabel = surveyVisibilityLabel(c);
 
-          return `
+            return `
             <div class="gw-rowline gwSurveyExplorerRow" data-survey-id="${esc(c.id)}" style="cursor:pointer;">
               <span style="min-width:0;">
                 <span>${esc(c.name || "Untitled Survey")}</span>
@@ -2469,7 +2583,8 @@ function openSurveyExplorer() {
               </span>
             </div>
           `;
-        }).join("")}
+          })
+          .join("")}
       </div>
 
       <div class="gw-quest-actions">
@@ -2479,70 +2594,69 @@ function openSurveyExplorer() {
     </div>
   `;
 
-  document.body.appendChild(root);
+    document.body.appendChild(root);
 
-  root.onclick = evt => {
-    if (evt.target === root) root.remove();
-  };
-
-  root.querySelector("#gwSurveyExplorerClose").onclick = () => root.remove();
-
-  root.querySelector("#gwNewSurveyBtn").onclick = () => {
-    root.remove();
-    openNewSurveyConfigurator();
-  };
-
-  root.querySelectorAll(".gwSurveyExplorerRow").forEach(row => {
-    row.onclick = () => {
-      root.remove();
-      openSurveyInfo(row.dataset.surveyId);
+    root.onclick = (evt) => {
+      if (evt.target === root) root.remove();
     };
-  });
 
-  root.querySelectorAll(".gwSurveyJoinBtn").forEach(btn => {
-    btn.onclick = evt => {
-      evt.preventDefault();
-      evt.stopPropagation();
+    root.querySelector("#gwSurveyExplorerClose").onclick = () => root.remove();
 
-      const id = btn.dataset.surveyId;
-      if (window.GridWildSurveyLayer?.isJoined?.(id)) {
-        window.GridWildSurveyLayer.leave(id);
-      } else {
-        window.GridWildSurveyLayer?.join?.(id);
-      }
-
+    root.querySelector("#gwNewSurveyBtn").onclick = () => {
       root.remove();
-      openSurveyExplorer();
+      openNewSurveyConfigurator();
     };
-  });
 
-  root.querySelectorAll(".gwSurveyVisibilityBtn").forEach(btn => {
-    btn.onclick = evt => {
-      evt.preventDefault();
-      evt.stopPropagation();
+    root.querySelectorAll(".gwSurveyExplorerRow").forEach((row) => {
+      row.onclick = () => {
+        root.remove();
+        openSurveyInfo(row.dataset.surveyId);
+      };
+    });
 
-      const id = btn.dataset.surveyId;
-      if (window.GridWildSurveyLayer?.isVisible?.(id)) {
-        window.GridWildSurveyLayer.hide(id);
-      } else {
-        window.GridWildSurveyLayer?.show?.(id);
-      }
+    root.querySelectorAll(".gwSurveyJoinBtn").forEach((btn) => {
+      btn.onclick = (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
 
-      root.remove();
-      openSurveyExplorer();
-    };
-  });
-}
+        const id = btn.dataset.surveyId;
+        if (window.GridWildSurveyLayer?.isJoined?.(id)) {
+          window.GridWildSurveyLayer.leave(id);
+        } else {
+          window.GridWildSurveyLayer?.join?.(id);
+        }
 
-function openNewSurveyConfigurator() {
-  if (window.GridWildSurveyDesigner?.open) {
-    window.GridWildSurveyDesigner.open();
-    return;
+        root.remove();
+        openSurveyExplorer();
+      };
+    });
+
+    root.querySelectorAll(".gwSurveyVisibilityBtn").forEach((btn) => {
+      btn.onclick = (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
+
+        const id = btn.dataset.surveyId;
+        if (window.GridWildSurveyLayer?.isVisible?.(id)) {
+          window.GridWildSurveyLayer.hide(id);
+        } else {
+          window.GridWildSurveyLayer?.show?.(id);
+        }
+
+        root.remove();
+        openSurveyExplorer();
+      };
+    });
   }
 
-  alert("Survey Designer module is not loaded. Check js/gw-survey-designer.js in index.html.");
-}
+  function openNewSurveyConfigurator() {
+    if (window.GridWildSurveyDesigner?.open) {
+      window.GridWildSurveyDesigner.open();
+      return;
+    }
 
+    alert("Survey Designer module is not loaded. Check js/gw-survey-designer.js in index.html.");
+  }
 
   window.GridWildQuests = {
     loadQuests,
@@ -2558,6 +2672,7 @@ function openNewSurveyConfigurator() {
     openNewSurveyConfigurator,
     bindQuestSheetControls,
     openQuestStatus,
+    openQuestConfirmDialog,
     openQuestRecipeCreator,
     embarkQuest,
     acceptAndEmbarkQuest,
@@ -2568,7 +2683,7 @@ function openNewSurveyConfigurator() {
     getArchivedQuests,
     isArchivedQuest,
     isIdentificationQuest,
-    
+
     constants: {
       TAXON_FLAVORS,
       OBJECTIVES,
@@ -2582,7 +2697,7 @@ function openNewSurveyConfigurator() {
     scheduleQuestLocaleRefresh(getGpsFix());
   });
 
-  window.addEventListener("gwUserLocationUpdated", evt => {
+  window.addEventListener("gwUserLocationUpdated", (evt) => {
     const d = evt.detail || {};
     const lat = Number(d.latitude);
     const lng = Number(d.longitude);

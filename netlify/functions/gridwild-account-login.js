@@ -1,10 +1,7 @@
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const ACCOUNT_TABLE = "gridwild_accounts";
 const KEY_LENGTH = 32;
@@ -66,7 +63,11 @@ exports.handler = async function (event) {
     if (accountResult.error) throw accountResult.error;
 
     const account = accountResult.data;
-    const passwordHash = hashPassword(password, account?.password_salt || "", account?.password_iterations);
+    const passwordHash = hashPassword(
+      password,
+      account?.password_salt || "",
+      account?.password_iterations
+    );
 
     if (!account || !timingSafeEqualHex(passwordHash, account.password_hash)) {
       return {

@@ -7,11 +7,7 @@
   const STORAGE_KEY = "gw_user_achievements_v1";
   const PROFILE_KEY = "gw_achievement_profile_v1";
   const ANNOUNCED_KEY = "gw_achievement_announced_v1";
-  const QUIET_EVALUATION_SOURCES = new Set([
-    "startup",
-    "codex_open",
-    "manual_recalculate"
-  ]);
+  const QUIET_EVALUATION_SOURCES = new Set(["startup", "codex_open", "manual_recalculate"]);
 
   const RANKS = ["Novice", "Apprentice", "Adept", "Master", "Grandmaster", "Legend"];
   let pendingBootstrapSync = false;
@@ -34,10 +30,7 @@
   }
 
   function announcementStorageKey() {
-    const playerId =
-      window.GridWildAPI?.getPlayerId?.() ||
-      window.__gwState?.player?.id ||
-      "local";
+    const playerId = window.GridWildAPI?.getPlayerId?.() || window.__gwState?.player?.id || "local";
 
     return `${ANNOUNCED_KEY}:${playerId}`;
   }
@@ -48,7 +41,7 @@
       const parsed = raw ? JSON.parse(raw) : [];
       if (Array.isArray(parsed)) return new Set(parsed.filter(Boolean));
       if (parsed && typeof parsed === "object") {
-        return new Set(Object.keys(parsed).filter(id => parsed[id]));
+        return new Set(Object.keys(parsed).filter((id) => parsed[id]));
       }
     } catch {
       // If localStorage is unavailable, toasts still work for the current run.
@@ -70,7 +63,7 @@
     if (!ids.length) return;
 
     const announced = loadAnnouncedAchievements();
-    ids.forEach(id => announced.add(id));
+    ids.forEach((id) => announced.add(id));
     saveAnnouncedAchievements(announced);
   }
 
@@ -87,66 +80,70 @@
     return !QUIET_EVALUATION_SOURCES.has(String(options.source || ""));
   }
 
-function loadStore() {
-  const dbRows = window.__gwState?.playerAchievements;
-  let out = {};
+  function loadStore() {
+    const dbRows = window.__gwState?.playerAchievements;
+    let out = {};
 
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    out = parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    out = {};
-  }
-
-  if (Array.isArray(dbRows)) {
-    dbRows.forEach(row => {
-      out[row.achievement_id] = {
-        unlocked: !!row.unlocked,
-        progress: Number(row.progress || 0),
-        target: Number(row.target || 1),
-        achieved_at: row.achieved_at || null,
-        achieved_where: row.achieved_where || null,
-        source: row.source || "db"
-      };
-    });
-  }
-
-  return out;
-}
-
-function saveStore(store) {
-  const safeStore = store || {};
-
-  // Keep local fallback mirror for now.
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(safeStore));
-
-  if (!window.GridWildAPI?.getPlayerId?.()) {
-    if (!pendingBootstrapSync) {
-      pendingBootstrapSync = true;
-      window.addEventListener("gwBootstrapReady", () => {
-        pendingBootstrapSync = false;
-        saveStore(safeStore);
-      }, { once: true });
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      out = parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      out = {};
     }
-    window.dispatchEvent(new CustomEvent("gwAchievementsChanged"));
-    refreshAchievementSummary();
-    return;
+
+    if (Array.isArray(dbRows)) {
+      dbRows.forEach((row) => {
+        out[row.achievement_id] = {
+          unlocked: !!row.unlocked,
+          progress: Number(row.progress || 0),
+          target: Number(row.target || 1),
+          achieved_at: row.achieved_at || null,
+          achieved_where: row.achieved_where || null,
+          source: row.source || "db"
+        };
+      });
+    }
+
+    return out;
   }
 
-  window.GridWildAPI?.upsertPlayerAchievements?.()
-    .then(result => {
-      window.__gwState = window.__gwState || {};
-      window.__gwState.playerAchievements = result.achievements || [];
+  function saveStore(store) {
+    const safeStore = store || {};
+
+    // Keep local fallback mirror for now.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(safeStore));
+
+    if (!window.GridWildAPI?.getPlayerId?.()) {
+      if (!pendingBootstrapSync) {
+        pendingBootstrapSync = true;
+        window.addEventListener(
+          "gwBootstrapReady",
+          () => {
+            pendingBootstrapSync = false;
+            saveStore(safeStore);
+          },
+          { once: true }
+        );
+      }
       window.dispatchEvent(new CustomEvent("gwAchievementsChanged"));
       refreshAchievementSummary();
-    })
-    .catch(err => {
-      console.warn("Could not sync achievements:", err);
-      window.dispatchEvent(new CustomEvent("gwAchievementsChanged"));
-      refreshAchievementSummary();
-    });
-}
+      return;
+    }
+
+    window.GridWildAPI?.upsertPlayerAchievements?.()
+      .then((result) => {
+        window.__gwState = window.__gwState || {};
+        window.__gwState.playerAchievements = result.achievements || [];
+        window.dispatchEvent(new CustomEvent("gwAchievementsChanged"));
+        refreshAchievementSummary();
+      })
+      .catch((err) => {
+        console.warn("Could not sync achievements:", err);
+        window.dispatchEvent(new CustomEvent("gwAchievementsChanged"));
+        refreshAchievementSummary();
+      });
+  }
 
   function loadProfile() {
     try {
@@ -279,7 +276,20 @@ function saveStore(store) {
       }
     }
 
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ];
     monthNames.forEach((m, idx) => {
       add({
         id: `month_${idx + 1}`,
@@ -321,7 +331,8 @@ function saveStore(store) {
       add({
         id,
         name,
-        category: rule.includes("survey") || rule.includes("ids") ? "Community" : "Behavior / Style",
+        category:
+          rule.includes("survey") || rule.includes("ids") ? "Community" : "Behavior / Style",
         family: name,
         rule_type: rule,
         threshold: n,
@@ -334,8 +345,22 @@ function saveStore(store) {
 
     [
       ["secret_444", "The Witching Minute", "secret_444", 1, "🕯️", "Observe at 4:44 AM."],
-      ["secret_three_in_minute", "Life Burst", "three_taxa_one_minute", 1, "⚡", "Record 3 taxa within 1 minute."],
-      ["secret_storm", "Stormbringer", "storm_observation", 1, "⛈️", "Upload during stormy weather. Placeholder until weather integration."]
+      [
+        "secret_three_in_minute",
+        "Life Burst",
+        "three_taxa_one_minute",
+        1,
+        "⚡",
+        "Record 3 taxa within 1 minute."
+      ],
+      [
+        "secret_storm",
+        "Stormbringer",
+        "storm_observation",
+        1,
+        "⛈️",
+        "Upload during stormy weather. Placeholder until weather integration."
+      ]
     ].forEach(([id, name, rule, n, icon, desc]) => {
       add({
         id,
@@ -353,11 +378,24 @@ function saveStore(store) {
     });
 
     // Pad to ~300 using themed generated micro-lines.
-    const biomes = ["Park", "Campus", "Creek", "Alley", "Garden", "Forest Edge", "Sidewalk", "Wetland"];
+    const biomes = [
+      "Park",
+      "Campus",
+      "Creek",
+      "Alley",
+      "Garden",
+      "Forest Edge",
+      "Sidewalk",
+      "Wetland"
+    ];
     const behaviors = ["Returner", "Mapper", "Specialist", "Scout", "Sentinel", "Archivist"];
     for (const biome of biomes) {
       for (const behavior of behaviors) {
-        for (const [tier, n] of [["Novice", 3], ["Apprentice", 7], ["Adept", 15]]) {
+        for (const [tier, n] of [
+          ["Novice", 3],
+          ["Apprentice", 7],
+          ["Adept", 15]
+        ]) {
           add({
             id: `style_${biome}_${behavior}_${n}`.toLowerCase().replaceAll(" ", "_"),
             name: `${biome} ${behavior}`,
@@ -386,9 +424,12 @@ function saveStore(store) {
       id: String(obs.id || ""),
       lat: Number(obs.lat),
       lng: Number(obs.lng),
-      cellKey: Number.isFinite(Number(obs.lat)) && Number.isFinite(Number(obs.lng)) && window.getCellKeyForLatLng
-        ? window.getCellKeyForLatLng(obs.lat, obs.lng)
-        : "",
+      cellKey:
+        Number.isFinite(Number(obs.lat)) &&
+        Number.isFinite(Number(obs.lng)) &&
+        window.getCellKeyForLatLng
+          ? window.getCellKeyForLatLng(obs.lat, obs.lng)
+          : "",
       scientific: sci,
       common: String(obs.common_name || obs.taxon || "").toLowerCase(),
       iconic: String(obs.iconic_taxon_name || "").toLowerCase(),
@@ -439,7 +480,7 @@ function saveStore(store) {
         const hay = `${r.scientific} ${r.common} ${r.iconic}`.toLowerCase();
         const matchesLine = window.GridWildTaxonomy?.matchesTaxonLine
           ? window.GridWildTaxonomy.matchesTaxonLine(line, hay)
-          : line.terms.some(t => hay.includes(t));
+          : line.terms.some((t) => hay.includes(t));
         if (matchesLine) {
           taxonLineCounts[line.key]++;
           if (r.genus) taxonLineGenera[line.key].add(r.genus);
@@ -490,10 +531,12 @@ function saveStore(store) {
 
     if (def.rule_type === "secret_444") {
       const obs = window.GridWildRecentINat?.getRecentObservations?.() || [];
-      return obs.some(o => {
+      return obs.some((o) => {
         const d = o.observed_on ? new Date(o.observed_on) : null;
         return d && d.getHours() === 4 && d.getMinutes() === 44;
-      }) ? 1 : 0;
+      })
+        ? 1
+        : 0;
     }
 
     return 0;
@@ -535,13 +578,13 @@ function saveStore(store) {
 
     if (newlyAwarded.length) {
       const announced = loadAnnouncedAchievements();
-      const unannouncedAwards = newlyAwarded.filter(def => !announced.has(def.id));
+      const unannouncedAwards = newlyAwarded.filter((def) => !announced.has(def.id));
 
       if (shouldAnnounceAwards(options) && unannouncedAwards.length) {
         showAwardToast(unannouncedAwards[0], unannouncedAwards.length);
       }
 
-      markAchievementsAnnounced(newlyAwarded.map(def => def.id));
+      markAchievementsAnnounced(newlyAwarded.map((def) => def.id));
     }
 
     return { newlyAwarded, store, stats };
@@ -554,9 +597,10 @@ function saveStore(store) {
     return {
       lat: last.lat ?? null,
       lng: last.lng ?? null,
-      cellKey: last.lat && last.lng && window.getCellKeyForLatLng
-        ? window.getCellKeyForLatLng(last.lat, last.lng)
-        : null
+      cellKey:
+        last.lat && last.lng && window.getCellKeyForLatLng
+          ? window.getCellKeyForLatLng(last.lat, last.lng)
+          : null
     };
   }
 
@@ -564,8 +608,8 @@ function saveStore(store) {
     const recent = window.GridWildRecentINat?.getRecentObservations?.() || [];
 
     const drafts = (window.GridWildDraftObservations?.loadDrafts?.() || [])
-      .filter(d => d.status !== "deleted")
-      .map(d => ({
+      .filter((d) => d.status !== "deleted")
+      .map((d) => ({
         id: d.id,
         lat: d.location?.lat,
         lng: d.location?.lng,
@@ -601,9 +645,11 @@ function saveStore(store) {
       url.searchParams.set("geoprivacy", "open");
       url.searchParams.set("taxon_geoprivacy", "open");
 
-      window.dispatchEvent(new CustomEvent("gwAchievementImportProgress", {
-        detail: { page, accepted: accepted.length }
-      }));
+      window.dispatchEvent(
+        new CustomEvent("gwAchievementImportProgress", {
+          detail: { page, accepted: accepted.length }
+        })
+      );
 
       const resp = await fetch(url.toString());
       if (!resp.ok) throw new Error(`iNaturalist historical import failed: HTTP ${resp.status}`);
@@ -643,9 +689,11 @@ function saveStore(store) {
       source: "inat_historical_import"
     });
 
-    window.dispatchEvent(new CustomEvent("gwAchievementImportDone", {
-      detail: { username, imported: accepted.length, newlyAwarded: result.newlyAwarded.length }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwAchievementImportDone", {
+        detail: { username, imported: accepted.length, newlyAwarded: result.newlyAwarded.length }
+      })
+    );
 
     return { observations: accepted, ...result };
   }
@@ -812,10 +860,10 @@ function saveStore(store) {
     injectStyles();
     evaluateCurrent({ source: "codex_open" });
 
-    document.querySelectorAll(".gw-ach-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".gw-ach-backdrop").forEach((el) => el.remove());
 
     const store = loadStore();
-    const unlockedCount = Object.values(store).filter(x => x?.unlocked).length;
+    const unlockedCount = Object.values(store).filter((x) => x?.unlocked).length;
 
     const root = document.createElement("div");
     root.className = "gw-ach-backdrop";
@@ -835,14 +883,14 @@ function saveStore(store) {
         </div>
 
         <div class="gw-ach-grid">
-          ${DEFINITIONS.map(def => renderTile(def, store[def.id])).join("")}
+          ${DEFINITIONS.map((def) => renderTile(def, store[def.id])).join("")}
         </div>
       </div>
     `;
 
     document.body.appendChild(root);
 
-    root.addEventListener("click", evt => {
+    root.addEventListener("click", (evt) => {
       if (evt.target === root) root.remove();
     });
 
@@ -869,7 +917,7 @@ function saveStore(store) {
       }
     };
 
-    root.querySelectorAll(".gw-ach-tile").forEach(tile => {
+    root.querySelectorAll(".gw-ach-tile").forEach((tile) => {
       tile.addEventListener("click", () => openDetail(tile.dataset.achievementId));
     });
   }
@@ -894,7 +942,7 @@ function saveStore(store) {
   }
 
   function openDetail(id) {
-    const def = DEFINITIONS.find(d => d.id === id);
+    const def = DEFINITIONS.find((d) => d.id === id);
     if (!def) return;
 
     const state = loadStore()[id] || {};
@@ -932,7 +980,7 @@ function saveStore(store) {
 
     document.body.appendChild(root);
     root.querySelector("#gwAchDetailClose").onclick = () => root.remove();
-    root.addEventListener("click", evt => {
+    root.addEventListener("click", (evt) => {
       if (evt.target === root) root.remove();
     });
   }
@@ -955,20 +1003,19 @@ function saveStore(store) {
   }
 
   function getUnlockedCount() {
-  return Object.values(loadStore()).filter(x => x?.unlocked).length;
-}
+    return Object.values(loadStore()).filter((x) => x?.unlocked).length;
+  }
 
-function refreshAchievementSummary() {
-  const el = document.getElementById("gwAchievementSummaryText");
-  if (!el) return;
+  function refreshAchievementSummary() {
+    const el = document.getElementById("gwAchievementSummaryText");
+    if (!el) return;
 
-  el.textContent =
-    `${getUnlockedCount()} accomplishments unlocked. Lifetime milestones, separate from quests.`;
-}
+    el.textContent = `${getUnlockedCount()} accomplishments unlocked. Lifetime milestones, separate from quests.`;
+  }
 
   function renderButtonHtml() {
     const store = loadStore();
-    const unlockedCount = Object.values(store).filter(x => x?.unlocked).length;
+    const unlockedCount = Object.values(store).filter((x) => x?.unlocked).length;
 
     return `
       <div class="gw-card">
@@ -1007,8 +1054,12 @@ function refreshAchievementSummary() {
     evaluateCurrent({ source: "draft_observation_update" });
   });
 
-  window.addEventListener("gwBootstrapReady", () => {
-    markUnlockedAchievementsAnnounced();
-    setTimeout(() => evaluateCurrent({ source: "startup", announce: false }), 0);
-  }, { once: true });
+  window.addEventListener(
+    "gwBootstrapReady",
+    () => {
+      markUnlockedAchievementsAnnounced();
+      setTimeout(() => evaluateCurrent({ source: "startup", announce: false }), 0);
+    },
+    { once: true }
+  );
 })();

@@ -3,10 +3,7 @@ const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { applyPartyTiming } = require("./_party-duration");
 const { requirePartyAccess } = require("./_party-access");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
@@ -20,20 +17,20 @@ exports.handler = async function (event) {
       throw new Error("player_id or party_id is required");
     }
 
-let activePartyId = requestedPartyId;
+    let activePartyId = requestedPartyId;
 
-if (!activePartyId) {
-  const { data: state, error: stateError } = await supabase
-    .from("player_state")
-    .select("active_party_id")
-    .eq("player_id", player_id)
-    .maybeSingle();
+    if (!activePartyId) {
+      const { data: state, error: stateError } = await supabase
+        .from("player_state")
+        .select("active_party_id")
+        .eq("player_id", player_id)
+        .maybeSingle();
 
-  if (stateError) throw stateError;
+      if (stateError) throw stateError;
 
-  stateActivePartyId = state?.active_party_id || null;
-  activePartyId = stateActivePartyId;
-}
+      stateActivePartyId = state?.active_party_id || null;
+      activePartyId = stateActivePartyId;
+    }
 
     if (!activePartyId) {
       return {
@@ -58,16 +55,22 @@ if (!activePartyId) {
       allowPublicRead: true
     });
 
-    if (!requestedPartyId && party?.status === "ended" && player_id && party.id === stateActivePartyId) {
-      await supabase
-        .from("player_state")
-        .upsert({
+    if (
+      !requestedPartyId &&
+      party?.status === "ended" &&
+      player_id &&
+      party.id === stateActivePartyId
+    ) {
+      await supabase.from("player_state").upsert(
+        {
           player_id,
           active_party_id: null,
           updated_at: new Date().toISOString()
-        }, {
+        },
+        {
           onConflict: "player_id"
-        });
+        }
+      );
     }
 
     const { data: members, error: membersError } = await supabase
@@ -95,7 +98,7 @@ if (!activePartyId) {
 
     if (evidenceError) throw evidenceError;
 
-    const progress = (evidence || []).filter(row => row.status !== "excluded").length;
+    const progress = (evidence || []).filter((row) => row.status !== "excluded").length;
 
     return {
       statusCode: 200,

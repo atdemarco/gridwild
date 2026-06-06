@@ -3,7 +3,7 @@
 // -----------------------------------------------------------------------------
 
 (function () {
-  const OVERVIEW_ZOOM_OFFSET = 4;   // main zoom 19 -> inset zoom 15
+  const OVERVIEW_ZOOM_OFFSET = 4; // main zoom 19 -> inset zoom 15
   const MIN_OVERVIEW_ZOOM = 13;
   const MAX_OVERVIEW_ZOOM = 17;
 
@@ -150,11 +150,7 @@
   }
 
   function getOverviewZoom() {
-    return clamp(
-      map.getZoom() - OVERVIEW_ZOOM_OFFSET,
-      MIN_OVERVIEW_ZOOM,
-      MAX_OVERVIEW_ZOOM
-    );
+    return clamp(map.getZoom() - OVERVIEW_ZOOM_OFFSET, MIN_OVERVIEW_ZOOM, MAX_OVERVIEW_ZOOM);
   }
 
   function syncFromMainMap() {

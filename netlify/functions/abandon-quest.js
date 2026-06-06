@@ -1,12 +1,9 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-exports.handler = async function(event) {
+exports.handler = async function (event) {
   try {
     await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
@@ -52,16 +49,14 @@ exports.handler = async function(event) {
       .maybeSingle();
 
     if (state?.active_quest_id === quest_id) {
-      const { error: stateError } = await supabase
-        .from("player_state")
-        .upsert(
-          {
-            player_id,
-            active_quest_id: null,
-            updated_at: new Date().toISOString()
-          },
-          { onConflict: "player_id" }
-        );
+      const { error: stateError } = await supabase.from("player_state").upsert(
+        {
+          player_id,
+          active_quest_id: null,
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: "player_id" }
+      );
 
       if (stateError) throw stateError;
     }

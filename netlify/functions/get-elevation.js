@@ -60,13 +60,17 @@ function parseRetryAfterMs(value) {
 
 function rateLimited(retryMs) {
   const retrySeconds = Math.max(1, Math.ceil(retryMs / 1000));
-  return json(429, {
-    error: "Elevation lookup is cooling down.",
-    retry_after_ms: retryMs
-  }, {
-    "Retry-After": String(retrySeconds),
-    "cache-control": "no-store"
-  });
+  return json(
+    429,
+    {
+      error: "Elevation lookup is cooling down.",
+      retry_after_ms: retryMs
+    },
+    {
+      "Retry-After": String(retrySeconds),
+      "cache-control": "no-store"
+    }
+  );
 }
 
 exports.handler = async function (event) {
@@ -82,21 +86,25 @@ exports.handler = async function (event) {
     }
 
     const now = Date.now();
-    const missing = points.filter(point => !Number.isFinite(cachedElevation(point)));
+    const missing = points.filter((point) => !Number.isFinite(cachedElevation(point)));
     if (!missing.length) {
-      return json(200, {
-        points: points.map(point => ({
-          key: point.key,
-          lat: point.lat,
-          lng: point.lng,
-          elevation_m: cachedElevation(point)
-        })),
-        source: "Open-Meteo Elevation API",
-        attribution: "Copernicus DEM GLO-90 via Open-Meteo",
-        cache: "hit"
-      }, {
-        "cache-control": "public, max-age=86400"
-      });
+      return json(
+        200,
+        {
+          points: points.map((point) => ({
+            key: point.key,
+            lat: point.lat,
+            lng: point.lng,
+            elevation_m: cachedElevation(point)
+          })),
+          source: "Open-Meteo Elevation API",
+          attribution: "Copernicus DEM GLO-90 via Open-Meteo",
+          cache: "hit"
+        },
+        {
+          "cache-control": "public, max-age=86400"
+        }
+      );
     }
 
     if (now < upstreamDisabledUntil) {
@@ -108,8 +116,8 @@ exports.handler = async function (event) {
     }
 
     const url = new URL(OPEN_METEO_ELEVATION_URL);
-    url.searchParams.set("latitude", missing.map(point => point.lat.toFixed(5)).join(","));
-    url.searchParams.set("longitude", missing.map(point => point.lng.toFixed(5)).join(","));
+    url.searchParams.set("latitude", missing.map((point) => point.lat.toFixed(5)).join(","));
+    url.searchParams.set("longitude", missing.map((point) => point.lng.toFixed(5)).join(","));
 
     lastUpstreamFetchAt = now;
     const resp = await fetch(url, {
@@ -119,7 +127,10 @@ exports.handler = async function (event) {
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
       if (resp.status === 429) {
-        const retryMs = Math.max(parseRetryAfterMs(resp.headers.get("Retry-After")), DEFAULT_RATE_LIMIT_MS);
+        const retryMs = Math.max(
+          parseRetryAfterMs(resp.headers.get("Retry-After")),
+          DEFAULT_RATE_LIMIT_MS
+        );
         upstreamDisabledUntil = Date.now() + retryMs;
         return rateLimited(retryMs);
       }
@@ -150,13 +161,17 @@ exports.handler = async function (event) {
       };
     });
 
-    return json(200, {
-      points: results,
-      source: "Open-Meteo Elevation API",
-      attribution: "Copernicus DEM GLO-90 via Open-Meteo"
-    }, {
-      "cache-control": "public, max-age=86400"
-    });
+    return json(
+      200,
+      {
+        points: results,
+        source: "Open-Meteo Elevation API",
+        attribution: "Copernicus DEM GLO-90 via Open-Meteo"
+      },
+      {
+        "cache-control": "public, max-age=86400"
+      }
+    );
   } catch (err) {
     return json(400, { error: err.message || "Elevation lookup failed." });
   }

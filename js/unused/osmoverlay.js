@@ -46,7 +46,7 @@ let __osmTimer = null;
 
 // Public function you can call from anywhere
 window.scheduleOSMVectorOverlayUpdate = function () {
-  console.log("running scheduleOSMVectorOverlayUpdate")
+  console.log("running scheduleOSMVectorOverlayUpdate");
   if (__osmTimer) clearTimeout(__osmTimer);
   __osmTimer = setTimeout(fetchOSMVectorOverlayInView, 250);
 };
@@ -58,9 +58,9 @@ async function fetchOSMVectorOverlayInView() {
 
   const b = map.getBounds();
   const south = b.getSouth();
-  const west  = b.getWest();
+  const west = b.getWest();
   const north = b.getNorth();
-  const east  = b.getEast();
+  const east = b.getEast();
 
   // Overpass QL: roads + buildings in current viewport bbox
   // NOTE: bbox order is (south,west,north,east)

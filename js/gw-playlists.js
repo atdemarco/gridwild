@@ -20,13 +20,12 @@
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
-
   function ensureStyles() {
-  if (document.getElementById("gwPlaylistStyles")) return;
+    if (document.getElementById("gwPlaylistStyles")) return;
 
-  const style = document.createElement("style");
-  style.id = "gwPlaylistStyles";
-  style.textContent = `
+    const style = document.createElement("style");
+    style.id = "gwPlaylistStyles";
+    style.textContent = `
     .gw-playlist-backdrop {
       position: fixed;
       inset: 0;
@@ -272,8 +271,8 @@
       }
     }
   `;
-  document.head.appendChild(style);
-}
+    document.head.appendChild(style);
+  }
 
   function loadAll() {
     try {
@@ -298,9 +297,9 @@
   }
 
   function refreshWildlistPhotoSlots(root = document) {
-    const latest = new Map(getRecentObs().map(obs => [String(obs.id), obs]));
+    const latest = new Map(getRecentObs().map((obs) => [String(obs.id), obs]));
 
-    root.querySelectorAll("[data-wildlist-photo-slot]").forEach(slot => {
+    root.querySelectorAll("[data-wildlist-photo-slot]").forEach((slot) => {
       const obs = latest.get(String(slot.dataset.obsId || ""));
       const img = getObsThumbUrl(obs);
       if (!img || slot.querySelector("img")) return;
@@ -313,26 +312,28 @@
     const ensure = window.GridWildRecentINat?.ensureObservationPhotos;
     if (typeof ensure !== "function") return Promise.resolve();
 
-    const cleaned = [...new Set((ids || []).map(id => String(id || "").trim()).filter(Boolean))];
+    const cleaned = [...new Set((ids || []).map((id) => String(id || "").trim()).filter(Boolean))];
     if (!cleaned.length) return Promise.resolve();
 
     return ensure(cleaned)
       .then(() => refreshWildlistPhotoSlots(root))
-      .catch(err => console.warn("Could not fetch Wildlist thumbnails:", err));
+      .catch((err) => console.warn("Could not fetch Wildlist thumbnails:", err));
   }
 
   function observeWildlistThumbnails(root = document) {
-    const latest = new Map(getRecentObs().map(obs => [String(obs.id), obs]));
-    const slots = Array.from(root.querySelectorAll("[data-wildlist-photo-slot]"))
-      .filter(slot => {
-        const id = String(slot.dataset.obsId || "");
-        return id && !getObsThumbUrl(latest.get(id));
-      });
+    const latest = new Map(getRecentObs().map((obs) => [String(obs.id), obs]));
+    const slots = Array.from(root.querySelectorAll("[data-wildlist-photo-slot]")).filter((slot) => {
+      const id = String(slot.dataset.obsId || "");
+      return id && !getObsThumbUrl(latest.get(id));
+    });
 
     if (!slots.length) return;
 
     if (!("IntersectionObserver" in window)) {
-      requestWildlistThumbnails(slots.slice(0, 24).map(slot => slot.dataset.obsId), root);
+      requestWildlistThumbnails(
+        slots.slice(0, 24).map((slot) => slot.dataset.obsId),
+        root
+      );
       return;
     }
 
@@ -345,82 +346,85 @@
       requestWildlistThumbnails(ids, root);
     };
 
-    const observer = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-        const id = entry.target.dataset.obsId;
-        if (id) queued.add(id);
-        observer.unobserve(entry.target);
-      });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const id = entry.target.dataset.obsId;
+          if (id) queued.add(id);
+          observer.unobserve(entry.target);
+        });
 
-      if (queued.size && !timer) timer = setTimeout(flush, 80);
-    }, {
-      root: root.querySelector(".gw-playlist-modal") || null,
-      rootMargin: "220px"
-    });
+        if (queued.size && !timer) timer = setTimeout(flush, 80);
+      },
+      {
+        root: root.querySelector(".gw-playlist-modal") || null,
+        rootMargin: "220px"
+      }
+    );
 
-    slots.forEach(slot => observer.observe(slot));
+    slots.forEach((slot) => observer.observe(slot));
   }
 
   const WILDLIST_RECIPES = [
-  {
-    id: "custom",
-    title: "Custom Wildlist",
-    subtitle: "Choose observations manually.",
-    icon: "🧺"
-  },
-  {
-    id: "today",
-    title: "Today’s Observations",
-    subtitle: "Everything observed today.",
-    icon: "☀️"
-  },
-  {
-    id: "week",
-    title: "This Week’s Observations",
-    subtitle: "Recent field activity from the last 7 days.",
-    icon: "📅"
-  },
-  {
-    id: "mysteries",
-    title: "My Mysteries",
-    subtitle: "Unknowns and observations needing identity work.",
-    icon: "❓"
-  },
-  {
-    id: "leafhoppers",
-    title: "My Leafhoppers",
-    subtitle: "Leafhopper-ish observations from recent activity.",
-    icon: "🪲"
-  },
-  {
-    id: "party_recent",
-    title: "Recent Party",
-    subtitle: "Build from recent party effort, route, and contributors.",
-    icon: "👣",
-    placeholder: true
-  }
-];
+    {
+      id: "custom",
+      title: "Custom Wildlist",
+      subtitle: "Choose observations manually.",
+      icon: "🧺"
+    },
+    {
+      id: "today",
+      title: "Today’s Observations",
+      subtitle: "Everything observed today.",
+      icon: "☀️"
+    },
+    {
+      id: "week",
+      title: "This Week’s Observations",
+      subtitle: "Recent field activity from the last 7 days.",
+      icon: "📅"
+    },
+    {
+      id: "mysteries",
+      title: "My Mysteries",
+      subtitle: "Unknowns and observations needing identity work.",
+      icon: "❓"
+    },
+    {
+      id: "leafhoppers",
+      title: "My Leafhoppers",
+      subtitle: "Leafhopper-ish observations from recent activity.",
+      icon: "🪲"
+    },
+    {
+      id: "party_recent",
+      title: "Recent Party",
+      subtitle: "Build from recent party effort, route, and contributors.",
+      icon: "👣",
+      placeholder: true
+    }
+  ];
 
   function compactObs(o) {
-  return {
-    id: o.id,
-    taxon: o.taxon || "",
-    common_name: o.common_name || "",
-    scientific_name: o.scientific_name || "",
-    observed_on: o.observed_on || null,
-    photo_url: o.photo_square_url || o.photo_url || null,
-    photo_square_url: o.photo_square_url || o.photo_url || null,
-    photo_medium_url: o.photo_square_url || o.photo_url || o.photo_medium_url || null,
-    iconic_taxon_name: o.iconic_taxon_name || "Unknown",
-    genus_name: o.genus_name || "",
-    uri: o.uri || null,
-    lat: Number.isFinite(Number(o.lat)) ? Number(o.lat) : null,
-    lng: Number.isFinite(Number(o.lng)) ? Number(o.lng) : null,
-    accuracy: Number.isFinite(Number(o.accuracy)) ? Number(o.accuracy) : null,
-    place_guess: o.place_guess || "",
-  };
-}
+    return {
+      id: o.id,
+      taxon: o.taxon || "",
+      common_name: o.common_name || "",
+      scientific_name: o.scientific_name || "",
+      observed_on: o.observed_on || null,
+      photo_url: o.photo_square_url || o.photo_url || null,
+      photo_square_url: o.photo_square_url || o.photo_url || null,
+      photo_medium_url: o.photo_square_url || o.photo_url || o.photo_medium_url || null,
+      iconic_taxon_name: o.iconic_taxon_name || "Unknown",
+      genus_name: o.genus_name || "",
+      uri: o.uri || null,
+      lat: Number.isFinite(Number(o.lat)) ? Number(o.lat) : null,
+      lng: Number.isFinite(Number(o.lng)) ? Number(o.lng) : null,
+      accuracy: Number.isFinite(Number(o.accuracy)) ? Number(o.accuracy) : null,
+      place_guess: o.place_guess || ""
+    };
+  }
 
   function getWildlistObsName(o) {
     return o?.taxon || o?.common_name || o?.scientific_name || "Unknown taxon";
@@ -442,17 +446,19 @@
     if (key === "protozoa") return "Protozoa";
     if (key === "chromista") return "Chromista";
 
-    if ([
-      "animalia",
-      "actinopterygii",
-      "amphibia",
-      "arachnida",
-      "aves",
-      "insecta",
-      "mammalia",
-      "mollusca",
-      "reptilia"
-    ].includes(key)) {
+    if (
+      [
+        "animalia",
+        "actinopterygii",
+        "amphibia",
+        "arachnida",
+        "aves",
+        "insecta",
+        "mammalia",
+        "mollusca",
+        "reptilia"
+      ].includes(key)
+    ) {
       return "Animals";
     }
 
@@ -468,7 +474,9 @@
       o?.iconic_taxon_name,
       getWildlistKingdom(o),
       o?.observed_on
-    ].join(" ").toLowerCase();
+    ]
+      .join(" ")
+      .toLowerCase();
   }
 
   function getWildlistKingdomOptions(obs) {
@@ -476,8 +484,10 @@
     const found = new Set((obs || []).map(getWildlistKingdom).filter(Boolean));
 
     return [
-      ...preferredOrder.filter(name => found.has(name)),
-      ...[...found].filter(name => !preferredOrder.includes(name)).sort((a, b) => a.localeCompare(b))
+      ...preferredOrder.filter((name) => found.has(name)),
+      ...[...found]
+        .filter((name) => !preferredOrder.includes(name))
+        .sort((a, b) => a.localeCompare(b))
     ];
   }
 
@@ -496,7 +506,7 @@
             <span>Kingdom</span>
             <select id="gwCustomWildlistKingdom">
               <option value="">All</option>
-              ${kingdoms.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join("")}
+              ${kingdoms.map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join("")}
             </select>
           </label>
 
@@ -530,7 +540,9 @@
     const tiles = Array.from(grid.querySelectorAll(".gw-custom-wildlist-tile"));
 
     function apply() {
-      const q = String(search?.value || "").trim().toLowerCase();
+      const q = String(search?.value || "")
+        .trim()
+        .toLowerCase();
       const selectedKingdom = String(kingdom?.value || "");
       const sortMode = String(sort?.value || "newest");
 
@@ -540,13 +552,15 @@
         }
 
         if (sortMode === "taxon") {
-          return String(a.dataset.wildlistName || "").localeCompare(String(b.dataset.wildlistName || ""));
+          return String(a.dataset.wildlistName || "").localeCompare(
+            String(b.dataset.wildlistName || "")
+          );
         }
 
         return Number(b.dataset.wildlistTime || 0) - Number(a.dataset.wildlistTime || 0);
       });
 
-      ordered.forEach(tile => {
+      ordered.forEach((tile) => {
         const matchesKingdom = !selectedKingdom || tile.dataset.wildlistKingdom === selectedKingdom;
         const matchesSearch = !q || String(tile.dataset.wildlistSearch || "").includes(q);
         tile.style.display = matchesKingdom && matchesSearch ? "block" : "none";
@@ -588,7 +602,7 @@
       updatedAt: now
     };
 
-    const idx = all.findIndex(p => p.id === full.id);
+    const idx = all.findIndex((p) => p.id === full.id);
     if (idx >= 0) all[idx] = full;
     else all.unshift(full);
 
@@ -597,11 +611,11 @@
   }
 
   function getById(id) {
-    return loadAll().find(p => p.id === id) || null;
+    return loadAll().find((p) => p.id === id) || null;
   }
 
   function deleteById(id) {
-    saveAll(loadAll().filter(p => p.id !== id));
+    saveAll(loadAll().filter((p) => p.id !== id));
   }
 
   function localDateKey(date = new Date()) {
@@ -636,7 +650,7 @@
 
   function filterToday(obs) {
     const today = localDateKey();
-    return obs.filter(o => observationDateKey(o) === today);
+    return obs.filter((o) => observationDateKey(o) === today);
   }
 
   function filterThisWeek(obs) {
@@ -644,14 +658,14 @@
     const cutoff = new Date();
     cutoff.setDate(now.getDate() - 7);
 
-    return obs.filter(o => {
+    return obs.filter((o) => {
       const d = observationDate(o);
       return d && !Number.isNaN(d.getTime()) && d >= cutoff;
     });
   }
 
   function filterMysteries(obs) {
-    return obs.filter(o => {
+    return obs.filter((o) => {
       const sci = String(o.scientific_name || "").trim();
       const common = String(o.common_name || "").trim();
       const iconic = String(o.iconic_taxon_name || "").trim();
@@ -666,17 +680,11 @@
   }
 
   function filterLeafhoppers(obs) {
-    return obs.filter(o => {
-      const hay = [
-        o.taxon,
-        o.common_name,
-        o.scientific_name
-      ].join(" ").toLowerCase();
+    return obs.filter((o) => {
+      const hay = [o.taxon, o.common_name, o.scientific_name].join(" ").toLowerCase();
 
       return (
-        hay.includes("leafhopper") ||
-        hay.includes("cicadellidae") ||
-        hay.includes("hemiptera")
+        hay.includes("leafhopper") || hay.includes("cicadellidae") || hay.includes("hemiptera")
       );
     });
   }
@@ -706,99 +714,94 @@
       description: "",
       mode: "template",
       template,
-      observationIds: selected.map(o => o.id),
+      observationIds: selected.map((o) => o.id),
       snapshotObservations: selected.map(compactObs)
     });
   }
 
-
   function applyRecipeFilters(selected, filters = {}) {
-  let out = Array.isArray(selected) ? selected.slice() : [];
+    let out = Array.isArray(selected) ? selected.slice() : [];
 
-  const taxonFilter = String(filters.taxonFilter || "").trim().toLowerCase();
-  if (taxonFilter) {
-    out = out.filter(o => {
-      const hay = [
-        o.taxon,
-        o.common_name,
-        o.scientific_name,
-        o.iconic_taxon_name,
-        o.genus_name
-      ].join(" ").toLowerCase();
+    const taxonFilter = String(filters.taxonFilter || "")
+      .trim()
+      .toLowerCase();
+    if (taxonFilter) {
+      out = out.filter((o) => {
+        const hay = [o.taxon, o.common_name, o.scientific_name, o.iconic_taxon_name, o.genus_name]
+          .join(" ")
+          .toLowerCase();
 
-      return hay.includes(taxonFilter);
+        return hay.includes(taxonFilter);
+      });
+    }
+
+    if (filters.photosOnly) {
+      out = out.filter((o) => o.photo_medium_url || o.photo_square_url || o.photo_url);
+    }
+
+    const maxObs = Number(filters.maxObs || 60);
+    if (Number.isFinite(maxObs) && maxObs > 0) {
+      out = out.slice(0, maxObs);
+    }
+
+    return out;
+  }
+
+  function buildTemplatePlaylistWithFilters(template, filters = {}) {
+    const obs = getRecentObs();
+
+    let title = "New Wildlist";
+    let selected = [];
+
+    if (template === "today") {
+      title = "Today’s Observations";
+      selected = filterToday(obs);
+    } else if (template === "week") {
+      title = "This Week’s Observations";
+      selected = filterThisWeek(obs);
+    } else if (template === "mysteries") {
+      title = "My Mysteries";
+      selected = filterMysteries(obs);
+    } else if (template === "leafhoppers") {
+      title = "My Leafhoppers";
+      selected = filterLeafhoppers(obs);
+    }
+
+    selected = applyRecipeFilters(selected, filters);
+
+    if (!selected.length) {
+      alert("No observations matched that recipe/filter combination.");
+    }
+
+    return savePlaylist({
+      title,
+      description: "",
+      mode: "template",
+      template,
+      observationIds: selected.map((o) => o.id),
+      snapshotObservations: selected.map(compactObs)
     });
   }
 
-  if (filters.photosOnly) {
-    out = out.filter(o => o.photo_medium_url || o.photo_square_url || o.photo_url);
+  function openPartyWildlistPlaceholder() {
+    const partyStore = JSON.parse(localStorage.getItem("gw_party_sessions_v1") || "[]");
+
+    alert(
+      [
+        "Party Wildlists are the next integration point.",
+        "",
+        `Found ${Array.isArray(partyStore) ? partyStore.length : 0} locally stored party sessions.`,
+        "",
+        "Next version will snapshot:",
+        "• party title",
+        "• participants",
+        "• start/end time",
+        "• route/path polyline",
+        "• contributed observations",
+        "• effort stats"
+      ].join("\n")
+    );
   }
-
-  const maxObs = Number(filters.maxObs || 60);
-  if (Number.isFinite(maxObs) && maxObs > 0) {
-    out = out.slice(0, maxObs);
-  }
-
-  return out;
-}
-
-function buildTemplatePlaylistWithFilters(template, filters = {}) {
-  const obs = getRecentObs();
-
-  let title = "New Wildlist";
-  let selected = [];
-
-  if (template === "today") {
-    title = "Today’s Observations";
-    selected = filterToday(obs);
-  } else if (template === "week") {
-    title = "This Week’s Observations";
-    selected = filterThisWeek(obs);
-  } else if (template === "mysteries") {
-    title = "My Mysteries";
-    selected = filterMysteries(obs);
-  } else if (template === "leafhoppers") {
-    title = "My Leafhoppers";
-    selected = filterLeafhoppers(obs);
-  }
-
-  selected = applyRecipeFilters(selected, filters);
-
-  if (!selected.length) {
-    alert("No observations matched that recipe/filter combination.");
-  }
-
-  return savePlaylist({
-    title,
-    description: "",
-    mode: "template",
-    template,
-    observationIds: selected.map(o => o.id),
-    snapshotObservations: selected.map(compactObs)
-  });
-}
-
-function openPartyWildlistPlaceholder() {
-  const partyStore =
-    JSON.parse(localStorage.getItem("gw_party_sessions_v1") || "[]");
-
-  alert(
-    [
-      "Party Wildlists are the next integration point.",
-      "",
-      `Found ${Array.isArray(partyStore) ? partyStore.length : 0} locally stored party sessions.`,
-      "",
-      "Next version will snapshot:",
-      "• party title",
-      "• participants",
-      "• start/end time",
-      "• route/path polyline",
-      "• contributed observations",
-      "• effort stats"
-    ].join("\n")
-  );
-}
-
 
   function renderSummary() {
     const el = document.getElementById("gwWildlistsSummary");
@@ -813,7 +816,10 @@ function openPartyWildlistPlaceholder() {
 
     el.innerHTML = `
       <div class="gw-list">
-        ${all.slice(0, 3).map(p => `
+        ${all
+          .slice(0, 3)
+          .map(
+            (p) => `
           <div class="gw-rowline">
             <span style="min-width:0;">
               <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
@@ -825,12 +831,14 @@ function openPartyWildlistPlaceholder() {
             </span>
             <button class="gw-mini-btn gw-open-wildlist-btn" data-id="${esc(p.id)}">Open</button>
           </div>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
     `;
 
-    el.querySelectorAll(".gw-open-wildlist-btn").forEach(btn => {
-    btn.addEventListener("click", evt => {
+    el.querySelectorAll(".gw-open-wildlist-btn").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
         evt.preventDefault();
         evt.stopPropagation();
 
@@ -838,28 +846,28 @@ function openPartyWildlistPlaceholder() {
         console.log("Opening Wildlist:", id);
 
         openViewer(id);
-    });
+      });
     });
   }
 
   function openCustomBuilder(options = {}) {
-  ensureStyles();
+    ensureStyles();
 
-  const obs = getRecentObs();
-  const builderObs = obs.slice(0, 120);
+    const obs = getRecentObs();
+    const builderObs = obs.slice(0, 120);
 
-  const editingPlaylistId = options.editingPlaylistId || null;
-  const preselectedIds = new Set((options.selectedIds || []).map(String));
+    const editingPlaylistId = options.editingPlaylistId || null;
+    const preselectedIds = new Set((options.selectedIds || []).map(String));
 
-  if (!obs.length) {
-    alert("Refresh Recent Observations first so GridWild has observations to build from.");
-    return;
-  }
+    if (!obs.length) {
+      alert("Refresh Recent Observations first so GridWild has observations to build from.");
+      return;
+    }
 
-  const modal = document.createElement("div");
-  modal.className = "gw-playlist-backdrop";
+    const modal = document.createElement("div");
+    modal.className = "gw-playlist-backdrop";
 
-  modal.innerHTML = `
+    modal.innerHTML = `
     <div class="gw-playlist-modal">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
         <div>
@@ -913,15 +921,16 @@ function openPartyWildlistPlaceholder() {
         gap:10px;
         margin-top:12px;
       ">
-        ${builderObs.map(o => {
-          const img = getObsThumbUrl(o);
-          const name = getWildlistObsName(o);
-          const kingdom = getWildlistKingdom(o);
-          const searchText = getWildlistSearchText(o);
-          const sortName = name.toLowerCase();
-          const sortTime = getWildlistObsTime(o);
+        ${builderObs
+          .map((o) => {
+            const img = getObsThumbUrl(o);
+            const name = getWildlistObsName(o);
+            const kingdom = getWildlistKingdom(o);
+            const searchText = getWildlistSearchText(o);
+            const sortName = name.toLowerCase();
+            const sortTime = getWildlistObsTime(o);
 
-          return `
+            return `
             <label
               class="gw-card gw-custom-wildlist-tile"
               data-obs-id="${esc(o.id)}"
@@ -953,9 +962,10 @@ function openPartyWildlistPlaceholder() {
                 justify-content:center;
                 margin-bottom:8px;
               " data-wildlist-photo-slot data-obs-id="${esc(o.id)}">
-                ${img
-                  ? `<img src="${esc(img)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;">`
-                  : `<span class="gw-muted">No photo</span>`
+                ${
+                  img
+                    ? `<img src="${esc(img)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;">`
+                    : `<span class="gw-muted">No photo</span>`
                 }
               </div>
 
@@ -968,121 +978,121 @@ function openPartyWildlistPlaceholder() {
               </div>
             </label>
           `;
-        }).join("")}
+          })
+          .join("")}
       </div>
 
-      ${obs.length > 120 ? `
+      ${
+        obs.length > 120
+          ? `
         <div class="gw-muted" style="font-size:11px;margin-top:10px;">
           Showing first 120 recent observations.
         </div>
-      ` : ""}
+      `
+          : ""
+      }
     </div>
   `;
 
-  document.body.appendChild(modal);
-  observeWildlistThumbnails(modal);
+    document.body.appendChild(modal);
+    observeWildlistThumbnails(modal);
 
-  const checks = Array.from(modal.querySelectorAll(".gwCustomWildlistObsCheck"));
-  const countEl = modal.querySelector("#gwCustomWildlistCount");
-  const tiles = Array.from(modal.querySelectorAll(".gw-custom-wildlist-tile"));
+    const checks = Array.from(modal.querySelectorAll(".gwCustomWildlistObsCheck"));
+    const countEl = modal.querySelector("#gwCustomWildlistCount");
+    const tiles = Array.from(modal.querySelectorAll(".gw-custom-wildlist-tile"));
 
-  function updateCount() {
-    const n = checks.filter(c => c.checked).length;
-    const shown = tiles.filter(tile => tile.style.display !== "none").length;
-    countEl.textContent = `${n} selected - ${shown} shown`;
+    function updateCount() {
+      const n = checks.filter((c) => c.checked).length;
+      const shown = tiles.filter((tile) => tile.style.display !== "none").length;
+      countEl.textContent = `${n} selected - ${shown} shown`;
+    }
+
+    function getShownChecks() {
+      return checks.filter((c) => c.closest(".gw-custom-wildlist-tile")?.style.display !== "none");
+    }
+
+    checks.forEach((c) => c.addEventListener("change", updateCount));
+    initCustomWildlistFilterBank(modal, updateCount);
+
+    modal.querySelector("#gwSelectAllWildlistObsBtn").onclick = () => {
+      getShownChecks().forEach((c) => (c.checked = true));
+      updateCount();
+    };
+
+    modal.querySelector("#gwClearWildlistObsBtn").onclick = () => {
+      checks.forEach((c) => (c.checked = false));
+      updateCount();
+    };
+
+    modal.querySelector("#gwCustomWildlistCloseBtn").onclick = () => modal.remove();
+
+    modal.querySelector("#gwSaveCustomWildlistBtn").onclick = () => {
+      const selectedIds = checks.filter((c) => c.checked).map((c) => String(c.value));
+
+      if (!selectedIds.length) {
+        alert("Choose at least one observation.");
+        return;
+      }
+
+      const latestById = new Map(getRecentObs().map((o) => [String(o.id), o]));
+      const initialById = new Map(obs.map((o) => [String(o.id), o]));
+      const selected = selectedIds
+        .map((id) => latestById.get(String(id)) || initialById.get(String(id)))
+        .filter(Boolean)
+        .map(compactObs);
+
+      const title =
+        modal.querySelector("#gwCustomWildlistTitle")?.value?.trim() || "Custom Wildlist";
+
+      const description = modal.querySelector("#gwCustomWildlistDescription")?.value?.trim() || "";
+
+      const playlist = savePlaylist({
+        id: editingPlaylistId || undefined,
+        title,
+        description,
+        mode: "custom",
+        template: null,
+        observationIds: selected.map((o) => o.id),
+        snapshotObservations: selected
+      });
+
+      modal.remove();
+      renderSummary();
+      openViewer(playlist.id);
+    };
+
+    modal.onclick = (evt) => {
+      if (evt.target === modal) modal.remove();
+    };
+
+    updateCount();
   }
 
-  function getShownChecks() {
-    return checks.filter(c => c.closest(".gw-custom-wildlist-tile")?.style.display !== "none");
-  }
+  function openCustomBuilderFromPlaylist(playlistId) {
+    const playlist = getById(playlistId);
 
-  checks.forEach(c => c.addEventListener("change", updateCount));
-  initCustomWildlistFilterBank(modal, updateCount);
-
-  modal.querySelector("#gwSelectAllWildlistObsBtn").onclick = () => {
-    getShownChecks().forEach(c => c.checked = true);
-    updateCount();
-  };
-
-  modal.querySelector("#gwClearWildlistObsBtn").onclick = () => {
-    checks.forEach(c => c.checked = false);
-    updateCount();
-  };
-
-  modal.querySelector("#gwCustomWildlistCloseBtn").onclick = () => modal.remove();
-
-  modal.querySelector("#gwSaveCustomWildlistBtn").onclick = () => {
-    const selectedIds = checks
-      .filter(c => c.checked)
-      .map(c => String(c.value));
-
-    if (!selectedIds.length) {
-      alert("Choose at least one observation.");
+    if (!playlist) {
+      alert("Wildlist not found.");
       return;
     }
 
-    const latestById = new Map(getRecentObs().map(o => [String(o.id), o]));
-    const initialById = new Map(obs.map(o => [String(o.id), o]));
-    const selected = selectedIds
-      .map(id => latestById.get(String(id)) || initialById.get(String(id)))
-      .filter(Boolean)
-      .map(compactObs);
-
-    const title =
-      modal.querySelector("#gwCustomWildlistTitle")?.value?.trim() ||
-      "Custom Wildlist";
-
-    const description =
-      modal.querySelector("#gwCustomWildlistDescription")?.value?.trim() ||
-      "";
-
-    const playlist = savePlaylist({
-    id: editingPlaylistId || undefined,
-    title,
-    description,
-    mode: "custom",
-    template: null,
-    observationIds: selected.map(o => o.id),
-    snapshotObservations: selected
+    openCustomBuilder({
+      editingPlaylistId: playlist.id,
+      title: playlist.title,
+      description: playlist.description,
+      selectedIds: playlist.observationIds || []
     });
-
-    modal.remove();
-    renderSummary();
-    openViewer(playlist.id);
-  };
-
-  modal.onclick = evt => {
-    if (evt.target === modal) modal.remove();
-  };
-
-  updateCount();
-}
-
-function openCustomBuilderFromPlaylist(playlistId) {
-  const playlist = getById(playlistId);
-
-  if (!playlist) {
-    alert("Wildlist not found.");
-    return;
   }
 
-  openCustomBuilder({
-    editingPlaylistId: playlist.id,
-    title: playlist.title,
-    description: playlist.description,
-    selectedIds: playlist.observationIds || []
-  });
-}
+  function openCreateMenu() {
+    ensureStyles();
 
-function openCreateMenu() {
-  ensureStyles();
+    const obs = getRecentObs();
 
-  const obs = getRecentObs();
+    const modal = document.createElement("div");
+    modal.className = "gw-playlist-backdrop";
 
-  const modal = document.createElement("div");
-  modal.className = "gw-playlist-backdrop";
-
-  modal.innerHTML = `
+    modal.innerHTML = `
     <div class="gw-playlist-modal">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
         <div>
@@ -1142,7 +1152,8 @@ function openCreateMenu() {
         gap:10px;
         margin-top:12px;
       ">
-        ${WILDLIST_RECIPES.map(r => `
+        ${WILDLIST_RECIPES.map(
+          (r) => `
           <button
             class="gw-card gw-recipe-btn"
             data-recipe-id="${esc(r.id)}"
@@ -1161,61 +1172,68 @@ function openCreateMenu() {
             <div class="gw-muted" style="font-size:11px;line-height:1.35;margin-top:5px;">
               ${esc(r.subtitle)}
             </div>
-            ${r.placeholder ? `
+            ${
+              r.placeholder
+                ? `
               <div class="gw-muted" style="font-size:10px;margin-top:8px;">
                 placeholder
               </div>
-            ` : ""}
+            `
+                : ""
+            }
           </button>
-        `).join("")}
+        `
+        ).join("")}
       </div>
     </div>
   `;
 
-  document.body.appendChild(modal);
+    document.body.appendChild(modal);
 
-  modal.querySelector("#gwRecipeCloseBtn").onclick = () => modal.remove();
+    modal.querySelector("#gwRecipeCloseBtn").onclick = () => modal.remove();
 
-  modal.querySelectorAll(".gw-recipe-btn").forEach(btn => {
-    btn.onclick = () => {
-      const recipeId = btn.dataset.recipeId;
+    modal.querySelectorAll(".gw-recipe-btn").forEach((btn) => {
+      btn.onclick = () => {
+        const recipeId = btn.dataset.recipeId;
 
-      const taxonFilter = modal.querySelector("#gwRecipeTaxonFilter")?.value?.trim() || "";
-      const photosOnly = !!modal.querySelector("#gwRecipePhotosOnly")?.checked;
-      const maxObs = Number(modal.querySelector("#gwRecipeMaxObs")?.value || 60);
+        const taxonFilter = modal.querySelector("#gwRecipeTaxonFilter")?.value?.trim() || "";
+        const photosOnly = !!modal.querySelector("#gwRecipePhotosOnly")?.checked;
+        const maxObs = Number(modal.querySelector("#gwRecipeMaxObs")?.value || 60);
 
-      modal.remove();
+        modal.remove();
 
-      if (recipeId === "custom") {
-        return openCustomBuilder();
-      }
+        if (recipeId === "custom") {
+          return openCustomBuilder();
+        }
 
-      if (recipeId === "party_recent") {
-        return openPartyWildlistPlaceholder();
-      }
+        if (recipeId === "party_recent") {
+          return openPartyWildlistPlaceholder();
+        }
 
-      const playlist = buildTemplatePlaylistWithFilters(recipeId, {
-        taxonFilter,
-        photosOnly,
-        maxObs
-      });
+        const playlist = buildTemplatePlaylistWithFilters(recipeId, {
+          taxonFilter,
+          photosOnly,
+          maxObs
+        });
 
-      renderSummary();
-      openViewer(playlist.id);
+        renderSummary();
+        openViewer(playlist.id);
+      };
+    });
+
+    modal.onclick = (evt) => {
+      if (evt.target === modal) modal.remove();
     };
-  });
 
-  modal.onclick = evt => {
-    if (evt.target === modal) modal.remove();
-  };
-
-  if (!obs.length) {
-    // Allow modal to open, but warn once.
-    setTimeout(() => {
-      alert("Recent observations are empty. Refresh Recent Observations before using observation-based recipes.");
-    }, 100);
+    if (!obs.length) {
+      // Allow modal to open, but warn once.
+      setTimeout(() => {
+        alert(
+          "Recent observations are empty. Refresh Recent Observations before using observation-based recipes."
+        );
+      }, 100);
+    }
   }
-}
 
   function openLibrary() {
     ensureStyles();
@@ -1246,7 +1264,7 @@ function openCreateMenu() {
         </div>
 
         <div class="gw-wildlist-library-list">
-          ${all.map(p => renderLibraryItem(p)).join("")}
+          ${all.map((p) => renderLibraryItem(p)).join("")}
         </div>
       </div>
     `;
@@ -1257,8 +1275,8 @@ function openCreateMenu() {
 
     modal.querySelector("#gwWildlistLibraryCloseBtn").onclick = close;
 
-    modal.querySelectorAll(".gw-wildlist-library-open").forEach(btn => {
-      btn.onclick = evt => {
+    modal.querySelectorAll(".gw-wildlist-library-open").forEach((btn) => {
+      btn.onclick = (evt) => {
         evt.preventDefault();
         const id = btn.dataset.playlistId;
         close();
@@ -1266,8 +1284,8 @@ function openCreateMenu() {
       };
     });
 
-    modal.querySelectorAll(".gw-wildlist-library-share").forEach(btn => {
-      btn.onclick = async evt => {
+    modal.querySelectorAll(".gw-wildlist-library-share").forEach((btn) => {
+      btn.onclick = async (evt) => {
         evt.preventDefault();
         const id = btn.dataset.playlistId;
         const status = getLibraryField(modal, "gw-wildlist-library-status", id);
@@ -1275,29 +1293,31 @@ function openCreateMenu() {
       };
     });
 
-    modal.onclick = evt => {
+    modal.onclick = (evt) => {
       if (evt.target === modal) close();
     };
 
-    modal.addEventListener("keydown", evt => {
+    modal.addEventListener("keydown", (evt) => {
       if (evt.key === "Escape") close();
     });
   }
 
   function getLibraryField(root, className, playlistId) {
-    return Array.from(root.querySelectorAll(`.${className}`))
-      .find(el => String(el.dataset.playlistId) === String(playlistId)) || null;
+    return (
+      Array.from(root.querySelectorAll(`.${className}`)).find(
+        (el) => String(el.dataset.playlistId) === String(playlistId)
+      ) || null
+    );
   }
 
   function renderLibraryItem(playlist) {
     const observations = playlist.snapshotObservations || [];
     const stats = getPlaylistStats(observations);
-    const updated = playlist.updatedAt
-      ? new Date(playlist.updatedAt)
-      : null;
-    const updatedLabel = updated && !Number.isNaN(updated.getTime())
-      ? updated.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
-      : "unknown update";
+    const updated = playlist.updatedAt ? new Date(playlist.updatedAt) : null;
+    const updatedLabel =
+      updated && !Number.isNaN(updated.getTime())
+        ? updated.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
+        : "unknown update";
 
     return `
       <section class="gw-wildlist-library-item" data-playlist-id="${esc(playlist.id)}">
@@ -1355,11 +1375,11 @@ function openCreateMenu() {
       openCreateMenu();
     };
 
-    modal.onclick = evt => {
+    modal.onclick = (evt) => {
       if (evt.target === modal) close();
     };
 
-    modal.addEventListener("keydown", evt => {
+    modal.addEventListener("keydown", (evt) => {
       if (evt.key === "Escape") close();
     });
 
@@ -1389,138 +1409,139 @@ function openCreateMenu() {
     }
   }
 
- function getPlaylistCoverObs(observations, playlist = {}) {
-  if (playlist.coverObsId) {
-    const chosen = observations.find(o => String(o.id) === String(playlist.coverObsId));
-    if (chosen) return chosen;
+  function getPlaylistCoverObs(observations, playlist = {}) {
+    if (playlist.coverObsId) {
+      const chosen = observations.find((o) => String(o.id) === String(playlist.coverObsId));
+      if (chosen) return chosen;
+    }
+
+    return (
+      observations.find((o) => o.photo_medium_url || o.photo_square_url || o.photo_url) ||
+      observations[0] ||
+      null
+    );
   }
 
-  return (
-    observations.find(o => o.photo_medium_url || o.photo_square_url || o.photo_url) ||
-    observations[0] ||
-    null
-  );
-}
+  function getPlaylistStats(observations) {
+    const taxa = new Set();
+    const dates = [];
 
-function getPlaylistStats(observations) {
-  const taxa = new Set();
-  const dates = [];
+    for (const o of observations || []) {
+      const name = o.scientific_name || o.taxon || o.common_name;
+      if (name) taxa.add(name);
 
-  for (const o of observations || []) {
-    const name = o.scientific_name || o.taxon || o.common_name;
-    if (name) taxa.add(name);
+      const raw = o.observed_on || o.created_at;
+      const d = raw ? new Date(raw) : null;
+      if (d && !Number.isNaN(d.getTime())) dates.push(d);
+    }
 
-    const raw = o.observed_on || o.created_at;
-    const d = raw ? new Date(raw) : null;
-    if (d && !Number.isNaN(d.getTime())) dates.push(d);
+    dates.sort((a, b) => a - b);
+
+    const fmt = (d) =>
+      d.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      });
+
+    let dateRange = "Unknown dates";
+    if (dates.length === 1) {
+      dateRange = fmt(dates[0]);
+    } else if (dates.length > 1) {
+      dateRange = `${fmt(dates[0])} – ${fmt(dates[dates.length - 1])}`;
+    }
+
+    return {
+      nObs: observations.length,
+      nTaxa: taxa.size,
+      dateRange
+    };
   }
 
-  dates.sort((a, b) => a - b);
+  function initWildlistMiniMap(playlistId) {
+    const host = document.getElementById("gwWildlistMiniMap");
+    if (!host || !window.L) return;
 
-  const fmt = d => d.toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric"
-  });
+    const playlist = getById(playlistId);
+    const observations = playlist?.snapshotObservations || [];
 
-  let dateRange = "Unknown dates";
-  if (dates.length === 1) {
-    dateRange = fmt(dates[0]);
-  } else if (dates.length > 1) {
-    dateRange = `${fmt(dates[0])} – ${fmt(dates[dates.length - 1])}`;
-  }
+    const pts = observations
+      .filter((o) => Number.isFinite(Number(o.lat)) && Number.isFinite(Number(o.lng)))
+      .map((o) => ({
+        lat: Number(o.lat),
+        lng: Number(o.lng),
+        name: o.taxon || o.common_name || o.scientific_name || "Observation"
+      }));
 
-  return {
-    nObs: observations.length,
-    nTaxa: taxa.size,
-    dateRange
-  };
-}
-
-function initWildlistMiniMap(playlistId) {
-  const host = document.getElementById("gwWildlistMiniMap");
-  if (!host || !window.L) return;
-
-  const playlist = getById(playlistId);
-  const observations = playlist?.snapshotObservations || [];
-
-  const pts = observations
-    .filter(o => Number.isFinite(Number(o.lat)) && Number.isFinite(Number(o.lng)))
-    .map(o => ({
-      lat: Number(o.lat),
-      lng: Number(o.lng),
-      name: o.taxon || o.common_name || o.scientific_name || "Observation"
-    }));
-
-  if (!pts.length) {
-    host.innerHTML = `
+    if (!pts.length) {
+      host.innerHTML = `
       <div class="gw-muted" style="padding:12px;font-size:12px;">
         No mapped coordinates available for this Wildlist yet.
       </div>
     `;
-    return;
-  }
+      return;
+    }
 
-  host.innerHTML = "";
+    host.innerHTML = "";
 
-  const miniMap = L.map(host, {
-    zoomControl: false,
-    attributionControl: false,
-    dragging: true,
-    scrollWheelZoom: false,
-    doubleClickZoom: false,
-    boxZoom: false,
-    keyboard: false,
-    tap: true
-  });
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 20
-  }).addTo(miniMap);
-
-  const group = L.featureGroup();
-
-  pts.forEach(p => {
-    L.circleMarker([p.lat, p.lng], {
-      radius: 5,
-      stroke: true,
-      weight: 1,
-      fillOpacity: 0.85
-    })
-      .bindPopup(p.name)
-      .addTo(group);
-  });
-
-  group.addTo(miniMap);
-
-  const bounds = group.getBounds();
-  miniMap.fitBounds(bounds.pad(0.25), {
-    maxZoom: 18
-  });
-
-  // Draw approximate GridWild cells if helper exists
-  if (typeof window.getCellKeyForLatLng === "function") {
-    const seen = new Set();
-
-    pts.forEach(p => {
-      const key = window.getCellKeyForLatLng(p.lat, p.lng);
-      if (!key || seen.has(key)) return;
-      seen.add(key);
-
-      // Placeholder cell marker for now: circle around occupied grid cell.
-      L.circle([p.lat, p.lng], {
-        radius: 10,
-        weight: 1,
-        fillOpacity: 0.08
-      }).addTo(miniMap);
+    const miniMap = L.map(host, {
+      zoomControl: false,
+      attributionControl: false,
+      dragging: true,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      tap: true
     });
-  }
 
-  setTimeout(() => miniMap.invalidateSize(), 100);
-}
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 20
+    }).addTo(miniMap);
+
+    const group = L.featureGroup();
+
+    pts.forEach((p) => {
+      L.circleMarker([p.lat, p.lng], {
+        radius: 5,
+        stroke: true,
+        weight: 1,
+        fillOpacity: 0.85
+      })
+        .bindPopup(p.name)
+        .addTo(group);
+    });
+
+    group.addTo(miniMap);
+
+    const bounds = group.getBounds();
+    miniMap.fitBounds(bounds.pad(0.25), {
+      maxZoom: 18
+    });
+
+    // Draw approximate GridWild cells if helper exists
+    if (typeof window.getCellKeyForLatLng === "function") {
+      const seen = new Set();
+
+      pts.forEach((p) => {
+        const key = window.getCellKeyForLatLng(p.lat, p.lng);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+
+        // Placeholder cell marker for now: circle around occupied grid cell.
+        L.circle([p.lat, p.lng], {
+          radius: 10,
+          weight: 1,
+          fillOpacity: 0.08
+        }).addTo(miniMap);
+      });
+    }
+
+    setTimeout(() => miniMap.invalidateSize(), 100);
+  }
 
   function openViewer(playlistId) {
-    ensureStyles(); 
+    ensureStyles();
     const playlist = getById(playlistId);
     if (!playlist) {
       alert("Wildlist not found.");
@@ -1529,7 +1550,8 @@ function initWildlistMiniMap(playlistId) {
 
     const observations = playlist.snapshotObservations || [];
     const coverObs = getPlaylistCoverObs(observations, playlist);
-    const coverImg = coverObs?.photo_medium_url || coverObs?.photo_square_url || coverObs?.photo_url || "";
+    const coverImg =
+      coverObs?.photo_medium_url || coverObs?.photo_square_url || coverObs?.photo_url || "";
     const stats = getPlaylistStats(observations);
     const author = window.__gwUser?.username || "unknown";
 
@@ -1545,7 +1567,9 @@ function initWildlistMiniMap(playlistId) {
   background:rgba(0,0,0,0.35);
   margin-bottom:12px;
 ">
-  ${coverImg ? `
+  ${
+    coverImg
+      ? `
     <img src="${esc(coverImg)}" style="
       position:absolute;
       inset:0;
@@ -1554,7 +1578,9 @@ function initWildlistMiniMap(playlistId) {
       object-fit:cover;
       filter:saturate(1.08) contrast(1.03);
     ">
-  ` : ""}
+  `
+      : ""
+  }
 
   <div style="
     position:absolute;
@@ -1640,11 +1666,15 @@ function initWildlistMiniMap(playlistId) {
   </div>
 </div>
 
-        ${playlist.description ? `
+        ${
+          playlist.description
+            ? `
           <div class="gw-muted" style="font-size:13px;line-height:1.4;margin-top:8px;">
             ${esc(playlist.description)}
           </div>
-        ` : ""}
+        `
+            : ""
+        }
 
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px;">
         <button class="gw-mini-btn" id="gwWildlistCopyLinkBtn">Copy Share Link</button>
@@ -1666,33 +1696,33 @@ function initWildlistMiniMap(playlistId) {
     document.body.appendChild(modal);
 
     setTimeout(() => {
-    initWildlistMiniMap(playlist.id);
+      initWildlistMiniMap(playlist.id);
     }, 80);
 
-    modal.querySelectorAll(".gw-wildlist-slide-tile").forEach(tile => {
-    tile.onclick = evt => {
+    modal.querySelectorAll(".gw-wildlist-slide-tile").forEach((tile) => {
+      tile.onclick = (evt) => {
         evt.preventDefault();
         evt.stopPropagation();
 
         const i = Number(tile.dataset.index || 0);
         openSlideshow(playlist.id, i);
-    };
+      };
     });
 
-    modal.querySelectorAll(".gw-set-cover-btn").forEach(btn => {
-    btn.onclick = evt => {
+    modal.querySelectorAll(".gw-set-cover-btn").forEach((btn) => {
+      btn.onclick = (evt) => {
         evt.preventDefault();
         evt.stopPropagation();
 
         const updated = {
-        ...playlist,
-        coverObsId: btn.dataset.obsId
+          ...playlist,
+          coverObsId: btn.dataset.obsId
         };
 
         savePlaylist(updated);
         modal.remove();
         openViewer(playlist.id);
-    };
+      };
     });
 
     modal.querySelector("#gwWildlistCloseBtn").onclick = () => modal.remove();
@@ -1709,36 +1739,36 @@ function initWildlistMiniMap(playlistId) {
     };
 
     modal.querySelector("#gwWildlistEditBtn").onclick = () => {
-    modal.remove();
-    openCustomBuilderFromPlaylist(playlist.id);
+      modal.remove();
+      openCustomBuilderFromPlaylist(playlist.id);
     };
 
-    modal.onclick = evt => {
+    modal.onclick = (evt) => {
       if (evt.target === modal) modal.remove();
     };
   }
 
   function openSlideshow(playlistId, startIndex = 0) {
-  ensureStyles();
+    ensureStyles();
 
-  const playlist = getById(playlistId);
-  if (!playlist) return;
+    const playlist = getById(playlistId);
+    if (!playlist) return;
 
-  const observations = playlist.snapshotObservations || [];
-  if (!observations.length) return;
+    const observations = playlist.snapshotObservations || [];
+    if (!observations.length) return;
 
-  let idx = Math.max(0, Math.min(startIndex, observations.length - 1));
+    let idx = Math.max(0, Math.min(startIndex, observations.length - 1));
 
-  const modal = document.createElement("div");
-  modal.className = "gw-playlist-backdrop";
+    const modal = document.createElement("div");
+    modal.className = "gw-playlist-backdrop";
 
-  function render() {
-    const o = observations[idx];
-    const img = o.photo_medium_url || o.photo_square_url || o.photo_url || "";
-    const name = o.taxon || o.common_name || o.scientific_name || "Unknown taxon";
-    const sci = o.scientific_name || "";
+    function render() {
+      const o = observations[idx];
+      const img = o.photo_medium_url || o.photo_square_url || o.photo_url || "";
+      const name = o.taxon || o.common_name || o.scientific_name || "Unknown taxon";
+      const sci = o.scientific_name || "";
 
-    modal.innerHTML = `
+      modal.innerHTML = `
       <div class="gw-playlist-modal" style="width:min(720px,96vw);">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
           <button class="gw-mini-btn" id="gwSlidePrevBtn">‹ Prev</button>
@@ -1758,9 +1788,10 @@ function initWildlistMiniMap(playlistId) {
           align-items:center;
           justify-content:center;
         ">
-          ${img
-            ? `<img src="${esc(img)}" style="width:100%;max-height:62vh;object-fit:contain;">`
-            : `<div class="gw-muted">No photo</div>`
+          ${
+            img
+              ? `<img src="${esc(img)}" style="width:100%;max-height:62vh;object-fit:contain;">`
+              : `<div class="gw-muted">No photo</div>`
           }
         </div>
 
@@ -1769,11 +1800,15 @@ function initWildlistMiniMap(playlistId) {
             ${esc(name)}
           </div>
 
-          ${sci ? `
+          ${
+            sci
+              ? `
             <div class="gw-muted" style="font-size:13px;margin-top:3px;">
               <i>${esc(sci)}</i>
             </div>
-          ` : ""}
+          `
+              : ""
+          }
 
           <div class="gw-muted" style="font-size:12px;margin-top:6px;">
             ${esc(o.observed_on || "unknown date")}
@@ -1781,67 +1816,69 @@ function initWildlistMiniMap(playlistId) {
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
-          ${o.uri ? `
+          ${
+            o.uri
+              ? `
             <a class="gw-mini-btn" href="${esc(o.uri)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none;">
               Open iNaturalist
             </a>
-          ` : `<button class="gw-mini-btn" disabled>Open iNaturalist</button>`}
+          `
+              : `<button class="gw-mini-btn" disabled>Open iNaturalist</button>`
+          }
 
           <button class="gw-mini-btn" id="gwSlideCloseBtn">Close</button>
         </div>
       </div>
     `;
 
-    modal.querySelector("#gwSlidePrevBtn").onclick = () => {
-      idx = (idx - 1 + observations.length) % observations.length;
-      render();
+      modal.querySelector("#gwSlidePrevBtn").onclick = () => {
+        idx = (idx - 1 + observations.length) % observations.length;
+        render();
+      };
+
+      modal.querySelector("#gwSlideNextBtn").onclick = () => {
+        idx = (idx + 1) % observations.length;
+        render();
+      };
+
+      modal.querySelector("#gwSlideCloseBtn").onclick = () => modal.remove();
+    }
+
+    modal.onclick = (evt) => {
+      if (evt.target === modal) modal.remove();
     };
 
-    modal.querySelector("#gwSlideNextBtn").onclick = () => {
-      idx = (idx + 1) % observations.length;
-      render();
-    };
+    document.body.appendChild(modal);
+    render();
 
-    modal.querySelector("#gwSlideCloseBtn").onclick = () => modal.remove();
+    window.addEventListener("keydown", function onKey(e) {
+      if (!document.body.contains(modal)) {
+        window.removeEventListener("keydown", onKey);
+        return;
+      }
+
+      if (e.key === "ArrowLeft") {
+        idx = (idx - 1 + observations.length) % observations.length;
+        render();
+      }
+
+      if (e.key === "ArrowRight") {
+        idx = (idx + 1) % observations.length;
+        render();
+      }
+
+      if (e.key === "Escape") {
+        modal.remove();
+        window.removeEventListener("keydown", onKey);
+      }
+    });
   }
 
-  modal.onclick = evt => {
-    if (evt.target === modal) modal.remove();
-  };
+  function renderObsTile(o, playlistId = "", index = 0) {
+    const img = o.photo_medium_url || o.photo_square_url || o.photo_url || "";
+    const name = o.taxon || o.common_name || o.scientific_name || "Unknown taxon";
 
-  document.body.appendChild(modal);
-  render();
-
-  window.addEventListener("keydown", function onKey(e) {
-    if (!document.body.contains(modal)) {
-      window.removeEventListener("keydown", onKey);
-      return;
-    }
-
-    if (e.key === "ArrowLeft") {
-      idx = (idx - 1 + observations.length) % observations.length;
-      render();
-    }
-
-    if (e.key === "ArrowRight") {
-      idx = (idx + 1) % observations.length;
-      render();
-    }
-
-    if (e.key === "Escape") {
-      modal.remove();
-      window.removeEventListener("keydown", onKey);
-    }
-  });
-}
-
-
-
-function renderObsTile(o, playlistId = "", index = 0) {
-  const img = o.photo_medium_url || o.photo_square_url || o.photo_url || "";
-  const name = o.taxon || o.common_name || o.scientific_name || "Unknown taxon";
-
-  return `
+    return `
     <div
       class="gw-card gw-wildlist-slide-tile"
       data-playlist-id="${esc(playlistId)}"
@@ -1858,9 +1895,10 @@ function renderObsTile(o, playlistId = "", index = 0) {
         justify-content:center;
         margin-bottom:8px;
       ">
-        ${img
-          ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;">`
-          : `<span class="gw-muted">No photo</span>`
+        ${
+          img
+            ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;">`
+            : `<span class="gw-muted">No photo</span>`
         }
       </div>
 
@@ -1882,7 +1920,7 @@ function renderObsTile(o, playlistId = "", index = 0) {
       </button>
     </div>
   `;
-}
+  }
 
   function handlePlaylistFromUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -1895,84 +1933,76 @@ function renderObsTile(o, playlistId = "", index = 0) {
   }
 
   function addObservationToWildlist(obsId) {
-  const obs = getRecentObs().find(o => String(o.id) === String(obsId));
+    const obs = getRecentObs().find((o) => String(o.id) === String(obsId));
 
-  if (!obs) {
-    alert("Observation not found in recent cache.");
-    return;
-  }
-
-  const all = loadAll();
-
-  if (!all.length) {
-    const playlist = savePlaylist({
-      title: "Custom Wildlist",
-      description: "",
-      mode: "custom",
-      template: null,
-      observationIds: [obs.id],
-      snapshotObservations: [compactObs(obs)]
-    });
-
-    renderSummary();
-    alert(`Added to new Wildlist: ${playlist.title}`);
-    return;
-  }
-
-  const labels = all.map((p, i) =>
-    `${i + 1}. ${p.title} (${(p.snapshotObservations || []).length} obs)`
-  );
-
-  const choice = prompt([
-    "Add to which Wildlist?",
-    "",
-    "0. Create new Wildlist",
-    ...labels
-  ].join("\n"));
-
-  if (choice === null) return;
-
-  let playlist = null;
-
-  if (choice === "0") {
-    const title = prompt("New Wildlist title:", "Custom Wildlist") || "Custom Wildlist";
-    playlist = savePlaylist({
-      title,
-      description: "",
-      mode: "custom",
-      template: null,
-      observationIds: [obs.id],
-      snapshotObservations: [compactObs(obs)]
-    });
-  } else {
-    const idx = Number(choice) - 1;
-    playlist = all[idx];
-
-    if (!playlist) return;
-
-    const ids = new Set((playlist.observationIds || []).map(String));
-    if (ids.has(String(obs.id))) {
-      alert("That observation is already in this Wildlist.");
+    if (!obs) {
+      alert("Observation not found in recent cache.");
       return;
     }
 
-    playlist.observationIds = [...(playlist.observationIds || []), obs.id];
-    playlist.snapshotObservations = [
-      ...(playlist.snapshotObservations || []),
-      compactObs(obs)
-    ];
+    const all = loadAll();
 
-    playlist = savePlaylist(playlist);
+    if (!all.length) {
+      const playlist = savePlaylist({
+        title: "Custom Wildlist",
+        description: "",
+        mode: "custom",
+        template: null,
+        observationIds: [obs.id],
+        snapshotObservations: [compactObs(obs)]
+      });
+
+      renderSummary();
+      alert(`Added to new Wildlist: ${playlist.title}`);
+      return;
+    }
+
+    const labels = all.map(
+      (p, i) => `${i + 1}. ${p.title} (${(p.snapshotObservations || []).length} obs)`
+    );
+
+    const choice = prompt(
+      ["Add to which Wildlist?", "", "0. Create new Wildlist", ...labels].join("\n")
+    );
+
+    if (choice === null) return;
+
+    let playlist = null;
+
+    if (choice === "0") {
+      const title = prompt("New Wildlist title:", "Custom Wildlist") || "Custom Wildlist";
+      playlist = savePlaylist({
+        title,
+        description: "",
+        mode: "custom",
+        template: null,
+        observationIds: [obs.id],
+        snapshotObservations: [compactObs(obs)]
+      });
+    } else {
+      const idx = Number(choice) - 1;
+      playlist = all[idx];
+
+      if (!playlist) return;
+
+      const ids = new Set((playlist.observationIds || []).map(String));
+      if (ids.has(String(obs.id))) {
+        alert("That observation is already in this Wildlist.");
+        return;
+      }
+
+      playlist.observationIds = [...(playlist.observationIds || []), obs.id];
+      playlist.snapshotObservations = [...(playlist.snapshotObservations || []), compactObs(obs)];
+
+      playlist = savePlaylist(playlist);
+    }
+
+    renderSummary();
+    alert(`Added to ${playlist.title}.`);
   }
 
-  renderSummary();
-  alert(`Added to ${playlist.title}.`);
-}
-
   function createFromObservations(observations, options = {}) {
-    const selected = Array.isArray(observations)
-      ? observations.filter(Boolean)
-      : [];
+    const selected = Array.isArray(observations) ? observations.filter(Boolean) : [];
 
     if (!selected.length) {
       alert("No observations selected for this Wildlist.");
@@ -1984,9 +2014,12 @@ function renderObsTile(o, playlistId = "", index = 0) {
       description: options.description || "",
       mode: options.mode || "activity",
       template: options.template || null,
-      observationIds: selected.map(o => o.id),
+      observationIds: selected.map((o) => o.id),
       snapshotObservations: selected.map(compactObs),
-      coverObsId: options.coverObsId || selected.find(o => o.photo_medium_url || o.photo_square_url || o.photo_url)?.id || null
+      coverObsId:
+        options.coverObsId ||
+        selected.find((o) => o.photo_medium_url || o.photo_square_url || o.photo_url)?.id ||
+        null
     });
 
     renderSummary();

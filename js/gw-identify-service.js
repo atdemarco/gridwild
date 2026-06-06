@@ -43,10 +43,7 @@
   }
 
   function claimKey(claim) {
-    return [
-      claim?.questId || "",
-      claim?.observationId || ""
-    ].join("::");
+    return [claim?.questId || "", claim?.observationId || ""].join("::");
   }
 
   function sortClaims(claims) {
@@ -57,7 +54,7 @@
 
   function upsertLocalClaim(claim) {
     const key = claimKey(claim);
-    const next = loadClaims().filter(row => claimKey(row) !== key);
+    const next = loadClaims().filter((row) => claimKey(row) !== key);
     saveClaims(sortClaims([claim, ...next]));
   }
 
@@ -71,7 +68,10 @@
     const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
 
     return {
-      id: row.id || row.id === 0 ? String(row.id) : row.localId || `ident_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      id:
+        row.id || row.id === 0
+          ? String(row.id)
+          : row.localId || `ident_${Date.now()}_${Math.random().toString(16).slice(2)}`,
       serverId: row.id ? String(row.id) : row.serverId || null,
       questId: row.quest_id ?? row.questId ?? null,
       observationId: String(observationIdValue),
@@ -88,7 +88,8 @@
       externalId: row.external_identification_id ?? row.externalId ?? null,
       submittedAt: row.submitted_at ?? row.submittedAt ?? null,
       claimedAt: row.claimed_at ?? row.claimedAt ?? nowISO(),
-      user: payload.user || row.user || window.GridWildINatAuth?.getUsername?.() || "mock-identifier",
+      user:
+        payload.user || row.user || window.GridWildINatAuth?.getUsername?.() || "mock-identifier",
       serverSynced: !!row.id
     };
   }
@@ -100,13 +101,11 @@
   }
 
   function mergeServerClaims(rows = []) {
-    const normalized = (Array.isArray(rows) ? rows : [])
-      .map(normalizeServerClaim)
-      .filter(Boolean);
+    const normalized = (Array.isArray(rows) ? rows : []).map(normalizeServerClaim).filter(Boolean);
     if (!normalized.length) return loadClaims();
 
-    const merged = new Map(loadClaims().map(claim => [claimKey(claim), claim]));
-    normalized.forEach(claim => {
+    const merged = new Map(loadClaims().map((claim) => [claimKey(claim), claim]));
+    normalized.forEach((claim) => {
       const previous = merged.get(claimKey(claim)) || {};
       merged.set(claimKey(claim), {
         ...previous,
@@ -125,12 +124,13 @@
 
     window.__gwState = window.__gwState || {};
     const rows = window.__gwState.questEvidence || [];
-    const next = rows.filter(row =>
-      !(
-        String(row.quest_id) === String(evidenceRow.quest_id) &&
-        String(row.obs_id) === String(evidenceRow.obs_id) &&
-        String(row.source || row.evidence_type || "") === "identification"
-      )
+    const next = rows.filter(
+      (row) =>
+        !(
+          String(row.quest_id) === String(evidenceRow.quest_id) &&
+          String(row.obs_id) === String(evidenceRow.obs_id) &&
+          String(row.source || row.evidence_type || "") === "identification"
+        )
     );
 
     window.__gwState.questEvidence = [evidenceRow, ...next];
@@ -151,10 +151,7 @@
     if (!key) return [];
 
     return loadClaims()
-      .filter(claim =>
-        String(claim.questId || "") === key &&
-        isClaimedStatus(claim.status)
-      )
+      .filter((claim) => String(claim.questId || "") === key && isClaimedStatus(claim.status))
       .sort((a, b) => String(b.claimedAt || "").localeCompare(String(a.claimedAt || "")));
   }
 
@@ -163,24 +160,25 @@
     const id = observationId(obs);
     if (!key || !id) return false;
 
-    return loadClaims().some(claim =>
-      String(claim.questId || "") === key &&
-      String(claim.observationId || "") === id &&
-      isClaimedStatus(claim.status)
+    return loadClaims().some(
+      (claim) =>
+        String(claim.questId || "") === key &&
+        String(claim.observationId || "") === id &&
+        isClaimedStatus(claim.status)
     );
   }
 
   function hasSkippedObservation(obs) {
     const id = observationId(obs);
     if (!id) return false;
-    return loadSkips().some(skip => String(skip.observationId || "") === id);
+    return loadSkips().some((skip) => String(skip.observationId || "") === id);
   }
 
   function skipObservation(obs, reason = "uncertain") {
     const id = observationId(obs);
     if (!id) return null;
 
-    const skips = loadSkips().filter(skip => String(skip.observationId || "") !== id);
+    const skips = loadSkips().filter((skip) => String(skip.observationId || "") !== id);
     const skip = {
       observationId: id,
       observationUri: obs?.uri || obs?.observationUri || null,
@@ -195,7 +193,7 @@
   function clearSkip(obs) {
     const id = observationId(obs);
     if (!id) return;
-    saveSkips(loadSkips().filter(skip => String(skip.observationId || "") !== id));
+    saveSkips(loadSkips().filter((skip) => String(skip.observationId || "") !== id));
   }
 
   function makeLocalClaim(input, submission) {

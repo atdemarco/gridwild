@@ -1,19 +1,16 @@
 const { createClient } = require("@supabase/supabase-js");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false }
+});
 
 const bucket = process.env.GRIDWILD_STORAGE_BUCKET || "gridwild-assets";
 const publicAssetBase = process.env.GRIDWILD_ASSET_PUBLIC_BASE;
 
 function joinPublicUrl(base, storagePath) {
-  return [
-    String(base || "").replace(/\/+$/g, ""),
-    String(storagePath || "").replace(/^\/+/g, ""),
-  ].filter(Boolean).join("/");
+  return [String(base || "").replace(/\/+$/g, ""), String(storagePath || "").replace(/^\/+/g, "")]
+    .filter(Boolean)
+    .join("/");
 }
 
 function publicUrl(storagePath) {
@@ -31,7 +28,8 @@ exports.handler = async function () {
   try {
     const { data: build, error } = await supabase
       .from("gw_asset_builds")
-      .select(`
+      .select(
+        `
         build_id,
         schema_version,
         generated_at,
@@ -44,7 +42,8 @@ exports.handler = async function () {
         n_squares,
         n_superchunks,
         n_observers
-      `)
+      `
+      )
       .eq("is_current", true)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -55,7 +54,7 @@ exports.handler = async function () {
     if (!build) {
       return {
         statusCode: 404,
-        body: JSON.stringify({ error: "No current GridWild asset build found." }),
+        body: JSON.stringify({ error: "No current GridWild asset build found." })
       };
     }
 
@@ -63,7 +62,7 @@ exports.handler = async function () {
       statusCode: 200,
       headers: {
         "content-type": "application/json",
-        "cache-control": "public, max-age=60",
+        "cache-control": "public, max-age=60"
       },
       body: JSON.stringify({
         bucket,
@@ -74,14 +73,14 @@ exports.handler = async function () {
           heat: publicUrl(build.heat_file),
           observerDictionary: publicUrl(build.observer_dictionary_file),
           squareSummary: publicUrl(build.square_summary_file),
-          superchunkBase: publicUrl(build.superchunk_dir),
-        },
-      }),
+          superchunkBase: publicUrl(build.superchunk_dir)
+        }
+      })
     };
   } catch (err) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message }),
+      body: JSON.stringify({ error: err.message })
     };
   }
 };

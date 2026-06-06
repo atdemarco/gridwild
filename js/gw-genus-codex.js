@@ -156,10 +156,10 @@
 
   const CODEX_BASE_URL = "assets/genuscodex/";
   const CODEX_MANIFEST_URL = `${CODEX_BASE_URL}genus-codex-manifest.json`;
-  
+
   const GENERA = {};
   let codexLoadPromise = null;
-  
+
   function basename(path) {
     return String(path || "")
       .replace(/\\/g, "/")
@@ -171,7 +171,6 @@
     if (codexLoadPromise) return codexLoadPromise;
 
     codexLoadPromise = (async () => {
-    
       const manifestResp = await fetch(CODEX_MANIFEST_URL);
 
       if (!manifestResp.ok) {
@@ -181,11 +180,11 @@
       const manifest = await manifestResp.json();
 
       const batchFiles = (manifest.batchFiles || [])
-        .map(row => basename(row.file))
+        .map((row) => basename(row.file))
         .filter(Boolean);
 
       const batches = await Promise.all(
-        batchFiles.map(async file => {
+        batchFiles.map(async (file) => {
           const resp = await fetch(`${CODEX_BASE_URL}${file}`);
           if (!resp.ok) {
             throw new Error(`Failed to load codex batch ${file}: HTTP ${resp.status}`);
@@ -206,8 +205,6 @@
 
     return codexLoadPromise;
   }
-
-
 
   function genus(genus, common, family, badge, fieldMarks, lore, facts, thumbUrl = "") {
     return { genus, common, family, badge, fieldMarks, lore, facts, thumbUrl };
@@ -455,7 +452,7 @@
 
     const clean = normalizeGenus(genusName);
     const rec = GENERA[clean] || makeFallbackGenus(clean || "Unknown");
-    
+
     let idx = 0;
     const slides = rec.lore.slice(0, 3);
     while (slides.length < 3) slides.push("This genus is waiting for a better field note.");
@@ -475,7 +472,7 @@
     function render() {
       const marks = (rec.fieldMarks || [])
         .slice(0, 3)
-        .map(k => FIELD_MARKS[k])
+        .map((k) => FIELD_MARKS[k])
         .filter(Boolean);
 
       card.innerHTML = `
@@ -494,11 +491,15 @@
 
         <div class="gw-codex-section-title">Field marks</div>
         <div class="gw-fieldmark-grid">
-          ${marks.length ? marks.map(renderFieldMark).join("") : renderFieldMark({
-            label: "Placeholder",
-            desc: "Add glossary tokens for this genus.",
-            svg: simpleIconSvg("?", "placeholder")
-          })}
+          ${
+            marks.length
+              ? marks.map(renderFieldMark).join("")
+              : renderFieldMark({
+                  label: "Placeholder",
+                  desc: "Add glossary tokens for this genus.",
+                  svg: simpleIconSvg("?", "placeholder")
+                })
+          }
         </div>
 
         <div class="gw-codex-section-title">Rotating field note</div>
@@ -556,13 +557,13 @@
 
   function listRecords() {
     return Object.values(GENERA)
-      .filter(rec => rec?.genus)
+      .filter((rec) => rec?.genus)
       .sort((a, b) => String(a.genus).localeCompare(String(b.genus)));
   }
 
   function recordFieldMarks(rec, limit = 3) {
     return (rec?.fieldMarks || [])
-      .map(k => FIELD_MARKS[k])
+      .map((k) => FIELD_MARKS[k])
       .filter(Boolean)
       .slice(0, limit);
   }
@@ -570,9 +571,10 @@
   function renderRecordCardHtml(input, options = {}) {
     const rec = typeof input === "string" ? getRecord(input) : input;
     const safeRec = rec?.genus ? rec : makeFallbackGenus("Unknown");
-    const slides = Array.isArray(safeRec.lore) && safeRec.lore.length
-      ? safeRec.lore
-      : ["This genus is waiting for a better field note."];
+    const slides =
+      Array.isArray(safeRec.lore) && safeRec.lore.length
+        ? safeRec.lore
+        : ["This genus is waiting for a better field note."];
     const idx = Math.max(0, Math.min(slides.length - 1, Number(options.slideIndex) || 0));
     const marks = recordFieldMarks(safeRec, Number(options.fieldMarkLimit) || 3);
 
@@ -593,11 +595,15 @@
 
         <div class="gw-codex-section-title">Field marks</div>
         <div class="gw-fieldmark-grid">
-          ${marks.length ? marks.map(renderFieldMark).join("") : renderFieldMark({
-            label: "Placeholder",
-            desc: "Add glossary tokens for this genus.",
-            svg: simpleIconSvg("?", "placeholder")
-          })}
+          ${
+            marks.length
+              ? marks.map(renderFieldMark).join("")
+              : renderFieldMark({
+                  label: "Placeholder",
+                  desc: "Add glossary tokens for this genus.",
+                  svg: simpleIconSvg("?", "placeholder")
+                })
+          }
         </div>
 
         <div class="gw-codex-section-title">Rotating field note</div>
@@ -607,7 +613,8 @@
   }
 
   function selectFact(rec, idx) {
-    const facts = Array.isArray(rec.facts) && rec.facts.length ? rec.facts : ["No factoids loaded yet."];
+    const facts =
+      Array.isArray(rec.facts) && rec.facts.length ? rec.facts : ["No factoids loaded yet."];
     const salt = Math.floor(Date.now() / 45000);
     return facts[(idx + salt) % facts.length];
   }
@@ -618,11 +625,13 @@
   }
 
   function normalizeGenus(s) {
-    return String(s || "")
-      .trim()
-      .replace(/[^A-Za-z]/g, " ")
-      .split(/\s+/)
-      .filter(Boolean)[0] || "";
+    return (
+      String(s || "")
+        .trim()
+        .replace(/[^A-Za-z]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean)[0] || ""
+    );
   }
 
   function extractGenusFromTaxonName(s) {
@@ -825,7 +834,6 @@
     fieldMarks: FIELD_MARKS
   };
 
-    // Intentionally lazy-loaded. The Codex JSON batches are large, so defer them
-    // until the user actually opens a Codex view.
-
+  // Intentionally lazy-loaded. The Codex JSON batches are large, so defer them
+  // until the user actually opens a Codex view.
 })();

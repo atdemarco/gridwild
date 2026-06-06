@@ -39,7 +39,7 @@
   }
 
   function showToast(message) {
-    document.querySelectorAll(".gw-account-toast").forEach(el => el.remove());
+    document.querySelectorAll(".gw-account-toast").forEach((el) => el.remove());
 
     const toast = document.createElement("div");
     toast.className = "gw-account-toast";
@@ -54,15 +54,21 @@
     const session = payload?.session || {};
     const player = payload?.player || null;
 
-    localStorage.setItem(ACCOUNT_KEY, JSON.stringify({
-      username: account.username || "",
-      playerId: player?.id || account.player_id || ""
-    }));
+    localStorage.setItem(
+      ACCOUNT_KEY,
+      JSON.stringify({
+        username: account.username || "",
+        playerId: player?.id || account.player_id || ""
+      })
+    );
 
-    localStorage.setItem(SESSION_KEY, JSON.stringify({
-      token: session.token || "",
-      expiresAt: session.expires_at || ""
-    }));
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({
+        token: session.token || "",
+        expiresAt: session.expires_at || ""
+      })
+    );
 
     if (player?.id) {
       localStorage.setItem(PLAYER_KEY, player.id);
@@ -73,9 +79,11 @@
       window.__gwState.player = player;
     }
 
-    window.dispatchEvent(new CustomEvent("gwAccountChanged", {
-      detail: { account: getAccount(), player }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwAccountChanged", {
+        detail: { account: getAccount(), player }
+      })
+    );
   }
 
   function signOut() {
@@ -89,9 +97,11 @@
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(PLAYER_KEY);
     localStorage.removeItem(PLAYER_SESSION_KEY);
-    window.dispatchEvent(new CustomEvent("gwAccountChanged", {
-      detail: { account: null, player: window.__gwState?.player || null }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwAccountChanged", {
+        detail: { account: null, player: window.__gwState?.player || null }
+      })
+    );
   }
 
   async function post(path, body, timeoutMs = 18000) {
@@ -103,14 +113,18 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {}),
       signal: controller.signal
-    }).catch(err => {
-      if (err?.name === "AbortError") {
-        throw new Error("Account request timed out. Check that the Netlify function is deployed/running, then try again.");
-      }
-      throw err;
-    }).finally(() => {
-      window.clearTimeout(timer);
-    });
+    })
+      .catch((err) => {
+        if (err?.name === "AbortError") {
+          throw new Error(
+            "Account request timed out. Check that the Netlify function is deployed/running, then try again."
+          );
+        }
+        throw err;
+      })
+      .finally(() => {
+        window.clearTimeout(timer);
+      });
 
     const text = await res.text();
     let data = null;
@@ -132,7 +146,8 @@
       username,
       password,
       display_name: displayName,
-      existing_player_id: window.GridWildAPI?.getPlayerId?.() || localStorage.getItem(PLAYER_KEY) || null,
+      existing_player_id:
+        window.GridWildAPI?.getPlayerId?.() || localStorage.getItem(PLAYER_KEY) || null,
       existing_player_session_token: window.GridWildAPI?.getPlayerSessionToken?.() || null
     });
 
@@ -289,7 +304,7 @@
 
   function openModal(mode = "signup") {
     injectStyles();
-    document.querySelectorAll(".gw-account-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".gw-account-backdrop").forEach((el) => el.remove());
 
     const signedIn = getAccount();
     const root = document.createElement("div");
@@ -317,7 +332,7 @@
         showToast("Signed out of GridWild.");
         window.setTimeout(() => window.location.reload(), 900);
       };
-      root.addEventListener("click", e => {
+      root.addEventListener("click", (e) => {
         if (e.target === root) root.remove();
       });
       return;
@@ -436,7 +451,7 @@
       }
     };
 
-    root.addEventListener("click", e => {
+    root.addEventListener("click", (e) => {
       if (e.target === root) root.remove();
     });
 
@@ -476,9 +491,15 @@
   }
 
   function bindButtons(root = document) {
-    root.querySelector("#gwOpenGridWildAccountBtn")?.addEventListener("click", () => openModal("signup"));
-    root.querySelector("#gwCreateGridWildAccountBtn")?.addEventListener("click", () => openModal("signup"));
-    root.querySelector("#gwLoginGridWildAccountBtn")?.addEventListener("click", () => openModal("login"));
+    root
+      .querySelector("#gwOpenGridWildAccountBtn")
+      ?.addEventListener("click", () => openModal("signup"));
+    root
+      .querySelector("#gwCreateGridWildAccountBtn")
+      ?.addEventListener("click", () => openModal("signup"));
+    root
+      .querySelector("#gwLoginGridWildAccountBtn")
+      ?.addEventListener("click", () => openModal("login"));
   }
 
   window.GridWildAccount = {

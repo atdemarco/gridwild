@@ -610,7 +610,7 @@
                   </span>
                 </button>
               `
-            : `<div class="gw-chat-body">${esc(message?.body || "")}</div>`
+              : `<div class="gw-chat-body">${esc(message?.body || "")}</div>`
         }
       </div>
     `;
@@ -648,14 +648,16 @@
   }
 
   function openSharedAttachment(controller, detail = {}) {
-    const localWildlist = detail.kind === "wildlist" && detail.source !== "party"
-      ? window.GridWildPlaylists?.getById?.(detail.id)
-      : null;
-    const localNiche = detail.kind === "niche"
-      ? (window.GridWildLocalNiches?.getNiches?.() || []).find(niche =>
-          String(niche?.id || niche?.source_key || "") === String(detail.id || "")
-        )
-      : null;
+    const localWildlist =
+      detail.kind === "wildlist" && detail.source !== "party"
+        ? window.GridWildPlaylists?.getById?.(detail.id)
+        : null;
+    const localNiche =
+      detail.kind === "niche"
+        ? (window.GridWildLocalNiches?.getNiches?.() || []).find(
+            (niche) => String(niche?.id || niche?.source_key || "") === String(detail.id || "")
+          )
+        : null;
     const opensAppView = Boolean(
       (detail.kind === "wildlist" && detail.source === "party" && detail.id) ||
       localWildlist ||
@@ -694,7 +696,7 @@
   }
 
   function bindMessageAttachments(controller) {
-    controller.container.querySelectorAll("[data-chat-location-open]").forEach(button => {
+    controller.container.querySelectorAll("[data-chat-location-open]").forEach((button) => {
       button.addEventListener("click", () => {
         const detail = {
           lat: Number(button.dataset.lat),
@@ -707,7 +709,7 @@
       });
     });
 
-    controller.container.querySelectorAll("[data-chat-attachment-open]").forEach(button => {
+    controller.container.querySelectorAll("[data-chat-attachment-open]").forEach((button) => {
       button.addEventListener("click", () => {
         const detail = {
           kind: button.dataset.kind || "",
@@ -733,7 +735,7 @@
     controller.messages = Array.isArray(messages) ? messages : [];
 
     list.innerHTML = controller.messages.length
-      ? controller.messages.map(message => renderMessage(message, controller.myPlayerId)).join("")
+      ? controller.messages.map((message) => renderMessage(message, controller.myPlayerId)).join("")
       : `<div class="gw-chat-empty">No messages yet. Start the field conversation.</div>`;
 
     bindMessageAttachments(controller);
@@ -782,7 +784,7 @@
       );
       if (result?.message) {
         renderMessages(controller, [
-          ...controller.messages.filter(row => row.id !== result.message.id),
+          ...controller.messages.filter((row) => row.id !== result.message.id),
           result.message
         ]);
       }
@@ -800,9 +802,11 @@
   }
 
   function setComposerDisabled(controller, disabled) {
-    controller.container.querySelectorAll("[data-chat-input], [data-chat-attachment], [data-chat-send]").forEach(el => {
-      el.disabled = disabled || !controller.options.canSend;
-    });
+    controller.container
+      .querySelectorAll("[data-chat-input], [data-chat-attachment], [data-chat-send]")
+      .forEach((el) => {
+        el.disabled = disabled || !controller.options.canSend;
+      });
   }
 
   function latestLocation() {
@@ -828,11 +832,12 @@
 
     return new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(
-        position => resolve({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracyMeters: position.coords.accuracy
-        }),
+        (position) =>
+          resolve({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracyMeters: position.coords.accuracy
+          }),
         () => reject(new Error("Could not get your current location.")),
         {
           enableHighAccuracy: true,
@@ -857,9 +862,7 @@
         payload: {
           lat: location.lat,
           lng: location.lng,
-          accuracy_meters: Number.isFinite(location.accuracyMeters)
-            ? location.accuracyMeters
-            : null
+          accuracy_meters: Number.isFinite(location.accuracyMeters) ? location.accuracyMeters : null
         }
       });
 
@@ -871,7 +874,7 @@
 
   function getWildlistAttachmentItems() {
     const saved = window.GridWildPlaylists?.loadAll?.() || [];
-    const savedItems = saved.map(wildlist => {
+    const savedItems = saved.map((wildlist) => {
       const count = Array.isArray(wildlist.snapshotObservations)
         ? wildlist.snapshotObservations.length
         : Array.isArray(wildlist.observationIds)
@@ -892,8 +895,8 @@
       ? window.__gwState.partyHistory
       : [];
     const partyItems = history
-      .filter(party => party?.id && (party.status === "ended" || party.ended_at || party.endedAt))
-      .map(party => {
+      .filter((party) => party?.id && (party.status === "ended" || party.ended_at || party.endedAt))
+      .map((party) => {
         const snapshot = window.__gwState?.partySnapshotsById?.[party.id] || {};
         const count = Array.isArray(snapshot.evidence)
           ? snapshot.evidence.length
@@ -915,7 +918,7 @@
     const seen = new Set();
 
     return niches
-      .map(niche => {
+      .map((niche) => {
         const id = cleanText(niche?.id || niche?.source_key);
         if (!id || seen.has(id)) return null;
         seen.add(id);
@@ -935,14 +938,17 @@
   }
 
   function getIdentificationAttachmentItems() {
-    const claims = window.GridWildIdentificationEvidence?.loadClaims?.()
-      || window.__gwState?.identificationClaims
-      || [];
+    const claims =
+      window.GridWildIdentificationEvidence?.loadClaims?.() ||
+      window.__gwState?.identificationClaims ||
+      [];
     const seen = new Set();
 
     return claims
-      .map(claim => {
-        const id = cleanText(claim?.id || claim?.serverId || claim?.observationId || claim?.observation_id);
+      .map((claim) => {
+        const id = cleanText(
+          claim?.id || claim?.serverId || claim?.observationId || claim?.observation_id
+        );
         if (!id || seen.has(id)) return null;
         seen.add(id);
 
@@ -952,7 +958,10 @@
           id,
           source: "identification",
           title: cleanText(
-            claim?.taxonCommonName || claim?.taxon_common_name || claim?.taxonName || claim?.taxon_name,
+            claim?.taxonCommonName ||
+              claim?.taxon_common_name ||
+              claim?.taxonName ||
+              claim?.taxon_name,
             "Identification item"
           ),
           subtitle: ["Identification", confidence, status].filter(Boolean).join(" - ")
@@ -987,16 +996,18 @@
         </div>
         <div class="gw-chat-picker-content">
           <div class="gw-chat-source-grid">
-            ${sources.map(source => {
-              const meta = pickerMeta(source);
-              return `
+            ${sources
+              .map((source) => {
+                const meta = pickerMeta(source);
+                return `
                 <button class="gw-chat-source-btn" type="button" data-chat-source="${esc(source.id)}">
                   <span class="gw-chat-source-icon">${meta.icon || "+"}</span>
                   <span class="gw-chat-source-label">${esc(meta.label || source.id)}</span>
                   <span class="gw-chat-source-hint">${esc(meta.hint || "Share item")}</span>
                 </button>
               `;
-            }).join("")}
+              })
+              .join("")}
           </div>
         </div>
       </section>
@@ -1005,7 +1016,7 @@
     picker.querySelector("[data-chat-picker-close]")?.addEventListener("click", () => {
       closeAttachmentPicker(controller);
     });
-    picker.querySelectorAll("[data-chat-source]").forEach(button => {
+    picker.querySelectorAll("[data-chat-source]").forEach((button) => {
       button.addEventListener("click", async () => {
         const source = attachmentSources.get(button.dataset.chatSource);
         if (!source) return;
@@ -1064,7 +1075,9 @@
 
     content.innerHTML = `
       <div class="gw-chat-picker-list">
-        ${items.map((item, index) => `
+        ${items
+          .map(
+            (item, index) => `
           <button class="gw-chat-picker-item" type="button" data-chat-item="${index}">
             <span class="gw-chat-source-icon">${meta.icon || "+"}</span>
             <span class="gw-chat-picker-item-copy">
@@ -1072,31 +1085,34 @@
               <span class="gw-chat-picker-item-subtitle">${esc(item.subtitle || meta.hint || "Share item")}</span>
             </span>
           </button>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
     `;
 
-    content.querySelectorAll("[data-chat-item]").forEach(button => {
+    content.querySelectorAll("[data-chat-item]").forEach((button) => {
       button.addEventListener("click", async () => {
         const item = items[Number(button.dataset.chatItem)];
         if (!item) return;
 
-        const message = typeof source.toMessage === "function"
-          ? source.toMessage(item, controller)
-          : {
-              message_type: "share",
-              body: cleanText(item.title, meta.label || "Shared item"),
-              payload: {
-                kind: source.kind || source.id,
-                id: cleanText(item.id) || null,
-                source: cleanText(item.source || source.id) || null,
-                title: cleanText(item.title, meta.label || "Shared item"),
-                subtitle: cleanText(item.subtitle) || null,
-                count: finiteNumber(item.count),
-                lat: finiteNumber(item.lat),
-                lng: finiteNumber(item.lng)
-              }
-            };
+        const message =
+          typeof source.toMessage === "function"
+            ? source.toMessage(item, controller)
+            : {
+                message_type: "share",
+                body: cleanText(item.title, meta.label || "Shared item"),
+                payload: {
+                  kind: source.kind || source.id,
+                  id: cleanText(item.id) || null,
+                  source: cleanText(item.source || source.id) || null,
+                  title: cleanText(item.title, meta.label || "Shared item"),
+                  subtitle: cleanText(item.subtitle) || null,
+                  count: finiteNumber(item.count),
+                  lat: finiteNumber(item.lat),
+                  lng: finiteNumber(item.lng)
+                }
+              };
 
         if (await send(controller, message)) {
           closeAttachmentPicker(controller);
@@ -1111,10 +1127,10 @@
 
     const picker = document.createElement("div");
     picker.className = "gw-chat-picker-backdrop";
-    picker.addEventListener("click", event => {
+    picker.addEventListener("click", (event) => {
       if (event.target === picker) closeAttachmentPicker(controller);
     });
-    picker.addEventListener("keydown", event => {
+    picker.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeAttachmentPicker(controller);
     });
 
@@ -1135,21 +1151,26 @@
     if (mapInstance && leaflet) {
       if (mapLocationMarker) mapInstance.removeLayer(mapLocationMarker);
 
-      mapLocationMarker = leaflet.circleMarker([lat, lng], {
-        radius: 10,
-        color: "#fff2c8",
-        weight: 3,
-        fillColor: "#ef9d47",
-        fillOpacity: 0.92
-      })
+      mapLocationMarker = leaflet
+        .circleMarker([lat, lng], {
+          radius: 10,
+          color: "#fff2c8",
+          weight: 3,
+          fillColor: "#ef9d47",
+          fillOpacity: 0.92
+        })
         .addTo(mapInstance)
-        .bindPopup(`<strong>${esc(detail.label || "Shared location")}</strong><br>${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        .bindPopup(
+          `<strong>${esc(detail.label || "Shared location")}</strong><br>${lat.toFixed(5)}, ${lng.toFixed(5)}`
+        );
 
       mapInstance.flyTo([lat, lng], Math.max(mapInstance.getZoom(), 18), { duration: 0.55 });
       mapLocationMarker.openPopup();
     }
 
-    window.dispatchEvent(new CustomEvent("gwChatLocationSelected", { detail: { ...detail, lat, lng } }));
+    window.dispatchEvent(
+      new CustomEvent("gwChatLocationSelected", { detail: { ...detail, lat, lng } })
+    );
     return true;
   }
 
@@ -1157,7 +1178,7 @@
     const form = controller.container.querySelector("[data-chat-composer]");
     const input = controller.container.querySelector("[data-chat-input]");
 
-    form?.addEventListener("submit", async event => {
+    form?.addEventListener("submit", async (event) => {
       event.preventDefault();
       const body = String(input?.value || "").trim();
       if (!body) {

@@ -62,7 +62,9 @@
   }
 
   function parseCellKey(key) {
-    const [ix, iy] = String(key || "").split(",").map(Number);
+    const [ix, iy] = String(key || "")
+      .split(",")
+      .map(Number);
     return Number.isFinite(ix) && Number.isFinite(iy) ? { ix, iy, key: cellKey(ix, iy) } : null;
   }
 
@@ -103,9 +105,7 @@
   function displayMetricsForCell(ix, iy) {
     const key = cellKey(ix, iy);
     const raw =
-      window.__richGridMetrics?.get?.(key) ||
-      window.__staticGridCounts?.get?.(key) ||
-      null;
+      window.__richGridMetrics?.get?.(key) || window.__staticGridCounts?.get?.(key) || null;
 
     if (typeof window.getDisplayMetricsForCell === "function") {
       return window.getDisplayMetricsForCell(ix, iy, raw);
@@ -132,9 +132,7 @@
     if (count <= 0 && species <= 0 && observers <= 0) return 0;
 
     return clamp01(
-      logScale(count, 32) * 0.34 +
-      logScale(species, 24) * 0.50 +
-      logScale(observers, 9) * 0.16
+      logScale(count, 32) * 0.34 + logScale(species, 24) * 0.5 + logScale(observers, 9) * 0.16
     );
   }
 
@@ -217,10 +215,10 @@
       ? 0
       : clamp01(
           intersectedBio * 0.76 +
-          lens * 0.14 +
-          bio * water * 0.10 +
-          landuseBoost(osm) -
-          humanPenalty * 0.42
+            lens * 0.14 +
+            bio * water * 0.1 +
+            landuseBoost(osm) -
+            humanPenalty * 0.42
         );
 
     return {
@@ -261,8 +259,10 @@
       const dx = cell.ix - clickedCell.ix;
       const dy = cell.iy - clickedCell.iy;
       const distance = Math.hypot(dx, dy);
-      const extremity = cell.score + cell.biodiversity * 0.16 + cell.water * cell.biodiversity * 0.08;
-      const tieBreak = hash01(`${clicked.key || cellKey(clickedCell.ix, clickedCell.iy)}:${cell.key}`) * 0.0001;
+      const extremity =
+        cell.score + cell.biodiversity * 0.16 + cell.water * cell.biodiversity * 0.08;
+      const tieBreak =
+        hash01(`${clicked.key || cellKey(clickedCell.ix, clickedCell.iy)}:${cell.key}`) * 0.0001;
       const value = extremity - distance * 0.006 + tieBreak;
       if (value > bestValue) {
         best = cell;
@@ -327,10 +327,7 @@
     const waterAffinity = 1 - Math.abs((seed.water || 0) - (next.water || 0));
     const habitatAffinity = sameHabitat(from, next);
     const taxonAffinity =
-      next.dominantIconic !== "Any" &&
-      next.dominantIconic === seed.dominantIconic
-        ? 0.12
-        : 0;
+      next.dominantIconic !== "Any" && next.dominantIconic === seed.dominantIconic ? 0.12 : 0;
     const localRoadPenalty = Math.max(roadPenalty(from.osm), roadPenalty(next.osm));
     let score =
       next.score * 0.58 +
@@ -375,8 +372,14 @@
     const frontier = [];
     const threshold = clamp(seedState.score * 0.36, 0.075, 0.32);
     const offsets = [
-      [1, 0], [-1, 0], [0, 1], [0, -1],
-      [1, 1], [1, -1], [-1, 1], [-1, -1]
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1]
     ];
 
     function pushNeighbors(from) {
@@ -447,25 +450,27 @@
   function withTimeout(promise, timeoutMs, fallback, label) {
     let settled = false;
     const guarded = Promise.resolve(promise)
-      .then(value => {
+      .then((value) => {
         settled = true;
         return value;
       })
-      .catch(err => {
+      .catch((err) => {
         settled = true;
         console.warn(label || "Cell-seeded niche async step failed.", err);
         return fallback;
       });
 
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       const timer = setTimeout(() => {
         if (!settled) {
-          console.warn(`${label || "Cell-seeded niche async step"} timed out after ${timeoutMs}ms; continuing with fallback.`);
+          console.warn(
+            `${label || "Cell-seeded niche async step"} timed out after ${timeoutMs}ms; continuing with fallback.`
+          );
           resolve(fallback);
         }
       }, timeoutMs);
 
-      guarded.then(value => {
+      guarded.then((value) => {
         clearTimeout(timer);
         resolve(value);
       });
@@ -481,7 +486,7 @@
   function topTaxonEntries(map, limit = 6) {
     return [...map.entries()]
       .map(([name, count]) => ({ name, count }))
-      .filter(entry => entry.count > 0)
+      .filter((entry) => entry.count > 0)
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
       .slice(0, limit);
   }
@@ -561,10 +566,10 @@
   }
 
   function aggregateMetrics(cells, seed, clickedCell, grow) {
-    const counts = cells.map(cell => Number(cell.metrics?.count) || 0);
-    const species = cells.map(cell => Number(cell.metrics?.species || cell.metrics?.genera) || 0);
-    const observers = cells.map(cell => Number(cell.metrics?.observers) || 0);
-    const activeCells = cells.filter(cell => (Number(cell.metrics?.count) || 0) > 0).length;
+    const counts = cells.map((cell) => Number(cell.metrics?.count) || 0);
+    const species = cells.map((cell) => Number(cell.metrics?.species || cell.metrics?.genera) || 0);
+    const observers = cells.map((cell) => Number(cell.metrics?.observers) || 0);
+    const activeCells = cells.filter((cell) => (Number(cell.metrics?.count) || 0) > 0).length;
     const dominantCounts = {};
 
     for (const cell of cells) {
@@ -583,11 +588,11 @@
       }
     }
 
-    const biodiversity = mean(cells.map(cell => cell.biodiversity));
-    const waterBoundary = mean(cells.map(cell => cell.water));
-    const peak = Math.max(...cells.map(cell => cell.score), 0);
-    const roadBounded = cells.filter(cell => roadPenalty(cell.osm) > 0).length;
-    const wetEdgeCells = cells.filter(cell => cell.osm?.isWetEdge).length;
+    const biodiversity = mean(cells.map((cell) => cell.biodiversity));
+    const waterBoundary = mean(cells.map((cell) => cell.water));
+    const peak = Math.max(...cells.map((cell) => cell.score), 0);
+    const roadBounded = cells.filter((cell) => roadPenalty(cell.osm) > 0).length;
+    const wetEdgeCells = cells.filter((cell) => cell.osm?.isWetEdge).length;
 
     return {
       algorithm: ALGORITHM_VERSION,
@@ -634,14 +639,17 @@
 
   function themeFor(metrics) {
     if (metrics.quiet_seed) return "quiet cell";
-    if (metrics.wet_edge_cells > 0 || metrics.water_boundary_score >= 0.36) return "wet-edge biodiversity";
-    if (metrics.road_bounded_cells > 0 || metrics.blocked_edges?.road > 0) return "road-bounded biodiversity";
+    if (metrics.wet_edge_cells > 0 || metrics.water_boundary_score >= 0.36)
+      return "wet-edge biodiversity";
+    if (metrics.road_bounded_cells > 0 || metrics.blocked_edges?.road > 0)
+      return "road-bounded biodiversity";
     if (metrics.biodiversity_score >= 0.34) return "biodiversity patch";
     return "cell-seeded biodiversity";
   }
 
   function typeFor(metrics) {
-    if (metrics.water_boundary_score >= 0.32 || metrics.wet_edge_cells > 0) return "edge_habitat_niche";
+    if (metrics.water_boundary_score >= 0.32 || metrics.wet_edge_cells > 0)
+      return "edge_habitat_niche";
     if (metrics.biodiversity_score >= 0.38 || metrics.species >= 10) return "high_richness_hotspot";
     return "under_sampled_nearby_opportunity";
   }
@@ -650,7 +658,7 @@
     const visible = visibleOsmPlaceContext(seed.center);
     if (visible?.primary_label) return visible;
 
-    const named = [seed, ...cells].find(cell => cell.osm?.nearestPlaceName);
+    const named = [seed, ...cells].find((cell) => cell.osm?.nearestPlaceName);
     if (named?.osm?.nearestPlaceName) {
       return {
         primary_label: named.osm.nearestPlaceName,
@@ -692,17 +700,33 @@
 
   function evidenceFor(metrics, clickedCell, seed) {
     const facts = [];
-    facts.push(`Seeded from global 20 ft cell ${cellKey(clickedCell.ix, clickedCell.iy)}; parsed ${seed.key} as the strongest cell within a 5-cell radius.`);
-    facts.push(`Growth linked ${metrics.component_cell_count} contiguous cell${metrics.component_cell_count === 1 ? "" : "s"} using biodiversity intersected with OSM water-boundary context.`);
-    if (metrics.diagonal_links > 0) facts.push(`${metrics.diagonal_links} diagonal link${metrics.diagonal_links === 1 ? "" : "s"} survived the weak-diagonal penalty.`);
-    if ((metrics.blocked_edges?.road || 0) > 0) facts.push(`${metrics.blocked_edges.road} road-boundary expansion${metrics.blocked_edges.road === 1 ? "" : "s"} were blocked.`);
-    if ((metrics.blocked_edges?.structure || 0) > 0) facts.push(`${metrics.blocked_edges.structure} structure-overlap expansion${metrics.blocked_edges.structure === 1 ? "" : "s"} were cut off.`);
-    if (metrics.quiet_seed) facts.push("No strong biodiversity evidence was cached nearby, so this remains a one-cell quiet niche definition.");
+    facts.push(
+      `Seeded from global 20 ft cell ${cellKey(clickedCell.ix, clickedCell.iy)}; parsed ${seed.key} as the strongest cell within a 5-cell radius.`
+    );
+    facts.push(
+      `Growth linked ${metrics.component_cell_count} contiguous cell${metrics.component_cell_count === 1 ? "" : "s"} using biodiversity intersected with OSM water-boundary context.`
+    );
+    if (metrics.diagonal_links > 0)
+      facts.push(
+        `${metrics.diagonal_links} diagonal link${metrics.diagonal_links === 1 ? "" : "s"} survived the weak-diagonal penalty.`
+      );
+    if ((metrics.blocked_edges?.road || 0) > 0)
+      facts.push(
+        `${metrics.blocked_edges.road} road-boundary expansion${metrics.blocked_edges.road === 1 ? "" : "s"} were blocked.`
+      );
+    if ((metrics.blocked_edges?.structure || 0) > 0)
+      facts.push(
+        `${metrics.blocked_edges.structure} structure-overlap expansion${metrics.blocked_edges.structure === 1 ? "" : "s"} were cut off.`
+      );
+    if (metrics.quiet_seed)
+      facts.push(
+        "No strong biodiversity evidence was cached nearby, so this remains a one-cell quiet niche definition."
+      );
     return facts;
   }
 
   function componentCentroid(cells) {
-    const weights = cells.map(cell => Math.max(0.18, cell.score));
+    const weights = cells.map((cell) => Math.max(0.18, cell.score));
     const weightTotal = sum(weights);
     if (weightTotal <= 0) return cells[0]?.center || null;
 
@@ -716,7 +740,7 @@
   }
 
   function boundaryEdges(cells) {
-    const keys = new Set(cells.map(cell => cell.key));
+    const keys = new Set(cells.map((cell) => cell.key));
     const edges = [];
 
     for (const cell of cells) {
@@ -741,7 +765,7 @@
 
   function geometryForCells(cells) {
     if (!cells.length) return null;
-    const edges = boundaryEdges(cells).map(edge => ({ ...edge, used: false }));
+    const edges = boundaryEdges(cells).map((edge) => ({ ...edge, used: false }));
     const byStart = new Map();
     for (const edge of edges) {
       const start = pointKey(edge.a);
@@ -761,7 +785,7 @@
         ring.push(current.b);
         const nextKey = pointKey(current.b);
         if (nextKey === pointKey(ring[0])) break;
-        const next = (byStart.get(nextKey) || []).find(candidate => !candidate.used);
+        const next = (byStart.get(nextKey) || []).find((candidate) => !candidate.used);
         if (!next) break;
         next.used = true;
         current = next;
@@ -773,10 +797,10 @@
     }
 
     if (!rings.length) {
-      const minIx = Math.min(...cells.map(cell => cell.ix));
-      const maxIx = Math.max(...cells.map(cell => cell.ix));
-      const minIy = Math.min(...cells.map(cell => cell.iy));
-      const maxIy = Math.max(...cells.map(cell => cell.iy));
+      const minIx = Math.min(...cells.map((cell) => cell.ix));
+      const maxIx = Math.max(...cells.map((cell) => cell.ix));
+      const minIy = Math.min(...cells.map((cell) => cell.iy));
+      const maxIy = Math.max(...cells.map((cell) => cell.iy));
       rings.push([
         gridCornerLngLat(minIx, minIy),
         gridCornerLngLat(maxIx + 1, minIy),
@@ -794,13 +818,19 @@
   }
 
   function sourceKeyFor(clickedCell, seed, metrics) {
-    const filterHash = shortHash(`${metrics.active_lens}|${metrics.heat_metric}|${metrics.filter_signature}`);
+    const filterHash = shortHash(
+      `${metrics.active_lens}|${metrics.heat_metric}|${metrics.filter_signature}`
+    );
     return `cell-seeded:${ALGORITHM_VERSION}:${filterHash}:${cellKey(clickedCell.ix, clickedCell.iy)}:${seed.key}`;
   }
 
   function titleFor(metrics, placeContext) {
     const place = placeContext?.primary_label || "this cell";
-    const focus = metrics.primary_taxa_label || (metrics.dominant_iconic && metrics.dominant_iconic !== "Any" ? metrics.dominant_iconic : "life");
+    const focus =
+      metrics.primary_taxa_label ||
+      (metrics.dominant_iconic && metrics.dominant_iconic !== "Any"
+        ? metrics.dominant_iconic
+        : "life");
     if (metrics.quiet_seed) return `Mark quiet cell near ${place}`;
     if (metrics.water_boundary_score >= 0.36) return `Trace wet-edge ${focus} near ${place}`;
     if (metrics.road_bounded_cells > 0) return `Sample road-bounded ${focus} near ${place}`;
@@ -815,7 +845,8 @@
   function featureKindLabel(kind, feature) {
     const tags = feature?.tags || {};
     if (kind === "water") return tags.waterway ? "stream / waterway" : "waterbody";
-    if (kind === "parks") return tags.leisure === "garden" ? "garden / park" : "park / natural feature";
+    if (kind === "parks")
+      return tags.leisure === "garden" ? "garden / park" : "park / natural feature";
     if (kind === "trails") return "trail / path";
     if (kind === "buildings") return "building / campus feature";
     return kind;
@@ -835,9 +866,9 @@
     if (!center || typeof L === "undefined") return null;
     const groups = window.GridWildOsmFeaturesLayer?.getFeatures?.() || {};
     const priority = [
-      { kind: "buildings", maxM: 70, base: 0.90 },
+      { kind: "buildings", maxM: 70, base: 0.9 },
       { kind: "water", maxM: 110, base: 0.86 },
-      { kind: "parks", maxM: 150, base: 0.80 },
+      { kind: "parks", maxM: 150, base: 0.8 },
       { kind: "trails", maxM: 95, base: 0.78 }
     ];
     const candidates = [];
@@ -869,10 +900,13 @@
       nearby_poi: best.kind === "buildings" ? best.label : null,
       osm_feature_ids: [best.feature.id].filter(Boolean),
       spatial_relation:
-        best.kind === "water" ? "beside" :
-        best.kind === "trails" ? "along" :
-        best.kind === "buildings" && best.distanceM < 30 ? "at" :
-        "near",
+        best.kind === "water"
+          ? "beside"
+          : best.kind === "trails"
+            ? "along"
+            : best.kind === "buildings" && best.distanceM < 30
+              ? "at"
+              : "near",
       distance_m: Math.round(best.distanceM),
       centroid: center,
       label_confidence: Number(best.confidence.toFixed(2)),
@@ -889,9 +923,9 @@
     const title = titleFor(metrics, placeContext);
     const confidence = clamp01(
       0.28 +
-      metrics.biodiversity_score * 0.38 +
-      metrics.water_boundary_score * 0.18 +
-      Math.min(0.16, metrics.active_cells / Math.max(1, metrics.component_cell_count) * 0.16)
+        metrics.biodiversity_score * 0.38 +
+        metrics.water_boundary_score * 0.18 +
+        Math.min(0.16, (metrics.active_cells / Math.max(1, metrics.component_cell_count)) * 0.16)
     );
 
     return {
@@ -904,7 +938,7 @@
       centroid_lat: centroid.lat,
       centroid_lng: centroid.lng,
       geometry: geometryForCells(cells),
-      grid_cell_ids: cells.map(cell => cell.key),
+      grid_cell_ids: cells.map((cell) => cell.key),
       radius_m: Math.round(Math.max(12, Math.sqrt(Math.max(1, cells.length)) * GRID_SIZE_M * 0.82)),
       scale_level: `cell-seeded:${cells.length > 4 ? "patch" : "micro"}`,
       taxon_focus: taxonFocusFor(metrics),
@@ -923,7 +957,9 @@
       novelty_score: clamp01(0.66 - confidence * 0.34 + (metrics.quiet_seed ? 0.18 : 0)),
       sampling_need_score: clamp01(1 - metrics.activeRatio * 0.72),
       biodiversity_score: clamp01(metrics.biodiversity_score),
-      questability_score: clamp01(confidence * 0.62 + Math.min(0.34, metrics.component_cell_count / 28)),
+      questability_score: clamp01(
+        confidence * 0.62 + Math.min(0.34, metrics.component_cell_count / 28)
+      ),
       place_context: placeContext,
       primary_place_label: placeContext.primary_label || null,
       secondary_place_label: null,
@@ -948,46 +984,60 @@
   }
 
   async function hydrateNicheCreationTaxa(niche) {
-    const loadSquareRecord = typeof getSquareGeneraRecord === "function"
-      ? getSquareGeneraRecord
-      : window.getSquareGeneraRecord;
+    const loadSquareRecord =
+      typeof getSquareGeneraRecord === "function"
+        ? getSquareGeneraRecord
+        : window.getSquareGeneraRecord;
     if (!niche || typeof loadSquareRecord !== "function") return niche;
 
-    const cells = (niche.grid_cell_ids || [])
-      .map(parseCellKey)
-      .filter(Boolean)
-      .slice(0, 140);
+    const cells = (niche.grid_cell_ids || []).map(parseCellKey).filter(Boolean).slice(0, 140);
     if (!cells.length) return niche;
 
     try {
-      const records = (await Promise.all(
-        cells.map(cell => loadSquareRecord(cell.ix, cell.iy).catch(() => null))
-      )).filter(Boolean);
+      const records = (
+        await Promise.all(cells.map((cell) => loadSquareRecord(cell.ix, cell.iy).catch(() => null)))
+      ).filter(Boolean);
       if (!records.length) return niche;
 
       const { rowCount, iconicCounts, summary } = taxonomySummaryFromRecords(records);
       const mergedMetrics = window.GWMetrics?.mergeSquareMetrics?.(records) || null;
       const primaryTaxon = primaryTaxonFromSummary(summary);
-      const dominantIconic = Object.entries(iconicCounts)
-        .sort((a, b) => b[1] - a[1])[0]?.[0] ||
+      const dominantIconic =
+        Object.entries(iconicCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
         mergedMetrics?.dominant_iconic ||
         niche.metrics?.dominant_iconic ||
         "Any";
 
       const metrics = {
         ...(niche.metrics || {}),
-        ...(mergedMetrics ? {
-          count: Math.max(Number(niche.metrics?.count) || 0, Number(mergedMetrics.count) || 0),
-          species: Math.max(Number(niche.metrics?.species) || 0, Number(mergedMetrics.species || mergedMetrics.genera) || 0),
-          observers: Math.max(Number(niche.metrics?.observers) || 0, Number(mergedMetrics.observers) || 0),
-          month_totals: mergedMetrics.month_totals || niche.metrics?.month_totals,
-          peak_month: mergedMetrics.peak_month || niche.metrics?.peak_month,
-          seasonal_strength: mergedMetrics.seasonal_strength ?? niche.metrics?.seasonal_strength,
-          last_observed: mergedMetrics.last_observed || niche.metrics?.last_observed,
-          median_last10_observed: mergedMetrics.median_last10_observed || niche.metrics?.median_last10_observed,
-          last_observed_ms: Number(mergedMetrics.last_observed_ms) || Number(niche.metrics?.last_observed_ms) || 0,
-          median_last10_observed_ms: Number(mergedMetrics.median_last10_observed_ms) || Number(niche.metrics?.median_last10_observed_ms) || 0
-        } : {}),
+        ...(mergedMetrics
+          ? {
+              count: Math.max(Number(niche.metrics?.count) || 0, Number(mergedMetrics.count) || 0),
+              species: Math.max(
+                Number(niche.metrics?.species) || 0,
+                Number(mergedMetrics.species || mergedMetrics.genera) || 0
+              ),
+              observers: Math.max(
+                Number(niche.metrics?.observers) || 0,
+                Number(mergedMetrics.observers) || 0
+              ),
+              month_totals: mergedMetrics.month_totals || niche.metrics?.month_totals,
+              peak_month: mergedMetrics.peak_month || niche.metrics?.peak_month,
+              seasonal_strength:
+                mergedMetrics.seasonal_strength ?? niche.metrics?.seasonal_strength,
+              last_observed: mergedMetrics.last_observed || niche.metrics?.last_observed,
+              median_last10_observed:
+                mergedMetrics.median_last10_observed || niche.metrics?.median_last10_observed,
+              last_observed_ms:
+                Number(mergedMetrics.last_observed_ms) ||
+                Number(niche.metrics?.last_observed_ms) ||
+                0,
+              median_last10_observed_ms:
+                Number(mergedMetrics.median_last10_observed_ms) ||
+                Number(niche.metrics?.median_last10_observed_ms) ||
+                0
+            }
+          : {}),
         iconic_counts: {
           ...(niche.metrics?.iconic_counts || {}),
           ...iconicCounts
@@ -1048,7 +1098,8 @@
       }
       if (!metrics.primary_taxa_label && niche.metrics?.primary_taxa_label) {
         metrics.primary_taxa_label = niche.metrics.primary_taxa_label;
-        metrics.primary_taxa_rank = niche.metrics.primary_taxa_rank || metrics.primary_taxa_rank || null;
+        metrics.primary_taxa_rank =
+          niche.metrics.primary_taxa_rank || metrics.primary_taxa_rank || null;
       }
       const title = titleFor(metrics, row.place_context || niche.place_context);
       return {
@@ -1083,7 +1134,7 @@
   }
 
   function waitForPaint() {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(resolve));
     });
   }
@@ -1143,13 +1194,17 @@
         select: true
       });
       window.GridWildHudTaxaFilter?.sync?.();
-      persistPlantedNiche(hydrated).catch(err => {
+      persistPlantedNiche(hydrated).catch((err) => {
         console.warn("Cell-seeded niche background persistence failed.", err);
       });
 
       if (typeof window.showGridWildToast === "function") {
-        const n = Number(hydrated.metrics?.component_cell_count || hydrated.grid_cell_ids?.length || 1);
-        window.showGridWildToast(`Niche parsed from ${hydrated.metrics?.parsed_seed_cell || clickedCell.key}: ${n} cell${n === 1 ? "" : "s"}`);
+        const n = Number(
+          hydrated.metrics?.component_cell_count || hydrated.grid_cell_ids?.length || 1
+        );
+        window.showGridWildToast(
+          `Niche parsed from ${hydrated.metrics?.parsed_seed_cell || clickedCell.key}: ${n} cell${n === 1 ? "" : "s"}`
+        );
       }
 
       return hydrated;
@@ -1302,7 +1357,10 @@
     if (map.getZoom() < MIN_SPARKLE_ZOOM) return [];
     const bounds = viewportCellBounds(1);
     const bucket = Math.floor(Date.now() / SPARKLE_BUCKET_MS);
-    const count = Math.max(1, (bounds.maxIx - bounds.minIx + 1) * (bounds.maxIy - bounds.minIy + 1));
+    const count = Math.max(
+      1,
+      (bounds.maxIx - bounds.minIx + 1) * (bounds.maxIy - bounds.minIy + 1)
+    );
     const stride = count > 7500 ? 3 : count > 3200 ? 2 : 1;
     const candidates = [];
 
@@ -1325,9 +1383,7 @@
     }
 
     const maxSparkles = clamp(Math.round(Math.sqrt(count) * 0.6), 4, 28);
-    return candidates
-      .sort((a, b) => b.score - a.score)
-      .slice(0, maxSparkles);
+    return candidates.sort((a, b) => b.score - a.score).slice(0, maxSparkles);
   }
 
   function renderSparklesNow() {
@@ -1371,7 +1427,8 @@
     const bounds = viewportCellBounds(1);
     const bucket = Math.floor(Date.now() / SPARKLE_BUCKET_MS);
     const signature = sparkleSignature(bounds, bucket);
-    if (signature === state.lastSparkleSignature && state.sparkleLayer?.getLayers?.().length) return;
+    if (signature === state.lastSparkleSignature && state.sparkleLayer?.getLayers?.().length)
+      return;
     state.lastSparkleSignature = signature;
 
     if (state.sparkleRaf) return;
@@ -1384,9 +1441,11 @@
     try {
       localStorage.setItem(SPARKLE_STORAGE_KEY, state.sparkleVisible ? "1" : "0");
     } catch {}
-    window.dispatchEvent(new CustomEvent("gridwild:nichesparklechange", {
-      detail: { showNicheSparkles: state.sparkleVisible }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gridwild:nichesparklechange", {
+        detail: { showNicheSparkles: state.sparkleVisible }
+      })
+    );
   }
 
   function loadSparkleVisible() {

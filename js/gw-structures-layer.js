@@ -70,24 +70,21 @@
     const z = map.getZoom();
 
     // Coarse key prevents refetching on tiny pans.
-    return [
-      z,
-      c.lat.toFixed(4),
-      c.lng.toFixed(4)
-    ].join("|");
+    return [z, c.lat.toFixed(4), c.lng.toFixed(4)].join("|");
   }
 
-
   function buildOverpassQuery() {
-  const bbox = getBboxString();
-  const showBuildings = window.__gwState?.showOsmBuildings ?? true;
+    const bbox = getBboxString();
+    const showBuildings = window.__gwState?.showOsmBuildings ?? true;
 
-  const buildingQuery = showBuildings ? `
+    const buildingQuery = showBuildings
+      ? `
         way["building"](${bbox});
         relation["building"](${bbox});
-  ` : "";
+  `
+      : "";
 
-  return `
+    return `
     [out:json][timeout:25];
     (
       ${buildingQuery}
@@ -111,16 +108,15 @@
     );
     out geom;
   `;
-}
-
+  }
 
   function buildOverpassQueryORIG() {
     const bbox = getBboxString();
 
     // Ways and relations tagged building=* inside current bbox.
     // out geom returns node geometry directly. Overpass supports bbox queries
-    // and out geom for map display/export workflows. 
-    // See Overpass examples / QL docs. 
+    // and out geom for map display/export workflows.
+    // See Overpass examples / QL docs.
     return `
       [out:json][timeout:20];
       (
@@ -138,8 +134,8 @@
       if (!Array.isArray(el.geometry) || el.geometry.length < 3) continue;
 
       const pts = el.geometry
-        .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
-        .map(p => L.latLng(p.lat, p.lon));
+        .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+        .map((p) => L.latLng(p.lat, p.lon));
 
       if (pts.length < 3) continue;
 
@@ -204,23 +200,23 @@
     ctx.closePath();
 
     //ctx.fillStyle = "rgba(92, 82, 68, 0.58)";
-  //  ctx.strokeStyle = "rgba(255, 235, 190, 0.72)";
-//    ctx.lineWidth = 1.4;
+    //  ctx.strokeStyle = "rgba(255, 235, 190, 0.72)";
+    //    ctx.lineWidth = 1.4;
 
     ctx.fillStyle = "rgba(170, 160, 145, 0.36)";
     ctx.strokeStyle = "rgba(255, 248, 220, 0.88)";
-    
+
     // ctx.fillStyle = "rgba(210,205,195,0.18)";
-  //  ctx.fillStyle = "rgba(210,205,195,0.36)";
+    //  ctx.fillStyle = "rgba(210,205,195,0.36)";
     ctx.strokeStyle = "rgba(255,250,235,0.82)";
     ctx.lineWidth = 1.2;
 
     ctx.fill();
 
     // how to make htis look nicer VVV
-  //  ctx.shadowColor = "rgba(255,255,255,0.36)";
+    //  ctx.shadowColor = "rgba(255,255,255,0.36)";
     //ctx.shadowBlur = 3;
-//    ctx.shadowBlur = 0;
+    //    ctx.shadowBlur = 0;
 
     ctx.stroke();
   }

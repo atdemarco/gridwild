@@ -14,7 +14,7 @@ const intentionalPublicServiceRoleFunctions = new Set([
 const failures = [];
 const protectedFunctions = [];
 
-for (const name of fs.readdirSync(functionsDir).filter(name => name.endsWith(".js"))) {
+for (const name of fs.readdirSync(functionsDir).filter((name) => name.endsWith(".js"))) {
   const content = fs.readFileSync(path.join(functionsDir, name), "utf8");
   if (!content.includes("exports.handler")) continue;
   if (!content.includes("SUPABASE_SERVICE_ROLE_KEY")) continue;
@@ -31,7 +31,7 @@ for (const name of fs.readdirSync(functionsDir).filter(name => name.endsWith(".j
       ...[
         handler.indexOf("authorizePlayerRequest"),
         handler.indexOf("requireAccountSession")
-      ].filter(index => index >= 0)
+      ].filter((index) => index >= 0)
     );
     const firstQueryIndex = handler.indexOf(".from(");
 
@@ -54,11 +54,11 @@ if (!apiContent.includes("getPlayerSessionToken()")) {
 
 if (failures.length) {
   console.error("Function authorization audit failed:");
-  failures.forEach(failure => console.error(`- ${failure}`));
+  failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
 
 console.log(
   `Function authorization audit passed: ${protectedFunctions.length} service-role endpoints protected; ` +
-  `${intentionalPublicServiceRoleFunctions.size} intentionally public.`
+    `${intentionalPublicServiceRoleFunctions.size} intentionally public.`
 );

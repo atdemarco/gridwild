@@ -1,10 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
@@ -36,7 +33,7 @@ exports.handler = async function (event) {
 
     const locationConfig = {
       locationMode: safeLocationMode,
-      locationUserId: safeLocationMode === "user" ? (location_user_id || "self") : null,
+      locationUserId: safeLocationMode === "user" ? location_user_id || "self" : null,
       location: safeLocationMode === "location" ? location : null,
       resolvedLocation: resolved_location || null
     };
@@ -53,11 +50,11 @@ exports.handler = async function (event) {
         target: Number(target || 10),
         location_mode: safeLocationMode,
         location_user_id: locationConfig.locationUserId,
-        location_label: location_label || (
-          safeLocationMode === "anywhere"
+        location_label:
+          location_label ||
+          (safeLocationMode === "anywhere"
             ? "Anywhere"
-            : location?.label || resolved_location?.label || null
-        ),
+            : location?.label || resolved_location?.label || null),
         location_config: locationConfig,
         lat: Number.isFinite(Number(lat)) ? Number(lat) : null,
         lng: Number.isFinite(Number(lng)) ? Number(lng) : null
@@ -67,13 +64,11 @@ exports.handler = async function (event) {
 
     if (partyError) throw partyError;
 
-    const { error: memberError } = await supabase
-      .from("party_members")
-      .insert({
-        party_id: party.id,
-        player_id,
-        role: "leader"
-      });
+    const { error: memberError } = await supabase.from("party_members").insert({
+      party_id: party.id,
+      player_id,
+      role: "leader"
+    });
 
     if (memberError) throw memberError;
 

@@ -37,10 +37,7 @@
   }
 
   function isSignedIn() {
-    return Boolean(
-      window.GridWildAPI?.getPlayerId?.() &&
-      window.GridWildAPI?.getSessionToken?.()
-    );
+    return Boolean(window.GridWildAPI?.getPlayerId?.() && window.GridWildAPI?.getSessionToken?.());
   }
 
   function myPlayerId() {
@@ -52,17 +49,21 @@
   }
 
   function firstName(name) {
-    return String(name || "Explorer").trim().split(/\s+/)[0] || "Explorer";
+    return (
+      String(name || "Explorer")
+        .trim()
+        .split(/\s+/)[0] || "Explorer"
+    );
   }
 
   function targetPlayerId(context = {}) {
     return String(
       context.targetPlayerId ||
-      context.target_player_id ||
-      context.player_id ||
-      context.presence?.player_id ||
-      context.player?.id ||
-      ""
+        context.target_player_id ||
+        context.player_id ||
+        context.presence?.player_id ||
+        context.player?.id ||
+        ""
     );
   }
 
@@ -71,11 +72,13 @@
   }
 
   function targetParty(context = {}) {
-    return context.active_party ||
+    return (
+      context.active_party ||
       context.activeParty ||
       context.presence?.active_party ||
       context.data?.active_party ||
-      null;
+      null
+    );
   }
 
   function currentParty() {
@@ -91,14 +94,17 @@
   }
 
   function isTargetBlocked(targetId) {
-    return state.blocks.some(row => String(row.blocked_player_id) === String(targetId));
+    return state.blocks.some((row) => String(row.blocked_player_id) === String(targetId));
   }
 
   function conversationForTarget(targetId) {
-    return state.conversations.find(row =>
-      String(row.sender_player_id) === String(targetId) ||
-      String(row.recipient_player_id) === String(targetId)
-    ) || null;
+    return (
+      state.conversations.find(
+        (row) =>
+          String(row.sender_player_id) === String(targetId) ||
+          String(row.recipient_player_id) === String(targetId)
+      ) || null
+    );
   }
 
   function injectStyles() {
@@ -403,10 +409,13 @@
     return `
       <div class="gw-avatar-panel-section" data-gw-player-interactions-section>
         <div class="gw-avatar-section-title">Interactions</div>
-        ${blocked
-          ? `<div class="gw-player-interaction-note">This player is blocked.</div>`
-          : `<div class="gw-player-interaction-actions">
-              ${actions.map(action => `
+        ${
+          blocked
+            ? `<div class="gw-player-interaction-note">This player is blocked.</div>`
+            : `<div class="gw-player-interaction-actions">
+              ${actions
+                .map(
+                  (action) => `
                 <button
                   class="gw-player-action-btn${action.danger ? " is-danger" : ""}"
                   type="button"
@@ -414,7 +423,9 @@
                 >
                   ${esc(action.label)}
                 </button>
-              `).join("")}
+              `
+                )
+                .join("")}
             </div>`
         }
       </div>
@@ -422,7 +433,7 @@
   }
 
   function setButtonsBusy(root, busy) {
-    root.querySelectorAll("[data-gw-player-action]").forEach(button => {
+    root.querySelectorAll("[data-gw-player-action]").forEach((button) => {
       button.disabled = !!busy;
     });
   }
@@ -491,7 +502,9 @@
         await refresh({ quiet: true });
         toast(`Party request sent to ${theirName}.`);
       } else if (action === "block") {
-        const ok = window.confirm?.(`Block ${theirName}? They will disappear from nearby HUD presence and cannot chat with you.`);
+        const ok = window.confirm?.(
+          `Block ${theirName}? They will disappear from nearby HUD presence and cannot chat with you.`
+        );
         if (!ok) return;
         await window.GridWildAPI.blockPlayer(targetId);
         await refresh({ quiet: true });
@@ -508,7 +521,7 @@
   }
 
   function bindAvatarActions(root = document, context = {}) {
-    root.querySelectorAll("[data-gw-player-action]").forEach(button => {
+    root.querySelectorAll("[data-gw-player-action]").forEach((button) => {
       if (button.dataset.gwPlayerActionBound === "true") return;
       button.dataset.gwPlayerActionBound = "true";
       button.addEventListener("click", () => {
@@ -523,14 +536,19 @@
     const party = row.party?.name || row.payload?.party_name || "party";
 
     if (row.status === "declined") {
-      if (row.type === "chat_request") return ["Chat request declined", `${recipient} declined the chat request.`];
-      if (row.type === "party_invite") return ["Party invite declined", `${recipient} declined the invite to ${party}.`];
-      if (row.type === "party_join_request") return ["Party request declined", `${recipient} declined the request to join ${party}.`];
+      if (row.type === "chat_request")
+        return ["Chat request declined", `${recipient} declined the chat request.`];
+      if (row.type === "party_invite")
+        return ["Party invite declined", `${recipient} declined the invite to ${party}.`];
+      if (row.type === "party_join_request")
+        return ["Party request declined", `${recipient} declined the request to join ${party}.`];
     }
 
-    if (row.type === "chat_request") return ["Chat request", `${sender} wants to start a private chat.`];
+    if (row.type === "chat_request")
+      return ["Chat request", `${sender} wants to start a private chat.`];
     if (row.type === "party_invite") return ["Party invite", `${sender} invited you to ${party}.`];
-    if (row.type === "party_join_request") return ["Party request", `${sender} wants to join ${party}.`];
+    if (row.type === "party_join_request")
+      return ["Party request", `${sender} wants to join ${party}.`];
 
     return ["Notification", "New player interaction."];
   }
@@ -622,9 +640,10 @@
           <button class="gw-player-inbox-action" type="button" data-gw-inbox-close>Close</button>
         </div>
         <div class="gw-player-inbox-list">
-          ${count
-            ? state.notifications.map(renderNotification).join("")
-            : `<div class="gw-player-inbox-item">
+          ${
+            count
+              ? state.notifications.map(renderNotification).join("")
+              : `<div class="gw-player-inbox-item">
                 <div class="gw-player-inbox-item-title">Inbox clear</div>
                 <div class="gw-player-inbox-item-copy">Chat and party requests will appear here.</div>
               </div>`
@@ -683,7 +702,7 @@
       renderHud();
     });
 
-    root.querySelectorAll("[data-gw-interaction-response]").forEach(button => {
+    root.querySelectorAll("[data-gw-interaction-response]").forEach((button) => {
       button.addEventListener("click", () => handleNotificationResponse(button));
     });
   }
@@ -696,9 +715,12 @@
   }
 
   function openDirectChat(rowOrRoomId, options = {}) {
-    const row = typeof rowOrRoomId === "string"
-      ? state.conversations.find(item => String(item.room_id) === String(rowOrRoomId)) || { room_id: rowOrRoomId }
-      : rowOrRoomId || {};
+    const row =
+      typeof rowOrRoomId === "string"
+        ? state.conversations.find((item) => String(item.room_id) === String(rowOrRoomId)) || {
+            room_id: rowOrRoomId
+          }
+        : rowOrRoomId || {};
     const roomId = row.room_id || options.roomId || null;
     if (!roomId) {
       toast("Direct chat is not ready yet.");
@@ -708,7 +730,8 @@
     injectStyles();
     closeDirectChat();
 
-    const other = row.other_player ||
+    const other =
+      row.other_player ||
       (String(row.sender_player_id || "") === myPlayerId() ? row.recipient : row.sender) ||
       options.otherPlayer ||
       null;
@@ -732,7 +755,9 @@
     chatRoot.addEventListener("click", (event) => {
       if (event.target === chatRoot) closeDirectChat();
     });
-    chatRoot.querySelector("[data-gw-direct-chat-close]")?.addEventListener("click", closeDirectChat);
+    chatRoot
+      .querySelector("[data-gw-direct-chat-close]")
+      ?.addEventListener("click", closeDirectChat);
 
     const container = chatRoot.querySelector("[data-gw-direct-chat-container]");
     window.GridWildChat?.mount?.(container, {
@@ -752,16 +777,19 @@
     return `
       <div class="gw-card" id="gwPlayerMessagesCard">
         <div class="gw-card-title">Messages</div>
-        ${!isSignedIn()
-          ? `<div class="gw-muted" style="font-size:12px;line-height:1.35;margin-top:8px;">
+        ${
+          !isSignedIn()
+            ? `<div class="gw-muted" style="font-size:12px;line-height:1.35;margin-top:8px;">
               Sign in with a GridWild account to use direct messages.
             </div>`
-          : conversations.length
-            ? conversations.map(row => {
-                const other = row.other_player ||
-                  (String(row.sender_player_id) === myPlayerId() ? row.recipient : row.sender);
-                const name = playerName(other);
-                return `
+            : conversations.length
+              ? conversations
+                  .map((row) => {
+                    const other =
+                      row.other_player ||
+                      (String(row.sender_player_id) === myPlayerId() ? row.recipient : row.sender);
+                    const name = playerName(other);
+                    return `
                   <div class="gw-direct-chat-row">
                     <div>
                       <div class="gw-direct-chat-row-title">${esc(name)}</div>
@@ -772,8 +800,9 @@
                     </button>
                   </div>
                 `;
-              }).join("")
-            : `<div class="gw-muted" style="font-size:12px;line-height:1.35;margin-top:8px;">
+                  })
+                  .join("")
+              : `<div class="gw-muted" style="font-size:12px;line-height:1.35;margin-top:8px;">
                 Accepted private chats will appear here.
               </div>`
         }
@@ -782,7 +811,7 @@
   }
 
   function bindMessagesSection(root = document) {
-    root.querySelectorAll("[data-gw-direct-chat-room]").forEach(button => {
+    root.querySelectorAll("[data-gw-direct-chat-room]").forEach((button) => {
       if (button.dataset.gwDirectChatBound === "true") return;
       button.dataset.gwDirectChatBound = "true";
       button.addEventListener("click", () => {

@@ -46,7 +46,9 @@
   }
 
   function parseCoordinates(text) {
-    const match = String(text || "").trim().match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+    const match = String(text || "")
+      .trim()
+      .match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (!match) return null;
 
     const lat = Number(match[1]);
@@ -70,9 +72,11 @@
 
   function persistSavedLocations(locations) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(locations));
-    window.dispatchEvent(new CustomEvent("gwSavedLocationsChanged", {
-      detail: { locations }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwSavedLocationsChanged", {
+        detail: { locations }
+      })
+    );
   }
 
   function saveLocation(location) {
@@ -80,9 +84,8 @@
     if (!next) return null;
 
     const locations = loadSavedLocations();
-    const existingIndex = locations.findIndex(item =>
-      Math.abs(item.lat - next.lat) < 0.000001 &&
-      Math.abs(item.lng - next.lng) < 0.000001
+    const existingIndex = locations.findIndex(
+      (item) => Math.abs(item.lat - next.lat) < 0.000001 && Math.abs(item.lng - next.lng) < 0.000001
     );
 
     if (existingIndex >= 0) {
@@ -418,25 +421,30 @@
       return;
     }
 
-    el.innerHTML = results.map(result => {
-      const lat = Number(result.lat);
-      const lng = Number(result.lon);
-      return `
+    el.innerHTML = results
+      .map((result) => {
+        const lat = Number(result.lat);
+        const lng = Number(result.lon);
+        return `
         <button class="gw-location-picker-row" type="button" data-lat="${lat}" data-lng="${lng}" data-label="${escapeHtml(result.display_name || "")}">
           <strong>${escapeHtml(result.name || result.display_name || formatCoordPair(lat, lng))}</strong>
           <span>${escapeHtml(result.display_name || formatCoordPair(lat, lng))}</span>
         </button>
       `;
-    }).join("");
+      })
+      .join("");
 
-    el.querySelectorAll(".gw-location-picker-row").forEach(row => {
+    el.querySelectorAll(".gw-location-picker-row").forEach((row) => {
       row.addEventListener("click", () => {
-        setSelectedLocation({
-          lat: Number(row.dataset.lat),
-          lng: Number(row.dataset.lng),
-          label: row.dataset.label,
-          source: "search"
-        }, { panMap: true, inputValue: row.dataset.label });
+        setSelectedLocation(
+          {
+            lat: Number(row.dataset.lat),
+            lng: Number(row.dataset.lng),
+            label: row.dataset.label,
+            source: "search"
+          },
+          { panMap: true, inputValue: row.dataset.label }
+        );
       });
     });
   }
@@ -450,11 +458,14 @@
 
     const parsed = parseCoordinates(query);
     if (parsed) {
-      setSelectedLocation({
-        ...parsed,
-        label: formatCoordPair(parsed.lat, parsed.lng),
-        source: "typed-coordinates"
-      }, { panMap: true, inputValue: formatCoordPair(parsed.lat, parsed.lng), reverseLookup: true });
+      setSelectedLocation(
+        {
+          ...parsed,
+          label: formatCoordPair(parsed.lat, parsed.lng),
+          source: "typed-coordinates"
+        },
+        { panMap: true, inputValue: formatCoordPair(parsed.lat, parsed.lng), reverseLookup: true }
+      );
       renderResults([]);
       return;
     }
@@ -466,7 +477,7 @@
     try {
       const response = await fetch(geocodeUrl(query), {
         signal: activeSearchController.signal,
-        headers: { "Accept": "application/json" }
+        headers: { Accept: "application/json" }
       });
       if (!response.ok) throw new Error(`Lookup failed (${response.status})`);
 
@@ -487,13 +498,14 @@
     try {
       const response = await fetch(reverseUrl(lat, lng), {
         signal: activeReverseController.signal,
-        headers: { "Accept": "application/json" }
+        headers: { Accept: "application/json" }
       });
       if (!response.ok) throw new Error(`Reverse lookup failed (${response.status})`);
 
       const data = await response.json();
       if (!selectedLocation) return;
-      selectedLocation.label = data?.display_name || selectedLocation.label || formatCoordPair(lat, lng);
+      selectedLocation.label =
+        data?.display_name || selectedLocation.label || formatCoordPair(lat, lng);
       setStatus(selectedLocation.label);
     } catch (err) {
       if (err.name !== "AbortError") {
@@ -538,7 +550,9 @@
 
     if (pickerMap && options.panMap) {
       suppressMapMove = true;
-      pickerMap.setView([normalized.lat, normalized.lng], Math.max(pickerMap.getZoom(), 14), { animate: true });
+      pickerMap.setView([normalized.lat, normalized.lng], Math.max(pickerMap.getZoom(), 14), {
+        animate: true
+      });
       window.setTimeout(() => {
         suppressMapMove = false;
       }, 350);
@@ -561,16 +575,20 @@
       return;
     }
 
-    el.innerHTML = saved.map(location => `
+    el.innerHTML = saved
+      .map(
+        (location) => `
       <button class="gw-location-picker-row" type="button" data-id="${escapeHtml(location.id)}">
         <strong>${escapeHtml(location.label)}</strong>
         <span>${escapeHtml(formatCoordPair(location.lat, location.lng))}</span>
       </button>
-    `).join("");
+    `
+      )
+      .join("");
 
-    el.querySelectorAll(".gw-location-picker-row").forEach(row => {
+    el.querySelectorAll(".gw-location-picker-row").forEach((row) => {
       row.addEventListener("click", () => {
-        const location = saved.find(item => item.id === row.dataset.id);
+        const location = saved.find((item) => item.id === row.dataset.id);
         if (location) {
           setSelectedLocation(location, {
             panMap: true,
@@ -609,24 +627,30 @@
       fillOpacity: 0.95
     }).addTo(pickerMap);
 
-    pickerMap.on("click", event => {
-      setSelectedLocation({
-        lat: event.latlng.lat,
-        lng: event.latlng.lng,
-        label: formatCoordPair(event.latlng.lat, event.latlng.lng),
-        source: "map-click"
-      }, { inputValue: formatCoordPair(event.latlng.lat, event.latlng.lng), reverseLookup: true });
+    pickerMap.on("click", (event) => {
+      setSelectedLocation(
+        {
+          lat: event.latlng.lat,
+          lng: event.latlng.lng,
+          label: formatCoordPair(event.latlng.lat, event.latlng.lng),
+          source: "map-click"
+        },
+        { inputValue: formatCoordPair(event.latlng.lat, event.latlng.lng), reverseLookup: true }
+      );
     });
 
     pickerMap.on("moveend", () => {
       if (suppressMapMove) return;
       const centerPoint = pickerMap.getCenter();
-      setSelectedLocation({
-        lat: centerPoint.lat,
-        lng: centerPoint.lng,
-        label: formatCoordPair(centerPoint.lat, centerPoint.lng),
-        source: "map-center"
-      }, { inputValue: formatCoordPair(centerPoint.lat, centerPoint.lng), reverseLookup: true });
+      setSelectedLocation(
+        {
+          lat: centerPoint.lat,
+          lng: centerPoint.lng,
+          label: formatCoordPair(centerPoint.lat, centerPoint.lng),
+          source: "map-center"
+        },
+        { inputValue: formatCoordPair(centerPoint.lat, centerPoint.lng), reverseLookup: true }
+      );
     });
 
     window.setTimeout(() => pickerMap.invalidateSize(), 60);
@@ -745,7 +769,7 @@
       searchTimer = setTimeout(() => searchLocations(input.value), 350);
     });
 
-    input?.addEventListener("keydown", event => {
+    input?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
         clearTimeout(searchTimer);
@@ -758,12 +782,15 @@
     root.querySelector("#gwLocationPickerUseMainMapBtn")?.addEventListener("click", () => {
       const center = window.map?.getCenter?.();
       if (!center) return;
-      setSelectedLocation({
-        lat: center.lat,
-        lng: center.lng,
-        label: formatCoordPair(center.lat, center.lng),
-        source: "current-map"
-      }, { panMap: true, inputValue: formatCoordPair(center.lat, center.lng), reverseLookup: true });
+      setSelectedLocation(
+        {
+          lat: center.lat,
+          lng: center.lng,
+          label: formatCoordPair(center.lat, center.lng),
+          source: "current-map"
+        },
+        { panMap: true, inputValue: formatCoordPair(center.lat, center.lng), reverseLookup: true }
+      );
     });
 
     root.querySelector("#gwLocationPickerUseSelectedBtn")?.addEventListener("click", () => {
@@ -775,9 +802,10 @@
     root.querySelector("#gwLocationPickerGoBtn")?.addEventListener("click", () => {
       if (!selectedLocation) return;
 
-      const didJump = typeof window.jumpToGridWildGps === "function"
-        ? window.jumpToGridWildGps(selectedLocation.lat, selectedLocation.lng)
-        : false;
+      const didJump =
+        typeof window.jumpToGridWildGps === "function"
+          ? window.jumpToGridWildGps(selectedLocation.lat, selectedLocation.lng)
+          : false;
 
       if (!didJump && window.map) {
         window.map.setView(
@@ -797,18 +825,21 @@
       const label = parsed ? selectedLocation.label : typed;
       const saved = saveLocation({
         ...selectedLocation,
-        label: label || selectedLocation.label || formatCoordPair(selectedLocation.lat, selectedLocation.lng)
+        label:
+          label ||
+          selectedLocation.label ||
+          formatCoordPair(selectedLocation.lat, selectedLocation.lng)
       });
       selectedLocation = saved || selectedLocation;
       renderSavedLocations();
       setStatus("Location saved.");
     });
 
-    root.addEventListener("click", event => {
+    root.addEventListener("click", (event) => {
       if (event.target === root) close();
     });
 
-    root.addEventListener("keydown", event => {
+    root.addEventListener("keydown", (event) => {
       if (event.key === "Escape") close();
     });
   }

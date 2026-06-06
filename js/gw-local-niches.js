@@ -50,9 +50,48 @@
   };
   const CELL_SEEDED_NICHE_ALGORITHM = "cell_seeded_niche_v1";
   const CONSTRAINED_GEOMETRY_RULES = [
-    { scale: "micro", scaleClass: "micro-niche", sigma: 0.65, peakFactor: 0.34, floorFactor: 0.18, suppressCells: 3, maxRadiusCells: 3, minCells: 1, maxCells: 4, maxElongation: 3.2, maxComplexity: 2.7, quantCells: 3 },
-    { scale: "patch", scaleClass: "patch niche", sigma: 1.05, peakFactor: 0.30, floorFactor: 0.14, suppressCells: 5, maxRadiusCells: 7, minCells: 5, maxCells: 32, maxElongation: 3.1, maxComplexity: 3.1, quantCells: 5 },
-    { scale: "place", scaleClass: "place niche", sigma: 1.75, peakFactor: 0.24, floorFactor: 0.10, suppressCells: 9, maxRadiusCells: 12, minCells: 12, maxCells: 96, maxElongation: 3.7, maxComplexity: 3.4, quantCells: 9 }
+    {
+      scale: "micro",
+      scaleClass: "micro-niche",
+      sigma: 0.65,
+      peakFactor: 0.34,
+      floorFactor: 0.18,
+      suppressCells: 3,
+      maxRadiusCells: 3,
+      minCells: 1,
+      maxCells: 4,
+      maxElongation: 3.2,
+      maxComplexity: 2.7,
+      quantCells: 3
+    },
+    {
+      scale: "patch",
+      scaleClass: "patch niche",
+      sigma: 1.05,
+      peakFactor: 0.3,
+      floorFactor: 0.14,
+      suppressCells: 5,
+      maxRadiusCells: 7,
+      minCells: 5,
+      maxCells: 32,
+      maxElongation: 3.1,
+      maxComplexity: 3.1,
+      quantCells: 5
+    },
+    {
+      scale: "place",
+      scaleClass: "place niche",
+      sigma: 1.75,
+      peakFactor: 0.24,
+      floorFactor: 0.1,
+      suppressCells: 9,
+      maxRadiusCells: 12,
+      minCells: 12,
+      maxCells: 96,
+      maxElongation: 3.7,
+      maxComplexity: 3.4,
+      quantCells: 9
+    }
   ];
   const TRAIL_CORRIDOR_RULE = {
     enabled: false,
@@ -97,9 +136,31 @@
     extensionIncludeActiveCells: false,
     extensionMaxAddedCells: 650,
     candidatePasses: [
-      { name: "edge", minScore: 0.06, minHeat: 0.02, minEdge: 0.035, heatWeight: 0.44, edgeWeight: 0.56 },
-      { name: "hot-ridge", minScore: 0.48, minHeat: 0.52, minEdge: 0.014, heatWeight: 0.7, edgeWeight: 0.3 },
-      { name: "super-hot", minScore: 0.78, minHeat: 0.78, minEdge: 0, heatWeight: 0.88, edgeWeight: 0.12, allowPlateau: true }
+      {
+        name: "edge",
+        minScore: 0.06,
+        minHeat: 0.02,
+        minEdge: 0.035,
+        heatWeight: 0.44,
+        edgeWeight: 0.56
+      },
+      {
+        name: "hot-ridge",
+        minScore: 0.48,
+        minHeat: 0.52,
+        minEdge: 0.014,
+        heatWeight: 0.7,
+        edgeWeight: 0.3
+      },
+      {
+        name: "super-hot",
+        minScore: 0.78,
+        minHeat: 0.78,
+        minEdge: 0,
+        heatWeight: 0.88,
+        edgeWeight: 0.12,
+        allowPlateau: true
+      }
     ],
     saturatedHeatThreshold: 0.86,
     saturatedMinEdgeScore: 0.012,
@@ -189,12 +250,8 @@
       return value ? [value] : [];
     }
 
-    const values = [
-      nicheOrKey?.id,
-      nicheOrKey?.source_key,
-      nicheOrKey?.metrics?.source_key
-    ]
-      .map(value => String(value || "").trim())
+    const values = [nicheOrKey?.id, nicheOrKey?.source_key, nicheOrKey?.metrics?.source_key]
+      .map((value) => String(value || "").trim())
       .filter(Boolean);
 
     return [...new Set(values)];
@@ -203,7 +260,7 @@
   function bookmarkMatches(a, b) {
     const aIds = nicheIdentifiers(a);
     const bIds = nicheIdentifiers(b);
-    return Boolean(aIds.length && bIds.length && aIds.some(id => bIds.includes(id)));
+    return Boolean(aIds.length && bIds.length && aIds.some((id) => bIds.includes(id)));
   }
 
   function sanitizeBookmarkedNiche(niche, bookmarkedAt = "") {
@@ -216,7 +273,10 @@
 
     if (snapshot.metrics && typeof snapshot.metrics === "object") {
       snapshot.metrics = { ...snapshot.metrics };
-      if (snapshot.metrics.taxonomy_summary && typeof snapshot.metrics.taxonomy_summary === "object") {
+      if (
+        snapshot.metrics.taxonomy_summary &&
+        typeof snapshot.metrics.taxonomy_summary === "object"
+      ) {
         snapshot.metrics.taxonomy_summary = { ...snapshot.metrics.taxonomy_summary };
         delete snapshot.metrics.taxonomy_summary.tree;
       }
@@ -234,7 +294,7 @@
   function loadBookmarkedNiches() {
     try {
       const keys = [...new Set([bookmarkStorageKey(), BOOKMARKS_STORAGE_KEY])];
-      const raw = keys.map(key => localStorage.getItem(key)).find(Boolean);
+      const raw = keys.map((key) => localStorage.getItem(key)).find(Boolean);
       const parsed = raw ? JSON.parse(raw) : null;
       const rows = Array.isArray(parsed)
         ? parsed
@@ -242,9 +302,7 @@
           ? parsed.niches
           : [];
 
-      return rows
-        .map(row => sanitizeBookmarkedNiche(row, row?.bookmarked_at))
-        .filter(Boolean);
+      return rows.map((row) => sanitizeBookmarkedNiche(row, row?.bookmarked_at)).filter(Boolean);
     } catch {
       return [];
     }
@@ -253,12 +311,15 @@
   function saveBookmarkedNiches() {
     try {
       const niches = state.bookmarkedNiches
-        .map(row => sanitizeBookmarkedNiche(row, row?.bookmarked_at))
+        .map((row) => sanitizeBookmarkedNiche(row, row?.bookmarked_at))
         .filter(Boolean);
-      localStorage.setItem(bookmarkStorageKey(), JSON.stringify({
-        version: BOOKMARKS_VERSION,
-        niches
-      }));
+      localStorage.setItem(
+        bookmarkStorageKey(),
+        JSON.stringify({
+          version: BOOKMARKS_VERSION,
+          niches
+        })
+      );
       state.bookmarkedNiches = niches;
       updateBookmarkedGlobalState();
       return true;
@@ -272,12 +333,12 @@
     window.__gwState = window.__gwState || {};
     window.__gwState.bookmarkedNiches = state.bookmarkedNiches.slice();
     window.__gwState.bookmarkedNicheIds = state.bookmarkedNiches
-      .map(niche => nicheIdentifiers(niche)[0])
+      .map((niche) => nicheIdentifiers(niche)[0])
       .filter(Boolean);
   }
 
   function savedBookmarkFor(nicheOrKey) {
-    return state.bookmarkedNiches.find(bookmark => bookmarkMatches(bookmark, nicheOrKey)) || null;
+    return state.bookmarkedNiches.find((bookmark) => bookmarkMatches(bookmark, nicheOrKey)) || null;
   }
 
   function isBookmarkedNiche(nicheOrKey) {
@@ -286,7 +347,7 @@
 
   function mergeBookmarkedNichesIntoState() {
     if (!state.bookmarkedNiches.length) {
-      state.niches = state.niches.map(niche => ({
+      state.niches = state.niches.map((niche) => ({
         ...niche,
         _bookmarked_niche: false,
         _bookmark_only: false
@@ -296,8 +357,8 @@
     }
 
     const bookmarkRows = state.bookmarkedNiches.map((bookmark) => {
-      const hasLiveMatch = state.niches.some(niche =>
-        bookmarkMatches(niche, bookmark) && niche._bookmark_only !== true
+      const hasLiveMatch = state.niches.some(
+        (niche) => bookmarkMatches(niche, bookmark) && niche._bookmark_only !== true
       );
       return {
         ...bookmark,
@@ -325,15 +386,17 @@
 
   function reloadBookmarkedNichesFromStorage() {
     const next = loadBookmarkedNiches();
-    const before = state.bookmarkedNiches.map(niche => nicheIdentifiers(niche).join("|")).join(";");
-    const after = next.map(niche => nicheIdentifiers(niche).join("|")).join(";");
+    const before = state.bookmarkedNiches
+      .map((niche) => nicheIdentifiers(niche).join("|"))
+      .join(";");
+    const after = next.map((niche) => nicheIdentifiers(niche).join("|")).join(";");
     if (before === after) {
       updateBookmarkedGlobalState();
       return;
     }
 
     state.bookmarkedNiches = next;
-    state.niches = state.niches.filter(niche => niche._bookmark_only !== true);
+    state.niches = state.niches.filter((niche) => niche._bookmark_only !== true);
     mergeBookmarkedNichesIntoState();
     updateNicheDistances();
     drawNicheLayer();
@@ -392,13 +455,16 @@
   }
 
   function isCorridorNiche(niche) {
-    return ["trail_corridor_niche_v1", "heat_tendril_niche_v1"]
-      .includes(String(niche?.metrics?.algorithm || ""));
+    return ["trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(
+      String(niche?.metrics?.algorithm || "")
+    );
   }
 
   function isCellSeededNiche(niche) {
-    return String(niche?.metrics?.algorithm || "") === CELL_SEEDED_NICHE_ALGORITHM ||
-      String(niche?.generated_by || "").includes("cell_seeded_niche");
+    return (
+      String(niche?.metrics?.algorithm || "") === CELL_SEEDED_NICHE_ALGORITHM ||
+      String(niche?.generated_by || "").includes("cell_seeded_niche")
+    );
   }
 
   function homeIconSvg() {
@@ -414,7 +480,10 @@
   function loadControls() {
     try {
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-      const controls = { ...DEFAULT_CONTROLS, ...(parsed && typeof parsed === "object" ? parsed : {}) };
+      const controls = {
+        ...DEFAULT_CONTROLS,
+        ...(parsed && typeof parsed === "object" ? parsed : {})
+      };
       if (!parsed || parsed.version !== CONTROLS_VERSION) {
         controls.version = CONTROLS_VERSION;
         controls.radiusM = "fov";
@@ -451,11 +520,11 @@
   }
 
   function yieldToPaint() {
-    return new Promise(resolve => requestAnimationFrame(() => resolve()));
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
   }
 
   function yieldToastMoment(ms = 180) {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       requestAnimationFrame(() => setTimeout(resolve, ms));
     });
   }
@@ -480,7 +549,8 @@
     root.classList.remove("is-done", "is-error");
     root.querySelector(".gw-niche-sampling-title").textContent = message;
     root.querySelector(".gw-niche-sampling-detail").textContent = detail || "";
-    root.querySelector(".gw-niche-sampling-track span").style.width = `${Math.max(2, Math.min(100, progress))}%`;
+    root.querySelector(".gw-niche-sampling-track span").style.width =
+      `${Math.max(2, Math.min(100, progress))}%`;
   }
 
   function finishSamplingToast(message = "Niche sampling complete", detail = "") {
@@ -546,22 +616,28 @@
 
   function boundsForCells(minIx, minIy, maxIx, maxIy) {
     const sw = map.options.crs.unproject(L.point(minIx * GRID_SIZE_M, minIy * GRID_SIZE_M));
-    const ne = map.options.crs.unproject(L.point((maxIx + 1) * GRID_SIZE_M, (maxIy + 1) * GRID_SIZE_M));
+    const ne = map.options.crs.unproject(
+      L.point((maxIx + 1) * GRID_SIZE_M, (maxIy + 1) * GRID_SIZE_M)
+    );
     return {
       type: "Polygon",
-      coordinates: [[
-        [sw.lng, sw.lat],
-        [ne.lng, sw.lat],
-        [ne.lng, ne.lat],
-        [sw.lng, ne.lat],
-        [sw.lng, sw.lat]
-      ]]
+      coordinates: [
+        [
+          [sw.lng, sw.lat],
+          [ne.lng, sw.lat],
+          [ne.lng, ne.lat],
+          [sw.lng, ne.lat],
+          [sw.lng, sw.lat]
+        ]
+      ]
     };
   }
 
   function leafletBoundsForCells(minIx, minIy, maxIx, maxIy) {
     const sw = map.options.crs.unproject(L.point(minIx * GRID_SIZE_M, minIy * GRID_SIZE_M));
-    const ne = map.options.crs.unproject(L.point((maxIx + 1) * GRID_SIZE_M, (maxIy + 1) * GRID_SIZE_M));
+    const ne = map.options.crs.unproject(
+      L.point((maxIx + 1) * GRID_SIZE_M, (maxIy + 1) * GRID_SIZE_M)
+    );
     return L.latLngBounds(sw, ne);
   }
 
@@ -579,9 +655,7 @@
 
   function displayMetrics(ix, iy) {
     const key = `${ix},${iy}`;
-    const rich = window.__richGridMetrics instanceof Map
-      ? window.__richGridMetrics.get(key)
-      : null;
+    const rich = window.__richGridMetrics instanceof Map ? window.__richGridMetrics.get(key) : null;
     const base = rich || staticMetrics(ix, iy);
 
     if (typeof getDisplayMetricsForCell === "function") {
@@ -601,9 +675,11 @@
 
     const metric = window.__gwState?.heatMetric || "count";
     const value =
-      metric === "species" ? Number(metrics.species) || 0 :
-      metric === "observers" ? Number(metrics.observers) || 0 :
-      Number(metrics.count) || 0;
+      metric === "species"
+        ? Number(metrics.species) || 0
+        : metric === "observers"
+          ? Number(metrics.observers) || 0
+          : Number(metrics.count) || 0;
 
     return clamp01(Math.log1p(value) / Math.log1p(metric === "count" ? 30 : 20));
   }
@@ -631,12 +707,18 @@
 
   function growTileCells() {
     const raw = Number(state.controls.growTileCells);
-    return Math.max(2, Math.min(80, Math.round(Number.isFinite(raw) ? raw : GROW_LOCAL_NICHE_RULE.defaultTileCells)));
+    return Math.max(
+      2,
+      Math.min(80, Math.round(Number.isFinite(raw) ? raw : GROW_LOCAL_NICHE_RULE.defaultTileCells))
+    );
   }
 
   function growMinOccupiedPct() {
     const raw = Number(state.controls.growMinOccupiedPct);
-    return Math.max(0, Math.min(100, Number.isFinite(raw) ? raw : GROW_LOCAL_NICHE_RULE.defaultMinOccupiedPct));
+    return Math.max(
+      0,
+      Math.min(100, Number.isFinite(raw) ? raw : GROW_LOCAL_NICHE_RULE.defaultMinOccupiedPct)
+    );
   }
 
   function getScanCellBounds(origin, radiusCells) {
@@ -672,9 +754,10 @@
   }
 
   function getFovCellBounds() {
-    const center = typeof map !== "undefined" && map?.getCenter
-      ? cellForLatLng(map.getCenter().lat, map.getCenter().lng)
-      : cellForLatLng(getOrigin().lat, getOrigin().lng);
+    const center =
+      typeof map !== "undefined" && map?.getCenter
+        ? cellForLatLng(map.getCenter().lat, map.getCenter().lng)
+        : cellForLatLng(getOrigin().lat, getOrigin().lng);
 
     if (typeof map === "undefined" || !map?.getBounds) {
       return {
@@ -765,7 +848,10 @@
   }
 
   function percentile(values, p) {
-    const nums = values.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+    const nums = values
+      .map(Number)
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
     if (!nums.length) return 0;
     const idx = Math.max(0, Math.min(nums.length - 1, Math.floor((nums.length - 1) * p)));
     return nums[idx];
@@ -803,12 +889,12 @@
     const hex = value.match(/^#?([0-9a-f]{6})$/i)?.[1];
     if (!hex) return value || "#6fbf91";
 
-    const rgb = [0, 2, 4].map(offset => parseInt(hex.slice(offset, offset + 2), 16));
-    const adjusted = rgb.map(channel => {
+    const rgb = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+    const adjusted = rgb.map((channel) => {
       const saturated = channel < 128 ? channel * 0.82 : channel * 0.68;
       return Math.max(24, Math.min(210, Math.round(saturated)));
     });
-    return `#${adjusted.map(channel => channel.toString(16).padStart(2, "0")).join("")}`;
+    return `#${adjusted.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
   }
 
   function nicheVisualStyle(niche, fallbackColor) {
@@ -866,7 +952,8 @@
   function featureKindLabel(kind, feature) {
     const tags = feature?.tags || {};
     if (kind === "water") return tags.waterway ? "stream / waterway" : "waterbody";
-    if (kind === "parks") return tags.leisure === "garden" ? "garden / park" : "park / natural feature";
+    if (kind === "parks")
+      return tags.leisure === "garden" ? "garden / park" : "park / natural feature";
     if (kind === "trails") return "trail / path";
     if (kind === "buildings") return "building / campus feature";
     return kind;
@@ -892,13 +979,12 @@
       return L.latLng(aLat, aLng).distanceTo(L.latLng(bLat, bLng));
     }
 
-    const toRad = deg => deg * Math.PI / 180;
+    const toRad = (deg) => (deg * Math.PI) / 180;
     const dLat = toRad(bLat - aLat);
     const dLng = toRad(bLng - aLng);
     const lat1 = toRad(aLat);
     const lat2 = toRad(bLat);
-    const h = Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
     return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
   }
 
@@ -910,8 +996,8 @@
 
   function componentShapeContext(members = []) {
     const points = members
-      .map(cell => ({ x: Number(cell.ix), y: Number(cell.iy) }))
-      .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+      .map((cell) => ({ x: Number(cell.ix), y: Number(cell.iy) }))
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
     if (points.length < 4) {
       return { elongated: false, cell_count: points.length };
     }
@@ -939,7 +1025,7 @@
     const major = Math.max(0, (trace + delta) / 2);
     const minor = Math.max(0.0001, (trace - delta) / 2);
     const ratio = Math.sqrt(major / minor);
-    const angleDeg = ((0.5 * Math.atan2(2 * xy, xx - yy)) * 180 / Math.PI + 180) % 180;
+    const angleDeg = ((0.5 * Math.atan2(2 * xy, xx - yy) * 180) / Math.PI + 180) % 180;
     const elongated = points.length >= 8 && ratio >= 2.35;
 
     return {
@@ -969,7 +1055,7 @@
       const px = a.x + dx * t;
       const py = a.y + dy * t;
       const distanceM = Math.sqrt((here.x - px) * (here.x - px) + (here.y - py) * (here.y - py));
-      const angleDeg = (Math.atan2(dy, dx) * 180 / Math.PI + 180) % 180;
+      const angleDeg = ((Math.atan2(dy, dx) * 180) / Math.PI + 180) % 180;
 
       if (!best || distanceM < best.distanceM) {
         best = {
@@ -984,7 +1070,8 @@
   }
 
   function featureSegmentSamples(feature) {
-    if (!Array.isArray(feature?.points) || feature.points.length < 2 || typeof map === "undefined") return [];
+    if (!Array.isArray(feature?.points) || feature.points.length < 2 || typeof map === "undefined")
+      return [];
     const segments = [];
     let cumulativeM = 0;
 
@@ -1022,7 +1109,10 @@
     for (const segment of segments) {
       const len2 = segment.dx * segment.dx + segment.dy * segment.dy;
       if (len2 <= 0) continue;
-      const t = Math.max(0, Math.min(1, ((p.x - segment.a.x) * segment.dx + (p.y - segment.a.y) * segment.dy) / len2));
+      const t = Math.max(
+        0,
+        Math.min(1, ((p.x - segment.a.x) * segment.dx + (p.y - segment.a.y) * segment.dy) / len2)
+      );
       const x = segment.a.x + segment.dx * t;
       const y = segment.a.y + segment.dy * t;
       const distanceM = Math.hypot(p.x - x, p.y - y);
@@ -1085,7 +1175,9 @@
       corridor_kind: corridor?.kind || null,
       corridor_label: corridor?.label || null,
       corridor_relation: corridor?.relation || null,
-      corridor_distance_m: Number.isFinite(Number(corridor?.distanceM)) ? Math.round(corridor.distanceM) : null,
+      corridor_distance_m: Number.isFinite(Number(corridor?.distanceM))
+        ? Math.round(corridor.distanceM)
+        : null,
       corridor_angle_diff_deg: corridor?.angle_diff_deg ?? null,
       corridor_confidence: corridor?.confidence ?? null
     };
@@ -1112,8 +1204,11 @@
     return {
       ...current,
       primary_label: hasCorridorLabel ? corridor.label : current.primary_label,
-      secondary_label: hasCorridorLabel ? (current.primary_label || current.secondary_label || null) : current.secondary_label,
-      place_type: corridor.kind === "water" ? "elongated stream-edge corridor" : "elongated path corridor",
+      secondary_label: hasCorridorLabel
+        ? current.primary_label || current.secondary_label || null
+        : current.secondary_label,
+      place_type:
+        corridor.kind === "water" ? "elongated stream-edge corridor" : "elongated path corridor",
       spatial_relation: relation,
       geometry_context: {
         ...geometryContext,
@@ -1123,7 +1218,9 @@
         ...(Array.isArray(current.osm_feature_ids) ? current.osm_feature_ids : []),
         corridor.feature?.id
       ].filter(Boolean),
-      label_confidence: Number(Math.max(Number(current.label_confidence) || 0, corridor.confidence || 0).toFixed(2)),
+      label_confidence: Number(
+        Math.max(Number(current.label_confidence) || 0, corridor.confidence || 0).toFixed(2)
+      ),
       label_source: `${current.label_source || "local"}+geometry_corridor`
     };
   }
@@ -1151,20 +1248,24 @@
       const corridorLabel = String(storedGeometryContext.corridor_label || "").trim();
       const primary = String(ctx.primary_label || "").trim();
       const generic = isGenericPlaceContext(ctx);
-      const genericCorridor = storedGeometryContext.corridor_kind === "water" ? "water edge" : "path";
+      const genericCorridor =
+        storedGeometryContext.corridor_kind === "water" ? "water edge" : "path";
       ctx.geometry_context.label_phrase = corridorLabel
         ? `${relation} ${corridorLabel}`
         : primary && !generic
           ? `${relation} the ${genericCorridor} near ${primary}`
           : `${relation} a nearby ${genericCorridor}`;
       ctx.spatial_relation = relation;
-      ctx.place_type = storedGeometryContext.corridor_kind === "water"
-        ? "elongated stream-edge corridor"
-        : "elongated path corridor";
-      ctx.label_confidence = Number(Math.max(
-        Number(ctx.label_confidence) || 0,
-        Number(storedGeometryContext.corridor_confidence) || 0
-      ).toFixed(2));
+      ctx.place_type =
+        storedGeometryContext.corridor_kind === "water"
+          ? "elongated stream-edge corridor"
+          : "elongated path corridor";
+      ctx.label_confidence = Number(
+        Math.max(
+          Number(ctx.label_confidence) || 0,
+          Number(storedGeometryContext.corridor_confidence) || 0
+        ).toFixed(2)
+      );
     }
 
     return ctx;
@@ -1212,7 +1313,10 @@
     }
 
     return text
-      .replace(/\b(NW|NE|SW|SE|St|Ave|Rd|Blvd|Dr|Ln|Ct|Pl|Ter|Cir|Pkwy|Hwy|Expy|Fwy|Tpke|Trl|Mt|Ft)\./g, "$1")
+      .replace(
+        /\b(NW|NE|SW|SE|St|Ave|Rd|Blvd|Dr|Ln|Ct|Pl|Ter|Cir|Pkwy|Hwy|Expy|Fwy|Tpke|Trl|Mt|Ft)\./g,
+        "$1"
+      )
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -1311,10 +1415,10 @@
     const words = text.split(/\s+/);
     const first = String(words[0] || "").toLowerCase();
     const second = String(words[1] || "").toLowerCase();
-    const directional = /^(north|south|east|west|northeast|northwest|southeast|southwest)$/i.test(first);
-    const relationWords = directional && second === "of"
-      ? words.slice(0, 2)
-      : words.slice(0, 1);
+    const directional = /^(north|south|east|west|northeast|northwest|southeast|southwest)$/i.test(
+      first
+    );
+    const relationWords = directional && second === "of" ? words.slice(0, 2) : words.slice(0, 1);
     const placeWords = words.slice(relationWords.length);
 
     return {
@@ -1327,14 +1431,18 @@
     const exemplarPhrase = nicheHudExemplarPhrase(niche);
     const homeClass = isHomeNiche(niche) ? " is-home-niche" : "";
     const bookmarkClass = isBookmarkedNiche(niche) ? " is-bookmarked-niche" : "";
-    const action = abbreviateMapLabel(exemplarPhrase ||
-      phraseForNiche(niche || {})
-        .replace(/^(Sample|Survey|Look for|Revisit|Check)\s+/i, "")
+    const action = abbreviateMapLabel(
+      exemplarPhrase ||
+        phraseForNiche(niche || {}).replace(/^(Sample|Survey|Look for|Revisit|Check)\s+/i, "")
     );
-    const place = splitPlacePhrase(placeSuffix(niche?.place_context || {
-      primary_label: niche?.primary_place_label,
-      label_confidence: niche?.place_label_confidence
-    }));
+    const place = splitPlacePhrase(
+      placeSuffix(
+        niche?.place_context || {
+          primary_label: niche?.primary_place_label,
+          label_confidence: niche?.place_label_confidence
+        }
+      )
+    );
 
     if (!place.place) {
       return `<span class="gw-niche-label-chip${homeClass}${bookmarkClass}"><span class="gw-niche-label-main">${esc(displayNicheShortTitle(niche))}</span></span>`;
@@ -1395,10 +1503,13 @@
 
     if (best) {
       const relation =
-        best.kind === "water" ? "beside" :
-        best.kind === "trails" ? "along" :
-        best.kind === "buildings" && best.distanceM < 30 ? "at" :
-        "near";
+        best.kind === "water"
+          ? "beside"
+          : best.kind === "trails"
+            ? "along"
+            : best.kind === "buildings" && best.distanceM < 30
+              ? "at"
+              : "near";
 
       return {
         primary_label: best.label,
@@ -1426,10 +1537,12 @@
   }
 
   function compactPlaceName(value) {
-    return String(value || "")
-      .split(",")
-      .map(part => part.trim())
-      .filter(Boolean)[0] || "";
+    return (
+      String(value || "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)[0] || ""
+    );
   }
 
   function numericHouseNumber(value) {
@@ -1438,7 +1551,8 @@
   }
 
   function streetBlockLabel(address = {}) {
-    const road = address.road || address.pedestrian || address.footway || address.path || address.cycleway;
+    const road =
+      address.road || address.pedestrian || address.footway || address.path || address.cycleway;
     if (!road) return "";
 
     const house = numericHouseNumber(address.house_number);
@@ -1451,13 +1565,15 @@
   }
 
   function neighborhoodLabel(address = {}) {
-    return address.neighbourhood ||
+    return (
+      address.neighbourhood ||
       address.suburb ||
       address.quarter ||
       address.city_district ||
       address.borough ||
       address.hamlet ||
-      "";
+      ""
+    );
   }
 
   function cityLabel(address = {}) {
@@ -1499,11 +1615,15 @@
 
     if (namedFeature && !["house", "residential"].includes(osmType)) {
       primary = namedFeature;
-      confidence = ["amenity", "building", "tourism", "leisure", "shop", "historic"].includes(osmClass)
+      confidence = ["amenity", "building", "tourism", "leisure", "shop", "historic"].includes(
+        osmClass
+      )
         ? 0.76
         : 0.68;
-      if (osmClass === "building" || osmType.includes("library") || osmType.includes("school")) relation = "near";
-      if (osmClass === "waterway" || osmType.includes("stream") || osmType.includes("canal")) relation = "along";
+      if (osmClass === "building" || osmType.includes("library") || osmType.includes("school"))
+        relation = "near";
+      if (osmClass === "waterway" || osmType.includes("stream") || osmType.includes("canal"))
+        relation = "along";
       if (osmClass === "highway") relation = "on";
     } else if (block) {
       primary = block;
@@ -1587,13 +1707,13 @@
       .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
     if (!points.length) return null;
 
-    const minLat = Math.min(...points.map(point => point.lat));
-    const maxLat = Math.max(...points.map(point => point.lat));
-    const minLng = Math.min(...points.map(point => point.lng));
-    const maxLng = Math.max(...points.map(point => point.lng));
+    const minLat = Math.min(...points.map((point) => point.lat));
+    const maxLat = Math.max(...points.map((point) => point.lat));
+    const minLng = Math.min(...points.map((point) => point.lng));
+    const maxLng = Math.max(...points.map((point) => point.lng));
     const midLat = (minLat + maxLat) / 2;
     const latPad = paddingM / 111320;
-    const lngPad = paddingM / Math.max(1, 111320 * Math.cos(midLat * Math.PI / 180));
+    const lngPad = paddingM / Math.max(1, 111320 * Math.cos((midLat * Math.PI) / 180));
 
     const south = minLat - latPad;
     const north = maxLat + latPad;
@@ -1608,7 +1728,11 @@
     if (Number.isFinite(Number(element.lat)) && Number.isFinite(Number(element.lon))) {
       return L.latLng(Number(element.lat), Number(element.lon));
     }
-    if (element.center && Number.isFinite(Number(element.center.lat)) && Number.isFinite(Number(element.center.lon))) {
+    if (
+      element.center &&
+      Number.isFinite(Number(element.center.lat)) &&
+      Number.isFinite(Number(element.center.lon))
+    ) {
       return L.latLng(Number(element.center.lat), Number(element.center.lon));
     }
     return null;
@@ -1620,7 +1744,9 @@
 
     for (const element of elements) {
       const tags = element.tags || {};
-      const name = compactPlaceName(tags.name || tags["addr:housename"] || tags.brand || tags.operator);
+      const name = compactPlaceName(
+        tags.name || tags["addr:housename"] || tags.brand || tags.operator
+      );
       if (!name) continue;
 
       const point = overpassElementPoint(element);
@@ -1628,13 +1754,9 @@
       const isRoad = !!tags.highway;
       const isWater = !!tags.waterway || !!tags.water || tags.natural === "water";
       const isPark = !!tags.leisure || !!tags.boundary || !!tags.natural;
-      const isBuilding = !!tags.building || !!tags.amenity || !!tags.tourism || !!tags.shop || !!tags.historic;
-      const priority =
-        isBuilding ? 4 :
-        isWater ? 3.7 :
-        isPark ? 3.3 :
-        isRoad ? 2.7 :
-        2;
+      const isBuilding =
+        !!tags.building || !!tags.amenity || !!tags.tourism || !!tags.shop || !!tags.historic;
+      const priority = isBuilding ? 4 : isWater ? 3.7 : isPark ? 3.3 : isRoad ? 2.7 : 2;
 
       candidates.push({
         name,
@@ -1653,13 +1775,15 @@
     if (!best) return null;
 
     const nearbyRoads = [];
-    for (const road of candidates.filter(item => item.isRoad && item.distanceM <= 75)) {
-      if (!nearbyRoads.some(existing => existing.name === road.name)) nearbyRoads.push(road);
+    for (const road of candidates.filter((item) => item.isRoad && item.distanceM <= 75)) {
+      if (!nearbyRoads.some((existing) => existing.name === road.name)) nearbyRoads.push(road);
       if (nearbyRoads.length >= 2) break;
     }
     if (best.isRoad && nearbyRoads.length >= 2) {
       const osmFeatureIds = nearbyRoads
-        .map(road => road.element.type && road.element.id ? `${road.element.type}/${road.element.id}` : null)
+        .map((road) =>
+          road.element.type && road.element.id ? `${road.element.type}/${road.element.id}` : null
+        )
         .filter(Boolean);
       return {
         primary_label: `${nearbyRoads[0].name} & ${nearbyRoads[1].name}`,
@@ -1676,20 +1800,24 @@
     }
 
     const tags = best.element.tags || {};
-    const relation =
-      best.isWater ? "along" :
-      best.isRoad ? "on" :
-      best.distanceM <= 20 && best.isBuilding ? "at" :
-      "near";
-    const placeType =
-      best.isRoad ? "street / path" :
-      best.isWater ? "stream / waterway" :
-      best.isPark ? "park / natural feature" :
-      best.isBuilding ? "building / place" :
-      "named map feature";
-    const osmFeatureId = best.element.type && best.element.id
-      ? `${best.element.type}/${best.element.id}`
-      : null;
+    const relation = best.isWater
+      ? "along"
+      : best.isRoad
+        ? "on"
+        : best.distanceM <= 20 && best.isBuilding
+          ? "at"
+          : "near";
+    const placeType = best.isRoad
+      ? "street / path"
+      : best.isWater
+        ? "stream / waterway"
+        : best.isPark
+          ? "park / natural feature"
+          : best.isBuilding
+            ? "building / place"
+            : "named map feature";
+    const osmFeatureId =
+      best.element.type && best.element.id ? `${best.element.type}/${best.element.id}` : null;
 
     return {
       primary_label: best.name,
@@ -1707,14 +1835,24 @@
   }
 
   function isGenericPlaceContext(placeContext = {}) {
-    const label = String(placeContext.primary_label || "").trim().toLowerCase();
+    const label = String(placeContext.primary_label || "")
+      .trim()
+      .toLowerCase();
     const confidence = Number(placeContext.label_confidence) || 0;
     const source = String(placeContext.label_source || "");
-    return confidence < 0.58 ||
+    return (
+      confidence < 0.58 ||
       !label ||
-      ["this nearby area", "this niche area", "your area", "current map area", "near your current location"].includes(label) ||
+      [
+        "this nearby area",
+        "this niche area",
+        "your area",
+        "current map area",
+        "near your current location"
+      ].includes(label) ||
       source === "quest_locale_fallback" ||
-      source === "niche_coordinate_fallback";
+      source === "niche_coordinate_fallback"
+    );
   }
 
   function placeContextCentroidDistanceM(placeContext = {}, lat, lng) {
@@ -1751,7 +1889,7 @@
 
   async function lookupNominatimPlaceContext(lat, lng) {
     const response = await fetch(reverseContextUrl(lat, lng), {
-      headers: { "Accept": "application/json" }
+      headers: { Accept: "application/json" }
     });
     if (!response.ok) throw new Error(`Nominatim reverse lookup failed (${response.status})`);
     const data = await response.json();
@@ -1763,7 +1901,7 @@
     const response = await fetch(OVERPASS_ENDPOINT, {
       method: "POST",
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
       },
       body: new URLSearchParams({ data: overpassQuery(lat, lng) })
@@ -1785,7 +1923,7 @@
     const response = await fetch(OVERPASS_ENDPOINT, {
       method: "POST",
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
       },
       body: new URLSearchParams({ data: query })
@@ -1870,7 +2008,8 @@
         continue;
       }
 
-      const storedGeometryContext = niche.place_context?.geometry_context || niche.metrics?.geometry_context || null;
+      const storedGeometryContext =
+        niche.place_context?.geometry_context || niche.metrics?.geometry_context || null;
       const currentContext = placeContextBelongsToNiche(niche.place_context, lat, lng)
         ? niche.place_context
         : resolvePlaceContext(lat, lng);
@@ -1891,10 +2030,24 @@
         place_label_confidence: placeContext?.label_confidence || niche.place_label_confidence || 0
       };
 
-      updated.evidence_summary = evidenceFor(updated.niche_type, updated.metrics || {}, placeContext);
-      updated.confidence = clamp01(Number(updated.confidence || 0) + Math.max(0, Number(updated.place_label_confidence || 0) - Number(niche.place_label_confidence || 0)) * 0.12);
+      updated.evidence_summary = evidenceFor(
+        updated.niche_type,
+        updated.metrics || {},
+        placeContext
+      );
+      updated.confidence = clamp01(
+        Number(updated.confidence || 0) +
+          Math.max(
+            0,
+            Number(updated.place_label_confidence || 0) - Number(niche.place_label_confidence || 0)
+          ) *
+            0.12
+      );
       updated.title = buildNicheDisplayTitle(updated);
-      updated.short_title = updated.title.replace(/^(Sample|Survey|Look for|Revisit|Check)\s+/i, "");
+      updated.short_title = updated.title.replace(
+        /^(Sample|Survey|Look for|Revisit|Check)\s+/i,
+        ""
+      );
       enriched.push(updated);
     }
 
@@ -1937,18 +2090,29 @@
   }
 
   function isBroadFocusLabel(value) {
-    return /^(life|local life|mixed life|dominant life groups|plants|insects|birds|fungi|mammals|animals|reptiles|amphibians|arachnids|mollusks|fish|ray-finned fish)$/i
-      .test(plainTaxonLabel(value));
+    return /^(life|local life|mixed life|dominant life groups|plants|insects|birds|fungi|mammals|animals|reptiles|amphibians|arachnids|mollusks|fish|ray-finned fish)$/i.test(
+      plainTaxonLabel(value)
+    );
   }
 
   function lensDescriptor(metrics = {}) {
-    const lens = String(metrics.active_lens || window.__gwState?.activeLens || "classic").toLowerCase();
-    const heatMetric = String(metrics.heat_metric || window.__gwState?.heatMetric || "count").toLowerCase();
+    const lens = String(
+      metrics.active_lens || window.__gwState?.activeLens || "classic"
+    ).toLowerCase();
+    const heatMetric = String(
+      metrics.heat_metric || window.__gwState?.heatMetric || "count"
+    ).toLowerCase();
 
     if (lens === "dominantlife") return "dominant";
     if (lens === "breadth") return "broad";
     if (lens === "seasonalpulse" || lens === "seasonalnow") return "seasonal";
-    if (lens === "revisit" || lens === "freshness" || lens === "wildtime" || lens === "timeconfidence") return "recent";
+    if (
+      lens === "revisit" ||
+      lens === "freshness" ||
+      lens === "wildtime" ||
+      lens === "timeconfidence"
+    )
+      return "recent";
     if (heatMetric === "species") return "genus-rich";
     if (heatMetric === "observers") return "well-watched";
     return "";
@@ -1978,7 +2142,7 @@
 
     const iconic = Object.entries(metrics.iconic_counts || {})
       .map(([name, count]) => ({ name, count: Number(count) || 0 }))
-      .filter(entry => entry.count > 0 && !/^unknown$/i.test(entry.name))
+      .filter((entry) => entry.count > 0 && !/^unknown$/i.test(entry.name))
       .sort((a, b) => b.count - a.count)[0];
     if (iconic) {
       const item = taxonDisplayEntry(iconic, "iconic_taxon");
@@ -1996,7 +2160,9 @@
     if (topSubject?.label) return topSubject.label;
     if (explicit) return explicit;
 
-    const activeLens = String(metrics.active_lens || window.__gwState?.activeLens || "").toLowerCase();
+    const activeLens = String(
+      metrics.active_lens || window.__gwState?.activeLens || ""
+    ).toLowerCase();
     if (activeLens === "breadth") return "mixed life";
     if (activeLens === "dominantlife") return "dominant life groups";
     return fallback;
@@ -2038,17 +2204,25 @@
     if (niche.metrics?.algorithm === CELL_SEEDED_NICHE_ALGORITHM) {
       const metrics = niche.metrics || {};
       if (metrics.quiet_seed) return "Mark quiet cell";
-      if (Number(metrics.water_boundary_score || 0) >= 0.36 || Number(metrics.wet_edge_cells || 0) > 0) {
+      if (
+        Number(metrics.water_boundary_score || 0) >= 0.36 ||
+        Number(metrics.wet_edge_cells || 0) > 0
+      ) {
         return focus ? `Trace wet-edge ${focus}` : "Trace wet-edge life";
       }
-      if (Number(metrics.road_bounded_cells || 0) > 0 || Number(metrics.blocked_edges?.road || 0) > 0) {
+      if (
+        Number(metrics.road_bounded_cells || 0) > 0 ||
+        Number(metrics.blocked_edges?.road || 0) > 0
+      ) {
         return focus ? `Sample road-bounded ${focus}` : "Sample road-bounded life";
       }
       return focus ? `Sample cell-seeded ${focus}` : "Sample cell-seeded life";
     }
     if (type === "edge_habitat_niche" || theme.includes("wet")) return "Sample wet-edge plants";
-    if (type === "taxon_specific_hotspot") return focus ? `Look for ${focus}` : "Look for focal taxa";
-    if (type === "seasonal_hotspot") return focus ? `Revisit seasonal ${focus}` : "Revisit seasonal life";
+    if (type === "taxon_specific_hotspot")
+      return focus ? `Look for ${focus}` : "Look for focal taxa";
+    if (type === "seasonal_hotspot")
+      return focus ? `Revisit seasonal ${focus}` : "Revisit seasonal life";
     if (type === "recently_stale_hotspot") return "Revisit this stale hotspot";
     if (type === "high_richness_hotspot") return richNichePhrase(niche);
     if (theme.includes("sidewalk")) return "Survey sidewalk flora";
@@ -2056,7 +2230,11 @@
   }
 
   function buildNicheDisplayTitle(niche) {
-    return abbreviateMapLabel(`${phraseForNiche(niche)} ${placeSuffix(niche.place_context || {})}`.replace(/\s+/g, " ").trim());
+    return abbreviateMapLabel(
+      `${phraseForNiche(niche)} ${placeSuffix(niche.place_context || {})}`
+        .replace(/\s+/g, " ")
+        .trim()
+    );
   }
 
   function retitleNiche(niche) {
@@ -2079,16 +2257,30 @@
     if (growLocal) {
       const tileCells = Number(metrics.grow_tile_cells || GROW_LOCAL_NICHE_RULE.defaultTileCells);
       const tileCount = Math.max(1, Number(metrics.grow_tile_count || 1));
-      const tilePhrase = tileCount > 1 ? `${tileCount} neighboring ${tileCells}x${tileCells} active-lens tiles` : `a globally anchored ${tileCells}x${tileCells} active-lens tile`;
-      facts.push(`This temporary niche is ${tilePhrase} with ${Number(metrics.grow_occupied_pct || 0).toFixed(1)}% occupied evidence squares.`);
+      const tilePhrase =
+        tileCount > 1
+          ? `${tileCount} neighboring ${tileCells}x${tileCells} active-lens tiles`
+          : `a globally anchored ${tileCells}x${tileCells} active-lens tile`;
+      facts.push(
+        `This temporary niche is ${tilePhrase} with ${Number(metrics.grow_occupied_pct || 0).toFixed(1)}% occupied evidence squares.`
+      );
       if (Number(metrics.grow_structure_clip?.clipped_cells || 0) > 0) {
-        facts.push(`${Math.round(Number(metrics.grow_structure_clip.clipped_cells || 0))} grid cells overlapping cached OSM building outlines were clipped before tile merging.`);
+        facts.push(
+          `${Math.round(Number(metrics.grow_structure_clip.clipped_cells || 0))} grid cells overlapping cached OSM building outlines were clipped before tile merging.`
+        );
       }
     }
     if (cellSeeded) {
-      facts.push(`This niche was computed at runtime from clicked global 20 ft cell ${metrics.clicked_cell || "unknown"}; the parsed seed was the strongest cell within ${Number(metrics.seed_search_radius_cells || 5)} cells.`);
-      facts.push(`The growth algorithm linked ${Number(metrics.component_cell_count || metrics.totalCells || 1)} contiguous biodiversity squares, with diagonal links weighted weakly.`);
-      if (Number(metrics.blocked_edges?.road || 0) > 0 || Number(metrics.blocked_edges?.structure || 0) > 0) {
+      facts.push(
+        `This niche was computed at runtime from clicked global 20 ft cell ${metrics.clicked_cell || "unknown"}; the parsed seed was the strongest cell within ${Number(metrics.seed_search_radius_cells || 5)} cells.`
+      );
+      facts.push(
+        `The growth algorithm linked ${Number(metrics.component_cell_count || metrics.totalCells || 1)} contiguous biodiversity squares, with diagonal links weighted weakly.`
+      );
+      if (
+        Number(metrics.blocked_edges?.road || 0) > 0 ||
+        Number(metrics.blocked_edges?.structure || 0) > 0
+      ) {
         facts.push("Cached OSM roads and structures cut off attempted expansion edges.");
       }
       if (Number(metrics.water_boundary_score || 0) > 0) {
@@ -2096,40 +2288,54 @@
       }
     }
     if (Number(metrics.lensPeakAbsZ) > 0) {
-      facts.push(heatTendril
-        ? metrics.heat_path_length_m
-          ? `This niche follows a solved Lens-heat path vector about ${Math.round(Number(metrics.heat_path_length_m || 0))} m long.`
-          : `This niche follows a long, thin Lens-heat tendril inside the current FOV.`
-        : trailCorridor
-        ? `This niche follows a hot trail-edge run about ${Math.round(Number(metrics.trail_length_m || 0))} m long.`
-        : growLocal
-        ? `No z cutoff was applied; the tile used the active HUD Explorer lens directly.`
-        : thresholdSubdivide
-        ? `This face comes from HUD-parity heat cells with z >= ${Number(metrics.z_threshold || state.controls.lensZThreshold || 2.5).toFixed(1)}, flood-filled and clipped to a ${THRESHOLD_SUBDIVIDE_RULE.tileCells}x${THRESHOLD_SUBDIVIDE_RULE.tileCells} grid tile.`
-        : constrained
-        ? `This niche is anchored to a local Lens peak and constrained by radius, area, shape, and boundary complexity.`
-        : `This locus is part of an absolute Z > ${Number(state.controls.lensZThreshold || 2.5).toFixed(1)} connected component in the current Lens heatmap.`);
+      facts.push(
+        heatTendril
+          ? metrics.heat_path_length_m
+            ? `This niche follows a solved Lens-heat path vector about ${Math.round(Number(metrics.heat_path_length_m || 0))} m long.`
+            : `This niche follows a long, thin Lens-heat tendril inside the current FOV.`
+          : trailCorridor
+            ? `This niche follows a hot trail-edge run about ${Math.round(Number(metrics.trail_length_m || 0))} m long.`
+            : growLocal
+              ? `No z cutoff was applied; the tile used the active HUD Explorer lens directly.`
+              : thresholdSubdivide
+                ? `This face comes from HUD-parity heat cells with z >= ${Number(metrics.z_threshold || state.controls.lensZThreshold || 2.5).toFixed(1)}, flood-filled and clipped to a ${THRESHOLD_SUBDIVIDE_RULE.tileCells}x${THRESHOLD_SUBDIVIDE_RULE.tileCells} grid tile.`
+                : constrained
+                  ? `This niche is anchored to a local Lens peak and constrained by radius, area, shape, and boundary complexity.`
+                  : `This locus is part of an absolute Z > ${Number(state.controls.lensZThreshold || 2.5).toFixed(1)} connected component in the current Lens heatmap.`
+      );
     }
     if (metrics.grow_osm_subdivision?.enabled) {
-      facts.push(metrics.grow_osm_subdivision?.vector_cut
-        ? "Cached OSM road and path centerlines subdivided this Grow niche as vector faces; structure footprints were ignored."
-        : "Cached OSM roads and paths subdivided this Grow niche; structure footprints were ignored.");
+      facts.push(
+        metrics.grow_osm_subdivision?.vector_cut
+          ? "Cached OSM road and path centerlines subdivided this Grow niche as vector faces; structure footprints were ignored."
+          : "Cached OSM roads and paths subdivided this Grow niche; structure footprints were ignored."
+      );
     } else if (metrics.osm_transform?.enabled) {
-      facts.push("Cached OSM roads, paths, and structure footprints subdivided this niche into map-fitted surviving areas.");
+      facts.push(
+        "Cached OSM roads, paths, and structure footprints subdivided this niche into map-fitted surviving areas."
+      );
     }
-    if (metrics.species > 0) facts.push(`Nearby cells contain ${Math.round(metrics.species)} genus/species signals.`);
-    if (metrics.activeRatio < 0.35) facts.push("This cell cluster is under-sampled relative to its walking context.");
-    if (daysSince(metrics.latestObservedMs) > 120) facts.push("The area has not been sampled recently.");
+    if (metrics.species > 0)
+      facts.push(`Nearby cells contain ${Math.round(metrics.species)} genus/species signals.`);
+    if (metrics.activeRatio < 0.35)
+      facts.push("This cell cluster is under-sampled relative to its walking context.");
+    if (daysSince(metrics.latestObservedMs) > 120)
+      facts.push("The area has not been sampled recently.");
     if (metrics.observers >= 3) facts.push("Multiple observers have contributed records nearby.");
-    if (placeContext?.primary_label) facts.push(`The niche is tied to ${placeContext.primary_label}.`);
+    if (placeContext?.primary_label)
+      facts.push(`The niche is tied to ${placeContext.primary_label}.`);
     if (placeContext?.geometry_context?.label_phrase) {
-      facts.push(`The niche shape is elongated and tracks ${placeContext.geometry_context.label_phrase}.`);
+      facts.push(
+        `The niche shape is elongated and tracks ${placeContext.geometry_context.label_phrase}.`
+      );
     }
 
     if (type === "edge_habitat_niche") {
-      facts.unshift(heatTendril
-        ? "A narrow heatmap corridor may mark a walkable line of concentrated observations."
-        : "A nearby edge feature may concentrate plants, insects, or fungi.");
+      facts.unshift(
+        heatTendril
+          ? "A narrow heatmap corridor may mark a walkable line of concentrated observations."
+          : "A nearby edge feature may concentrate plants, insects, or fungi."
+      );
     }
 
     return {
@@ -2274,9 +2480,7 @@
     const stats = zStats(values);
     if (stats) {
       for (const cell of cells.values()) {
-        cell.z = cell.signal > 0 && stats.sd > 0
-          ? (cell.signal - stats.mean) / stats.sd
-          : 0;
+        cell.z = cell.signal > 0 && stats.sd > 0 ? (cell.signal - stats.mean) / stats.sd : 0;
       }
     }
 
@@ -2287,10 +2491,11 @@
     const nums = values.map(Number).filter(Number.isFinite);
     if (!nums.length) return null;
     const mean = nums.reduce((sum, value) => sum + value, 0) / nums.length;
-    const variance = nums.reduce((sum, value) => {
-      const d = value - mean;
-      return sum + d * d;
-    }, 0) / nums.length;
+    const variance =
+      nums.reduce((sum, value) => {
+        const d = value - mean;
+        return sum + d * d;
+      }, 0) / nums.length;
     return { mean, sd: Math.sqrt(variance) };
   }
 
@@ -2301,8 +2506,8 @@
 
     return new Set(
       [...signalData.cells.values()]
-        .filter(cell => Math.abs(cell.z) > threshold)
-        .map(cell => cell.key)
+        .filter((cell) => Math.abs(cell.z) > threshold)
+        .map((cell) => cell.key)
     );
   }
 
@@ -2312,9 +2517,14 @@
     const visited = new Set();
     const components = [];
     const offsets = [
-      [-1, -1], [0, -1], [1, -1],
-      [-1, 0],           [1, 0],
-      [-1, 1],  [0, 1],  [1, 1]
+      [-1, -1],
+      [0, -1],
+      [1, -1],
+      [-1, 0],
+      [1, 0],
+      [-1, 1],
+      [0, 1],
+      [1, 1]
     ];
 
     for (const key of mask) {
@@ -2339,9 +2549,10 @@
       }
 
       if (members.length >= minCells) {
-        const peak = members.reduce((best, cell) => (
-          !best || Math.abs(cell.z) > Math.abs(best.z) ? cell : best
-        ), null);
+        const peak = members.reduce(
+          (best, cell) => (!best || Math.abs(cell.z) > Math.abs(best.z) ? cell : best),
+          null
+        );
 
         components.push({
           peak,
@@ -2357,8 +2568,14 @@
       }
     }
 
-    const maxCells = Math.max(1, ...components.map((component) => Number(component.componentCellCount) || 0));
-    const maxMeanAbsZ = Math.max(0.01, ...components.map((component) => Number(component.meanAbsZ) || 0));
+    const maxCells = Math.max(
+      1,
+      ...components.map((component) => Number(component.componentCellCount) || 0)
+    );
+    const maxMeanAbsZ = Math.max(
+      0.01,
+      ...components.map((component) => Number(component.meanAbsZ) || 0)
+    );
 
     return components
       .map((component) => {
@@ -2371,11 +2588,12 @@
           clusterPreferenceScore: clamp01((sizeScore + peakScore) / 2)
         };
       })
-      .sort((a, b) =>
-        b.clusterPreferenceScore - a.clusterPreferenceScore ||
-        b.componentCellCount - a.componentCellCount ||
-        b.meanAbsZ - a.meanAbsZ ||
-        b.peakAbsZ - a.peakAbsZ
+      .sort(
+        (a, b) =>
+          b.clusterPreferenceScore - a.clusterPreferenceScore ||
+          b.componentCellCount - a.componentCellCount ||
+          b.meanAbsZ - a.meanAbsZ ||
+          b.peakAbsZ - a.peakAbsZ
       );
   }
 
@@ -2386,24 +2604,29 @@
 
     return new Set(
       [...signalData.cells.values()]
-        .filter(cell => Number(cell.signal || 0) > 0 && Number(cell.z || 0) >= threshold)
-        .map(cell => cell.key)
+        .filter((cell) => Number(cell.signal || 0) > 0 && Number(cell.z || 0) >= threshold)
+        .map((cell) => cell.key)
     );
   }
 
   function componentStatsFromMembers(members = []) {
-    const peak = members.reduce((best, cell) => (
-      !best ||
-      Number(cell.z || 0) > Number(best.z || 0) ||
-      (Number(cell.z || 0) === Number(best.z || 0) && Number(cell.signal || 0) > Number(best.signal || 0))
-        ? cell
-        : best
-    ), null);
+    const peak = members.reduce(
+      (best, cell) =>
+        !best ||
+        Number(cell.z || 0) > Number(best.z || 0) ||
+        (Number(cell.z || 0) === Number(best.z || 0) &&
+          Number(cell.signal || 0) > Number(best.signal || 0))
+          ? cell
+          : best,
+      null
+    );
 
     if (!peak || !members.length) return null;
-    const meanSignal = members.reduce((sum, cell) => sum + Number(cell.signal || 0), 0) / members.length;
+    const meanSignal =
+      members.reduce((sum, cell) => sum + Number(cell.signal || 0), 0) / members.length;
     const meanZ = members.reduce((sum, cell) => sum + Number(cell.z || 0), 0) / members.length;
-    const meanAbsZ = members.reduce((sum, cell) => sum + Math.abs(Number(cell.z || 0)), 0) / members.length;
+    const meanAbsZ =
+      members.reduce((sum, cell) => sum + Math.abs(Number(cell.z || 0)), 0) / members.length;
 
     return {
       peak,
@@ -2424,9 +2647,14 @@
     const visited = new Set();
     const components = [];
     const offsets = [
-      [-1, -1], [0, -1], [1, -1],
-      [-1, 0],           [1, 0],
-      [-1, 1],  [0, 1],  [1, 1]
+      [-1, -1],
+      [0, -1],
+      [1, -1],
+      [-1, 0],
+      [1, 0],
+      [-1, 1],
+      [0, 1],
+      [1, 1]
     ];
 
     for (const key of mask) {
@@ -2454,10 +2682,9 @@
       if (component) components.push(component);
     }
 
-    return components.sort((a, b) =>
-      b.peakZ - a.peakZ ||
-      b.meanZ - a.meanZ ||
-      b.componentCellCount - a.componentCellCount
+    return components.sort(
+      (a, b) =>
+        b.peakZ - a.peakZ || b.meanZ - a.meanZ || b.componentCellCount - a.componentCellCount
     );
   }
 
@@ -2481,13 +2708,11 @@
     const allTiles = [...groups.entries()]
       .map(([tileKey, members]) => ({ tileKey, members }))
       .sort((a, b) => b.members.length - a.members.length || a.tileKey.localeCompare(b.tileKey));
-    const surviving = allTiles.filter(tile => tile.members.length >= minCells);
-    const selectedTiles = surviving.length
-      ? surviving
-      : allTiles.slice(0, 1);
+    const surviving = allTiles.filter((tile) => tile.members.length >= minCells);
+    const selectedTiles = surviving.length ? surviving : allTiles.slice(0, 1);
 
     return selectedTiles
-      .map(tile => {
+      .map((tile) => {
         const next = componentStatsFromMembers(tile.members);
         if (!next) return null;
         return {
@@ -2545,9 +2770,12 @@
       metrics.species += Number(m.species) || 0;
       metrics.observers += Number(m.observers) || 0;
       metrics.captive += Number(m.n_captive) || 0;
-      metrics.latestObservedMs = Math.max(metrics.latestObservedMs, Number(m.last_observed_ms) || 0);
+      metrics.latestObservedMs = Math.max(
+        metrics.latestObservedMs,
+        Number(m.last_observed_ms) || 0
+      );
 
-      if (Array.isArray(m.month_totals) && m.month_totals.some(v => Number(v) > 0)) {
+      if (Array.isArray(m.month_totals) && m.month_totals.some((v) => Number(v) > 0)) {
         m.month_totals.slice(0, 12).forEach((value, idx) => {
           metrics.month_totals[idx] += Number(value) || 0;
         });
@@ -2577,14 +2805,16 @@
     const ix = Math.round(metrics.totalCells ? sumIx / metrics.totalCells : component.peak.ix);
     const iy = Math.round(metrics.totalCells ? sumIy / metrics.totalCells : component.peak.iy);
 
-    const componentId = hashString(component.members
-      .map(cell => cell.key)
-      .sort()
-      .join("|"));
+    const componentId = hashString(
+      component.members
+        .map((cell) => cell.key)
+        .sort()
+        .join("|")
+    );
 
     return {
       componentId,
-      cells: component.members.map(cell => cell.key),
+      cells: component.members.map((cell) => cell.key),
       center: latLngForCell(ix, iy),
       ix,
       iy,
@@ -2611,7 +2841,8 @@
 
   function chooseType(scores, metrics, placeContext) {
     const typeLabel = String(placeContext.place_type || "").toLowerCase();
-    if (scores.edge > 0.62 || typeLabel.includes("stream") || typeLabel.includes("water")) return "edge_habitat_niche";
+    if (scores.edge > 0.62 || typeLabel.includes("stream") || typeLabel.includes("water"))
+      return "edge_habitat_niche";
     if (scores.need > 0.7) return "under_sampled_nearby_opportunity";
     if (scores.stale > 0.65 && metrics.count > 0) return "recently_stale_hotspot";
     if (scores.bio > 0.62) return "high_richness_hotspot";
@@ -2620,7 +2851,11 @@
 
   function themeFor(type, placeContext) {
     const placeType = String(placeContext.place_type || "").toLowerCase();
-    if (type === "edge_habitat_niche" && (placeType.includes("stream") || placeType.includes("water"))) return "Plants / wet edge";
+    if (
+      type === "edge_habitat_niche" &&
+      (placeType.includes("stream") || placeType.includes("water"))
+    )
+      return "Plants / wet edge";
     if (type === "edge_habitat_niche") return "Edge habitat";
     if (type === "high_richness_hotspot") return "High richness";
     if (type === "recently_stale_hotspot") return "Recently stale";
@@ -2628,30 +2863,57 @@
     return "Under-sampled";
   }
 
-  function thresholdSubdivideNicheFromComponent({ component, origin, caps, activeLens, heatMetric, chunkIndex, tileIndex }) {
+  function thresholdSubdivideNicheFromComponent({
+    component,
+    origin,
+    caps,
+    activeLens,
+    heatMetric,
+    chunkIndex,
+    tileIndex
+  }) {
     const agg = aggregateComponent(component);
     const ll = agg.center;
     const distanceM = L.latLng(origin.lat, origin.lng).distanceTo(L.latLng(ll.lat, ll.lng));
     const m = agg.metrics;
     const weights = scoreWeights();
     const heatCap =
-      heatMetric === "species" ? caps.species :
-      heatMetric === "observers" ? caps.observers :
-      caps.count;
-    const bio = clamp01((Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.66 + m.activeRatio * 0.16 + clamp01(m.lensPeakZ / 5) * 0.18);
-    const need = clamp01((1 - m.activeRatio) * 0.54 + (m.count > 0 && m.count < caps.count ? 0.22 : 0) + (m.observers <= 1 ? 0.09 : 0) + (1 - clamp01(m.lensMeanSignal / Math.max(1, heatCap))) * 0.15);
+      heatMetric === "species"
+        ? caps.species
+        : heatMetric === "observers"
+          ? caps.observers
+          : caps.count;
+    const bio = clamp01(
+      (Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.66 +
+        m.activeRatio * 0.16 +
+        clamp01(m.lensPeakZ / 5) * 0.18
+    );
+    const need = clamp01(
+      (1 - m.activeRatio) * 0.54 +
+        (m.count > 0 && m.count < caps.count ? 0.22 : 0) +
+        (m.observers <= 1 ? 0.09 : 0) +
+        (1 - clamp01(m.lensMeanSignal / Math.max(1, heatCap))) * 0.15
+    );
     const stale = clamp01(daysSince(m.latestObservedMs) / 240);
     const edge = detectEdgeScore(ll.lat, ll.lng);
     const zStrength = clamp01((Number(m.lensPeakZ) || 0) / 5);
-    const componentSizeScore = clamp01(Math.log1p(Number(m.componentCellCount) || 1) / Math.log1p(THRESHOLD_SUBDIVIDE_RULE.tileCells ** 2));
-    const clusterPriority = clamp01(zStrength * 0.48 + componentSizeScore * 0.24 + clamp01(Number(m.lensMeanZ || 0) / 4) * 0.18 + m.activeRatio * 0.1);
+    const componentSizeScore = clamp01(
+      Math.log1p(Number(m.componentCellCount) || 1) /
+        Math.log1p(THRESHOLD_SUBDIVIDE_RULE.tileCells ** 2)
+    );
+    const clusterPriority = clamp01(
+      zStrength * 0.48 +
+        componentSizeScore * 0.24 +
+        clamp01(Number(m.lensMeanZ || 0) / 4) * 0.18 +
+        m.activeRatio * 0.1
+    );
     const questability = clamp01(
       clusterPriority * 0.38 +
-      zStrength * 0.18 +
-      bio * weights.bio * 0.72 +
-      need * weights.need * 0.72 +
-      stale * weights.stale * 0.72 +
-      edge * weights.edge * 0.72
+        zStrength * 0.18 +
+        bio * weights.bio * 0.72 +
+        need * weights.need * 0.72 +
+        stale * weights.stale * 0.72 +
+        edge * weights.edge * 0.72
     );
     const placeContext = resolveGeometricPlaceContext(
       ll.lat,
@@ -2668,11 +2930,16 @@
       active_lens: activeLens,
       heat_metric: heatMetric
     });
-    const taxonFocus = theme.includes("Plants") || nicheType === "edge_habitat_niche"
-      ? { iconic: "Plantae", label: "plants" }
-      : initialFocus?.label
-        ? { iconic: initialFocus.rank || "Any", label: titleSubjectCase(initialFocus.label), source_rank: initialFocus.rank || null }
-        : { iconic: "Any", label: "life" };
+    const taxonFocus =
+      theme.includes("Plants") || nicheType === "edge_habitat_niche"
+        ? { iconic: "Plantae", label: "plants" }
+        : initialFocus?.label
+          ? {
+              iconic: initialFocus.rank || "Any",
+              label: titleSubjectCase(initialFocus.label),
+              source_rank: initialFocus.rank || null
+            }
+          : { iconic: "Any", label: "life" };
     const coreCell = component.peak ? `${component.peak.ix},${component.peak.iy}` : "";
     const threshold = Number(state.controls.lensZThreshold || 2.5);
     const sourceKey = [
@@ -2714,7 +2981,9 @@
       geometry_type: geometryType,
       scale_class: scaleClass,
       display_geometry: geometryType,
-      interaction_radius_m: Math.round(Math.max(26, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.25)),
+      interaction_radius_m: Math.round(
+        Math.max(26, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.25)
+      ),
       geometry_context: placeContext.geometry_context || null,
       member_cells_are_analysis_object: true
     };
@@ -2730,13 +2999,17 @@
       centroid_lng: ll.lng,
       geometry: boundsForCells(agg.minIx, agg.minIy, agg.maxIx, agg.maxIy),
       grid_cell_ids: agg.cells,
-      radius_m: Math.round(Math.max(18, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.08)),
+      radius_m: Math.round(
+        Math.max(18, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.08)
+      ),
       scale_level: `threshold-subdivide:${scaleClass}`,
       taxon_focus: taxonFocus,
       seasonal_profile: { mode: "threshold_subdivide_runtime_v1" },
       evidence_summary: evidenceFor(nicheType, nextMetrics, placeContext),
       metrics: nextMetrics,
-      confidence: clamp01(0.34 + placeContext.label_confidence * 0.18 + questability * 0.28 + clusterPriority * 0.2),
+      confidence: clamp01(
+        0.34 + placeContext.label_confidence * 0.18 + questability * 0.28 + clusterPriority * 0.2
+      ),
       novelty_score: need,
       sampling_need_score: need,
       biodiversity_score: bio,
@@ -2766,10 +3039,12 @@
     const capRadiusCells = isFovSampling()
       ? Math.max(
           6,
-          Math.ceil(Math.max(
-            signalData.bounds.maxIx - signalData.bounds.minIx,
-            signalData.bounds.maxIy - signalData.bounds.minIy
-          ) / 2)
+          Math.ceil(
+            Math.max(
+              signalData.bounds.maxIx - signalData.bounds.minIx,
+              signalData.bounds.maxIy - signalData.bounds.minIy
+            ) / 2
+          )
         )
       : Math.max(6, Math.round(numericRadiusM(500) / GRID_SIZE_M));
     const caps = scanCaps(center, capRadiusCells);
@@ -2785,23 +3060,26 @@
       droppedTiles += tiles.length ? Number(tiles[0].thresholdDroppedTileCount || 0) : 0;
       tiles.forEach((component, tileIndex) => {
         components.push(component);
-        rows.push(thresholdSubdivideNicheFromComponent({
-          component,
-          origin,
-          caps,
-          activeLens,
-          heatMetric,
-          chunkIndex,
-          tileIndex
-        }));
+        rows.push(
+          thresholdSubdivideNicheFromComponent({
+            component,
+            origin,
+            caps,
+            activeLens,
+            heatMetric,
+            chunkIndex,
+            tileIndex
+          })
+        );
       });
     });
 
     const sortedRows = rows
       .filter(Boolean)
-      .sort((a, b) =>
-        nicheClusterPriority(b) - nicheClusterPriority(a) ||
-        Number(b.questability_score || 0) - Number(a.questability_score || 0)
+      .sort(
+        (a, b) =>
+          nicheClusterPriority(b) - nicheClusterPriority(a) ||
+          Number(b.questability_score || 0) - Number(a.questability_score || 0)
       );
 
     state.detectorDebug = {
@@ -2855,14 +3133,18 @@
     const context = buildOsmTransformationContext();
     const structuresByKey = new Map();
     for (const feature of context?.structures || []) {
-      const key = feature?.feature?.id || `${feature.points?.[0]?.x?.toFixed?.(1)},${feature.points?.[0]?.y?.toFixed?.(1)}:${feature.points?.length || 0}`;
+      const key =
+        feature?.feature?.id ||
+        `${feature.points?.[0]?.x?.toFixed?.(1)},${feature.points?.[0]?.y?.toFixed?.(1)}:${feature.points?.length || 0}`;
       structuresByKey.set(String(key), feature);
     }
     const structureLayerBuildings = window.GridWildStructuresLayer?.getBuildings?.() || [];
     for (const building of structureLayerBuildings) {
       const projected = projectOsmFeature(building, "structure");
       if (!projected || projected.points.length < 3) continue;
-      const key = building?.id || `${projected.points[0]?.x?.toFixed?.(1)},${projected.points[0]?.y?.toFixed?.(1)}:${projected.points.length}`;
+      const key =
+        building?.id ||
+        `${projected.points[0]?.x?.toFixed?.(1)},${projected.points[0]?.y?.toFixed?.(1)}:${projected.points.length}`;
       if (!structuresByKey.has(String(key))) structuresByKey.set(String(key), projected);
     }
     const structures = [...structuresByKey.values()];
@@ -2889,7 +3171,9 @@
     }
 
     const bounds = membersBoundsMeters(members, GRID_SIZE_M);
-    const relevant = structures.filter(feature => boundsOverlap(bounds, projectedBoundsForPoints(feature.points, GRID_SIZE_M)));
+    const relevant = structures.filter((feature) =>
+      boundsOverlap(bounds, projectedBoundsForPoints(feature.points, GRID_SIZE_M))
+    );
     if (!relevant.length) {
       return {
         members,
@@ -2918,7 +3202,7 @@
     }
 
     return {
-      members: members.filter(cell => !clipped.has(cell.key)),
+      members: members.filter((cell) => !clipped.has(cell.key)),
       clippedCells: clipped.size,
       structureFeatures: structures.length,
       cutoutPaths
@@ -2955,7 +3239,9 @@
     for (const tile of sortedTiles) {
       occupiedCells += Number(tile.occupiedCells || 0);
       totalCells += Number(tile.totalCells || tile.members?.length || tileSize * tileSize);
-      originalTotalCells += Number(tile.originalTotalCells || tile.totalCells || tile.members?.length || tileSize * tileSize);
+      originalTotalCells += Number(
+        tile.originalTotalCells || tile.totalCells || tile.members?.length || tileSize * tileSize
+      );
       preClipOccupiedCells += Number(tile.preClipOccupiedCells || tile.occupiedCells || 0);
       structureClippedCells += Number(tile.structureClippedCells || 0);
       structureFeatures = Math.max(structureFeatures, Number(tile.structureFeatures || 0));
@@ -2970,14 +3256,20 @@
     const component = componentStatsFromMembers(members);
     if (!component) return null;
 
-    const tileAnchors = sortedTiles.map(tile => tile.tileKey || growTileKey(tile.anchorIx, tile.anchorIy));
+    const tileAnchors = sortedTiles.map(
+      (tile) => tile.tileKey || growTileKey(tile.anchorIx, tile.anchorIy)
+    );
     const occupiedRatio = totalCells ? occupiedCells / totalCells : 0;
-    const sizeScore = clamp01(component.componentCellCount / Math.max(1, totalCells || tileSize * tileSize));
+    const sizeScore = clamp01(
+      component.componentCellCount / Math.max(1, totalCells || tileSize * tileSize)
+    );
     const peakScore = clamp01(Number(component.peakSignal || 0));
 
     component.clusterSizeScore = sizeScore;
     component.clusterPeakScore = peakScore;
-    component.clusterPreferenceScore = clamp01(occupiedRatio * 0.5 + peakScore * 0.3 + Number(component.meanSignal || 0) * 0.2);
+    component.clusterPreferenceScore = clamp01(
+      occupiedRatio * 0.5 + peakScore * 0.3 + Number(component.meanSignal || 0) * 0.2
+    );
     component.growTileAnchor = tileAnchors[0] || "";
     component.growTileAnchors = tileAnchors;
     component.growTileCount = sortedTiles.length;
@@ -2985,8 +3277,8 @@
 
     return {
       component,
-      anchorIx: Math.min(...sortedTiles.map(tile => tile.anchorIx)),
-      anchorIy: Math.min(...sortedTiles.map(tile => tile.anchorIy)),
+      anchorIx: Math.min(...sortedTiles.map((tile) => tile.anchorIx)),
+      anchorIy: Math.min(...sortedTiles.map((tile) => tile.anchorIy)),
       occupiedCells,
       occupiedRatio,
       tileAnchors,
@@ -3002,17 +3294,20 @@
 
   function growTileGroupsFromTiles(tiles = [], tileSize = growTileCells(), mergeEnabled = false) {
     if (!mergeEnabled) {
-      return tiles
-        .map(tile => growTileGroupFromTiles([tile], tileSize))
-        .filter(Boolean);
+      return tiles.map((tile) => growTileGroupFromTiles([tile], tileSize)).filter(Boolean);
     }
 
-    const byKey = new Map(tiles.map(tile => [tile.tileKey, tile]));
+    const byKey = new Map(tiles.map((tile) => [tile.tileKey, tile]));
     const visited = new Set();
     const offsets = [
-      [-tileSize, -tileSize], [0, -tileSize], [tileSize, -tileSize],
-      [-tileSize, 0],                         [tileSize, 0],
-      [-tileSize, tileSize],  [0, tileSize],  [tileSize, tileSize]
+      [-tileSize, -tileSize],
+      [0, -tileSize],
+      [tileSize, -tileSize],
+      [-tileSize, 0],
+      [tileSize, 0],
+      [-tileSize, tileSize],
+      [0, tileSize],
+      [tileSize, tileSize]
     ];
     const groups = [];
 
@@ -3038,10 +3333,12 @@
       if (group) groups.push(group);
     }
 
-    return groups.sort((a, b) =>
-      Number(b.component?.clusterPreferenceScore || 0) - Number(a.component?.clusterPreferenceScore || 0) ||
-      Number(b.occupiedRatio || 0) - Number(a.occupiedRatio || 0) ||
-      Number(b.tileCount || 0) - Number(a.tileCount || 0)
+    return groups.sort(
+      (a, b) =>
+        Number(b.component?.clusterPreferenceScore || 0) -
+          Number(a.component?.clusterPreferenceScore || 0) ||
+        Number(b.occupiedRatio || 0) - Number(a.occupiedRatio || 0) ||
+        Number(b.tileCount || 0) - Number(a.tileCount || 0)
     );
   }
 
@@ -3073,21 +3370,32 @@
     const distanceM = L.latLng(origin.lat, origin.lng).distanceTo(L.latLng(ll.lat, ll.lng));
     const m = agg.metrics;
     const weights = scoreWeights();
-    const bio = clamp01((Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.58 + occupiedRatio * 0.18 + m.lensMeanSignal * 0.24);
-    const need = clamp01((1 - occupiedRatio) * 0.34 + (1 - m.lensMeanSignal) * 0.28 + (m.observers <= 1 ? 0.12 : 0) + (m.count > 0 && m.count < caps.count ? 0.18 : 0));
+    const bio = clamp01(
+      (Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.58 +
+        occupiedRatio * 0.18 +
+        m.lensMeanSignal * 0.24
+    );
+    const need = clamp01(
+      (1 - occupiedRatio) * 0.34 +
+        (1 - m.lensMeanSignal) * 0.28 +
+        (m.observers <= 1 ? 0.12 : 0) +
+        (m.count > 0 && m.count < caps.count ? 0.18 : 0)
+    );
     const stale = clamp01(daysSince(m.latestObservedMs) / 240);
     const edge = detectEdgeScore(ll.lat, ll.lng);
     const lensPeak = clamp01(m.lensPeakSignal);
     const zStrength = clamp01((Number(m.lensPeakAbsZ) || 0) / 5);
-    const clusterPriority = clamp01(occupiedRatio * 0.42 + m.lensMeanSignal * 0.28 + lensPeak * 0.18 + bio * 0.12);
+    const clusterPriority = clamp01(
+      occupiedRatio * 0.42 + m.lensMeanSignal * 0.28 + lensPeak * 0.18 + bio * 0.12
+    );
     const questability = clamp01(
       clusterPriority * 0.38 +
-      lensPeak * 0.08 +
-      zStrength * 0.08 +
-      bio * weights.bio * 0.72 +
-      need * weights.need * 0.62 +
-      stale * weights.stale * 0.58 +
-      edge * weights.edge * 0.58
+        lensPeak * 0.08 +
+        zStrength * 0.08 +
+        bio * weights.bio * 0.72 +
+        need * weights.need * 0.62 +
+        stale * weights.stale * 0.58 +
+        edge * weights.edge * 0.58
     );
 
     const placeContext = resolveGeometricPlaceContext(
@@ -3098,10 +3406,17 @@
     );
     const nicheType = chooseType({ bio, need, stale, edge }, m, placeContext);
     const anchorKey = growTileKey(anchorIx, anchorIy);
-    const tileAnchorList = Array.isArray(tileAnchors) && tileAnchors.length ? tileAnchors : [anchorKey];
+    const tileAnchorList =
+      Array.isArray(tileAnchors) && tileAnchors.length ? tileAnchors : [anchorKey];
     const normalizedTileCount = Math.max(1, Number(tileCount || tileAnchorList.length || 1));
-    const normalizedTotalCells = Math.max(1, Number(totalCells || normalizedTileCount * tileSize * tileSize));
-    const normalizedOriginalCells = Math.max(normalizedTotalCells, Number(originalTotalCells || normalizedTotalCells));
+    const normalizedTotalCells = Math.max(
+      1,
+      Number(totalCells || normalizedTileCount * tileSize * tileSize)
+    );
+    const normalizedOriginalCells = Math.max(
+      normalizedTotalCells,
+      Number(originalTotalCells || normalizedTotalCells)
+    );
     const clippedStructureCells = Math.max(0, Number(structureClippedCells || 0));
     const mergedTiles = mergeEnabled === true && normalizedTileCount > 1;
     const scaleClass = mergedTiles
@@ -3113,11 +3428,16 @@
       active_lens: activeLens,
       heat_metric: heatMetric
     });
-    const taxonFocus = theme.includes("Plants") || nicheType === "edge_habitat_niche"
-      ? { iconic: "Plantae", label: "plants" }
-      : initialFocus?.label
-        ? { iconic: initialFocus.rank || "Any", label: titleSubjectCase(initialFocus.label), source_rank: initialFocus.rank || null }
-        : { iconic: "Any", label: "life" };
+    const taxonFocus =
+      theme.includes("Plants") || nicheType === "edge_habitat_niche"
+        ? { iconic: "Plantae", label: "plants" }
+        : initialFocus?.label
+          ? {
+              iconic: initialFocus.rank || "Any",
+              label: titleSubjectCase(initialFocus.label),
+              source_rank: initialFocus.rank || null
+            }
+          : { iconic: "Any", label: "life" };
     const coreCell = component.peak ? `${component.peak.ix},${component.peak.iy}` : anchorKey;
     const tileKeyPart = mergedTiles ? `merge-${hashString(tileAnchorList.join("|"))}` : anchorKey;
     const sourceKey = [
@@ -3148,7 +3468,9 @@
       geometry_type: mergedTiles ? "grow-local-niche-merged-tiles" : "grow-local-niche-tile",
       scale_class: scaleClass,
       display_geometry: mergedTiles ? "grow-local-niche-merged-tiles" : "grow-local-niche-tile",
-      interaction_radius_m: Math.round(Math.max(32, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 0.72)),
+      interaction_radius_m: Math.round(
+        Math.max(32, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 0.72)
+      ),
       geometry_context: placeContext.geometry_context || null,
       member_cells_are_analysis_object: true,
       grow_tile_cells: tileSize,
@@ -3162,7 +3484,13 @@
       grow_total_cells: normalizedTotalCells,
       grow_original_total_cells: normalizedOriginalCells,
       grow_pre_clip_occupied_cells: Math.max(0, Number(preClipOccupiedCells ?? occupiedCells)),
-      grow_pre_clip_occupied_pct: Number(((Number(preClipOccupiedCells ?? occupiedCells) || 0) / Math.max(1, normalizedOriginalCells) * 100).toFixed(1)),
+      grow_pre_clip_occupied_pct: Number(
+        (
+          ((Number(preClipOccupiedCells ?? occupiedCells) || 0) /
+            Math.max(1, normalizedOriginalCells)) *
+          100
+        ).toFixed(1)
+      ),
       grow_occupied_pct: Number((occupiedRatio * 100).toFixed(1)),
       grow_min_occupied_pct: growMinOccupiedPct(),
       grow_structure_clip: {
@@ -3190,13 +3518,17 @@
       centroid_lng: ll.lng,
       geometry: boundsForCells(agg.minIx, agg.minIy, agg.maxIx, agg.maxIy),
       grid_cell_ids: agg.cells,
-      radius_m: Math.round(Math.max(22, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 0.66)),
+      radius_m: Math.round(
+        Math.max(22, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 0.66)
+      ),
       scale_level: `grow-local-niche:${scaleClass}`,
       taxon_focus: taxonFocus,
       seasonal_profile: { mode: "grow_local_niche_runtime_v1" },
       evidence_summary: evidenceFor(nicheType, nextMetrics, placeContext),
       metrics: nextMetrics,
-      confidence: clamp01(0.32 + placeContext.label_confidence * 0.16 + questability * 0.3 + clusterPriority * 0.22),
+      confidence: clamp01(
+        0.32 + placeContext.label_confidence * 0.16 + questability * 0.3 + clusterPriority * 0.22
+      ),
       novelty_score: need,
       sampling_need_score: need,
       biodiversity_score: bio,
@@ -3228,10 +3560,9 @@
     const center = bounds.center || cellForLatLng(origin.lat, origin.lng);
     const capRadiusCells = Math.max(
       6,
-      Math.ceil(Math.max(
-        Math.abs(bounds.maxIx - bounds.minIx),
-        Math.abs(bounds.maxIy - bounds.minIy)
-      ) / 2)
+      Math.ceil(
+        Math.max(Math.abs(bounds.maxIx - bounds.minIx), Math.abs(bounds.maxIy - bounds.minIy)) / 2
+      )
     );
     const caps = scanCaps(center, capRadiusCells);
     const activeLens = window.__gwState?.activeLens || "classic";
@@ -3255,8 +3586,12 @@
       for (let anchorIy = startAnchorIy; anchorIy <= endAnchorIy; anchorIy += tileSize) {
         scannedTiles++;
         const rawMembers = growTileMembers(signalData, origin, anchorIx, anchorIy, tileSize);
-        const preClipOccupiedCells = rawMembers.filter(cell => Number(cell.signal || 0) > 0).length;
-        const preClipOccupiedRatio = rawMembers.length ? preClipOccupiedCells / rawMembers.length : 0;
+        const preClipOccupiedCells = rawMembers.filter(
+          (cell) => Number(cell.signal || 0) > 0
+        ).length;
+        const preClipOccupiedRatio = rawMembers.length
+          ? preClipOccupiedCells / rawMembers.length
+          : 0;
         if (preClipOccupiedRatio < minOccupiedRatio) {
           droppedLowEvidence++;
           continue;
@@ -3264,7 +3599,12 @@
 
         const clipped = structureClipEnabled
           ? clipGrowMembersByStructures(rawMembers, structureClipContext)
-          : { members: rawMembers, clippedCells: 0, structureFeatures: structureClipContext?.structures?.length || 0, cutoutPaths: [] };
+          : {
+              members: rawMembers,
+              clippedCells: 0,
+              structureFeatures: structureClipContext?.structures?.length || 0,
+              cutoutPaths: []
+            };
         if (clipped.clippedCells > 0) {
           structureClippedCells += clipped.clippedCells;
           structureClippedTiles += 1;
@@ -3274,7 +3614,7 @@
           continue;
         }
 
-        const occupiedCells = clipped.members.filter(cell => Number(cell.signal || 0) > 0).length;
+        const occupiedCells = clipped.members.filter((cell) => Number(cell.signal || 0) > 0).length;
         const occupiedRatio = clipped.members.length ? occupiedCells / clipped.members.length : 0;
         acceptedTiles.push({
           anchorIx,
@@ -3295,36 +3635,39 @@
     }
 
     const tileGroups = growTileGroupsFromTiles(acceptedTiles, tileSize, mergeEnabled);
-    const components = tileGroups.map(group => group.component).filter(Boolean);
-    const rows = tileGroups.map((group, tileIndex) => growLocalNicheFromComponent({
-      component: group.component,
-      origin,
-      caps,
-      activeLens,
-      heatMetric,
-      tileSize,
-      anchorIx: group.anchorIx,
-      anchorIy: group.anchorIy,
-      occupiedCells: group.occupiedCells,
-      occupiedRatio: group.occupiedRatio,
-      tileAnchors: group.tileAnchors,
-      tileCount: group.tileCount,
-      totalCells: group.totalCells,
-      originalTotalCells: group.originalTotalCells,
-      preClipOccupiedCells: group.preClipOccupiedCells,
-      structureClippedCells: group.structureClippedCells,
-      structureFeatures: group.structureFeatures,
-      structureCutoutPaths: group.structureCutoutPaths,
-      structureClipEnabled,
-      mergeEnabled,
-      tileIndex
-    }));
+    const components = tileGroups.map((group) => group.component).filter(Boolean);
+    const rows = tileGroups.map((group, tileIndex) =>
+      growLocalNicheFromComponent({
+        component: group.component,
+        origin,
+        caps,
+        activeLens,
+        heatMetric,
+        tileSize,
+        anchorIx: group.anchorIx,
+        anchorIy: group.anchorIy,
+        occupiedCells: group.occupiedCells,
+        occupiedRatio: group.occupiedRatio,
+        tileAnchors: group.tileAnchors,
+        tileCount: group.tileCount,
+        totalCells: group.totalCells,
+        originalTotalCells: group.originalTotalCells,
+        preClipOccupiedCells: group.preClipOccupiedCells,
+        structureClippedCells: group.structureClippedCells,
+        structureFeatures: group.structureFeatures,
+        structureCutoutPaths: group.structureCutoutPaths,
+        structureClipEnabled,
+        mergeEnabled,
+        tileIndex
+      })
+    );
 
     const sortedRows = rows
       .filter(Boolean)
-      .sort((a, b) =>
-        nicheClusterPriority(b) - nicheClusterPriority(a) ||
-        Number(b.metrics?.grow_occupied_pct || 0) - Number(a.metrics?.grow_occupied_pct || 0)
+      .sort(
+        (a, b) =>
+          nicheClusterPriority(b) - nicheClusterPriority(a) ||
+          Number(b.metrics?.grow_occupied_pct || 0) - Number(a.metrics?.grow_occupied_pct || 0)
       );
 
     state.detectorDebug = {
@@ -3332,7 +3675,7 @@
       components,
       thresholdMode: "grow",
       sampledCellCount: signalData.cells.size,
-      thresholdCellCount: signalData.values.filter(value => Number(value) > 0).length,
+      thresholdCellCount: signalData.values.filter((value) => Number(value) > 0).length,
       constrainedGeometry: {
         algorithm: GROW_LOCAL_NICHE_RULE.version,
         activeLens,
@@ -3369,7 +3712,9 @@
   }
 
   function parseGridCellKey(cellKey) {
-    const [ix, iy] = String(cellKey || "").split(",").map(Number);
+    const [ix, iy] = String(cellKey || "")
+      .split(",")
+      .map(Number);
     if (!Number.isFinite(ix) || !Number.isFinite(iy)) return null;
     return { ix, iy, key: `${ix},${iy}` };
   }
@@ -3380,8 +3725,12 @@
     const ll = latLngForCell(parsed.ix, parsed.iy);
     const metrics = displayMetrics(parsed.ix, parsed.iy) || {};
     const signal = currentLensSignal(metrics);
-    const peakKey = String(sourceNiche?.metrics?.peak_cell || sourceNiche?.metrics?.core_cell || "");
-    const sourcePeakZ = Number(sourceNiche?.metrics?.peak_z ?? sourceNiche?.metrics?.lensPeakZ ?? 0);
+    const peakKey = String(
+      sourceNiche?.metrics?.peak_cell || sourceNiche?.metrics?.core_cell || ""
+    );
+    const sourcePeakZ = Number(
+      sourceNiche?.metrics?.peak_z ?? sourceNiche?.metrics?.lensPeakZ ?? 0
+    );
     return {
       ...parsed,
       lat: ll.lat,
@@ -3410,25 +3759,20 @@
   function projectedBoundsForPoints(points = [], padM = 0) {
     if (!points.length) return null;
     return {
-      minX: Math.min(...points.map(point => point.x)) - padM,
-      maxX: Math.max(...points.map(point => point.x)) + padM,
-      minY: Math.min(...points.map(point => point.y)) - padM,
-      maxY: Math.max(...points.map(point => point.y)) + padM
+      minX: Math.min(...points.map((point) => point.x)) - padM,
+      maxX: Math.max(...points.map((point) => point.x)) + padM,
+      minY: Math.min(...points.map((point) => point.y)) - padM,
+      maxY: Math.max(...points.map((point) => point.y)) + padM
     };
   }
 
   function boundsOverlap(a, b) {
     if (!a || !b) return false;
-    return a.minX <= b.maxX &&
-      a.maxX >= b.minX &&
-      a.minY <= b.maxY &&
-      a.maxY >= b.minY;
+    return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
   }
 
   function projectOsmFeature(feature, kind) {
-    const points = (feature?.points || [])
-      .map(projectedPointForLatLngLike)
-      .filter(Boolean);
+    const points = (feature?.points || []).map(projectedPointForLatLngLike).filter(Boolean);
     if (points.length < 2) return null;
     return {
       feature,
@@ -3443,12 +3787,16 @@
     if (typeof map === "undefined" || typeof L === "undefined") return null;
     const groups = window.GridWildOsmFeaturesLayer?.getFeatures?.() || {};
     const roadLike = [
-      ...(Array.isArray(groups.roads) ? groups.roads.map(feature => projectOsmFeature(feature, "road")) : []),
-      ...(Array.isArray(groups.trails) ? groups.trails.map(feature => projectOsmFeature(feature, "path")) : [])
+      ...(Array.isArray(groups.roads)
+        ? groups.roads.map((feature) => projectOsmFeature(feature, "road"))
+        : []),
+      ...(Array.isArray(groups.trails)
+        ? groups.trails.map((feature) => projectOsmFeature(feature, "path"))
+        : [])
     ].filter(Boolean);
     const structures = (Array.isArray(groups.buildings) ? groups.buildings : [])
-      .map(feature => projectOsmFeature(feature, "structure"))
-      .filter(feature => feature && feature.points.length >= 3);
+      .map((feature) => projectOsmFeature(feature, "structure"))
+      .filter((feature) => feature && feature.points.length >= 3);
 
     return {
       roadLike,
@@ -3471,10 +3819,10 @@
   function membersBoundsMeters(members = [], padM = 0) {
     if (!members.length) return null;
     return {
-      minX: Math.min(...members.map(cell => Number(cell.ix) * GRID_SIZE_M)) - padM,
-      maxX: Math.max(...members.map(cell => (Number(cell.ix) + 1) * GRID_SIZE_M)) + padM,
-      minY: Math.min(...members.map(cell => Number(cell.iy) * GRID_SIZE_M)) - padM,
-      maxY: Math.max(...members.map(cell => (Number(cell.iy) + 1) * GRID_SIZE_M)) + padM
+      minX: Math.min(...members.map((cell) => Number(cell.ix) * GRID_SIZE_M)) - padM,
+      maxX: Math.max(...members.map((cell) => (Number(cell.ix) + 1) * GRID_SIZE_M)) + padM,
+      minY: Math.min(...members.map((cell) => Number(cell.iy) * GRID_SIZE_M)) - padM,
+      maxY: Math.max(...members.map((cell) => (Number(cell.iy) + 1) * GRID_SIZE_M)) + padM
     };
   }
 
@@ -3495,10 +3843,9 @@
   }
 
   function pointInRect(point, rect) {
-    return point.x >= rect.minX &&
-      point.x <= rect.maxX &&
-      point.y >= rect.minY &&
-      point.y <= rect.maxY;
+    return (
+      point.x >= rect.minX && point.x <= rect.maxX && point.y >= rect.minY && point.y <= rect.maxY
+    );
   }
 
   function expandRect(rect, padM) {
@@ -3517,10 +3864,12 @@
   function pointOnSegment(point, a, b) {
     const eps = 1e-7;
     if (Math.abs(cross2d(a, b, point)) > eps) return false;
-    return point.x >= Math.min(a.x, b.x) - eps &&
+    return (
+      point.x >= Math.min(a.x, b.x) - eps &&
       point.x <= Math.max(a.x, b.x) + eps &&
       point.y >= Math.min(a.y, b.y) - eps &&
-      point.y <= Math.max(a.y, b.y) + eps;
+      point.y <= Math.max(a.y, b.y) + eps
+    );
   }
 
   function segmentsIntersect(a, b, c, d) {
@@ -3528,14 +3877,18 @@
     const abD = cross2d(a, b, d);
     const cdA = cross2d(c, d, a);
     const cdB = cross2d(c, d, b);
-    if ((abC > 0 && abD < 0 || abC < 0 && abD > 0) &&
-        (cdA > 0 && cdB < 0 || cdA < 0 && cdB > 0)) {
+    if (
+      ((abC > 0 && abD < 0) || (abC < 0 && abD > 0)) &&
+      ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0))
+    ) {
       return true;
     }
-    return pointOnSegment(c, a, b) ||
+    return (
+      pointOnSegment(c, a, b) ||
       pointOnSegment(d, a, b) ||
       pointOnSegment(a, c, d) ||
-      pointOnSegment(b, c, d);
+      pointOnSegment(b, c, d)
+    );
   }
 
   function segmentIntersectsRect(a, b, rect) {
@@ -3565,7 +3918,8 @@
       const a = points[i - 1];
       const b = points[i];
       if (segmentIntersectsRect(a, b, expanded)) return true;
-      if (bufferM > 0 && probes.some(point => distancePointToSegment(point, a, b) <= bufferM)) return true;
+      if (bufferM > 0 && probes.some((point) => distancePointToSegment(point, a, b) <= bufferM))
+        return true;
     }
     return false;
   }
@@ -3583,8 +3937,9 @@
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
       const a = ring[i];
       const b = ring[j];
-      const crosses = ((a.y > point.y) !== (b.y > point.y)) &&
-        (point.x < (b.x - a.x) * (point.y - a.y) / ((b.y - a.y) || 1e-9) + a.x);
+      const crosses =
+        a.y > point.y !== b.y > point.y &&
+        point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y || 1e-9) + a.x;
       if (crosses) inside = !inside;
     }
     return inside;
@@ -3594,8 +3949,8 @@
     const ring = closedProjectedRing(points);
     if (ring.length < 4) return false;
     const probes = [rectCenter(rect), ...rectCorners(rect)];
-    if (probes.some(point => pointInPolygon(point, ring))) return true;
-    if (ring.some(point => pointInRect(point, rect))) return true;
+    if (probes.some((point) => pointInPolygon(point, ring))) return true;
+    if (ring.some((point) => pointInRect(point, rect))) return true;
     for (let i = 1; i < ring.length; i++) {
       if (segmentIntersectsRect(ring[i - 1], ring[i], rect)) return true;
     }
@@ -3603,7 +3958,7 @@
   }
 
   function connectedOsmTransformComponents(cells = []) {
-    const byKey = new Map(cells.map(cell => [cell.key, cell]));
+    const byKey = new Map(cells.map((cell) => [cell.key, cell]));
     const visited = new Set();
     const groups = [];
 
@@ -3616,7 +3971,12 @@
       while (queue.length) {
         const current = queue.shift();
         group.push(current);
-        for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+        for (const [dx, dy] of [
+          [0, -1],
+          [1, 0],
+          [0, 1],
+          [-1, 0]
+        ]) {
           const key = `${current.ix + dx},${current.iy + dy}`;
           if (visited.has(key) || !byKey.has(key)) continue;
           visited.add(key);
@@ -3656,15 +4016,20 @@
       return { summary, components: [members], transformed: false };
     }
 
-    const maxPad = Math.max(
-      OSM_TRANSFORMATION_RULE.roadBufferM,
-      OSM_TRANSFORMATION_RULE.pathBufferM,
-      includeStructures ? OSM_TRANSFORMATION_RULE.structureBufferM : 0
-    ) + GRID_SIZE_M;
+    const maxPad =
+      Math.max(
+        OSM_TRANSFORMATION_RULE.roadBufferM,
+        OSM_TRANSFORMATION_RULE.pathBufferM,
+        includeStructures ? OSM_TRANSFORMATION_RULE.structureBufferM : 0
+      ) + GRID_SIZE_M;
     const nicheBounds = membersBoundsMeters(members, maxPad);
-    const roadFeatures = (context?.roadLike || []).filter(feature => boundsOverlap(nicheBounds, projectedBoundsForPoints(feature.points, maxPad)));
+    const roadFeatures = (context?.roadLike || []).filter((feature) =>
+      boundsOverlap(nicheBounds, projectedBoundsForPoints(feature.points, maxPad))
+    );
     const structureFeatures = includeStructures
-      ? (context?.structures || []).filter(feature => boundsOverlap(nicheBounds, projectedBoundsForPoints(feature.points, maxPad)))
+      ? (context?.structures || []).filter((feature) =>
+          boundsOverlap(nicheBounds, projectedBoundsForPoints(feature.points, maxPad))
+        )
       : [];
     summary.roadFeatures = roadFeatures.length;
     summary.structureFeatures = structureFeatures.length;
@@ -3681,9 +4046,10 @@
       const rect = cellRectMeters(cell);
 
       for (const feature of roadFeatures) {
-        const bufferM = feature.kind === "path"
-          ? OSM_TRANSFORMATION_RULE.pathBufferM
-          : OSM_TRANSFORMATION_RULE.roadBufferM;
+        const bufferM =
+          feature.kind === "path"
+            ? OSM_TRANSFORMATION_RULE.pathBufferM
+            : OSM_TRANSFORMATION_RULE.roadBufferM;
         if (polylineTouchesRect(feature.points, rect, bufferM)) {
           roadCutKeys.add(cell.key);
           break;
@@ -3701,15 +4067,12 @@
       }
     }
 
-    const blockedKeys = new Set([
-      ...roadCutKeys,
-      ...buildingEdgeCutKeys,
-      ...buildingOverlapKeys
-    ]);
-    const openCells = members.filter(cell => !blockedKeys.has(cell.key));
+    const blockedKeys = new Set([...roadCutKeys, ...buildingEdgeCutKeys, ...buildingOverlapKeys]);
+    const openCells = members.filter((cell) => !blockedKeys.has(cell.key));
     const components = connectedOsmTransformComponents(openCells);
-    const surviving = components.filter(component => component.length >= minCells);
-    const changed = blockedKeys.size > 0 || surviving.length !== 1 || surviving[0]?.length !== originalCount;
+    const surviving = components.filter((component) => component.length >= minCells);
+    const changed =
+      blockedKeys.size > 0 || surviving.length !== 1 || surviving[0]?.length !== originalCount;
 
     summary.roadCutCells = roadCutKeys.size;
     summary.buildingEdgeCutCells = buildingEdgeCutKeys.size;
@@ -3726,21 +4089,36 @@
   }
 
   function bestPeakForTransformedCells(cells = [], sourceNiche = null) {
-    const peakKey = String(sourceNiche?.metrics?.peak_cell || sourceNiche?.metrics?.core_cell || "");
-    return cells.find(cell => cell.key === peakKey) ||
-      cells.slice().sort((a, b) =>
-        Number(b.signal || 0) - Number(a.signal || 0) ||
-        Number(b.metrics?.count || 0) - Number(a.metrics?.count || 0)
-      )[0] ||
+    const peakKey = String(
+      sourceNiche?.metrics?.peak_cell || sourceNiche?.metrics?.core_cell || ""
+    );
+    return (
+      cells.find((cell) => cell.key === peakKey) ||
+      cells
+        .slice()
+        .sort(
+          (a, b) =>
+            Number(b.signal || 0) - Number(a.signal || 0) ||
+            Number(b.metrics?.count || 0) - Number(a.metrics?.count || 0)
+        )[0] ||
       cells[0] ||
-      null;
+      null
+    );
   }
 
-  function buildOsmTransformedNiche(source, cells, componentIndex, subdivisionCount, analysisSummary, origin) {
+  function buildOsmTransformedNiche(
+    source,
+    cells,
+    componentIndex,
+    subdivisionCount,
+    analysisSummary,
+    origin
+  ) {
     const peak = bestPeakForTransformedCells(cells, source);
-    const component = constrainedComponentFromMembers(cells, peak, {
-      maxCells: Math.max(cells.length, OSM_TRANSFORMATION_RULE.maxCellsPerNiche)
-    }) || componentFromMembers(cells, peak);
+    const component =
+      constrainedComponentFromMembers(cells, peak, {
+        maxCells: Math.max(cells.length, OSM_TRANSFORMATION_RULE.maxCellsPerNiche)
+      }) || componentFromMembers(cells, peak);
     if (!component) return null;
 
     const agg = aggregateComponent(component);
@@ -3750,12 +4128,7 @@
     const scaleClass = constrainedScaleClass(component, geometryType);
     const areaRatio = cells.length / Math.max(1, analysisSummary.originalCount || cells.length);
     const placeContext = preserveGeometryContext(
-      resolveGeometricPlaceContext(
-        ll.lat,
-        ll.lng,
-        component,
-        resolvePlaceContext(ll.lat, ll.lng)
-      ),
+      resolveGeometricPlaceContext(ll.lat, ll.lng, component, resolvePlaceContext(ll.lat, ll.lng)),
       {
         ...(source.place_context?.geometry_context || sourceMetrics.geometry_context || {}),
         osm_transformed: true,
@@ -3764,7 +4137,8 @@
       }
     );
     const distanceM = L.latLng(origin.lat, origin.lng).distanceTo(L.latLng(ll.lat, ll.lng));
-    const sourceKeyBase = source.source_key || source.id || `${source.centroid_lat},${source.centroid_lng}`;
+    const sourceKeyBase =
+      source.source_key || source.id || `${source.centroid_lat},${source.centroid_lng}`;
     const coreCell = peak ? `${peak.ix},${peak.iy}` : "";
     const sourceAlgorithm = String(sourceMetrics.algorithm || "constrained_geometry_niche_v1");
     const nextMetrics = {
@@ -3777,14 +4151,26 @@
       heat_metric: sourceMetrics.heat_metric || window.__gwState?.heatMetric || "count",
       core_cell: coreCell,
       peak_cell: coreCell,
-      peak_signal: Number(Math.max(Number(sourceMetrics.peak_signal || 0), Number(agg.metrics.lensPeakSignal || 0)).toFixed(3)),
+      peak_signal: Number(
+        Math.max(
+          Number(sourceMetrics.peak_signal || 0),
+          Number(agg.metrics.lensPeakSignal || 0)
+        ).toFixed(3)
+      ),
       peak_z: Number(sourceMetrics.peak_z ?? sourceMetrics.lensPeakZ ?? agg.metrics.lensPeakZ ?? 0),
-      peak_abs_z: Number(sourceMetrics.peak_abs_z ?? sourceMetrics.lensPeakAbsZ ?? agg.metrics.lensPeakAbsZ ?? 0),
-      lensPeakAbsZ: Math.max(Number(sourceMetrics.lensPeakAbsZ || 0), Number(agg.metrics.lensPeakAbsZ || 0)),
+      peak_abs_z: Number(
+        sourceMetrics.peak_abs_z ?? sourceMetrics.lensPeakAbsZ ?? agg.metrics.lensPeakAbsZ ?? 0
+      ),
+      lensPeakAbsZ: Math.max(
+        Number(sourceMetrics.lensPeakAbsZ || 0),
+        Number(agg.metrics.lensPeakAbsZ || 0)
+      ),
       geometry_type: geometryType,
       scale_class: scaleClass,
       display_geometry: "osm-fitted-polygon",
-      interaction_radius_m: Math.round(Math.max(26, Math.sqrt(Math.max(1, cells.length)) * GRID_SIZE_M * 1.3)),
+      interaction_radius_m: Math.round(
+        Math.max(26, Math.sqrt(Math.max(1, cells.length)) * GRID_SIZE_M * 1.3)
+      ),
       geometry_context: placeContext.geometry_context || null,
       osm_transform: {
         enabled: true,
@@ -3817,13 +4203,18 @@
       geometry: boundsForCells(agg.minIx, agg.minIy, agg.maxIx, agg.maxIy),
       grid_cell_ids: agg.cells,
       radius_m: Math.round(Math.max(18, Math.sqrt(Math.max(1, cells.length)) * GRID_SIZE_M * 1.08)),
-      scale_level: sourceAlgorithm === THRESHOLD_SUBDIVIDE_RULE.version
-        ? `threshold-subdivide:${scaleClass}:osm-fit`
-        : `constrained-geometry:${scaleClass}:osm-fit`,
+      scale_level:
+        sourceAlgorithm === THRESHOLD_SUBDIVIDE_RULE.version
+          ? `threshold-subdivide:${scaleClass}:osm-fit`
+          : `constrained-geometry:${scaleClass}:osm-fit`,
       metrics: nextMetrics,
       evidence_summary: evidenceFor(source.niche_type, nextMetrics, placeContext),
-      confidence: clamp01(Number(source.confidence || 0) * 0.94 + Math.min(1, areaRatio) * 0.04 + 0.02),
-      questability_score: clamp01(Number(source.questability_score || 0) * (0.86 + Math.min(1, areaRatio) * 0.14)),
+      confidence: clamp01(
+        Number(source.confidence || 0) * 0.94 + Math.min(1, areaRatio) * 0.04 + 0.02
+      ),
+      questability_score: clamp01(
+        Number(source.questability_score || 0) * (0.86 + Math.min(1, areaRatio) * 0.14)
+      ),
       place_context: placeContext,
       primary_place_label: placeContext.primary_label || source.primary_place_label || null,
       secondary_place_label: placeContext.secondary_label || source.secondary_place_label || null,
@@ -3834,20 +4225,29 @@
     };
 
     transformed.title = buildNicheDisplayTitle(transformed);
-    transformed.short_title = transformed.title.replace(/^(Sample|Survey|Look for|Revisit|Check)\s+/i, "");
+    transformed.short_title = transformed.title.replace(
+      /^(Sample|Survey|Look for|Revisit|Check)\s+/i,
+      ""
+    );
     return transformed;
   }
 
   function shouldOsmTransformNiche(niche) {
-    return ["constrained_geometry_niche_v1", THRESHOLD_SUBDIVIDE_RULE.version].includes(String(niche?.metrics?.algorithm || "")) &&
+    return (
+      ["constrained_geometry_niche_v1", THRESHOLD_SUBDIVIDE_RULE.version].includes(
+        String(niche?.metrics?.algorithm || "")
+      ) &&
       Array.isArray(niche?.grid_cell_ids) &&
-      niche.grid_cell_ids.length > 0;
+      niche.grid_cell_ids.length > 0
+    );
   }
 
   function osmTransformSummaryText(summary, fallbackCount) {
     if (!summary?.enabled) return "";
-    if (!summary.available) return "No cached OSM roads, paths, or structures available for this view.";
-    if (!summary.changed) return `${fallbackCount} niche objects; cached OSM features did not intersect the blobs.`;
+    if (!summary.available)
+      return "No cached OSM roads, paths, or structures available for this view.";
+    if (!summary.changed)
+      return `${fallbackCount} niche objects; cached OSM features did not intersect the blobs.`;
     return `${summary.outputCount} OSM-fit niche areas from ${summary.inputCount} blobs; ${summary.roadCutCells} road/path cuts, ${summary.buildingOverlapCells} structure overlaps.`;
   }
 
@@ -3904,7 +4304,14 @@
 
       const subdivisionCount = analysis.components.length;
       for (let i = 0; i < analysis.components.length; i++) {
-        const next = buildOsmTransformedNiche(niche, analysis.components[i], i, subdivisionCount, detail, origin);
+        const next = buildOsmTransformedNiche(
+          niche,
+          analysis.components[i],
+          i,
+          subdivisionCount,
+          detail,
+          origin
+        );
         if (next) transformedRows.push(next);
       }
     }
@@ -3913,7 +4320,8 @@
     if (state.detectorDebug?.constrainedGeometry) {
       state.detectorDebug.constrainedGeometry.osmTransformation = summary;
     }
-    state.constrainedGeometryDebug = state.detectorDebug?.constrainedGeometry || state.constrainedGeometryDebug;
+    state.constrainedGeometryDebug =
+      state.detectorDebug?.constrainedGeometry || state.constrainedGeometryDebug;
     return { niches: transformedRows, summary };
   }
 
@@ -3927,8 +4335,8 @@
 
   function closeMeterRing(points = []) {
     const ring = (Array.isArray(points) ? points : [])
-      .map(point => ({ x: Number(point?.x), y: Number(point?.y) }))
-      .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+      .map((point) => ({ x: Number(point?.x), y: Number(point?.y) }))
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
     const cleaned = [];
     for (const point of ring) {
       if (!cleaned.length || !meterPointsClose(cleaned[cleaned.length - 1], point, 0.03)) {
@@ -4001,28 +4409,24 @@
   }
 
   function meterPathToLatLng(path = []) {
-    return path
-      .map(meterPointToLatLng)
-      .map(point => [point.lat, point.lng]);
+    return path.map(meterPointToLatLng).map((point) => [point.lat, point.lng]);
   }
 
   function meterRingToGeoJSONPolygon(ring = []) {
     const coords = closeMeterRing(ring)
       .map(meterPointToLatLng)
-      .map(point => [point.lng, point.lat]);
-    return coords.length >= 4
-      ? { type: "Polygon", coordinates: [coords] }
-      : null;
+      .map((point) => [point.lng, point.lat]);
+    return coords.length >= 4 ? { type: "Polygon", coordinates: [coords] } : null;
   }
 
   function meterRingBounds(ring = [], padM = 0) {
     const open = openMeterRing(ring);
     if (!open.length) return null;
     return {
-      minX: Math.min(...open.map(point => point.x)) - padM,
-      maxX: Math.max(...open.map(point => point.x)) + padM,
-      minY: Math.min(...open.map(point => point.y)) - padM,
-      maxY: Math.max(...open.map(point => point.y)) + padM
+      minX: Math.min(...open.map((point) => point.x)) - padM,
+      maxX: Math.max(...open.map((point) => point.x)) + padM,
+      minY: Math.min(...open.map((point) => point.y)) - padM,
+      maxY: Math.max(...open.map((point) => point.y)) + padM
     };
   }
 
@@ -4069,8 +4473,9 @@
       if (hit) tValues.push(hit.t);
     }
 
-    const sorted = [...new Set(tValues.map(t => Number(Math.max(0, Math.min(1, t)).toFixed(8))))]
-      .sort((x, y) => x - y);
+    const sorted = [
+      ...new Set(tValues.map((t) => Number(Math.max(0, Math.min(1, t)).toFixed(8))))
+    ].sort((x, y) => x - y);
     const segments = [];
     for (let i = 1; i < sorted.length; i++) {
       const t0 = sorted[i - 1];
@@ -4113,14 +4518,15 @@
     }
     flush();
     return paths
-      .map(path => {
+      .map((path) => {
         const cleaned = [];
         for (const point of path) {
-          if (!cleaned.length || !meterPointsClose(cleaned[cleaned.length - 1], point, 0.06)) cleaned.push(point);
+          if (!cleaned.length || !meterPointsClose(cleaned[cleaned.length - 1], point, 0.06))
+            cleaned.push(point);
         }
         return cleaned;
       })
-      .filter(path => path.length >= 2);
+      .filter((path) => path.length >= 2);
   }
 
   function cutPathCanSplitRing(path = [], ring = []) {
@@ -4163,14 +4569,14 @@
     const placements = [
       { label: "start", ...ringInsertPosition(path[0], open) },
       { label: "end", ...ringInsertPosition(path[path.length - 1], open) }
-    ].filter(position => position && position.distance <= 0.75);
+    ].filter((position) => position && position.distance <= 0.75);
     if (placements.length < 2) return null;
 
     const vertices = [];
     for (let i = 0; i < open.length; i++) {
       vertices.push({ ...open[i] });
       placements
-        .filter(position => position.edgeIndex === i)
+        .filter((position) => position.edgeIndex === i)
         .sort((a, b) => a.t - b.t)
         .forEach((position) => {
           const point = { ...position.point, _cutLabel: position.label };
@@ -4181,20 +4587,33 @@
 
     const deduped = [];
     for (const point of vertices) {
-      if (!deduped.length || !meterPointsClose(deduped[deduped.length - 1], point, 0.04)) deduped.push(point);
+      if (!deduped.length || !meterPointsClose(deduped[deduped.length - 1], point, 0.04))
+        deduped.push(point);
       else if (point._cutLabel) deduped[deduped.length - 1]._cutLabel = point._cutLabel;
     }
-    if (deduped.length > 1 && meterPointsClose(deduped[0], deduped[deduped.length - 1], 0.04)) deduped.pop();
+    if (deduped.length > 1 && meterPointsClose(deduped[0], deduped[deduped.length - 1], 0.04))
+      deduped.pop();
 
-    let startIndex = deduped.findIndex(point => point._cutLabel === "start");
-    let endIndex = deduped.findIndex(point => point._cutLabel === "end");
+    let startIndex = deduped.findIndex((point) => point._cutLabel === "start");
+    let endIndex = deduped.findIndex((point) => point._cutLabel === "end");
     if (startIndex < 0) {
-      startIndex = deduped.reduce((best, point, index) =>
-        meterPointDistance(point, path[0]) < meterPointDistance(deduped[best], path[0]) ? index : best, 0);
+      startIndex = deduped.reduce(
+        (best, point, index) =>
+          meterPointDistance(point, path[0]) < meterPointDistance(deduped[best], path[0])
+            ? index
+            : best,
+        0
+      );
     }
     if (endIndex < 0) {
-      endIndex = deduped.reduce((best, point, index) =>
-        meterPointDistance(point, path[path.length - 1]) < meterPointDistance(deduped[best], path[path.length - 1]) ? index : best, 0);
+      endIndex = deduped.reduce(
+        (best, point, index) =>
+          meterPointDistance(point, path[path.length - 1]) <
+          meterPointDistance(deduped[best], path[path.length - 1])
+            ? index
+            : best,
+        0
+      );
     }
     if (startIndex === endIndex) return null;
 
@@ -4221,17 +4640,15 @@
 
     const start = inserted.vertices[inserted.startIndex];
     const end = inserted.vertices[inserted.endIndex];
-    const cutPath = [
-      start,
-      ...path.slice(1, -1).map(point => ({ x: point.x, y: point.y })),
-      end
-    ];
+    const cutPath = [start, ...path.slice(1, -1).map((point) => ({ x: point.x, y: point.y })), end];
     const arcAB = ringArc(inserted.vertices, inserted.startIndex, inserted.endIndex);
     const arcBA = ringArc(inserted.vertices, inserted.endIndex, inserted.startIndex);
     const ringA = closeMeterRing(arcAB.concat(cutPath.slice(0, -1).reverse()));
     const ringB = closeMeterRing(cutPath.concat(arcBA.slice(1)));
     const minArea = Math.max(2, GRID_SIZE_M * GRID_SIZE_M * 0.02);
-    const rings = [ringA, ringB].filter(next => next.length >= 4 && Math.abs(meterRingArea(next)) >= minArea);
+    const rings = [ringA, ringB].filter(
+      (next) => next.length >= 4 && Math.abs(meterRingArea(next)) >= minArea
+    );
     return rings.length === 2 ? rings : null;
   }
 
@@ -4255,7 +4672,7 @@
       addAdjacent(edge.b, edge);
     });
 
-    if ([...adjacency.values()].some(list => list.length !== 2)) return [];
+    if ([...adjacency.values()].some((list) => list.length !== 2)) return [];
 
     const rings = [];
     for (const start of edges) {
@@ -4268,7 +4685,7 @@
 
       while (gridPointKey(current) !== startKey) {
         const currentKey = gridPointKey(current);
-        const next = (adjacency.get(currentKey) || []).find(edge => !edge.used);
+        const next = (adjacency.get(currentKey) || []).find((edge) => !edge.used);
         if (!next) break;
 
         next.used = true;
@@ -4278,7 +4695,7 @@
       }
 
       if (ring.length >= 5 && gridPointKey(ring[0]) === gridPointKey(ring[ring.length - 1])) {
-        rings.push(ring.map(point => ({ x: point.x * GRID_SIZE_M, y: point.y * GRID_SIZE_M })));
+        rings.push(ring.map((point) => ({ x: point.x * GRID_SIZE_M, y: point.y * GRID_SIZE_M })));
       }
     }
 
@@ -4300,10 +4717,11 @@
 
   function segmentOnAnyCutPath(a, b, cutPaths = []) {
     const mid = interpolateMeterPoint(a, b, 0.5);
-    return cutPaths.some(path =>
-      pointOnMeterPath(a, path, 0.18) &&
-      pointOnMeterPath(b, path, 0.18) &&
-      pointOnMeterPath(mid, path, 0.18)
+    return cutPaths.some(
+      (path) =>
+        pointOnMeterPath(a, path, 0.18) &&
+        pointOnMeterPath(b, path, 0.18) &&
+        pointOnMeterPath(mid, path, 0.18)
     );
   }
 
@@ -4326,11 +4744,11 @@
       current.push(b);
     }
     if (current.length >= 2) paths.push(current);
-    return paths.map(meterPathToLatLng).filter(path => path.length >= 2);
+    return paths.map(meterPathToLatLng).filter((path) => path.length >= 2);
   }
 
   function cellsOverlappingMeterRing(members = [], ring = []) {
-    return (members || []).filter(cell => polygonOverlapsRect(ring, cellRectMeters(cell)));
+    return (members || []).filter((cell) => polygonOverlapsRect(ring, cellRectMeters(cell)));
   }
 
   function analyzeGrowVectorOsmSubdivision(source, context) {
@@ -4349,10 +4767,12 @@
     if (!outerRing?.length) return { summary, faces: [], transformed: false };
 
     const ringBounds = meterRingBounds(outerRing, GRID_SIZE_M);
-    const roadFeatures = (context?.roadLike || [])
-      .filter(feature => boundsOverlap(ringBounds, projectedBoundsForPoints(feature.points, GRID_SIZE_M)));
+    const roadFeatures = (context?.roadLike || []).filter((feature) =>
+      boundsOverlap(ringBounds, projectedBoundsForPoints(feature.points, GRID_SIZE_M))
+    );
     summary.roadFeatures = roadFeatures.length;
-    if (!roadFeatures.length) return { summary, faces: [{ ring: outerRing, cutPaths: [], members }], transformed: false };
+    if (!roadFeatures.length)
+      return { summary, faces: [{ ring: outerRing, cutPaths: [], members }], transformed: false };
 
     let faces = [{ ring: outerRing, cutPaths: [], members }];
     for (const feature of roadFeatures) {
@@ -4365,8 +4785,8 @@
           const updated = [];
           for (const candidate of working) {
             const paths = clippedPolylinePathsToRing(feature.points, candidate.ring)
-              .filter(path => pathLengthMeters(path) >= GRID_SIZE_M * 0.35)
-              .filter(path => cutPathCanSplitRing(path, candidate.ring));
+              .filter((path) => pathLengthMeters(path) >= GRID_SIZE_M * 0.35)
+              .filter((path) => cutPathCanSplitRing(path, candidate.ring));
             let split = null;
             let splitPath = null;
             for (const path of paths) {
@@ -4398,21 +4818,23 @@
       if (faces.length > 80) break;
     }
 
-    const cutPaths = faces.flatMap(face => face.cutPaths || []);
-    summary.roadCutCells = members.filter(cell => cutPaths.some(path =>
-      polylineTouchesRect(path, cellRectMeters(cell), 0)
-    )).length;
+    const cutPaths = faces.flatMap((face) => face.cutPaths || []);
+    summary.roadCutCells = members.filter((cell) =>
+      cutPaths.some((path) => polylineTouchesRect(path, cellRectMeters(cell), 0))
+    ).length;
 
     const outputFaces = faces
-      .map(face => ({
+      .map((face) => ({
         ...face,
         ring: closeMeterRing(face.ring),
         members: cellsOverlappingMeterRing(members, face.ring),
         outerPaths: faceOuterPathsLatLng(face),
-        cutPathsLatLng: (face.cutPaths || []).map(meterPathToLatLng).filter(path => path.length >= 2),
+        cutPathsLatLng: (face.cutPaths || [])
+          .map(meterPathToLatLng)
+          .filter((path) => path.length >= 2),
         areaM2: Math.abs(meterRingArea(face.ring))
       }))
-      .filter(face => face.ring.length >= 4 && face.members.length > 0 && face.areaM2 >= 2);
+      .filter((face) => face.ring.length >= 4 && face.members.length > 0 && face.areaM2 >= 2);
 
     summary.survivingComponents = outputFaces.length;
     summary.transformed = outputFaces.length > 1;
@@ -4423,7 +4845,14 @@
     };
   }
 
-  function buildGrowVectorSubdividedNiche(source, face, componentIndex, subdivisionCount, analysisSummary, origin) {
+  function buildGrowVectorSubdividedNiche(
+    source,
+    face,
+    componentIndex,
+    subdivisionCount,
+    analysisSummary,
+    origin
+  ) {
     const peak = bestPeakForTransformedCells(face.members, source);
     const component = componentFromMembers(face.members, peak);
     if (!component) return null;
@@ -4432,22 +4861,21 @@
     const centroid = meterRingCentroid(face.ring);
     const ll = meterPointToLatLng(centroid);
     const sourceMetrics = source.metrics || {};
-    const sourceKeyBase = source.source_key || source.id || `${source.centroid_lat},${source.centroid_lng}`;
+    const sourceKeyBase =
+      source.source_key || source.id || `${source.centroid_lat},${source.centroid_lng}`;
     const geometry = meterRingToGeoJSONPolygon(face.ring);
     if (!geometry) return null;
 
-    const tileSize = Number(sourceMetrics.grow_tile_cells || GROW_LOCAL_NICHE_RULE.defaultTileCells);
+    const tileSize = Number(
+      sourceMetrics.grow_tile_cells || GROW_LOCAL_NICHE_RULE.defaultTileCells
+    );
     const tileCount = Math.max(1, Number(sourceMetrics.grow_tile_count || 1));
-    const scaleClass = tileCount > 1
-      ? `${tileCount} merged ${tileSize}x${tileSize} grow tiles, OSM vector face`
-      : `${tileSize}x${tileSize} grow tile, OSM vector face`;
+    const scaleClass =
+      tileCount > 1
+        ? `${tileCount} merged ${tileSize}x${tileSize} grow tiles, OSM vector face`
+        : `${tileSize}x${tileSize} grow tile, OSM vector face`;
     const placeContext = preserveGeometryContext(
-      resolveGeometricPlaceContext(
-        ll.lat,
-        ll.lng,
-        component,
-        resolvePlaceContext(ll.lat, ll.lng)
-      ),
+      resolveGeometricPlaceContext(ll.lat, ll.lng, component, resolvePlaceContext(ll.lat, ll.lng)),
       {
         ...(source.place_context?.geometry_context || sourceMetrics.geometry_context || {}),
         grow_osm_vector_subdivision: true,
@@ -4458,7 +4886,12 @@
       }
     );
     const coreCell = peak ? `${peak.ix},${peak.iy}` : String(sourceMetrics.core_cell || "");
-    const areaRatio = face.areaM2 / Math.max(1, Math.abs(meterRingArea(componentBoundaryRingsMeters(membersForNicheCells(source))[0] || [])));
+    const areaRatio =
+      face.areaM2 /
+      Math.max(
+        1,
+        Math.abs(meterRingArea(componentBoundaryRingsMeters(membersForNicheCells(source))[0] || []))
+      );
     const distanceM = L.latLng(origin.lat, origin.lng).distanceTo(L.latLng(ll.lat, ll.lng));
     const nextMetrics = {
       ...sourceMetrics,
@@ -4528,12 +4961,17 @@
       grid_cell_ids: agg.cells,
       radius_m: Math.round(Math.max(18, Math.sqrt(Math.max(1, face.areaM2 / Math.PI)))),
       scale_level: `grow-local-niche:${scaleClass}`,
-      description: "A temporary GridWild Grow niche subdivided by cached OSM road and path centerlines.",
+      description:
+        "A temporary GridWild Grow niche subdivided by cached OSM road and path centerlines.",
       seasonal_profile: { mode: "grow_local_niche_vector_osm_runtime_v1" },
       metrics: nextMetrics,
       evidence_summary: evidenceFor(source.niche_type, nextMetrics, placeContext),
-      confidence: clamp01(Number(source.confidence || 0) * 0.94 + Math.min(1, areaRatio) * 0.04 + 0.02),
-      questability_score: clamp01(Number(source.questability_score || 0) * (0.86 + Math.min(1, areaRatio) * 0.14)),
+      confidence: clamp01(
+        Number(source.confidence || 0) * 0.94 + Math.min(1, areaRatio) * 0.04 + 0.02
+      ),
+      questability_score: clamp01(
+        Number(source.questability_score || 0) * (0.86 + Math.min(1, areaRatio) * 0.14)
+      ),
       place_context: placeContext,
       primary_place_label: placeContext.primary_label || source.primary_place_label || null,
       secondary_place_label: placeContext.secondary_label || source.secondary_place_label || null,
@@ -4548,15 +4986,18 @@
   }
 
   function shouldGrowOsmSubdivisionNiche(niche) {
-    return String(niche?.metrics?.algorithm || "") === GROW_LOCAL_NICHE_RULE.version &&
+    return (
+      String(niche?.metrics?.algorithm || "") === GROW_LOCAL_NICHE_RULE.version &&
       Array.isArray(niche?.grid_cell_ids) &&
-      niche.grid_cell_ids.length > 0;
+      niche.grid_cell_ids.length > 0
+    );
   }
 
   function growOsmSubdivisionSummaryText(summary, fallbackCount) {
     if (!summary?.enabled) return "";
     if (!summary.available) return "No cached OSM roads or paths available for this view.";
-    if (!summary.changed) return `${fallbackCount} Grow niche objects; cached roads and paths did not intersect them.`;
+    if (!summary.changed)
+      return `${fallbackCount} Grow niche objects; cached roads and paths did not intersect them.`;
     return `${summary.outputCount} Grow vector faces from ${summary.inputCount} inputs; ${summary.vectorCutCount || 0} road/path centerline cuts.`;
   }
 
@@ -4580,9 +5021,7 @@
 
     if (!summary.enabled) return { niches, summary };
     const baseContext = buildOsmTransformationContext();
-    const context = baseContext
-      ? { ...baseContext, structures: [] }
-      : null;
+    const context = baseContext ? { ...baseContext, structures: [] } : null;
     summary.roadFeatures = context?.roadLike?.length || 0;
     summary.available = summary.roadFeatures > 0;
     if (!summary.available) return { niches, summary };
@@ -4614,7 +5053,14 @@
 
       const subdivisionCount = analysis.faces.length;
       for (let i = 0; i < analysis.faces.length; i++) {
-        const next = buildGrowVectorSubdividedNiche(niche, analysis.faces[i], i, subdivisionCount, detail, origin);
+        const next = buildGrowVectorSubdividedNiche(
+          niche,
+          analysis.faces[i],
+          i,
+          subdivisionCount,
+          detail,
+          origin
+        );
         if (next) transformedRows.push(next);
       }
     }
@@ -4623,24 +5069,29 @@
     if (state.detectorDebug?.constrainedGeometry) {
       state.detectorDebug.constrainedGeometry.growOsmSubdivision = summary;
     }
-    state.constrainedGeometryDebug = state.detectorDebug?.constrainedGeometry || state.constrainedGeometryDebug;
+    state.constrainedGeometryDebug =
+      state.detectorDebug?.constrainedGeometry || state.constrainedGeometryDebug;
     return { niches: transformedRows, summary };
   }
 
   function capThresholdSubdivideNiches(niches = []) {
     if (state.controls.thresholdSubdivideApproach !== true) return niches;
     const max = Math.max(1, Number(state.controls.maxCandidates) || 8);
-    return niches.slice()
-      .sort((a, b) =>
-        nicheClusterPriority(b) - nicheClusterPriority(a) ||
-        Number(b.questability_score || 0) - Number(a.questability_score || 0)
+    return niches
+      .slice()
+      .sort(
+        (a, b) =>
+          nicheClusterPriority(b) - nicheClusterPriority(a) ||
+          Number(b.questability_score || 0) - Number(a.questability_score || 0)
       )
       .slice(0, max);
   }
 
   function debugComponentForNiche(niche, signalData = null) {
     const members = (Array.isArray(niche?.grid_cell_ids) ? niche.grid_cell_ids : [])
-      .map((cellKey) => signalData?.cells?.get?.(String(cellKey)) || cellMemberForKey(cellKey, niche))
+      .map(
+        (cellKey) => signalData?.cells?.get?.(String(cellKey)) || cellMemberForKey(cellKey, niche)
+      )
       .filter(Boolean);
     return componentStatsFromMembers(members);
   }
@@ -4656,13 +5107,16 @@
       state.detectorDebug.constrainedGeometry.resultCount = niches.length;
       state.detectorDebug.constrainedGeometry.finalFaceCount = niches.length;
     }
-    state.constrainedGeometryDebug = state.detectorDebug.constrainedGeometry || state.constrainedGeometryDebug;
+    state.constrainedGeometryDebug =
+      state.detectorDebug.constrainedGeometry || state.constrainedGeometryDebug;
   }
 
   function nicheCellSet(cells = []) {
-    return new Set((Array.isArray(cells) ? cells : []).map((cell) =>
-      typeof cell === "string" ? cell : cell?.key
-    ).filter(Boolean));
+    return new Set(
+      (Array.isArray(cells) ? cells : [])
+        .map((cell) => (typeof cell === "string" ? cell : cell?.key))
+        .filter(Boolean)
+    );
   }
 
   function nicheCellJaccard(aCells = [], bCells = []) {
@@ -4734,9 +5188,12 @@
       peakSignal: peakCell.signal || 0,
       peakZ: peakCell.z || 0,
       peakAbsZ: Math.abs(peakCell.z || 0),
-      meanSignal: safeMembers.reduce((sum, cell) => sum + Number(cell.signal || 0), 0) / safeMembers.length,
+      meanSignal:
+        safeMembers.reduce((sum, cell) => sum + Number(cell.signal || 0), 0) / safeMembers.length,
       meanZ: safeMembers.reduce((sum, cell) => sum + Number(cell.z || 0), 0) / safeMembers.length,
-      meanAbsZ: safeMembers.reduce((sum, cell) => sum + Math.abs(Number(cell.z || 0)), 0) / safeMembers.length,
+      meanAbsZ:
+        safeMembers.reduce((sum, cell) => sum + Math.abs(Number(cell.z || 0)), 0) /
+        safeMembers.length,
       componentCellCount: safeMembers.length
     };
   }
@@ -4755,7 +5212,10 @@
   }
 
   function constrainedFindCores(signalData, raster, blurred, rule) {
-    const threshold = Math.max(0.16, Number(state.controls.lensZThreshold || 2.5) * rule.peakFactor);
+    const threshold = Math.max(
+      0.16,
+      Number(state.controls.lensZThreshold || 2.5) * rule.peakFactor
+    );
     const cores = [];
 
     for (let y = 1; y < raster.height - 1; y++) {
@@ -4791,7 +5251,8 @@
     const suppress = Math.max(1, Number(rule.suppressCells) || 4);
     const maxCores = Math.max(8, Number(state.controls.maxCandidates || 8) * 4);
     for (const core of cores) {
-      if (selected.some((other) => Math.hypot(other.x - core.x, other.y - core.y) < suppress)) continue;
+      if (selected.some((other) => Math.hypot(other.x - core.x, other.y - core.y) < suppress))
+        continue;
       selected.push(core);
       if (selected.length >= maxCores) break;
     }
@@ -4934,11 +5395,15 @@
     const boundaryEdges = gridBoundaryEdges(normalized);
     const shapeContext = componentShapeContext(normalized);
     const maxRadiusCells = coreCell
-      ? normalized.reduce((max, cell) => Math.max(max, Math.hypot(cell.ix - coreCell.ix, cell.iy - coreCell.iy)), 0)
+      ? normalized.reduce(
+          (max, cell) => Math.max(max, Math.hypot(cell.ix - coreCell.ix, cell.iy - coreCell.iy)),
+          0
+        )
       : 0;
-    const complexity = boundaryEdges.length / Math.max(4, 4 * Math.sqrt(Math.max(1, normalized.length)));
-    const oneCellNecks = normalized.filter((cell) =>
-      cell.key !== coreCell?.key && supportNeighborCount(cell, keys) <= 1
+    const complexity =
+      boundaryEdges.length / Math.max(4, 4 * Math.sqrt(Math.max(1, normalized.length)));
+    const oneCellNecks = normalized.filter(
+      (cell) => cell.key !== coreCell?.key && supportNeighborCount(cell, keys) <= 1
     ).length;
 
     return {
@@ -4956,7 +5421,11 @@
     const geometryContext = placeContext?.geometry_context || {};
     if (count <= 4) return "point-halo";
     if (geometryContext.corridor_kind || placeType.includes("corridor")) return "corridor-buffer";
-    if (shapeMetrics?.elongated && (placeType.includes("trail") || placeType.includes("stream") || placeType.includes("water"))) return "edge-band";
+    if (
+      shapeMetrics?.elongated &&
+      (placeType.includes("trail") || placeType.includes("stream") || placeType.includes("water"))
+    )
+      return "edge-band";
     if (count >= 52) return "place-section";
     return "patch-polygon";
   }
@@ -4974,15 +5443,22 @@
     const members = component?.members || [];
     const shape = constrainedShapeMetrics(members, component?.peak);
     const corridor = placeContext?.geometry_context?.corridor_kind;
-    const maxElongation = corridor ? Math.max(5.6, Number(rule.maxElongation) || 3.2) : Number(rule.maxElongation) || 3.2;
+    const maxElongation = corridor
+      ? Math.max(5.6, Number(rule.maxElongation) || 3.2)
+      : Number(rule.maxElongation) || 3.2;
     const maxComplexity = Number(rule.maxComplexity) || 3.2;
 
     if (!members.length) return { ok: false, shape, reason: "empty" };
-    if (members.length > Number(rule.maxCells || 999)) return { ok: false, shape, reason: "area_cap" };
-    if (shape.max_radius_cells > Number(rule.maxRadiusCells || 6) + 0.2) return { ok: false, shape, reason: "radius_cap" };
-    if (Number(shape.elongation_ratio || 1) > maxElongation) return { ok: false, shape, reason: "elongation_cap" };
-    if (Number(shape.perimeter_complexity || 1) > maxComplexity) return { ok: false, shape, reason: "complexity_cap" };
-    if (Number(shape.one_cell_necks || 0) > Math.max(0, Math.floor(members.length / 18))) return { ok: false, shape, reason: "neck_cap" };
+    if (members.length > Number(rule.maxCells || 999))
+      return { ok: false, shape, reason: "area_cap" };
+    if (shape.max_radius_cells > Number(rule.maxRadiusCells || 6) + 0.2)
+      return { ok: false, shape, reason: "radius_cap" };
+    if (Number(shape.elongation_ratio || 1) > maxElongation)
+      return { ok: false, shape, reason: "elongation_cap" };
+    if (Number(shape.perimeter_complexity || 1) > maxComplexity)
+      return { ok: false, shape, reason: "complexity_cap" };
+    if (Number(shape.one_cell_necks || 0) > Math.max(0, Math.floor(members.length / 18)))
+      return { ok: false, shape, reason: "neck_cap" };
 
     return { ok: true, shape, reason: "passes" };
   }
@@ -4990,7 +5466,10 @@
   function constrainedComponentFromMembers(members, coreCell, rule) {
     const component = componentFromMembers(members, coreCell);
     if (!component) return null;
-    const sizeScore = clamp01(Math.log1p(component.componentCellCount || 1) / Math.log1p(Math.max(8, Number(rule.maxCells) || 32)));
+    const sizeScore = clamp01(
+      Math.log1p(component.componentCellCount || 1) /
+        Math.log1p(Math.max(8, Number(rule.maxCells) || 32))
+    );
     const peakScore = clamp01(Math.abs(Number(component.peakZ) || 0) / 5);
     return {
       ...component,
@@ -5000,29 +5479,51 @@
     };
   }
 
-  function constrainedNicheFromComponent({ component, rule, origin, caps, activeLens, heatMetric, contract }) {
+  function constrainedNicheFromComponent({
+    component,
+    rule,
+    origin,
+    caps,
+    activeLens,
+    heatMetric,
+    contract
+  }) {
     const agg = aggregateComponent(component);
     const ll = agg.center;
     const distanceM = L.latLng(origin.lat, origin.lng).distanceTo(L.latLng(ll.lat, ll.lng));
     const m = agg.metrics;
     const weights = scoreWeights();
-    const bio = clamp01((Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.68 + m.activeRatio * 0.17 + m.lensPeakSignal * 0.15);
-    const need = clamp01((1 - m.activeRatio) * 0.55 + (m.count > 0 && m.count < caps.count ? 0.22 : 0) + (m.observers <= 1 ? 0.08 : 0) + (1 - m.lensMeanSignal) * 0.15);
+    const bio = clamp01(
+      (Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.68 +
+        m.activeRatio * 0.17 +
+        m.lensPeakSignal * 0.15
+    );
+    const need = clamp01(
+      (1 - m.activeRatio) * 0.55 +
+        (m.count > 0 && m.count < caps.count ? 0.22 : 0) +
+        (m.observers <= 1 ? 0.08 : 0) +
+        (1 - m.lensMeanSignal) * 0.15
+    );
     const stale = clamp01(daysSince(m.latestObservedMs) / 240);
     const edge = detectEdgeScore(ll.lat, ll.lng);
     const lensPeak = clamp01(m.lensPeakSignal);
     const zStrength = clamp01((Number(m.lensPeakAbsZ) || 0) / 5);
-    const componentSizeScore = clamp01(Math.log1p(Number(m.componentCellCount) || 1) / Math.log1p(96));
-    const clusterPriority = clamp01(Number(m.clusterPreferenceScore) || (componentSizeScore * 0.42 + zStrength * 0.36 + lensPeak * 0.22));
+    const componentSizeScore = clamp01(
+      Math.log1p(Number(m.componentCellCount) || 1) / Math.log1p(96)
+    );
+    const clusterPriority = clamp01(
+      Number(m.clusterPreferenceScore) ||
+        componentSizeScore * 0.42 + zStrength * 0.36 + lensPeak * 0.22
+    );
     const questability = clamp01(
       clusterPriority * 0.36 +
-      zStrength * 0.18 +
-      componentSizeScore * 0.12 +
-      lensPeak * 0.08 +
-      bio * weights.bio * 0.7 +
-      need * weights.need * 0.7 +
-      stale * weights.stale * 0.7 +
-      edge * weights.edge * 0.7
+        zStrength * 0.18 +
+        componentSizeScore * 0.12 +
+        lensPeak * 0.08 +
+        bio * weights.bio * 0.7 +
+        need * weights.need * 0.7 +
+        stale * weights.stale * 0.7 +
+        edge * weights.edge * 0.7
     );
 
     const placeContext = resolveGeometricPlaceContext(
@@ -5031,7 +5532,12 @@
       component,
       resolvePlaceContext(ll.lat, ll.lng)
     );
-    const geometryType = constrainedGeometryType(rule, component, placeContext, contract?.shape || {});
+    const geometryType = constrainedGeometryType(
+      rule,
+      component,
+      placeContext,
+      contract?.shape || {}
+    );
     const scaleClass = constrainedScaleClass(component, geometryType);
     const nicheType = chooseType({ bio, need, stale, edge }, m, placeContext);
     const theme = `${themeFor(nicheType, placeContext)} / ${scaleClass}`;
@@ -5040,11 +5546,16 @@
       active_lens: activeLens,
       heat_metric: heatMetric
     });
-    const taxonFocus = theme.includes("Plants") || nicheType === "edge_habitat_niche"
-      ? { iconic: "Plantae", label: "plants" }
-      : initialFocus?.label
-        ? { iconic: initialFocus.rank || "Any", label: titleSubjectCase(initialFocus.label), source_rank: initialFocus.rank || null }
-        : { iconic: "Any", label: "life" };
+    const taxonFocus =
+      theme.includes("Plants") || nicheType === "edge_habitat_niche"
+        ? { iconic: "Plantae", label: "plants" }
+        : initialFocus?.label
+          ? {
+              iconic: initialFocus.rank || "Any",
+              label: titleSubjectCase(initialFocus.label),
+              source_rank: initialFocus.rank || null
+            }
+          : { iconic: "Any", label: "life" };
     const coreCell = component.peak ? `${component.peak.ix},${component.peak.iy}` : "";
     const sourceKey = [
       "gw-local-niche-v4",
@@ -5060,14 +5571,20 @@
       source_key: sourceKey,
       title: "",
       short_title: "",
-      description: "A GridWild interpreted sampling opportunity generated as a peak-centered, constrained geometry niche.",
+      description:
+        "A GridWild interpreted sampling opportunity generated as a peak-centered, constrained geometry niche.",
       niche_type: nicheType,
       theme,
       centroid_lat: ll.lat,
       centroid_lng: ll.lng,
       geometry: boundsForCells(agg.minIx, agg.minIy, agg.maxIx, agg.maxIy),
       grid_cell_ids: agg.cells,
-      radius_m: Math.round(Math.max(18, Math.sqrt(Math.max(1, m.componentCellCount || agg.cells.length)) * GRID_SIZE_M * 1.14)),
+      radius_m: Math.round(
+        Math.max(
+          18,
+          Math.sqrt(Math.max(1, m.componentCellCount || agg.cells.length)) * GRID_SIZE_M * 1.14
+        )
+      ),
       scale_level: `constrained-geometry:${scaleClass}`,
       taxon_focus: taxonFocus,
       seasonal_profile: { mode: "constrained_geometry_runtime_v1" },
@@ -5092,12 +5609,16 @@
         geometry_type: geometryType,
         scale_class: scaleClass,
         display_geometry: geometryType,
-        interaction_radius_m: Math.round(Math.max(28, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.35)),
+        interaction_radius_m: Math.round(
+          Math.max(28, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.35)
+        ),
         geometry_contract: contract || null,
         geometry_context: placeContext.geometry_context || null,
         member_cells_are_analysis_object: true
       },
-      confidence: clamp01(0.36 + placeContext.label_confidence * 0.2 + questability * 0.26 + clusterPriority * 0.18),
+      confidence: clamp01(
+        0.36 + placeContext.label_confidence * 0.2 + questability * 0.26 + clusterPriority * 0.18
+      ),
       novelty_score: need,
       sampling_need_score: need,
       biodiversity_score: bio,
@@ -5122,7 +5643,9 @@
   function trailCellScore(cell) {
     const signalScore = clamp01(Number(cell?.signal || 0));
     const zScore = clamp01(Math.max(0, Number(cell?.z || 0)) / 4);
-    return clamp01(signalScore * TRAIL_CORRIDOR_RULE.signalWeight + zScore * TRAIL_CORRIDOR_RULE.zWeight);
+    return clamp01(
+      signalScore * TRAIL_CORRIDOR_RULE.signalWeight + zScore * TRAIL_CORRIDOR_RULE.zWeight
+    );
   }
 
   function smoothTrailBins(bins = []) {
@@ -5153,7 +5676,10 @@
   }
 
   function splitTrailRun(run = []) {
-    const maxBins = Math.max(1, Math.ceil(TRAIL_CORRIDOR_RULE.maxLengthM / TRAIL_CORRIDOR_RULE.binM));
+    const maxBins = Math.max(
+      1,
+      Math.ceil(TRAIL_CORRIDOR_RULE.maxLengthM / TRAIL_CORRIDOR_RULE.binM)
+    );
     if (run.length <= maxBins) return [run];
 
     const chunks = [];
@@ -5164,8 +5690,8 @@
   }
 
   function trailCorridorComponentFromRun(run = [], cellRows = [], inclusive = false) {
-    const startM = Math.min(...run.map(bin => bin.startM));
-    const endM = Math.max(...run.map(bin => bin.endM));
+    const startM = Math.min(...run.map((bin) => bin.startM));
+    const endM = Math.max(...run.map((bin) => bin.endM));
     const byKey = new Map();
 
     for (const row of cellRows) {
@@ -5176,13 +5702,15 @@
     }
 
     const rows = [...byKey.values()]
-      .sort((a, b) => inclusive
-        ? a.alongM - b.alongM || a.distanceM - b.distanceM
-        : b.score - a.score || a.distanceM - b.distanceM)
+      .sort((a, b) =>
+        inclusive
+          ? a.alongM - b.alongM || a.distanceM - b.distanceM
+          : b.score - a.score || a.distanceM - b.distanceM
+      )
       .slice(0, TRAIL_CORRIDOR_RULE.maxCells);
     if (rows.length < TRAIL_CORRIDOR_RULE.minCells) return null;
 
-    const members = rows.map(row => row.cell);
+    const members = rows.map((row) => row.cell);
     const peakRow = rows.slice().sort((a, b) => b.score - a.score || a.distanceM - b.distanceM)[0];
     const component = componentFromMembers(members, peakRow.cell);
     if (!component) return null;
@@ -5191,7 +5719,11 @@
     const peakScore = rows[0]?.score || 0;
     const lengthM = Math.max(0, endM - startM);
     if (lengthM < TRAIL_CORRIDOR_RULE.minLengthM) return null;
-    if (meanScore < TRAIL_CORRIDOR_RULE.minMeanScore && peakScore < TRAIL_CORRIDOR_RULE.minPeakScore) return null;
+    if (
+      meanScore < TRAIL_CORRIDOR_RULE.minMeanScore &&
+      peakScore < TRAIL_CORRIDOR_RULE.minPeakScore
+    )
+      return null;
 
     return {
       ...component,
@@ -5202,15 +5734,19 @@
       trailPeakScore: peakScore,
       clusterSizeScore: clamp01(lengthM / TRAIL_CORRIDOR_RULE.maxLengthM),
       clusterPeakScore: clamp01(peakScore),
-      clusterPreferenceScore: clamp01(meanScore * 0.46 + peakScore * 0.34 + Math.min(1, lengthM / 180) * 0.2)
+      clusterPreferenceScore: clamp01(
+        meanScore * 0.46 + peakScore * 0.34 + Math.min(1, lengthM / 180) * 0.2
+      )
     };
   }
 
   function trailCorridorComponentForWholeTrail(trailLengthM, cellRows = []) {
-    const syntheticRun = [{
-      startM: 0,
-      endM: trailLengthM
-    }];
+    const syntheticRun = [
+      {
+        startM: 0,
+        endM: trailLengthM
+      }
+    ];
     return trailCorridorComponentFromRun(syntheticRun, cellRows, true);
   }
 
@@ -5236,7 +5772,14 @@
     );
   }
 
-  function trailCorridorNicheFromComponent({ component, feature, origin, caps, activeLens, heatMetric }) {
+  function trailCorridorNicheFromComponent({
+    component,
+    feature,
+    origin,
+    caps,
+    activeLens,
+    heatMetric
+  }) {
     const agg = aggregateComponent(component);
     const ll = agg.center;
     const distanceM = L.latLng(origin.lat, origin.lng).distanceTo(L.latLng(ll.lat, ll.lng));
@@ -5244,21 +5787,44 @@
     const placeContext = trailPlaceContext(feature, component, resolvePlaceContext(ll.lat, ll.lng));
     const lensPeak = clamp01(m.lensPeakSignal);
     const zStrength = clamp01((Number(m.lensPeakAbsZ) || 0) / 5);
-    const trailStrength = clamp01((component.trailMeanScore || 0) * 0.56 + (component.trailPeakScore || 0) * 0.34 + Math.min(1, (component.trailLengthM || 0) / 200) * 0.1);
-    const bio = clamp01((Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.6 + m.activeRatio * 0.16 + trailStrength * 0.24);
-    const need = clamp01((1 - m.activeRatio) * 0.46 + (m.observers <= 1 ? 0.12 : 0) + (1 - m.lensMeanSignal) * 0.18);
+    const trailStrength = clamp01(
+      (component.trailMeanScore || 0) * 0.56 +
+        (component.trailPeakScore || 0) * 0.34 +
+        Math.min(1, (component.trailLengthM || 0) / 200) * 0.1
+    );
+    const bio = clamp01(
+      (Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.6 +
+        m.activeRatio * 0.16 +
+        trailStrength * 0.24
+    );
+    const need = clamp01(
+      (1 - m.activeRatio) * 0.46 + (m.observers <= 1 ? 0.12 : 0) + (1 - m.lensMeanSignal) * 0.18
+    );
     const stale = clamp01(daysSince(m.latestObservedMs) / 240);
-    const questability = clamp01(trailStrength * 0.46 + zStrength * 0.14 + lensPeak * 0.1 + bio * 0.16 + need * 0.1 + stale * 0.04);
+    const questability = clamp01(
+      trailStrength * 0.46 +
+        zStrength * 0.14 +
+        lensPeak * 0.1 +
+        bio * 0.16 +
+        need * 0.1 +
+        stale * 0.04
+    );
     const initialFocus = topTaxonomySubject({
       ...m,
       active_lens: activeLens,
       heat_metric: heatMetric
     });
     const taxonFocus = initialFocus?.label
-      ? { iconic: initialFocus.rank || "Any", label: titleSubjectCase(initialFocus.label), source_rank: initialFocus.rank || null }
+      ? {
+          iconic: initialFocus.rank || "Any",
+          label: titleSubjectCase(initialFocus.label),
+          source_rank: initialFocus.rank || null
+        }
       : { iconic: "Any", label: "life" };
     const coreCell = component.peak ? `${component.peak.ix},${component.peak.iy}` : "";
-    const featureKey = String(feature?.id || featureLabel(feature) || "trail").replace(/\s+/g, "-").slice(0, 64);
+    const featureKey = String(feature?.id || featureLabel(feature) || "trail")
+      .replace(/\s+/g, "-")
+      .slice(0, 64);
     const sourceKey = [
       "gw-local-niche-v4",
       activeLens,
@@ -5274,7 +5840,8 @@
       source_key: sourceKey,
       title: "",
       short_title: "",
-      description: "A GridWild trail corridor niche generated from OSM path geometry and sustained Lens heat along the trail edge.",
+      description:
+        "A GridWild trail corridor niche generated from OSM path geometry and sustained Lens heat along the trail edge.",
       niche_type: "edge_habitat_niche",
       theme: "Trail corridor / corridor niche",
       centroid_lat: ll.lat,
@@ -5302,11 +5869,15 @@
         peak_abs_z: Number((m.lensPeakAbsZ || 0).toFixed(3)),
         component_id: agg.componentId,
         component_cell_count: Number(m.componentCellCount || agg.cells.length),
-        cluster_priority_score: Number((component.clusterPreferenceScore || trailStrength).toFixed(3)),
+        cluster_priority_score: Number(
+          (component.clusterPreferenceScore || trailStrength).toFixed(3)
+        ),
         geometry_type: "corridor-buffer",
         scale_class: "corridor niche",
         display_geometry: "corridor-buffer",
-        interaction_radius_m: Math.round(Math.max(48, Math.min(260, (component.trailLengthM || 80) * 0.5))),
+        interaction_radius_m: Math.round(
+          Math.max(48, Math.min(260, (component.trailLengthM || 80) * 0.5))
+        ),
         trail_feature_id: feature?.id || null,
         trail_feature_name: featureLabel(feature) || null,
         trail_start_m: Math.round(component.trailStartM || 0),
@@ -5315,8 +5886,12 @@
         trail_buffer_m: TRAIL_CORRIDOR_RULE.bufferM,
         trail_mean_score: Number((component.trailMeanScore || 0).toFixed(3)),
         trail_peak_score: Number((component.trailPeakScore || 0).toFixed(3)),
-        trail_corridor_mode: TRAIL_CORRIDOR_RULE.wholeTrailMode ? "whole_trail_inclusive" : "hot_run",
-        trail_inclusion_policy: TRAIL_CORRIDOR_RULE.wholeTrailMode ? "emit_if_trail_cells_in_fov" : "emit_hot_runs",
+        trail_corridor_mode: TRAIL_CORRIDOR_RULE.wholeTrailMode
+          ? "whole_trail_inclusive"
+          : "hot_run",
+        trail_inclusion_policy: TRAIL_CORRIDOR_RULE.wholeTrailMode
+          ? "emit_if_trail_cells_in_fov"
+          : "emit_hot_runs",
         geometry_contract: {
           ok: true,
           reason: "trail_corridor",
@@ -5327,7 +5902,9 @@
         geometry_context: placeContext.geometry_context || null,
         member_cells_are_analysis_object: true
       },
-      confidence: clamp01(0.42 + placeContext.label_confidence * 0.22 + questability * 0.24 + trailStrength * 0.12),
+      confidence: clamp01(
+        0.42 + placeContext.label_confidence * 0.22 + questability * 0.24 + trailStrength * 0.12
+      ),
       novelty_score: need,
       sampling_need_score: need,
       biodiversity_score: bio,
@@ -5350,9 +5927,11 @@
   }
 
   function generateTrailCorridorCandidates(signalData, origin, caps, activeLens, heatMetric) {
-    if (!TRAIL_CORRIDOR_RULE.enabled || typeof map === "undefined") return { rows: [], components: [], debug: { trails: 0, emitted: 0 } };
-    const trails = (window.GridWildOsmFeaturesLayer?.getFeatures?.().trails || [])
-      .filter((feature) => Array.isArray(feature.points) && feature.points.length >= 2);
+    if (!TRAIL_CORRIDOR_RULE.enabled || typeof map === "undefined")
+      return { rows: [], components: [], debug: { trails: 0, emitted: 0 } };
+    const trails = (window.GridWildOsmFeaturesLayer?.getFeatures?.().trails || []).filter(
+      (feature) => Array.isArray(feature.points) && feature.points.length >= 2
+    );
     const rows = [];
     const components = [];
     const debug = [];
@@ -5390,7 +5969,10 @@
       }));
 
       for (const row of cellRows) {
-        const idx = Math.max(0, Math.min(binCount - 1, Math.floor(row.alongM / TRAIL_CORRIDOR_RULE.binM)));
+        const idx = Math.max(
+          0,
+          Math.min(binCount - 1, Math.floor(row.alongM / TRAIL_CORRIDOR_RULE.binM))
+        );
         bins[idx].rows.push(row);
       }
 
@@ -5402,15 +5984,15 @@
         bin.peakScore = sorted[0]?.score || 0;
       }
 
-      const scoredBins = bins.filter(bin => bin.rows.length);
+      const scoredBins = bins.filter((bin) => bin.rows.length);
       if (!scoredBins.length) continue;
       const mean = scoredBins.reduce((sum, bin) => sum + bin.score, 0) / scoredBins.length;
-      const variance = scoredBins.reduce((sum, bin) => sum + (bin.score - mean) ** 2, 0) / scoredBins.length;
+      const variance =
+        scoredBins.reduce((sum, bin) => sum + (bin.score - mean) ** 2, 0) / scoredBins.length;
       const sd = Math.sqrt(variance);
       const threshold = Math.max(TRAIL_CORRIDOR_RULE.minMeanScore, mean + sd * 0.32);
       const smoothed = smoothTrailBins(bins);
-      const runs = trailRunsFromBins(smoothed, threshold)
-        .flatMap(splitTrailRun);
+      const runs = trailRunsFromBins(smoothed, threshold).flatMap(splitTrailRun);
       let emitted = 0;
 
       const wholeTrailComponent = TRAIL_CORRIDOR_RULE.wholeTrailMode
@@ -5418,7 +6000,7 @@
         : null;
       const candidateComponents = wholeTrailComponent
         ? [wholeTrailComponent]
-        : runs.map(run => trailCorridorComponentFromRun(run, cellRows)).filter(Boolean);
+        : runs.map((run) => trailCorridorComponentFromRun(run, cellRows)).filter(Boolean);
 
       for (const component of candidateComponents) {
         const niche = trailCorridorNicheFromComponent({
@@ -5429,7 +6011,8 @@
           activeLens,
           heatMetric
         });
-        if (!TRAIL_CORRIDOR_RULE.wholeTrailMode && Number(niche.questability_score || 0) < 0.18) continue;
+        if (!TRAIL_CORRIDOR_RULE.wholeTrailMode && Number(niche.questability_score || 0) < 0.18)
+          continue;
         rows.push(niche);
         components.push(component);
         emitted += 1;
@@ -5459,7 +6042,9 @@
   function heatBaseScore(cell) {
     const signalScore = clamp01(Number(cell?.signal || 0));
     const zScore = clamp01(Math.abs(Number(cell?.z || 0)) / 4);
-    return clamp01(signalScore * HEAT_TENDRIL_RULE.signalWeight + zScore * HEAT_TENDRIL_RULE.zWeight);
+    return clamp01(
+      signalScore * HEAT_TENDRIL_RULE.signalWeight + zScore * HEAT_TENDRIL_RULE.zWeight
+    );
   }
 
   function heatLocalEdgeScore(cell, signalData) {
@@ -5477,8 +6062,8 @@
     const ur = sample(1, -1);
     const dl = sample(-1, 1);
     const dr = sample(1, 1);
-    const sobelX = (ur + 2 * right + dr) - (ul + 2 * left + dl);
-    const sobelY = (dl + 2 * down + dr) - (ul + 2 * up + ur);
+    const sobelX = ur + 2 * right + dr - (ul + 2 * left + dl);
+    const sobelY = dl + 2 * down + dr - (ul + 2 * up + ur);
     const gradient = Math.hypot(sobelX, sobelY) / 4;
     const neighbors = [left, right, up, down, ul, ur, dl, dr];
     const localContrast = Math.max(...neighbors.map((value) => Math.abs(center - value)));
@@ -5492,7 +6077,16 @@
       : [];
     return passes.length
       ? passes
-      : [{ name: "heat", minScore: HEAT_TENDRIL_RULE.minScore, minHeat: 0, minEdge: 0, heatWeight: 1, edgeWeight: 0 }];
+      : [
+          {
+            name: "heat",
+            minScore: HEAT_TENDRIL_RULE.minScore,
+            minHeat: 0,
+            minEdge: 0,
+            heatWeight: 1,
+            edgeWeight: 0
+          }
+        ];
   }
 
   function heatTendrilCellScore(cell, signalData = null, pass = null) {
@@ -5500,8 +6094,7 @@
     if (!pass || !signalData) return heatScore;
     const edgeScore = heatLocalEdgeScore(cell, signalData);
     return clamp01(
-      heatScore * Number(pass.heatWeight ?? 1) +
-      edgeScore * Number(pass.edgeWeight ?? 0)
+      heatScore * Number(pass.heatWeight ?? 1) + edgeScore * Number(pass.edgeWeight ?? 0)
     );
   }
 
@@ -5582,8 +6175,16 @@
       field[y * width + x] = Math.max(field[y * width + x], Number(row.score || 0));
     }
 
-    const blurred = blurRaster(field, width, height, Number(HEAT_TENDRIL_RULE.skeletonSigmaCells) || 0.9);
-    const threshold = Math.max(0.02, Number(pass.skeletonThreshold ?? HEAT_TENDRIL_RULE.skeletonThreshold) || 0.26);
+    const blurred = blurRaster(
+      field,
+      width,
+      height,
+      Number(HEAT_TENDRIL_RULE.skeletonSigmaCells) || 0.9
+    );
+    const threshold = Math.max(
+      0.02,
+      Number(pass.skeletonThreshold ?? HEAT_TENDRIL_RULE.skeletonThreshold) || 0.26
+    );
     const binary = new Uint8Array(width * height);
     for (let idx = 0; idx < blurred.length; idx++) {
       if (blurred[idx] >= threshold) binary[idx] = 1;
@@ -5608,10 +6209,10 @@
         const heatScore = heatBaseScore(cell);
         const edgeScore = heatLocalEdgeScore(cell, signalData);
         const score = clamp01(
-          heatScore * Number(pass.heatWeight ?? 1) +
-          edgeScore * Number(pass.edgeWeight ?? 0)
+          heatScore * Number(pass.heatWeight ?? 1) + edgeScore * Number(pass.edgeWeight ?? 0)
         );
-        if (score < Math.max(0.01, Number(pass.minScore ?? HEAT_TENDRIL_RULE.minScore) * 0.45)) continue;
+        if (score < Math.max(0.01, Number(pass.minScore ?? HEAT_TENDRIL_RULE.minScore) * 0.45))
+          continue;
         skeletonRows.set(key, {
           cell,
           score,
@@ -5690,9 +6291,14 @@
     }
 
     const offsets = [
-      [-1, -1], [0, -1], [1, -1],
-      [-1, 0],           [1, 0],
-      [-1, 1],  [0, 1],  [1, 1]
+      [-1, -1],
+      [0, -1],
+      [1, -1],
+      [-1, 0],
+      [1, 0],
+      [-1, 1],
+      [0, 1],
+      [1, 1]
     ];
     const queue = members.slice();
     const queued = new Set(queue.map((cell) => cell.key));
@@ -5714,18 +6320,19 @@
     }
 
     const extended = [...byKey.values()];
-    const capped = extended.length > HEAT_TENDRIL_RULE.maxCells
-      ? extended
-          .map((cell) => {
-            const dx = Number(cell.ix) - axis.cx;
-            const dy = Number(cell.iy) - axis.cy;
-            const perp = Math.abs(dx * -axis.uy + dy * axis.ux);
-            return { cell, perp, score: heatTendrilCellScore(cell) };
-          })
-          .sort((a, b) => a.perp - b.perp || b.score - a.score)
-          .slice(0, HEAT_TENDRIL_RULE.maxCells)
-          .map((row) => row.cell)
-      : extended;
+    const capped =
+      extended.length > HEAT_TENDRIL_RULE.maxCells
+        ? extended
+            .map((cell) => {
+              const dx = Number(cell.ix) - axis.cx;
+              const dy = Number(cell.iy) - axis.cy;
+              const perp = Math.abs(dx * -axis.uy + dy * axis.ux);
+              return { cell, perp, score: heatTendrilCellScore(cell) };
+            })
+            .sort((a, b) => a.perp - b.perp || b.score - a.score)
+            .slice(0, HEAT_TENDRIL_RULE.maxCells)
+            .map((row) => row.cell)
+        : extended;
 
     return {
       members: capped,
@@ -5775,9 +6382,7 @@
     for (const row of rows.slice(0, 8)) addCandidate(row);
 
     const limit = Math.max(8, Number(HEAT_TENDRIL_RULE.maxEndpointCandidates) || 34);
-    const list = [...candidates.values()]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    const list = [...candidates.values()].sort((a, b) => b.score - a.score).slice(0, limit);
     const pool = list.length >= 2 ? list : rows.slice(0, Math.min(rows.length, limit));
 
     let best = null;
@@ -5797,7 +6402,11 @@
     if (!HEAT_TENDRIL_RULE.vectorMode || rows.length < 2) return null;
     const rowMap = new Map(rows.map((row) => [row.cell.key, row]));
     const pair = heatPathEndpointPair(rows, rowMap);
-    if (!pair || pair.distanceCells < Math.max(2, Number(HEAT_TENDRIL_RULE.minVectorLengthCells) || 5)) return null;
+    if (
+      !pair ||
+      pair.distanceCells < Math.max(2, Number(HEAT_TENDRIL_RULE.minVectorLengthCells) || 5)
+    )
+      return null;
 
     const startKey = pair.start.cell.key;
     const endKey = pair.end.cell.key;
@@ -5826,9 +6435,14 @@
       if (!current) continue;
       for (const next of heatPathNeighborRows(current, rowMap)) {
         if (visited.has(next.cell.key)) continue;
-        const stepCells = Math.hypot(next.cell.ix - current.cell.ix, next.cell.iy - current.cell.iy);
+        const stepCells = Math.hypot(
+          next.cell.ix - current.cell.ix,
+          next.cell.iy - current.cell.iy
+        );
         const heatReward = clamp01((current.score + next.score) / 2);
-        const edgeReward = clamp01((Number(current.edgeScore || 0) + Number(next.edgeScore || 0)) / 2);
+        const edgeReward = clamp01(
+          (Number(current.edgeScore || 0) + Number(next.edgeScore || 0)) / 2
+        );
         const cost = stepCells * (1.38 - heatReward * 0.48 - edgeReward * 0.42);
         const candidateDistance = currentDistance + cost;
         if (candidateDistance < (distances.get(next.cell.key) ?? Infinity)) {
@@ -5851,7 +6465,8 @@
     if (pathKeys[0] !== startKey) return null;
 
     const pathRows = pathKeys.map((key) => rowMap.get(key)).filter(Boolean);
-    if (pathRows.length < Math.max(2, Number(HEAT_TENDRIL_RULE.minVectorLengthCells) || 5)) return null;
+    if (pathRows.length < Math.max(2, Number(HEAT_TENDRIL_RULE.minVectorLengthCells) || 5))
+      return null;
 
     const gridPoints = pathRows.map((row) => ({ x: row.cell.ix + 0.5, y: row.cell.iy + 0.5 }));
     const simplifiedPoints = simplifyOpenContourPath(
@@ -5861,10 +6476,11 @@
     const polyline = simplifiedPoints.map((point) => gridLatLng(point.x, point.y));
     let lengthM = 0;
     for (let i = 1; i < pathRows.length; i++) {
-      lengthM += Math.hypot(
-        pathRows[i].cell.ix - pathRows[i - 1].cell.ix,
-        pathRows[i].cell.iy - pathRows[i - 1].cell.iy
-      ) * GRID_SIZE_M;
+      lengthM +=
+        Math.hypot(
+          pathRows[i].cell.ix - pathRows[i - 1].cell.ix,
+          pathRows[i].cell.iy - pathRows[i - 1].cell.iy
+        ) * GRID_SIZE_M;
     }
 
     return {
@@ -5889,9 +6505,14 @@
     const passDebug = [];
     let scoredCellTotal = 0;
     const offsets = [
-      [-1, -1], [0, -1], [1, -1],
-      [-1, 0],           [1, 0],
-      [-1, 1],  [0, 1],  [1, 1]
+      [-1, -1],
+      [0, -1],
+      [1, -1],
+      [-1, 0],
+      [1, 0],
+      [-1, 1],
+      [0, 1],
+      [1, 1]
     ];
 
     for (const pass of passes) {
@@ -5900,15 +6521,18 @@
         const heatScore = heatBaseScore(cell);
         const edgeScore = heatLocalEdgeScore(cell, signalData);
         const score = clamp01(
-          heatScore * Number(pass.heatWeight ?? 1) +
-          edgeScore * Number(pass.edgeWeight ?? 0)
+          heatScore * Number(pass.heatWeight ?? 1) + edgeScore * Number(pass.edgeWeight ?? 0)
         );
         if (heatScore < Number(pass.minHeat || 0)) continue;
         if (edgeScore < Number(pass.minEdge || 0)) continue;
         if (
           !pass.allowPlateau &&
           heatScore >= HEAT_TENDRIL_RULE.saturatedHeatThreshold &&
-          edgeScore < Math.max(Number(pass.minEdge || 0), Number(HEAT_TENDRIL_RULE.saturatedMinEdgeScore || 0))
+          edgeScore <
+            Math.max(
+              Number(pass.minEdge || 0),
+              Number(HEAT_TENDRIL_RULE.saturatedMinEdgeScore || 0)
+            )
         ) {
           continue;
         }
@@ -5934,93 +6558,114 @@
       });
       const visited = new Set();
 
-    for (const key of graphRows.keys()) {
-      if (visited.has(key)) continue;
-      const stack = [key];
-      const rows = [];
-      visited.add(key);
+      for (const key of graphRows.keys()) {
+        if (visited.has(key)) continue;
+        const stack = [key];
+        const rows = [];
+        visited.add(key);
 
-      while (stack.length) {
-        const currentKey = stack.pop();
-        const row = graphRows.get(currentKey);
-        if (!row) continue;
-        rows.push(row);
+        while (stack.length) {
+          const currentKey = stack.pop();
+          const row = graphRows.get(currentKey);
+          if (!row) continue;
+          rows.push(row);
 
-        for (const [dx, dy] of offsets) {
-          const nextKey = `${row.cell.ix + dx},${row.cell.iy + dy}`;
-          if (!graphRows.has(nextKey) || visited.has(nextKey)) continue;
-          visited.add(nextKey);
-          stack.push(nextKey);
+          for (const [dx, dy] of offsets) {
+            const nextKey = `${row.cell.ix + dx},${row.cell.iy + dy}`;
+            if (!graphRows.has(nextKey) || visited.has(nextKey)) continue;
+            visited.add(nextKey);
+            stack.push(nextKey);
+          }
         }
+
+        if (rows.length < HEAT_TENDRIL_RULE.minCells) continue;
+        rows.sort((a, b) => b.score - a.score);
+        const keptRows = rows.slice(0, HEAT_TENDRIL_RULE.maxCells);
+        const vector = solveHeatPathVector(keptRows);
+        const baseMembers = vector?.cells?.length ? vector.cells : keptRows.map((row) => row.cell);
+        const extension = vector
+          ? { members: baseMembers, added: 0, axis: heatTendrilAxis(baseMembers) }
+          : extendHeatTendrilMembers(signalData, baseMembers);
+        const members = extension.members;
+        const component = componentFromMembers(members, keptRows[0].cell);
+        if (!component) continue;
+
+        const shape = constrainedShapeMetrics(members, component.peak);
+        const peakScore = vector?.peakScore ?? keptRows[0]?.score ?? 0;
+        const meanScore =
+          vector?.meanScore ??
+          members.reduce((sum, cell) => sum + heatTendrilCellScore(cell), 0) / members.length;
+        const rejectionReasons = [];
+        if (peakScore < HEAT_TENDRIL_RULE.minPeakScore) rejectionReasons.push("peak_score");
+        if (Number(shape.elongation_ratio || 1) < HEAT_TENDRIL_RULE.minElongation)
+          rejectionReasons.push("elongation");
+        if (Number(shape.major_cells || 0) < HEAT_TENDRIL_RULE.minMajorCells)
+          rejectionReasons.push("major_length");
+        if (Number(shape.minor_cells || 999) > HEAT_TENDRIL_RULE.maxMinorCells)
+          rejectionReasons.push("minor_width");
+        if (Number(shape.perimeter_complexity || 0) > HEAT_TENDRIL_RULE.maxPerimeterComplexity)
+          rejectionReasons.push("perimeter_complexity");
+
+        const candidate = {
+          ...component,
+          heatTendrilScore: meanScore,
+          heatTendrilPeakScore: peakScore,
+          heatTendrilShape: shape,
+          heatTendrilExtendedCells: extension.added,
+          heatTendrilPass: keptRows[0]?.passName || "heat",
+          heatPathVector: vector,
+          heatTendrilAxis: extension.axis
+            ? {
+                angle_deg: Number(Number(extension.axis.shape?.axis_angle_deg || 0).toFixed(1)),
+                width_cells: HEAT_TENDRIL_RULE.extensionWidthCells,
+                pad_cells: HEAT_TENDRIL_RULE.extensionPadCells
+              }
+            : null,
+          clusterSizeScore: clamp01(
+            Math.log1p(members.length) / Math.log1p(HEAT_TENDRIL_RULE.maxCells)
+          ),
+          clusterPeakScore: clamp01(peakScore),
+          clusterPreferenceScore: clamp01(
+            meanScore * 0.48 +
+              peakScore * 0.32 +
+              Math.min(1, Number(shape.major_cells || 0) / 18) * 0.2
+          )
+        };
+
+        if (rejectionReasons.length) {
+          for (const reason of rejectionReasons) rejected[reason] = (rejected[reason] || 0) + 1;
+          fallbackCandidates.push({
+            ...candidate,
+            heatTendrilRelaxed: true,
+            heatTendrilRejected: rejectionReasons
+          });
+          continue;
+        }
+
+        components.push(candidate);
       }
-
-      if (rows.length < HEAT_TENDRIL_RULE.minCells) continue;
-      rows.sort((a, b) => b.score - a.score);
-      const keptRows = rows.slice(0, HEAT_TENDRIL_RULE.maxCells);
-      const vector = solveHeatPathVector(keptRows);
-      const baseMembers = vector?.cells?.length ? vector.cells : keptRows.map(row => row.cell);
-      const extension = vector
-        ? { members: baseMembers, added: 0, axis: heatTendrilAxis(baseMembers) }
-        : extendHeatTendrilMembers(signalData, baseMembers);
-      const members = extension.members;
-      const component = componentFromMembers(members, keptRows[0].cell);
-      if (!component) continue;
-
-      const shape = constrainedShapeMetrics(members, component.peak);
-      const peakScore = vector?.peakScore ?? keptRows[0]?.score ?? 0;
-      const meanScore = vector?.meanScore ?? members.reduce((sum, cell) => sum + heatTendrilCellScore(cell), 0) / members.length;
-      const rejectionReasons = [];
-      if (peakScore < HEAT_TENDRIL_RULE.minPeakScore) rejectionReasons.push("peak_score");
-      if (Number(shape.elongation_ratio || 1) < HEAT_TENDRIL_RULE.minElongation) rejectionReasons.push("elongation");
-      if (Number(shape.major_cells || 0) < HEAT_TENDRIL_RULE.minMajorCells) rejectionReasons.push("major_length");
-      if (Number(shape.minor_cells || 999) > HEAT_TENDRIL_RULE.maxMinorCells) rejectionReasons.push("minor_width");
-      if (Number(shape.perimeter_complexity || 0) > HEAT_TENDRIL_RULE.maxPerimeterComplexity) rejectionReasons.push("perimeter_complexity");
-
-      const candidate = {
-        ...component,
-        heatTendrilScore: meanScore,
-        heatTendrilPeakScore: peakScore,
-        heatTendrilShape: shape,
-        heatTendrilExtendedCells: extension.added,
-        heatTendrilPass: keptRows[0]?.passName || "heat",
-        heatPathVector: vector,
-        heatTendrilAxis: extension.axis ? {
-          angle_deg: Number(Number(extension.axis.shape?.axis_angle_deg || 0).toFixed(1)),
-          width_cells: HEAT_TENDRIL_RULE.extensionWidthCells,
-          pad_cells: HEAT_TENDRIL_RULE.extensionPadCells
-        } : null,
-        clusterSizeScore: clamp01(Math.log1p(members.length) / Math.log1p(HEAT_TENDRIL_RULE.maxCells)),
-        clusterPeakScore: clamp01(peakScore),
-        clusterPreferenceScore: clamp01(meanScore * 0.48 + peakScore * 0.32 + Math.min(1, Number(shape.major_cells || 0) / 18) * 0.2)
-      };
-
-      if (rejectionReasons.length) {
-        for (const reason of rejectionReasons) rejected[reason] = (rejected[reason] || 0) + 1;
-        fallbackCandidates.push({ ...candidate, heatTendrilRelaxed: true, heatTendrilRejected: rejectionReasons });
-        continue;
-      }
-
-      components.push(candidate);
-    }
     }
 
     if (!components.length && HEAT_TENDRIL_RULE.fallbackEnabled) {
       const fallback = fallbackCandidates
-        .filter((component) =>
-          Number(component.componentCellCount || 0) >= HEAT_TENDRIL_RULE.fallbackMinCells &&
-          Number(component.heatTendrilPeakScore || 0) >= HEAT_TENDRIL_RULE.fallbackMinPeakScore
+        .filter(
+          (component) =>
+            Number(component.componentCellCount || 0) >= HEAT_TENDRIL_RULE.fallbackMinCells &&
+            Number(component.heatTendrilPeakScore || 0) >= HEAT_TENDRIL_RULE.fallbackMinPeakScore
         )
-        .sort((a, b) =>
-          b.clusterPreferenceScore - a.clusterPreferenceScore ||
-          b.componentCellCount - a.componentCellCount
+        .sort(
+          (a, b) =>
+            b.clusterPreferenceScore - a.clusterPreferenceScore ||
+            b.componentCellCount - a.componentCellCount
         )
         .slice(0, Math.max(1, Number(HEAT_TENDRIL_RULE.maxFallbackComponents) || 1));
       components.push(...fallback);
     }
 
-    const sorted = components.sort((a, b) =>
-      b.clusterPreferenceScore - a.clusterPreferenceScore ||
-      b.componentCellCount - a.componentCellCount
+    const sorted = components.sort(
+      (a, b) =>
+        b.clusterPreferenceScore - a.clusterPreferenceScore ||
+        b.componentCellCount - a.componentCellCount
     );
     sorted.debug = {
       scoredCells: scoredCellTotal,
@@ -6028,15 +6673,21 @@
       skeletonizedPasses: passDebug.filter((pass) => pass.skeletonized).length,
       skeletonCells: passDebug.reduce((sum, pass) => sum + Number(pass.skeletonCells || 0), 0),
       fallbackCandidates: fallbackCandidates.length,
-      extendedCells: sorted.reduce((sum, component) => sum + Number(component.heatTendrilExtendedCells || 0), 0),
-      vectorSegments: sorted.filter((component) => component.heatPathVector?.polyline?.length >= 2).length,
+      extendedCells: sorted.reduce(
+        (sum, component) => sum + Number(component.heatTendrilExtendedCells || 0),
+        0
+      ),
+      vectorSegments: sorted.filter((component) => component.heatPathVector?.polyline?.length >= 2)
+        .length,
       rejected
     };
     return sorted;
   }
 
   function heatTendrilPlaceContext(component) {
-    const shape = component.heatTendrilShape || constrainedShapeMetrics(component.members || [], component.peak);
+    const shape =
+      component.heatTendrilShape ||
+      constrainedShapeMetrics(component.members || [], component.peak);
     return {
       primary_label: "heat corridor in view",
       secondary_label: null,
@@ -6063,18 +6714,39 @@
     const placeContext = heatTendrilPlaceContext(component);
     const lensPeak = clamp01(m.lensPeakSignal);
     const zStrength = clamp01((Number(m.lensPeakAbsZ) || 0) / 5);
-    const tendrilStrength = clamp01((component.heatTendrilScore || 0) * 0.54 + (component.heatTendrilPeakScore || 0) * 0.34 + Math.min(1, Number(component.heatTendrilShape?.major_cells || 0) / 20) * 0.12);
-    const bio = clamp01((Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.58 + m.activeRatio * 0.14 + tendrilStrength * 0.28);
-    const need = clamp01((1 - m.activeRatio) * 0.42 + (m.observers <= 1 ? 0.1 : 0) + (1 - m.lensMeanSignal) * 0.18);
+    const tendrilStrength = clamp01(
+      (component.heatTendrilScore || 0) * 0.54 +
+        (component.heatTendrilPeakScore || 0) * 0.34 +
+        Math.min(1, Number(component.heatTendrilShape?.major_cells || 0) / 20) * 0.12
+    );
+    const bio = clamp01(
+      (Math.log1p(m.species) / Math.log1p(caps.species * 4)) * 0.58 +
+        m.activeRatio * 0.14 +
+        tendrilStrength * 0.28
+    );
+    const need = clamp01(
+      (1 - m.activeRatio) * 0.42 + (m.observers <= 1 ? 0.1 : 0) + (1 - m.lensMeanSignal) * 0.18
+    );
     const stale = clamp01(daysSince(m.latestObservedMs) / 240);
-    const questability = clamp01(tendrilStrength * 0.48 + zStrength * 0.16 + lensPeak * 0.1 + bio * 0.14 + need * 0.08 + stale * 0.04);
+    const questability = clamp01(
+      tendrilStrength * 0.48 +
+        zStrength * 0.16 +
+        lensPeak * 0.1 +
+        bio * 0.14 +
+        need * 0.08 +
+        stale * 0.04
+    );
     const initialFocus = topTaxonomySubject({
       ...m,
       active_lens: activeLens,
       heat_metric: heatMetric
     });
     const taxonFocus = initialFocus?.label
-      ? { iconic: initialFocus.rank || "Any", label: titleSubjectCase(initialFocus.label), source_rank: initialFocus.rank || null }
+      ? {
+          iconic: initialFocus.rank || "Any",
+          label: titleSubjectCase(initialFocus.label),
+          source_rank: initialFocus.rank || null
+        }
       : { iconic: "Any", label: "life" };
     const coreCell = component.peak ? `${component.peak.ix},${component.peak.iy}` : "";
     const sourceKey = [
@@ -6090,14 +6762,17 @@
       source_key: sourceKey,
       title: "",
       short_title: "",
-      description: "A GridWild corridor niche generated directly from a long, thin heatmap tendril inside the current FOV.",
+      description:
+        "A GridWild corridor niche generated directly from a long, thin heatmap tendril inside the current FOV.",
       niche_type: "edge_habitat_niche",
       theme: "Heat corridor / corridor niche",
       centroid_lat: ll.lat,
       centroid_lng: ll.lng,
       geometry: boundsForCells(agg.minIx, agg.minIy, agg.maxIx, agg.maxIy),
       grid_cell_ids: agg.cells,
-      radius_m: Math.round(Math.max(42, Math.min(260, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.65))),
+      radius_m: Math.round(
+        Math.max(42, Math.min(260, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.65))
+      ),
       scale_level: "constrained-geometry:heat corridor",
       taxon_focus: taxonFocus,
       seasonal_profile: { mode: "heat_tendril_runtime_v1" },
@@ -6118,19 +6793,27 @@
         peak_abs_z: Number((m.lensPeakAbsZ || 0).toFixed(3)),
         component_id: agg.componentId,
         component_cell_count: Number(m.componentCellCount || agg.cells.length),
-        cluster_priority_score: Number((component.clusterPreferenceScore || tendrilStrength).toFixed(3)),
+        cluster_priority_score: Number(
+          (component.clusterPreferenceScore || tendrilStrength).toFixed(3)
+        ),
         geometry_type: "corridor-buffer",
         scale_class: "corridor niche",
         display_geometry: "corridor-buffer",
-        interaction_radius_m: Math.round(Math.max(56, Math.min(320, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.9))),
+        interaction_radius_m: Math.round(
+          Math.max(56, Math.min(320, Math.sqrt(Math.max(1, agg.cells.length)) * GRID_SIZE_M * 1.9))
+        ),
         heat_tendril_score: Number((component.heatTendrilScore || 0).toFixed(3)),
         heat_tendril_peak_score: Number((component.heatTendrilPeakScore || 0).toFixed(3)),
         heat_tendril_pass: component.heatTendrilPass || null,
         heat_tendril_relaxed: Boolean(component.heatTendrilRelaxed),
-        heat_tendril_rejected_checks: Array.isArray(component.heatTendrilRejected) ? component.heatTendrilRejected : [],
+        heat_tendril_rejected_checks: Array.isArray(component.heatTendrilRejected)
+          ? component.heatTendrilRejected
+          : [],
         heat_tendril_extended_cells: Number(component.heatTendrilExtendedCells || 0),
         heat_tendril_axis: component.heatTendrilAxis || null,
-        heat_path_polyline: Array.isArray(component.heatPathVector?.polyline) ? component.heatPathVector.polyline : [],
+        heat_path_polyline: Array.isArray(component.heatPathVector?.polyline)
+          ? component.heatPathVector.polyline
+          : [],
         heat_path_length_m: Number((component.heatPathVector?.lengthM || 0).toFixed(1)),
         heat_path_cell_count: Number(component.heatPathVector?.cells?.length || 0),
         heat_path_simplified_points: Number(component.heatPathVector?.simplifiedPointCount || 0),
@@ -6138,7 +6821,9 @@
           ok: true,
           reason: component.heatPathVector
             ? "heat_path_vector"
-            : component.heatTendrilRelaxed ? "heat_tendril_relaxed_fallback" : "heat_tendril",
+            : component.heatTendrilRelaxed
+              ? "heat_tendril_relaxed_fallback"
+              : "heat_tendril",
           min_elongation: HEAT_TENDRIL_RULE.minElongation,
           min_major_cells: HEAT_TENDRIL_RULE.minMajorCells,
           max_minor_cells: HEAT_TENDRIL_RULE.maxMinorCells
@@ -6197,20 +6882,31 @@
 
   function constrainedDedupeRows(rows = []) {
     const accepted = [];
-    const sorted = rows.slice().sort((a, b) =>
-      nicheClusterPriority(b) - nicheClusterPriority(a) ||
-      Number(b.questability_score || 0) - Number(a.questability_score || 0)
-    );
+    const sorted = rows
+      .slice()
+      .sort(
+        (a, b) =>
+          nicheClusterPriority(b) - nicheClusterPriority(a) ||
+          Number(b.questability_score || 0) - Number(a.questability_score || 0)
+      );
 
     for (const row of sorted) {
       const duplicate = accepted.some((kept) => {
-        const rowCorridor = row.metrics?.geometry_type === "corridor-buffer" || row.metrics?.algorithm === "trail_corridor_niche_v1";
-        const keptCorridor = kept.metrics?.geometry_type === "corridor-buffer" || kept.metrics?.algorithm === "trail_corridor_niche_v1";
+        const rowCorridor =
+          row.metrics?.geometry_type === "corridor-buffer" ||
+          row.metrics?.algorithm === "trail_corridor_niche_v1";
+        const keptCorridor =
+          kept.metrics?.geometry_type === "corridor-buffer" ||
+          kept.metrics?.algorithm === "trail_corridor_niche_v1";
         if (rowCorridor !== keptCorridor) return false;
         const rowAlgorithm = String(row.metrics?.algorithm || "");
         const keptAlgorithm = String(kept.metrics?.algorithm || "");
-        const rowDebugCorridor = ["trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(rowAlgorithm);
-        const keptDebugCorridor = ["trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(keptAlgorithm);
+        const rowDebugCorridor = ["trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(
+          rowAlgorithm
+        );
+        const keptDebugCorridor = ["trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(
+          keptAlgorithm
+        );
         if (rowDebugCorridor && keptDebugCorridor && rowAlgorithm !== keptAlgorithm) return false;
 
         const overlap = nicheCellJaccard(row.grid_cell_ids || [], kept.grid_cell_ids || []);
@@ -6224,7 +6920,9 @@
             peak_iy: Number(String(kept.metrics?.peak_cell || "").split(",")[1])
           }
         );
-        const sameTrail = rowCorridor && keptCorridor &&
+        const sameTrail =
+          rowCorridor &&
+          keptCorridor &&
           row.metrics?.trail_feature_id &&
           row.metrics?.trail_feature_id === kept.metrics?.trail_feature_id;
         if (sameTrail) return overlap >= 0.35;
@@ -6262,10 +6960,12 @@
     const capRadiusCells = isFovSampling()
       ? Math.max(
           6,
-          Math.ceil(Math.max(
-            signalData.bounds.maxIx - signalData.bounds.minIx,
-            signalData.bounds.maxIy - signalData.bounds.minIy
-          ) / 2)
+          Math.ceil(
+            Math.max(
+              signalData.bounds.maxIx - signalData.bounds.minIx,
+              signalData.bounds.maxIy - signalData.bounds.minIy
+            ) / 2
+          )
         )
       : Math.max(6, Math.round(numericRadiusM(500) / GRID_SIZE_M));
     const caps = scanCaps(center, capRadiusCells);
@@ -6332,14 +7032,26 @@
     }
 
     if (includeCorridors && NICHE_OSM_CONTEXT_ENABLED && TRAIL_CORRIDOR_RULE.enabled) {
-      const trailCorridors = generateTrailCorridorCandidates(signalData, origin, caps, activeLens, heatMetric);
+      const trailCorridors = generateTrailCorridorCandidates(
+        signalData,
+        origin,
+        caps,
+        activeLens,
+        heatMetric
+      );
       rows.push(...trailCorridors.rows);
       acceptedComponents.push(...trailCorridors.components);
       trailDebug = trailCorridors.debug;
     }
 
     if (includeCorridors) {
-      const heatTendrils = generateHeatTendrilCandidates(signalData, origin, caps, activeLens, heatMetric);
+      const heatTendrils = generateHeatTendrilCandidates(
+        signalData,
+        origin,
+        caps,
+        activeLens,
+        heatMetric
+      );
       rows.push(...heatTendrils.rows);
       acceptedComponents.push(...heatTendrils.components);
       heatTendrilDebug = heatTendrils.debug;
@@ -6351,7 +7063,9 @@
       components: acceptedComponents,
       zThreshold: Number(state.controls.lensZThreshold || 2.5),
       sampledCellCount: signalData.cells.size,
-      thresholdCellCount: [...signalData.cells.values()].filter(cell => Math.abs(cell.z) > Number(state.controls.lensZThreshold || 2.5)).length,
+      thresholdCellCount: [...signalData.cells.values()].filter(
+        (cell) => Math.abs(cell.z) > Number(state.controls.lensZThreshold || 2.5)
+      ).length,
       constrainedGeometry: {
         algorithm: includeCorridors ? "corridor_sampling_v1" : "constrained_geometry_niche_v1",
         activeLens,
@@ -6376,12 +7090,14 @@
     const heatBoost = isHeatTendrilNiche(niche) ? 0.55 : 0;
     if (Number.isFinite(explicit) && explicit > 0) return explicit + heatBoost;
 
-    const cells = Number(metrics.component_cell_count || metrics.componentCellCount || metrics.totalCells || 0);
+    const cells = Number(
+      metrics.component_cell_count || metrics.componentCellCount || metrics.totalCells || 0
+    );
     const meanAbsZ = Number(metrics.mean_abs_z || metrics.lensMeanAbsZ || metrics.meanAbsZ || 0);
-    return clamp01(
-      clamp01(Math.log1p(cells) / Math.log1p(100)) * 0.5 +
-      clamp01(meanAbsZ / 6) * 0.5
-    ) + heatBoost;
+    return (
+      clamp01(clamp01(Math.log1p(cells) / Math.log1p(100)) * 0.5 + clamp01(meanAbsZ / 6) * 0.5) +
+      heatBoost
+    );
   }
 
   function mergeNiches(...nicheGroups) {
@@ -6394,13 +7110,19 @@
         current.is_home_niche = Boolean(current.is_home_niche || niche.is_home_niche);
         current.home_user_count = Math.max(homeUserCount(current), homeUserCount(niche));
         current._bookmarked_niche = Boolean(current._bookmarked_niche || niche._bookmarked_niche);
-        current._bookmark_only = Boolean(current._bookmark_only === true && niche._bookmark_only === true);
+        current._bookmark_only = Boolean(
+          current._bookmark_only === true && niche._bookmark_only === true
+        );
         current.bookmarked_at = current.bookmarked_at || niche.bookmarked_at;
       }
       const score = Number(niche.questability_score || 0);
       const currentScore = Number(current?.questability_score || 0);
-      const confidence = Number(niche.place_label_confidence || niche.place_context?.label_confidence || 0);
-      const currentConfidence = Number(current?.place_label_confidence || current?.place_context?.label_confidence || 0);
+      const confidence = Number(
+        niche.place_label_confidence || niche.place_context?.label_confidence || 0
+      );
+      const currentConfidence = Number(
+        current?.place_label_confidence || current?.place_context?.label_confidence || 0
+      );
       const hasSpecificPlace = !isGenericPlaceContext(niche.place_context || {});
       const currentHasSpecificPlace = !isGenericPlaceContext(current?.place_context || {});
       const scoreTied = Math.abs(score - currentScore) < 0.0001;
@@ -6424,11 +7146,11 @@
         });
       }
     }
-    const sorted = [...byKey.values()]
-      .sort((a, b) =>
+    const sorted = [...byKey.values()].sort(
+      (a, b) =>
         nicheClusterPriority(b) - nicheClusterPriority(a) ||
         Number(b.questability_score || 0) - Number(a.questability_score || 0)
-      );
+    );
 
     return sorted;
   }
@@ -6514,7 +7236,11 @@
 
   async function refreshLocalNiches(options = {}) {
     if (state.loading) {
-      showSamplingToast("Niche generation already running", 55, "Waiting for the current pass to finish.");
+      showSamplingToast(
+        "Niche generation already running",
+        55,
+        "Waiting for the current pass to finish."
+      );
       return;
     }
     const modeConfig = samplingModeConfig(options.mode === "corridors" ? "corridors" : "niches");
@@ -6528,174 +7254,226 @@
     renderIntoPage();
     await yieldToPaint();
 
-    const useAvailableOsmLayerOnly = modeConfig.mode === "niches" && (
-      state.controls.osmTransformation === true ||
-      state.controls.thresholdSubdivideApproach === true
-    );
-    if (NICHE_OSM_CONTEXT_ENABLED && !useAvailableOsmLayerOnly) window.GridWildOsmFeaturesLayer?.scheduleFetch?.();
+    const useAvailableOsmLayerOnly =
+      modeConfig.mode === "niches" &&
+      (state.controls.osmTransformation === true ||
+        state.controls.thresholdSubdivideApproach === true);
+    if (NICHE_OSM_CONTEXT_ENABLED && !useAvailableOsmLayerOnly)
+      window.GridWildOsmFeaturesLayer?.scheduleFetch?.();
 
     const origin = getOrigin();
     let serverNiches = [];
     let generated = [];
 
     try {
-    try {
-      showSamplingToast("Checking durable niche layer", 18, "Looking for matching saved components nearby.");
-      await yieldToPaint();
-      const data = await window.GridWildAPI?.getNearbyLocalNiches?.(origin.lat, origin.lng, {
-        radius_m: isFovSampling() ? 5000 : numericRadiusM(500),
-        limit: Math.max(1, Number(state.controls.maxCandidates) || 8) * 3
-      });
-      if (data?.home_niche_id !== undefined) {
-        window.__gwState = window.__gwState || {};
-        window.__gwState.homeNicheId = data.home_niche_id || null;
-      }
-      const activeLens = window.__gwState?.activeLens || "classic";
-      const zThreshold = Number(state.controls.lensZThreshold || 2.5);
-      const extent = isFovSampling() ? "fov" : "radius_m";
-      const wantsOsmTransform = modeConfig.mode === "niches" && state.controls.osmTransformation === true;
-      const wantsThresholdSubdivide = modeConfig.mode === "niches" && state.controls.thresholdSubdivideApproach === true;
-      const durableAlgorithms = [
-        "constrained_geometry_niche_v1",
-        "trail_corridor_niche_v1",
-        "heat_tendril_niche_v1",
-        THRESHOLD_SUBDIVIDE_RULE.version
-      ];
-      serverNiches = (data?.niches || []).filter((niche) => {
-        const metrics = niche.metrics || {};
-        const algorithm = String(metrics.algorithm || "");
-        const hasOsmTransform = metrics.osm_transform?.enabled === true;
-        const thresholdApproachMatches = wantsThresholdSubdivide
-          ? algorithm === THRESHOLD_SUBDIVIDE_RULE.version
-          : algorithm !== THRESHOLD_SUBDIVIDE_RULE.version;
-        return durableAlgorithms.includes(algorithm) &&
-          String(metrics.active_lens || "classic") === String(activeLens) &&
-          String(metrics.sampling_extent || "radius_m") === extent &&
-          Math.abs(Number(metrics.z_threshold || zThreshold) - zThreshold) < 0.01 &&
-          thresholdApproachMatches &&
-          (wantsOsmTransform ? hasOsmTransform : !hasOsmTransform);
-      });
-    } catch (err) {
-      state.persistWarning = "Server niche layer unavailable; showing runtime candidates.";
-      console.warn("Local niche fetch failed:", err);
-    }
-
-    showSamplingToast(modeConfig.coreTitle, 42, modeConfig.coreDetail);
-    await yieldToastMoment(220);
-    generated = generateLocalCandidates(origin, { mode: modeConfig.mode });
-    const heatTendrilDebug = state.detectorDebug?.constrainedGeometry?.heatTendrils || {};
-    const heatTendrilCount = heatTendrilDebug.emitted || 0;
-    showSamplingToast(
-      modeConfig.resultTitle,
-      64,
-      modeConfig.mode === "corridors"
-        ? `${generated.length} corridor objects, ${heatTendrilCount} heat tendrils (${heatTendrilDebug.vectorSegments || 0} skeleton path vectors, ${heatTendrilDebug.skeletonCells || 0} skeleton cells).`
-        : `${state.detectorDebug?.constrainedGeometry?.resultCount || generated.length} niche objects.`
-    );
-    await yieldToastMoment(SAMPLING_RESULT_TOAST_MS);
-
-    if (generated.length && modeConfig.mode === "niches" && state.controls.osmTransformation === true) {
-      showSamplingToast("Applying OSM transformation", 68, "Subdividing blobs with cached roads, paths, and structures.");
-      await yieldToPaint();
-      const transformed = applyOsmTransformationsToNiches(generated, origin);
-      generated = transformed.niches;
-      const detail = osmTransformSummaryText(transformed.summary, generated.length);
-      if (detail) {
-        showSamplingToast("OSM transformation complete", 70, detail);
-        await yieldToastMoment(640);
-      }
-    }
-
-    if (generated.length && modeConfig.mode === "niches" && state.controls.thresholdSubdivideApproach === true) {
-      generated = capThresholdSubdivideNiches(generated);
-      syncThresholdSubdivideDebugFromNiches(generated);
-    }
-
-    if (generated.length && NICHE_OSM_CONTEXT_ENABLED && !useAvailableOsmLayerOnly) {
-      showSamplingToast("Resolving place labels", 72, "Checking nearby OSM names, streets, and neighborhoods.");
-      await yieldToPaint();
-      generated = await enrichNichePlaceContexts(generated);
-    }
-
-    if (generated.length && window.GridWildAPI?.upsertLocalNiches) {
       try {
-        showSamplingToast("Saving local niches", 82, `${generated.length} ${modeConfig.saveDetail}.`);
+        showSamplingToast(
+          "Checking durable niche layer",
+          18,
+          "Looking for matching saved components nearby."
+        );
         await yieldToPaint();
-        const generatedByKey = new Map(generated.map((niche) => [
-          niche.source_key || niche.id || `${niche.centroid_lat},${niche.centroid_lng}`,
-          niche
-        ]));
-        const saved = await window.GridWildAPI.upsertLocalNiches(generated);
-        const here = L.latLng(origin.lat, origin.lng);
-        generated = (saved?.niches || generated).map((row) => {
-          const previous = generatedByKey.get(row.source_key || row.id || `${row.centroid_lat},${row.centroid_lng}`) || null;
-          const confidence = Number(row.place_label_confidence || row.place_context?.label_confidence || 0);
-          const previousConfidence = Number(previous?.place_label_confidence || previous?.place_context?.label_confidence || 0);
-          const placeFields = previous && previousConfidence > confidence
-            ? {
-                place_context: previous.place_context,
-                primary_place_label: previous.primary_place_label,
-                secondary_place_label: previous.secondary_place_label,
-                place_label_confidence: previous.place_label_confidence
-              }
-            : {};
-
-          return retitleNiche({
-            ...(previous || {}),
-            ...row,
-            ...placeFields,
-            distance_m: Number.isFinite(Number(row.distance_m))
-              ? Number(row.distance_m)
-              : here.distanceTo(L.latLng(row.centroid_lat, row.centroid_lng)),
-            comment_count: Number(row.comment_count || 0),
-            home_user_count: Math.max(homeUserCount(row), homeUserCount(previous)),
-            is_home_niche: Boolean(row.is_home_niche || previous?.is_home_niche || (row.id && row.id === window.__gwState?.homeNicheId)),
-            _runtimeOnly: false
-          });
+        const data = await window.GridWildAPI?.getNearbyLocalNiches?.(origin.lat, origin.lng, {
+          radius_m: isFovSampling() ? 5000 : numericRadiusM(500),
+          limit: Math.max(1, Number(state.controls.maxCandidates) || 8) * 3
+        });
+        if (data?.home_niche_id !== undefined) {
+          window.__gwState = window.__gwState || {};
+          window.__gwState.homeNicheId = data.home_niche_id || null;
+        }
+        const activeLens = window.__gwState?.activeLens || "classic";
+        const zThreshold = Number(state.controls.lensZThreshold || 2.5);
+        const extent = isFovSampling() ? "fov" : "radius_m";
+        const wantsOsmTransform =
+          modeConfig.mode === "niches" && state.controls.osmTransformation === true;
+        const wantsThresholdSubdivide =
+          modeConfig.mode === "niches" && state.controls.thresholdSubdivideApproach === true;
+        const durableAlgorithms = [
+          "constrained_geometry_niche_v1",
+          "trail_corridor_niche_v1",
+          "heat_tendril_niche_v1",
+          THRESHOLD_SUBDIVIDE_RULE.version
+        ];
+        serverNiches = (data?.niches || []).filter((niche) => {
+          const metrics = niche.metrics || {};
+          const algorithm = String(metrics.algorithm || "");
+          const hasOsmTransform = metrics.osm_transform?.enabled === true;
+          const thresholdApproachMatches = wantsThresholdSubdivide
+            ? algorithm === THRESHOLD_SUBDIVIDE_RULE.version
+            : algorithm !== THRESHOLD_SUBDIVIDE_RULE.version;
+          return (
+            durableAlgorithms.includes(algorithm) &&
+            String(metrics.active_lens || "classic") === String(activeLens) &&
+            String(metrics.sampling_extent || "radius_m") === extent &&
+            Math.abs(Number(metrics.z_threshold || zThreshold) - zThreshold) < 0.01 &&
+            thresholdApproachMatches &&
+            (wantsOsmTransform ? hasOsmTransform : !hasOsmTransform)
+          );
         });
       } catch (err) {
-        state.persistWarning = "Generated niches could not be persisted yet.";
-        console.warn("Local niche upsert failed:", err);
+        state.persistWarning = "Server niche layer unavailable; showing runtime candidates.";
+        console.warn("Local niche fetch failed:", err);
       }
-    }
 
-    showSamplingToast("Refreshing niche HUD", 92, "Drawing components, labels, and markers.");
-    await yieldToPaint();
-    state.niches = state.controls.thresholdSubdivideApproach === true
-      ? capThresholdSubdivideNiches(mergeNiches(serverNiches, generated))
-      : mergeNiches(state.niches, serverNiches, generated);
-    mergeBookmarkedNichesIntoState();
-    syncThresholdSubdivideDebugFromNiches(state.niches);
-    const visibleCorridorCount = state.niches.filter(isCorridorNiche).length;
-    state.loading = false;
-    state.loadingAction = null;
-    drawNicheLayer();
-    renderIntoPage();
-    finishSamplingToast(
-      modeConfig.completeTitle,
-      `${state.niches.length} total objects shown; ${visibleCorridorCount} corridors in the HUD.`
-    );
+      showSamplingToast(modeConfig.coreTitle, 42, modeConfig.coreDetail);
+      await yieldToastMoment(220);
+      generated = generateLocalCandidates(origin, { mode: modeConfig.mode });
+      const heatTendrilDebug = state.detectorDebug?.constrainedGeometry?.heatTendrils || {};
+      const heatTendrilCount = heatTendrilDebug.emitted || 0;
+      showSamplingToast(
+        modeConfig.resultTitle,
+        64,
+        modeConfig.mode === "corridors"
+          ? `${generated.length} corridor objects, ${heatTendrilCount} heat tendrils (${heatTendrilDebug.vectorSegments || 0} skeleton path vectors, ${heatTendrilDebug.skeletonCells || 0} skeleton cells).`
+          : `${state.detectorDebug?.constrainedGeometry?.resultCount || generated.length} niche objects.`
+      );
+      await yieldToastMoment(SAMPLING_RESULT_TOAST_MS);
 
-    if (options.openFirst) {
-      const firstGenerated = generated[0] || null;
-      const first = firstGenerated
-        ? state.niches.find((niche) => nicheKey(niche) === nicheKey(firstGenerated)) || firstGenerated
-        : state.niches[0];
-      if (first) openNicheDetail(first.id || first.source_key);
-    }
+      if (
+        generated.length &&
+        modeConfig.mode === "niches" &&
+        state.controls.osmTransformation === true
+      ) {
+        showSamplingToast(
+          "Applying OSM transformation",
+          68,
+          "Subdividing blobs with cached roads, paths, and structures."
+        );
+        await yieldToPaint();
+        const transformed = applyOsmTransformationsToNiches(generated, origin);
+        generated = transformed.niches;
+        const detail = osmTransformSummaryText(transformed.summary, generated.length);
+        if (detail) {
+          showSamplingToast("OSM transformation complete", 70, detail);
+          await yieldToastMoment(640);
+        }
+      }
+
+      if (
+        generated.length &&
+        modeConfig.mode === "niches" &&
+        state.controls.thresholdSubdivideApproach === true
+      ) {
+        generated = capThresholdSubdivideNiches(generated);
+        syncThresholdSubdivideDebugFromNiches(generated);
+      }
+
+      if (generated.length && NICHE_OSM_CONTEXT_ENABLED && !useAvailableOsmLayerOnly) {
+        showSamplingToast(
+          "Resolving place labels",
+          72,
+          "Checking nearby OSM names, streets, and neighborhoods."
+        );
+        await yieldToPaint();
+        generated = await enrichNichePlaceContexts(generated);
+      }
+
+      if (generated.length && window.GridWildAPI?.upsertLocalNiches) {
+        try {
+          showSamplingToast(
+            "Saving local niches",
+            82,
+            `${generated.length} ${modeConfig.saveDetail}.`
+          );
+          await yieldToPaint();
+          const generatedByKey = new Map(
+            generated.map((niche) => [
+              niche.source_key || niche.id || `${niche.centroid_lat},${niche.centroid_lng}`,
+              niche
+            ])
+          );
+          const saved = await window.GridWildAPI.upsertLocalNiches(generated);
+          const here = L.latLng(origin.lat, origin.lng);
+          generated = (saved?.niches || generated).map((row) => {
+            const previous =
+              generatedByKey.get(
+                row.source_key || row.id || `${row.centroid_lat},${row.centroid_lng}`
+              ) || null;
+            const confidence = Number(
+              row.place_label_confidence || row.place_context?.label_confidence || 0
+            );
+            const previousConfidence = Number(
+              previous?.place_label_confidence || previous?.place_context?.label_confidence || 0
+            );
+            const placeFields =
+              previous && previousConfidence > confidence
+                ? {
+                    place_context: previous.place_context,
+                    primary_place_label: previous.primary_place_label,
+                    secondary_place_label: previous.secondary_place_label,
+                    place_label_confidence: previous.place_label_confidence
+                  }
+                : {};
+
+            return retitleNiche({
+              ...(previous || {}),
+              ...row,
+              ...placeFields,
+              distance_m: Number.isFinite(Number(row.distance_m))
+                ? Number(row.distance_m)
+                : here.distanceTo(L.latLng(row.centroid_lat, row.centroid_lng)),
+              comment_count: Number(row.comment_count || 0),
+              home_user_count: Math.max(homeUserCount(row), homeUserCount(previous)),
+              is_home_niche: Boolean(
+                row.is_home_niche ||
+                previous?.is_home_niche ||
+                (row.id && row.id === window.__gwState?.homeNicheId)
+              ),
+              _runtimeOnly: false
+            });
+          });
+        } catch (err) {
+          state.persistWarning = "Generated niches could not be persisted yet.";
+          console.warn("Local niche upsert failed:", err);
+        }
+      }
+
+      showSamplingToast("Refreshing niche HUD", 92, "Drawing components, labels, and markers.");
+      await yieldToPaint();
+      state.niches =
+        state.controls.thresholdSubdivideApproach === true
+          ? capThresholdSubdivideNiches(mergeNiches(serverNiches, generated))
+          : mergeNiches(state.niches, serverNiches, generated);
+      mergeBookmarkedNichesIntoState();
+      syncThresholdSubdivideDebugFromNiches(state.niches);
+      const visibleCorridorCount = state.niches.filter(isCorridorNiche).length;
+      state.loading = false;
+      state.loadingAction = null;
+      drawNicheLayer();
+      renderIntoPage();
+      finishSamplingToast(
+        modeConfig.completeTitle,
+        `${state.niches.length} total objects shown; ${visibleCorridorCount} corridors in the HUD.`
+      );
+
+      if (options.openFirst) {
+        const firstGenerated = generated[0] || null;
+        const first = firstGenerated
+          ? state.niches.find((niche) => nicheKey(niche) === nicheKey(firstGenerated)) ||
+            firstGenerated
+          : state.niches[0];
+        if (first) openNicheDetail(first.id || first.source_key);
+      }
     } catch (err) {
       state.loading = false;
       state.loadingAction = null;
       state.lastError = err;
       console.error("Niche sampling failed:", err);
-      failSamplingToast("Niche generation failed", err.message || "Could not complete this generation pass.");
+      failSamplingToast(
+        "Niche generation failed",
+        err.message || "Could not complete this generation pass."
+      );
       renderIntoPage();
     }
   }
 
   async function growLocalNiches(options = {}) {
     if (state.loading) {
-      showSamplingToast("Niche generation already running", 55, "Waiting for the current pass to finish.");
+      showSamplingToast(
+        "Niche generation already running",
+        55,
+        "Waiting for the current pass to finish."
+      );
       return;
     }
 
@@ -6727,7 +7505,9 @@
       let growOsmSummary = null;
 
       showSamplingToast(
-        state.controls.growOsmSubdivisionEnabled === true ? "Preparing Grow outputs" : "Resolving tile labels",
+        state.controls.growOsmSubdivisionEnabled === true
+          ? "Preparing Grow outputs"
+          : "Resolving tile labels",
         72,
         `${generated.length} ${state.controls.growMergeEnabled === true ? "Grow tile groups" : "grow tile niches"} survived the occupancy filter.`
       );
@@ -6774,7 +7554,10 @@
       state.loadingAction = null;
       state.lastError = err;
       console.error("Grow Local Niches failed:", err);
-      failSamplingToast("Grow Local Niches failed", err.message || "Could not complete this generation pass.");
+      failSamplingToast(
+        "Grow Local Niches failed",
+        err.message || "Could not complete this generation pass."
+      );
       renderIntoPage();
     }
   }
@@ -6800,7 +7583,20 @@
     return niche.description || "Local cells show a useful sampling opportunity.";
   }
 
-  const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const MONTH_LABELS = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+  ];
   const PIE_COLORS = {
     Plantae: "#7fd77e",
     Insecta: "#f28b6d",
@@ -6849,12 +7645,39 @@
     "treasure2"
   ];
   const NICHE_LENS_GROUPS = [
-    { label: "Bio", title: "Biodiversity", lenses: ["richness", "rare", "emerald", "breadth", "dominantlife"] },
+    {
+      label: "Bio",
+      title: "Biodiversity",
+      lenses: ["richness", "rare", "emerald", "breadth", "dominantlife"]
+    },
     { label: "Find", title: "Discovery", lenses: ["underexplored", "treasure", "treasure2"] },
-    { label: "Time", title: "Recency", lenses: ["freshness", "wildtime", "timeconfidence", "revisit", "reactivated", "seasonalnow"] },
-    { label: "Season", title: "Seasonality", lenses: ["seasonalpulse", "stability", "seasonalnow"] },
-    { label: "People", title: "Human signal", lenses: ["classic", "observers", "cultivated", "wildbalance"] },
-    { label: "Access", title: "OSM priors", lenses: ["osm-path-adjacency", "osm-trail-side", "osm-wet-edge", "osm-barrier-map", "osm-landuse-class", "osm-accessibility"] }
+    {
+      label: "Time",
+      title: "Recency",
+      lenses: ["freshness", "wildtime", "timeconfidence", "revisit", "reactivated", "seasonalnow"]
+    },
+    {
+      label: "Season",
+      title: "Seasonality",
+      lenses: ["seasonalpulse", "stability", "seasonalnow"]
+    },
+    {
+      label: "People",
+      title: "Human signal",
+      lenses: ["classic", "observers", "cultivated", "wildbalance"]
+    },
+    {
+      label: "Access",
+      title: "OSM priors",
+      lenses: [
+        "osm-path-adjacency",
+        "osm-trail-side",
+        "osm-wet-edge",
+        "osm-barrier-map",
+        "osm-landuse-class",
+        "osm-accessibility"
+      ]
+    }
   ];
   const TAXON_COMMON_ALIASES = {
     iconic_taxon: {
@@ -7633,14 +8456,14 @@
       .replace(/[_-]+/g, " ")
       .replace(/\s+/g, " ")
       .trim()
-      .replace(/\b\w/g, c => c.toUpperCase());
+      .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   function genusCodexCommonName(name) {
     const rec = window.GridWildGenusCodex?.genera?.[name];
     if (!rec) return "";
     if (rec.common) return titleCaseTaxonLabel(rec.common);
-    const fact = (rec.facts || []).find(item => /iNaturalist lists "/.test(String(item)));
+    const fact = (rec.facts || []).find((item) => /iNaturalist lists "/.test(String(item)));
     const match = String(fact || "").match(/iNaturalist lists "([^"]+)"/);
     return match?.[1] ? titleCaseTaxonLabel(match[1]) : "";
   }
@@ -7651,7 +8474,8 @@
       return window.GridWildTaxonomy.displayEntry({ name: scientific, count: entry?.count }, rank);
     }
     const aliases = TAXON_COMMON_ALIASES[rank] || {};
-    const common = aliases[scientific] || (rank === "genus" ? genusCodexCommonName(scientific) : "");
+    const common =
+      aliases[scientific] || (rank === "genus" ? genusCodexCommonName(scientific) : "");
     return {
       common: common || scientific,
       scientific,
@@ -7662,7 +8486,7 @@
 
   function monthTotals(metrics = {}) {
     const totals = Array.isArray(metrics.month_totals)
-      ? metrics.month_totals.slice(0, 12).map(v => Number(v) || 0)
+      ? metrics.month_totals.slice(0, 12).map((v) => Number(v) || 0)
       : [];
     while (totals.length < 12) totals.push(0);
     return totals;
@@ -7679,7 +8503,7 @@
       };
     }
 
-    const peakIndex = totals.reduce((best, value, idx) => value > totals[best] ? idx : best, 0);
+    const peakIndex = totals.reduce((best, value, idx) => (value > totals[best] ? idx : best), 0);
     const entropy = totals.reduce((sum, value) => {
       if (value <= 0) return sum;
       const p = value / total;
@@ -7688,7 +8512,7 @@
 
     return {
       peakMonth: peakIndex + 1,
-      seasonalStrength: clamp01((totals[peakIndex] / total - (1 / 12)) / 0.55),
+      seasonalStrength: clamp01((totals[peakIndex] / total - 1 / 12) / 0.55),
       entropy
     };
   }
@@ -7697,20 +8521,26 @@
     const explicit = String(metrics.dominant_iconic || "").trim();
     if (explicit) return explicit;
 
-    return Object.entries(metrics.iconic_counts || {})
-      .map(([name, count]) => ({ name, count: Number(count) || 0 }))
-      .filter(entry => entry.count > 0)
-      .sort((a, b) => b.count - a.count)[0]?.name || "Unknown";
+    return (
+      Object.entries(metrics.iconic_counts || {})
+        .map(([name, count]) => ({ name, count: Number(count) || 0 }))
+        .filter((entry) => entry.count > 0)
+        .sort((a, b) => b.count - a.count)[0]?.name || "Unknown"
+    );
   }
 
   function lensStatsMetrics(metrics = {}, niche = null) {
     const months = monthProfileStats(metrics);
     const activeCells = Number(metrics.activeCells || metrics.active_cells || 0);
-    const totalCells = Number(metrics.component_cell_count || metrics.componentCellCount || metrics.totalCells || 0);
-    const rawLatestObservedMs = Number(metrics.latestObservedMs || metrics.latest_observed_ms || metrics.last_observed_ms || 0);
+    const totalCells = Number(
+      metrics.component_cell_count || metrics.componentCellCount || metrics.totalCells || 0
+    );
+    const rawLatestObservedMs = Number(
+      metrics.latestObservedMs || metrics.latest_observed_ms || metrics.last_observed_ms || 0
+    );
     const latestObservedMs = Number.isFinite(rawLatestObservedMs) ? rawLatestObservedMs : 0;
     const iconicCounts = metrics.iconic_counts || {};
-    const iconicN = Object.values(iconicCounts).filter(value => Number(value) > 0).length;
+    const iconicN = Object.values(iconicCounts).filter((value) => Number(value) > 0).length;
 
     return {
       ...metrics,
@@ -7719,14 +8549,21 @@
       observers: Number(metrics.observers) || 0,
       n_captive: Number(metrics.n_captive ?? metrics.captive) || 0,
       activeCells,
-      nActiveSquares: activeCells || Math.max(1, Math.round(totalCells * Number(metrics.activeRatio || metrics.active_ratio || 0))),
+      nActiveSquares:
+        activeCells ||
+        Math.max(
+          1,
+          Math.round(totalCells * Number(metrics.activeRatio || metrics.active_ratio || 0))
+        ),
       dominant_iconic: dominantIconicFromMetrics(metrics),
       iconic_n: Number(metrics.iconic_n || iconicN || 1),
       month_totals: monthTotals(metrics),
       peak_month: Number(metrics.peak_month || months.peakMonth || 0),
       seasonal_strength: clamp01(Number(metrics.seasonal_strength || months.seasonalStrength || 0)),
       month_entropy: Number(metrics.month_entropy || months.entropy || 0),
-      last_observed: metrics.last_observed || (latestObservedMs ? new Date(latestObservedMs).toISOString().slice(0, 10) : ""),
+      last_observed:
+        metrics.last_observed ||
+        (latestObservedMs ? new Date(latestObservedMs).toISOString().slice(0, 10) : ""),
       last_observed_ms: latestObservedMs,
       median_last10_observed: metrics.median_last10_observed || metrics.last_observed || "",
       median_last10_observed_ms: Number(metrics.median_last10_observed_ms || latestObservedMs || 0),
@@ -7735,8 +8572,13 @@
   }
 
   function lensLabel(key) {
-    return window.GWLegendCopy?.[key]?.title ||
-      key.split("-").map(part => part ? part[0].toUpperCase() + part.slice(1) : part).join(" ");
+    return (
+      window.GWLegendCopy?.[key]?.title ||
+      key
+        .split("-")
+        .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+        .join(" ")
+    );
   }
 
   function lensOutputColor(output) {
@@ -7778,7 +8620,7 @@
   }
 
   function radarPoint(cx, cy, radius, angleDeg, value = 1) {
-    const angle = (angleDeg - 90) * Math.PI / 180;
+    const angle = ((angleDeg - 90) * Math.PI) / 180;
     return {
       x: cx + radius * value * Math.cos(angle),
       y: cy + radius * value * Math.sin(angle)
@@ -7789,11 +8631,13 @@
     const cx = 88;
     const cy = 82;
     const radius = 48 * radiusMultiplier;
-    return rows.map((row, index) => {
-      const angle = (360 / rows.length) * index;
-      const point = radarPoint(cx, cy, radius, angle, clamp01(row.value));
-      return `${point.x.toFixed(1)},${point.y.toFixed(1)}`;
-    }).join(" ");
+    return rows
+      .map((row, index) => {
+        const angle = (360 / rows.length) * index;
+        const point = radarPoint(cx, cy, radius, angle, clamp01(row.value));
+        return `${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+      })
+      .join(" ");
   }
 
   function logScore(value, max) {
@@ -7803,9 +8647,9 @@
   function lensGroupRows(outputs = [], metrics = {}) {
     return NICHE_LENS_GROUPS.map((group) => {
       const rows = group.lenses
-        .map(key => outputs.find(output => output.key === key))
+        .map((key) => outputs.find((output) => output.key === key))
         .filter(Boolean);
-      const available = rows.filter(row => row.available);
+      const available = rows.filter((row) => row.available);
       let value = available.length
         ? available.reduce((sum, row) => sum + row.value, 0) / available.length
         : 0;
@@ -7813,7 +8657,10 @@
       if (group.label === "Bio") {
         value = Math.max(value, clamp01(Number(metrics.biodiversity_score || 0)) * 0.82);
       } else if (group.label === "Find") {
-        value = Math.max(value, clamp01(Number(metrics.sampling_need_score || metrics.novelty_score || 0)) * 0.82);
+        value = Math.max(
+          value,
+          clamp01(Number(metrics.sampling_need_score || metrics.novelty_score || 0)) * 0.82
+        );
       } else if (group.label === "Access" && !available.length) {
         const corridor = isCorridorNiche({ metrics }) ? 0.58 : 0;
         value = Math.max(value, corridor);
@@ -7828,11 +8675,15 @@
     const summary = metrics.taxonomy_summary || metrics.taxonomySummary || {};
     const hydratedCells = Number(summary.hydrated_cells || 0);
     const specific = focus && !isBroadFocusLabel(focus) ? 0.48 : 0.18;
-    return clamp01(specific + Math.min(0.32, hydratedCells / 30) + clamp01(Number(niche?.confidence || 0)) * 0.20);
+    return clamp01(
+      specific + Math.min(0.32, hydratedCells / 30) + clamp01(Number(niche?.confidence || 0)) * 0.2
+    );
   }
 
   function questRadarRows(niche, metrics = {}) {
-    const rawLatestMs = Number(metrics.latestObservedMs || metrics.latest_observed_ms || metrics.last_observed_ms || 0);
+    const rawLatestMs = Number(
+      metrics.latestObservedMs || metrics.latest_observed_ms || metrics.last_observed_ms || 0
+    );
     const latestMs = Number.isFinite(rawLatestMs) ? rawLatestMs : 0;
     const freshness = latestMs ? 1 - clamp01(daysSince(latestMs) / 365) : 0;
     const stewardScore = clamp01(homeUserCount(niche) / 4 + (isHomeNiche(niche) ? 0.25 : 0));
@@ -7848,9 +8699,15 @@
   }
 
   function patchRadarRows(metrics = {}) {
-    const cells = Number(metrics.component_cell_count || metrics.componentCellCount || metrics.totalCells || 0);
+    const cells = Number(
+      metrics.component_cell_count || metrics.componentCellCount || metrics.totalCells || 0
+    );
     const count = Number(metrics.count || 0);
-    const iconicN = Number(metrics.iconic_n || Object.values(metrics.iconic_counts || {}).filter(value => Number(value) > 0).length || 0);
+    const iconicN = Number(
+      metrics.iconic_n ||
+        Object.values(metrics.iconic_counts || {}).filter((value) => Number(value) > 0).length ||
+        0
+    );
     const months = monthProfileStats(metrics);
     const activeRatio = Number(metrics.activeRatio || metrics.active_ratio || 0);
 
@@ -7866,7 +8723,13 @@
 
   function renderRadarCardHtml(title, rows, ariaLabel) {
     const gridPolygons = [0.33, 0.66, 1]
-      .map(scale => `<polygon points="${radarPolygonPoints(rows.map(row => ({ ...row, value: 1 })), scale)}"></polygon>`)
+      .map(
+        (scale) =>
+          `<polygon points="${radarPolygonPoints(
+            rows.map((row) => ({ ...row, value: 1 })),
+            scale
+          )}"></polygon>`
+      )
       .join("");
     const polygonPoints = radarPolygonPoints(rows);
 
@@ -7876,20 +8739,24 @@
         <svg class="gw-niche-lens-radar" viewBox="0 0 176 164" role="img" aria-label="${esc(ariaLabel || title)}">
           <g class="gw-niche-lens-radar-grid">
             ${gridPolygons}
-            ${rows.map((row, index) => {
-              const angle = (360 / rows.length) * index;
-              const end = radarPoint(88, 82, 48, angle, 1);
-              return `<line x1="88" y1="82" x2="${end.x.toFixed(1)}" y2="${end.y.toFixed(1)}"></line>`;
-            }).join("")}
+            ${rows
+              .map((row, index) => {
+                const angle = (360 / rows.length) * index;
+                const end = radarPoint(88, 82, 48, angle, 1);
+                return `<line x1="88" y1="82" x2="${end.x.toFixed(1)}" y2="${end.y.toFixed(1)}"></line>`;
+              })
+              .join("")}
           </g>
           <polygon class="gw-niche-lens-radar-fill" points="${polygonPoints}"></polygon>
           <polyline class="gw-niche-lens-radar-line" points="${polygonPoints} ${polygonPoints.split(" ")[0]}"></polyline>
-          ${rows.map((row, index) => {
-            const angle = (360 / rows.length) * index;
-            const point = radarPoint(88, 82, 63, angle, 1);
-            const anchor = point.x < 78 ? "end" : point.x > 98 ? "start" : "middle";
-            return `<text x="${point.x.toFixed(1)}" y="${point.y.toFixed(1)}" text-anchor="${anchor}">${esc(row.label)}</text>`;
-          }).join("")}
+          ${rows
+            .map((row, index) => {
+              const angle = (360 / rows.length) * index;
+              const point = radarPoint(88, 82, 63, angle, 1);
+              const anchor = point.x < 78 ? "end" : point.x > 98 ? "start" : "middle";
+              return `<text x="${point.x.toFixed(1)}" y="${point.y.toFixed(1)}" text-anchor="${anchor}">${esc(row.label)}</text>`;
+            })
+            .join("")}
         </svg>
       </div>
     `;
@@ -7903,11 +8770,15 @@
     }
 
     const groups = lensGroupRows(outputs, metrics);
-    const active = outputs.find(output => output.active) || outputs.find(output => output.key === "classic") || outputs[0];
-    const strongest = outputs
-      .filter(output => output.available)
-      .slice()
-      .sort((a, b) => b.value - a.value)[0] || active;
+    const active =
+      outputs.find((output) => output.active) ||
+      outputs.find((output) => output.key === "classic") ||
+      outputs[0];
+    const strongest =
+      outputs
+        .filter((output) => output.available)
+        .slice()
+        .sort((a, b) => b.value - a.value)[0] || active;
     const average = outputs.length
       ? outputs.reduce((sum, output) => sum + output.value, 0) / outputs.length
       : 0;
@@ -7925,13 +8796,17 @@
           <span><b>Mean</b>${esc(Math.round(average * 100))}% lens output</span>
         </div>
         <div class="gw-niche-lens-output-ribbon" aria-label="All lens output values">
-          ${outputs.map(output => `
+          ${outputs
+            .map(
+              (output) => `
             <span class="gw-niche-lens-output ${output.active ? "is-active" : ""} ${output.available ? "" : "is-unavailable"}" title="${esc(output.label)}: ${esc(output.available ? `${Math.round(output.value * 100)}%` : "no OSM value")}">
               <i style="--gw-lens-color:${esc(output.color)};--gw-lens-value:${esc(Math.round(output.value * 100))}%;"></i>
               <b>${esc(output.label)}</b>
               <em>${esc(output.available ? Math.round(output.value * 100) : 0)}</em>
             </span>
-          `).join("")}
+          `
+            )
+            .join("")}
         </div>
       </div>
     `;
@@ -7964,7 +8839,7 @@
   function topTaxonEntries(map, limit = 5) {
     return [...map.entries()]
       .map(([name, count]) => ({ name, count }))
-      .filter(entry => entry.count > 0)
+      .filter((entry) => entry.count > 0)
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
       .slice(0, limit);
   }
@@ -8014,7 +8889,11 @@
   }
 
   function nicheHydrationKey(niche) {
-    return niche?.source_key || niche?.id || (Array.isArray(niche?.grid_cell_ids) ? niche.grid_cell_ids.join("|") : "");
+    return (
+      niche?.source_key ||
+      niche?.id ||
+      (Array.isArray(niche?.grid_cell_ids) ? niche.grid_cell_ids.join("|") : "")
+    );
   }
 
   async function hydrateNicheSummaryMetrics(niche, onProgress = null) {
@@ -8023,9 +8902,10 @@
     if (nicheSummaryHydrationCache.has(key)) return nicheSummaryHydrationCache.get(key);
 
     const cells = parseCellIds(niche.grid_cell_ids || []);
-    const loadSquareRecord = typeof getSquareGeneraRecord === "function"
-      ? getSquareGeneraRecord
-      : window.getSquareGeneraRecord;
+    const loadSquareRecord =
+      typeof getSquareGeneraRecord === "function"
+        ? getSquareGeneraRecord
+        : window.getSquareGeneraRecord;
     if (!cells.length || typeof loadSquareRecord !== "function") return niche;
 
     const month_totals = Array(12).fill(0);
@@ -8097,11 +8977,12 @@
       }
     };
     const hydratedFocus = topTaxonomySubject(hydratedDraft.metrics);
-    if (hydratedFocus?.label && (
-      !hydratedDraft.taxon_focus?.label ||
-      isBroadFocusLabel(hydratedDraft.taxon_focus.label) ||
-      String(hydratedDraft.taxon_focus.source_rank || "") === "iconic_taxon"
-    )) {
+    if (
+      hydratedFocus?.label &&
+      (!hydratedDraft.taxon_focus?.label ||
+        isBroadFocusLabel(hydratedDraft.taxon_focus.label) ||
+        String(hydratedDraft.taxon_focus.source_rank || "") === "iconic_taxon")
+    ) {
       hydratedDraft.taxon_focus = {
         ...(hydratedDraft.taxon_focus || {}),
         label: titleSubjectCase(hydratedFocus.label),
@@ -8132,17 +9013,20 @@
     const showToast = options.showToast === true;
     const startedSelectedId = nicheKey(niche);
 
-    const job = hydrateNicheSummaryMetrics(niche, showToast
-      ? (done, total) => {
-          if (!total) return;
-          const progress = 14 + Math.round((done / total) * 78);
-          showSamplingToast(
-            "Hydrating niche summary",
-            progress,
-            `Loading month and taxonomy rows for ${done}/${total} cells.`
-          );
-        }
-      : null)
+    const job = hydrateNicheSummaryMetrics(
+      niche,
+      showToast
+        ? (done, total) => {
+            if (!total) return;
+            const progress = 14 + Math.round((done / total) * 78);
+            showSamplingToast(
+              "Hydrating niche summary",
+              progress,
+              `Loading month and taxonomy rows for ${done}/${total} cells.`
+            );
+          }
+        : null
+    )
       .then((hydrated) => {
         const current = nicheByKey(startedSelectedId);
         if (!current || !hydrated) return current || hydrated || niche;
@@ -8169,7 +9053,10 @@
       .catch((err) => {
         console.warn("Could not hydrate niche summary:", err);
         if (showToast) {
-          failSamplingToast("Niche summary hydration failed", "Keeping the existing niche summary.");
+          failSamplingToast(
+            "Niche summary hydration failed",
+            "Keeping the existing niche summary."
+          );
         }
         return niche;
       })
@@ -8185,29 +9072,35 @@
     const totals = monthTotals(metrics);
     const max = Math.max(...totals, 0);
     const total = totals.reduce((sum, value) => sum + value, 0);
-    const exactCells = Number(metrics.monthTotalsExactCells || metrics.month_totals_exact_cells || 0);
-    const missingCells = Number(metrics.monthTotalsMissingCells || metrics.month_totals_missing_cells || 0);
+    const exactCells = Number(
+      metrics.monthTotalsExactCells || metrics.month_totals_exact_cells || 0
+    );
+    const missingCells = Number(
+      metrics.monthTotalsMissingCells || metrics.month_totals_missing_cells || 0
+    );
 
     if (!total) {
       return `<div class="gw-muted gw-niche-evidence-line">Month-level observation counts are not loaded for this niche yet.</div>`;
     }
 
-    const yTicks = [max, max / 2, 0].map(value => Math.round(value));
-    const note = missingCells > 0
-      ? `<div class="gw-muted gw-niche-chart-note">Monthly bars use cells with real month buckets; ${esc(missingCells)} cells lacked month-level counts.</div>`
-      : exactCells > 0
-        ? `<div class="gw-muted gw-niche-chart-note">Monthly bars use observation month buckets from ${esc(exactCells)} cells.</div>`
-        : "";
+    const yTicks = [max, max / 2, 0].map((value) => Math.round(value));
+    const note =
+      missingCells > 0
+        ? `<div class="gw-muted gw-niche-chart-note">Monthly bars use cells with real month buckets; ${esc(missingCells)} cells lacked month-level counts.</div>`
+        : exactCells > 0
+          ? `<div class="gw-muted gw-niche-chart-note">Monthly bars use observation month buckets from ${esc(exactCells)} cells.</div>`
+          : "";
 
     return `
       <div class="gw-niche-month-chart" aria-label="Monthly niche observations bar chart">
         <div class="gw-niche-y-axis" aria-hidden="true">
-          ${yTicks.map(value => `<span>${esc(value)}</span>`).join("")}
+          ${yTicks.map((value) => `<span>${esc(value)}</span>`).join("")}
         </div>
         <div class="gw-niche-month-plot">
-          ${totals.map((value, idx) => {
-            const intensity = max > 0 ? value / max : 0;
-            return `
+          ${totals
+            .map((value, idx) => {
+              const intensity = max > 0 ? value / max : 0;
+              return `
               <div class="gw-niche-month-bar-col" title="${esc(MONTH_LABELS[idx])}: ${esc(Math.round(value))} observations">
                 <div class="gw-niche-month-bar-track">
                   <i style="height:${Math.max(value > 0 ? 5 : 0, Math.round(intensity * 100))}%"></i>
@@ -8215,7 +9108,8 @@
                 <span>${esc(MONTH_LABELS[idx])}</span>
               </div>
             `;
-          }).join("")}
+            })
+            .join("")}
         </div>
       </div>
       ${note}
@@ -8223,7 +9117,7 @@
   }
 
   function polarPoint(cx, cy, r, angleDeg) {
-    const angle = (angleDeg - 90) * Math.PI / 180;
+    const angle = ((angleDeg - 90) * Math.PI) / 180;
     return {
       x: cx + r * Math.cos(angle),
       y: cy + r * Math.sin(angle)
@@ -8265,9 +9159,10 @@
       const offset = polarPoint(0, 0, 7, mid);
       const label = taxonDisplayEntry({ name: key, count: value }, "iconic_taxon");
       const color = PIE_COLORS[key] || PIE_COLORS.Unknown;
-      const shape = sweep >= 359.9
-        ? `<circle cx="${(60 + offset.x).toFixed(2)}" cy="${(60 + offset.y).toFixed(2)}" r="42" fill="${color}"></circle>`
-        : `<path d="${pieSlicePath(60 + offset.x, 60 + offset.y, 42, start, end)}" fill="${color}"></path>`;
+      const shape =
+        sweep >= 359.9
+          ? `<circle cx="${(60 + offset.x).toFixed(2)}" cy="${(60 + offset.y).toFixed(2)}" r="42" fill="${color}"></circle>`
+          : `<path d="${pieSlicePath(60 + offset.x, 60 + offset.y, 42, start, end)}" fill="${color}"></path>`;
 
       return { key, label, value, color, shape };
     });
@@ -8275,13 +9170,17 @@
     return `
       <div class="gw-niche-pie-wrap">
         <svg class="gw-niche-pie" viewBox="0 0 120 120" role="img" aria-label="Exploded life-group pie chart">
-          ${slices.map(slice => slice.shape).join("")}
+          ${slices.map((slice) => slice.shape).join("")}
           <circle cx="60" cy="60" r="18" fill="rgba(20,17,15,0.94)" stroke="rgba(240,209,138,0.20)"></circle>
         </svg>
         <div class="gw-niche-pie-legend">
-          ${slices.map(slice => `
+          ${slices
+            .map(
+              (slice) => `
             <span title="${esc(slice.key)}"><i style="background:${slice.color}"></i>${esc(slice.label.common)} ${esc(Math.round(slice.value))}</span>
-          `).join("")}
+          `
+            )
+            .join("")}
         </div>
       </div>
     `;
@@ -8312,24 +9211,33 @@
         <div class="gw-muted gw-niche-chart-note">
           Hydrated ${esc(hydratedCells)} of ${esc(totalCells)} cells from genera superchunks; ${esc(rowCount)} taxon rows accumulated.
         </div>
-        ${groups.map(([label, rank, entries]) => `
+        ${groups
+          .map(
+            ([label, rank, entries]) => `
           <div class="gw-niche-taxonomy-group">
             <strong>${esc(label)}</strong>
             <div class="gw-niche-taxonomy-list">
-              ${entries.slice(0, 8).map(entry => {
-                const item = taxonDisplayEntry(entry, rank);
-                const title = item.aliased ? `${item.common} (${item.scientific})` : item.scientific;
-                return `
+              ${entries
+                .slice(0, 8)
+                .map((entry) => {
+                  const item = taxonDisplayEntry(entry, rank);
+                  const title = item.aliased
+                    ? `${item.common} (${item.scientific})`
+                    : item.scientific;
+                  return `
                   <span title="${esc(title)}">
                     ${esc(item.common)}
                     ${item.aliased ? `<em>${esc(item.scientific)}</em>` : ""}
                     <i>${esc(item.count)}</i>
                   </span>
                 `;
-              }).join("")}
+                })
+                .join("")}
             </div>
           </div>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
     `;
   }
@@ -8347,9 +9255,13 @@
               [500, "500 m"],
               [900, "900 m"],
               [1500, "1.5 km"]
-            ].map(([value, label]) => `
+            ]
+              .map(
+                ([value, label]) => `
               <option value="${value}" ${String(c.radiusM) !== "fov" && Number(c.radiusM) === value ? "selected" : ""}>${label}</option>
-            `).join("")}
+            `
+              )
+              .join("")}
           </select>
         </label>
 
@@ -8449,8 +9361,8 @@
 
   function renderLocalNichesHtml() {
     injectStyles();
-    const rows = (state.niches || []).filter(niche =>
-      isCellSeededNiche(niche) || isBookmarkedNiche(niche)
+    const rows = (state.niches || []).filter(
+      (niche) => isCellSeededNiche(niche) || isBookmarkedNiche(niche)
     );
 
     return `
@@ -8459,9 +9371,13 @@
         ${state.persistWarning ? `<div class="gw-muted gw-niche-warning">${esc(state.persistWarning)}</div>` : ""}
         <div id="gwLocalNicheList">
           ${!rows.length ? `<div class="gw-muted">No seeded niches yet.</div>` : ""}
-          ${rows.length ? `
+          ${
+            rows.length
+              ? `
             <div class="gw-list">
-              ${rows.map((niche) => `
+              ${rows
+                .map(
+                  (niche) => `
                 <div class="gw-rowline gw-niche-row ${isHomeNiche(niche) ? "is-home-niche" : ""} ${isBookmarkedNiche(niche) ? "is-bookmarked-niche" : ""} ${isSelectedNiche(niche) ? "is-selected-niche" : ""} ${isCorridorNiche(niche) ? "is-heat-tendril" : ""}" data-niche-key="${esc(nicheKey(niche))}">
                   <span class="gw-niche-row-main">
                     <span class="gw-niche-icon">${esc(iconForNiche(niche))}</span>
@@ -8482,9 +9398,13 @@
                   </span>
                   <button class="gw-mini-btn gwStartNicheQuestBtn" data-niche-key="${esc(nicheKey(niche))}" type="button">Start</button>
                 </div>
-              `).join("")}
+              `
+                )
+                .join("")}
             </div>
-          ` : ""}
+          `
+              : ""
+          }
         </div>
       </div>
     `;
@@ -8535,49 +9455,41 @@
     root.addEventListener("change", (evt) => {
       if (evt.target.id === "gwNicheRadius") {
         state.controls.radiusM = evt.target.value === "fov" ? "fov" : Number(evt.target.value);
-      }
-      else if (evt.target.id === "gwNicheScale") state.controls.scale = evt.target.value;
+      } else if (evt.target.id === "gwNicheScale") state.controls.scale = evt.target.value;
       else if (evt.target.id === "gwNicheEmphasis") state.controls.emphasis = evt.target.value;
       else if (evt.target.id === "gwNicheDetectorMask") {
         state.controls.showDetectorMask = evt.target.checked === true;
         saveControls();
         drawNicheLayer();
         return;
-      }
-      else if (evt.target.id === "gwNicheSmartHudPlots") {
+      } else if (evt.target.id === "gwNicheSmartHudPlots") {
         state.controls.smartNicheHudPlots = evt.target.checked === true;
         saveControls();
         drawNicheLayer();
         return;
-      }
-      else if (evt.target.id === "gwNicheOsmTransformation") {
+      } else if (evt.target.id === "gwNicheOsmTransformation") {
         state.controls.osmTransformation = evt.target.checked === true;
         saveControls();
         refreshLocalNiches({ mode: "niches" });
         return;
-      }
-      else if (evt.target.id === "gwNicheThresholdSubdivideApproach") {
+      } else if (evt.target.id === "gwNicheThresholdSubdivideApproach") {
         state.controls.thresholdSubdivideApproach = evt.target.checked === true;
         saveControls();
         refreshLocalNiches({ mode: "niches" });
         return;
-      }
-      else if (evt.target.id === "gwGrowNicheClipStructures") {
+      } else if (evt.target.id === "gwGrowNicheClipStructures") {
         state.controls.growClipStructuresEnabled = evt.target.checked === true;
         saveControls();
         return;
-      }
-      else if (evt.target.id === "gwGrowNicheMerge") {
+      } else if (evt.target.id === "gwGrowNicheMerge") {
         state.controls.growMergeEnabled = evt.target.checked === true;
         saveControls();
         return;
-      }
-      else if (evt.target.id === "gwGrowNicheOsmSubdivision") {
+      } else if (evt.target.id === "gwGrowNicheOsmSubdivision") {
         state.controls.growOsmSubdivisionEnabled = evt.target.checked === true;
         saveControls();
         return;
-      }
-      else return;
+      } else return;
       saveControls();
       refreshLocalNiches();
     });
@@ -8588,11 +9500,23 @@
       } else if (evt.target.id === "gwNicheZThreshold") {
         state.controls.lensZThreshold = Math.max(0, Math.min(6, Number(evt.target.value) || 2.5));
       } else if (evt.target.id === "gwNicheMinCells") {
-        state.controls.componentMinCells = Math.max(1, Math.min(100, Number(evt.target.value) || 10));
+        state.controls.componentMinCells = Math.max(
+          1,
+          Math.min(100, Number(evt.target.value) || 10)
+        );
       } else if (evt.target.id === "gwGrowNicheTileCells") {
-        state.controls.growTileCells = Math.max(2, Math.min(80, Math.round(Number(evt.target.value) || GROW_LOCAL_NICHE_RULE.defaultTileCells)));
+        state.controls.growTileCells = Math.max(
+          2,
+          Math.min(
+            80,
+            Math.round(Number(evt.target.value) || GROW_LOCAL_NICHE_RULE.defaultTileCells)
+          )
+        );
       } else if (evt.target.id === "gwGrowNicheMinOccupiedPct") {
-        state.controls.growMinOccupiedPct = Math.max(0, Math.min(100, Number(evt.target.value) || 0));
+        state.controls.growMinOccupiedPct = Math.max(
+          0,
+          Math.min(100, Number(evt.target.value) || 0)
+        );
       } else {
         return;
       }
@@ -8682,7 +9606,7 @@
     const snapshot = sanitizeBookmarkedNiche(niche, savedBookmarkFor(niche)?.bookmarked_at);
     if (!snapshot) return false;
 
-    const idx = state.bookmarkedNiches.findIndex(bookmark => bookmarkMatches(bookmark, snapshot));
+    const idx = state.bookmarkedNiches.findIndex((bookmark) => bookmarkMatches(bookmark, snapshot));
     if (idx >= 0) {
       state.bookmarkedNiches[idx] = {
         ...snapshot,
@@ -8697,8 +9621,9 @@
 
   function removeBookmarkedSnapshot(nicheOrKey) {
     const before = state.bookmarkedNiches.length;
-    state.bookmarkedNiches = state.bookmarkedNiches
-      .filter(bookmark => !bookmarkMatches(bookmark, nicheOrKey));
+    state.bookmarkedNiches = state.bookmarkedNiches.filter(
+      (bookmark) => !bookmarkMatches(bookmark, nicheOrKey)
+    );
     const changed = state.bookmarkedNiches.length !== before;
     if (changed) saveBookmarkedNiches();
     return changed;
@@ -8722,9 +9647,10 @@
       ...bookmarkNiche,
       id: bookmarkNiche?.id || original.id,
       source_key: bookmarkNiche?.source_key || original.source_key,
-      _runtimeOnly: bookmarkNiche?._runtimeOnly === undefined
-        ? original._runtimeOnly
-        : bookmarkNiche._runtimeOnly
+      _runtimeOnly:
+        bookmarkNiche?._runtimeOnly === undefined
+          ? original._runtimeOnly
+          : bookmarkNiche._runtimeOnly
     });
 
     if (!replaceNicheInState(merged)) {
@@ -8757,14 +9683,16 @@
 
     removeBookmarkedSnapshot(original);
     state.niches = state.niches
-      .filter(row => !(bookmarkMatches(row, original) && row._bookmark_only === true))
-      .map((row) => bookmarkMatches(row, original)
-        ? {
-            ...row,
-            _bookmarked_niche: false,
-            _bookmark_only: false
-          }
-        : row);
+      .filter((row) => !(bookmarkMatches(row, original) && row._bookmark_only === true))
+      .map((row) =>
+        bookmarkMatches(row, original)
+          ? {
+              ...row,
+              _bookmarked_niche: false,
+              _bookmark_only: false
+            }
+          : row
+      );
 
     updateNicheDistances();
     drawNicheLayer();
@@ -8782,7 +9710,9 @@
   }
 
   function closeModals(clearSelection = true) {
-    document.querySelectorAll(".gw-quest-modal-backdrop.gw-niche-detail-backdrop").forEach((el) => el.remove());
+    document
+      .querySelectorAll(".gw-quest-modal-backdrop.gw-niche-detail-backdrop")
+      .forEach((el) => el.remove());
     if (clearSelection) {
       state.selectedId = null;
       drawNicheLayer();
@@ -8845,10 +9775,7 @@
     });
 
     if (niche.id) {
-      const detailData = await Promise.all([
-        loadComments(niche.id),
-        loadHomeUsers(niche.id)
-      ]);
+      const detailData = await Promise.all([loadComments(niche.id), loadHomeUsers(niche.id)]);
       comments = detailData[0];
       homeUsers = detailData[1];
       renderCurrent(nicheByKey(key) || niche);
@@ -8917,13 +9844,21 @@
         <div class="gw-niche-section">
           <div class="gw-niche-section-title">Home Users</div>
           <div class="gw-niche-home-users">
-            ${homeUsers.length ? homeUsers.map((user) => `
+            ${
+              homeUsers.length
+                ? homeUsers
+                    .map(
+                      (user) => `
               <span class="gw-niche-home-user" style="${user.color ? `--gw-home-user-color:${esc(user.color)};` : ""}">
                 <i>${esc(user.icon || "H")}</i>
                 <b>${esc(user.display_name || "GridWild Steward")}</b>
                 ${formatStewardDate(user.stewarded_at) ? `<small>since ${esc(formatStewardDate(user.stewarded_at))}</small>` : ""}
               </span>
-            `).join("") : `<div class="gw-muted">No stewards have made this their home niche yet.</div>`}
+            `
+                    )
+                    .join("")
+                : `<div class="gw-muted">No stewards have made this their home niche yet.</div>`
+            }
           </div>
         </div>
 
@@ -8967,12 +9902,20 @@
         <div class="gw-niche-section">
           <div class="gw-niche-section-title">User Comments</div>
           <div class="gw-niche-comments">
-            ${comments.length ? comments.map((comment) => `
+            ${
+              comments.length
+                ? comments
+                    .map(
+                      (comment) => `
               <div class="gw-niche-comment">
                 <span>${esc(comment.comment_text)}</span>
                 <small>${esc(comment.comment_type || "comment")} &middot; ${esc(String(comment.created_at || "").slice(0, 10))}</small>
               </div>
-            `).join("") : `<div class="gw-muted">No comments yet.</div>`}
+            `
+                    )
+                    .join("")
+                : `<div class="gw-muted">No comments yet.</div>`
+            }
           </div>
           <div class="gw-niche-comment-form">
             <select id="gwNicheCommentType">
@@ -9040,7 +9983,9 @@
     }
 
     root.querySelector("#gwNicheFocusMapBtn")?.addEventListener("click", () => {
-      map.flyTo([niche.centroid_lat, niche.centroid_lng], Math.max(map.getZoom(), 18), { duration: 0.6 });
+      map.flyTo([niche.centroid_lat, niche.centroid_lng], Math.max(map.getZoom(), 18), {
+        duration: 0.6
+      });
       minimizeNicheDetail();
     });
 
@@ -9112,7 +10057,8 @@
       };
 
       state.niches = state.niches.map((row) => {
-        const same = String(row.id || row.source_key) === String(niche.id || niche.source_key) ||
+        const same =
+          String(row.id || row.source_key) === String(niche.id || niche.source_key) ||
           String(row.source_key || "") === String(niche.source_key || "");
         const priorCount = homeUserCount(row);
         const wasHome = row.is_home_niche === true && !same;
@@ -9138,11 +10084,13 @@
       renderIntoPage();
       window.GridWildCharacter?.renderSummary?.();
       window.GridWildPlayerUI?.refreshPlayerUI?.();
-      showNicheToast(sameHome
-        ? "Home niche confirmed"
-        : previousHomeId
-          ? `Home niche changed to ${homeNicheTitle(updated)}`
-          : `Home niche added: ${homeNicheTitle(updated)}`);
+      showNicheToast(
+        sameHome
+          ? "Home niche confirmed"
+          : previousHomeId
+            ? `Home niche changed to ${homeNicheTitle(updated)}`
+            : `Home niche added: ${homeNicheTitle(updated)}`
+      );
       openNicheDetail(updated.id || updated.source_key);
     } catch (err) {
       console.error("Could not set home niche:", err);
@@ -9159,7 +10107,8 @@
       window.__gwState.homeNiche = null;
 
       state.niches = state.niches.map((row) => {
-        const wasHome = isHomeNiche(row) || (nicheKey && String(row.id || row.source_key) === String(nicheKey));
+        const wasHome =
+          isHomeNiche(row) || (nicheKey && String(row.id || row.source_key) === String(nicheKey));
         return {
           ...row,
           is_home_niche: false,
@@ -9171,9 +10120,9 @@
       renderIntoPage();
       window.GridWildCharacter?.renderSummary?.();
       window.GridWildPlayerUI?.refreshPlayerUI?.();
-      showNicheToast(previousHome
-        ? `Home niche removed: ${homeNicheTitle(previousHome)}`
-        : "Home niche removed");
+      showNicheToast(
+        previousHome ? `Home niche removed: ${homeNicheTitle(previousHome)}` : "Home niche removed"
+      );
 
       if (nicheKey) openNicheDetail(nicheKey);
     } catch (err) {
@@ -9228,7 +10177,12 @@
 
     const holeCandidates = new Map();
     for (const cell of byKey.values()) {
-      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+      for (const [dx, dy] of [
+        [0, -1],
+        [1, 0],
+        [0, 1],
+        [-1, 0]
+      ]) {
         const ix = cell.ix + dx;
         const iy = cell.iy + dy;
         const key = `${ix},${iy}`;
@@ -9252,7 +10206,7 @@
     const toLatLng = (x, y) => {
       return gridLatLng(x, y);
     };
-    return gridBoundaryEdges(members).map(edge => [
+    return gridBoundaryEdges(members).map((edge) => [
       toLatLng(edge.a.x, edge.a.y),
       toLatLng(edge.b.x, edge.b.y)
     ]);
@@ -9260,7 +10214,7 @@
 
   function gridBoundaryEdges(members = []) {
     const normalized = normalizedComponentMembers(members);
-    const keys = new Set(normalized.map(cell => cell.key || `${cell.ix},${cell.iy}`));
+    const keys = new Set(normalized.map((cell) => cell.key || `${cell.ix},${cell.iy}`));
     const edges = [];
 
     for (const cell of normalized) {
@@ -9268,10 +10222,14 @@
       const iy = Number(cell.iy);
       if (!Number.isFinite(ix) || !Number.isFinite(iy)) continue;
 
-      if (!keys.has(`${ix},${iy - 1}`)) edges.push({ a: { x: ix, y: iy }, b: { x: ix + 1, y: iy } });
-      if (!keys.has(`${ix + 1},${iy}`)) edges.push({ a: { x: ix + 1, y: iy }, b: { x: ix + 1, y: iy + 1 } });
-      if (!keys.has(`${ix},${iy + 1}`)) edges.push({ a: { x: ix + 1, y: iy + 1 }, b: { x: ix, y: iy + 1 } });
-      if (!keys.has(`${ix - 1},${iy}`)) edges.push({ a: { x: ix, y: iy + 1 }, b: { x: ix, y: iy } });
+      if (!keys.has(`${ix},${iy - 1}`))
+        edges.push({ a: { x: ix, y: iy }, b: { x: ix + 1, y: iy } });
+      if (!keys.has(`${ix + 1},${iy}`))
+        edges.push({ a: { x: ix + 1, y: iy }, b: { x: ix + 1, y: iy + 1 } });
+      if (!keys.has(`${ix},${iy + 1}`))
+        edges.push({ a: { x: ix + 1, y: iy + 1 }, b: { x: ix, y: iy + 1 } });
+      if (!keys.has(`${ix - 1},${iy}`))
+        edges.push({ a: { x: ix, y: iy + 1 }, b: { x: ix, y: iy } });
     }
 
     return edges;
@@ -9301,7 +10259,7 @@
       addAdjacent(edge.b, edge);
     });
 
-    if ([...adjacency.values()].some(list => list.length !== 2)) return [];
+    if ([...adjacency.values()].some((list) => list.length !== 2)) return [];
 
     const rings = [];
     for (const start of edges) {
@@ -9314,7 +10272,7 @@
 
       while (gridPointKey(current) !== startKey) {
         const currentKey = gridPointKey(current);
-        const next = (adjacency.get(currentKey) || []).find(edge => !edge.used);
+        const next = (adjacency.get(currentKey) || []).find((edge) => !edge.used);
         if (!next) break;
 
         next.used = true;
@@ -9324,7 +10282,7 @@
       }
 
       if (ring.length >= 5 && gridPointKey(ring[0]) === gridPointKey(ring[ring.length - 1])) {
-        rings.push(ring.map(point => gridLatLng(point.x, point.y)));
+        rings.push(ring.map((point) => gridLatLng(point.x, point.y)));
       }
     }
 
@@ -9342,7 +10300,7 @@
       sum += value;
     }
 
-    return kernel.map(value => value / sum);
+    return kernel.map((value) => value / sum);
   }
 
   function blurRaster(mask, width, height, sigma = 1) {
@@ -9405,12 +10363,18 @@
       2: [["top", "right"]],
       3: [["left", "right"]],
       4: [["right", "bottom"]],
-      5: [["left", "bottom"], ["top", "right"]],
+      5: [
+        ["left", "bottom"],
+        ["top", "right"]
+      ],
       6: [["top", "bottom"]],
       7: [["left", "bottom"]],
       8: [["bottom", "left"]],
       9: [["top", "bottom"]],
-      10: [["top", "left"], ["right", "bottom"]],
+      10: [
+        ["top", "left"],
+        ["right", "bottom"]
+      ],
       11: [["right", "bottom"]],
       12: [["right", "left"]],
       13: [["top", "right"]],
@@ -9433,7 +10397,7 @@
           (values[3] >= threshold ? 8 : 0);
 
         for (const pair of table[code] || []) {
-          segments.push(pair.map(edge => contourEdgePoint(edge, x, y, values, threshold)));
+          segments.push(pair.map((edge) => contourEdgePoint(edge, x, y, values, threshold)));
         }
       }
     }
@@ -9446,7 +10410,7 @@
   }
 
   function connectContourSegments(segments = []) {
-    const unused = segments.map(segment => segment.map(point => ({ ...point })));
+    const unused = segments.map((segment) => segment.map((point) => ({ ...point })));
     const paths = [];
 
     while (unused.length) {
@@ -9523,7 +10487,10 @@
     const ring = points.slice(0, -1);
     let anchor = 0;
     for (let i = 1; i < ring.length; i++) {
-      if (ring[i].x < ring[anchor].x || (ring[i].x === ring[anchor].x && ring[i].y < ring[anchor].y)) {
+      if (
+        ring[i].x < ring[anchor].x ||
+        (ring[i].x === ring[anchor].x && ring[i].y < ring[anchor].y)
+      ) {
         anchor = i;
       }
     }
@@ -9573,20 +10540,25 @@
       NICHE_BOUNDARY_RENDERING.contourThreshold,
       NICHE_BOUNDARY_RENDERING.simplifyToleranceCells,
       NICHE_BOUNDARY_RENDERING.chaikinIterations,
-      hashString(normalized.map(cell => cell.key).sort().join("|"))
+      hashString(
+        normalized
+          .map((cell) => cell.key)
+          .sort()
+          .join("|")
+      )
     ].join(":");
 
     if (nicheBoundaryCache.has(cacheKey)) return nicheBoundaryCache.get(cacheKey);
 
-    const minIx = Math.min(...normalized.map(cell => cell.ix));
-    const maxIx = Math.max(...normalized.map(cell => cell.ix));
-    const minIy = Math.min(...normalized.map(cell => cell.iy));
-    const maxIy = Math.max(...normalized.map(cell => cell.iy));
+    const minIx = Math.min(...normalized.map((cell) => cell.ix));
+    const maxIx = Math.max(...normalized.map((cell) => cell.ix));
+    const minIy = Math.min(...normalized.map((cell) => cell.iy));
+    const maxIy = Math.max(...normalized.map((cell) => cell.iy));
     const padding = Math.max(3, Math.ceil(NICHE_BOUNDARY_RENDERING.smoothingSigmaCells * 3) + 1);
     const originIx = minIx - padding;
     const originIy = minIy - padding;
-    const width = (maxIx - minIx + 1) + padding * 2;
-    const height = (maxIy - minIy + 1) + padding * 2;
+    const width = maxIx - minIx + 1 + padding * 2;
+    const height = maxIy - minIy + 1 + padding * 2;
 
     if (width * height > 12000) return [];
 
@@ -9598,12 +10570,19 @@
     }
 
     const blurred = blurRaster(mask, width, height, NICHE_BOUNDARY_RENDERING.smoothingSigmaCells);
-    const segments = marchingSquareSegments(blurred, width, height, NICHE_BOUNDARY_RENDERING.contourThreshold);
+    const segments = marchingSquareSegments(
+      blurred,
+      width,
+      height,
+      NICHE_BOUNDARY_RENDERING.contourThreshold
+    );
     const paths = connectContourSegments(segments)
-      .map(path => simplifyContourPath(path, NICHE_BOUNDARY_RENDERING.simplifyToleranceCells))
-      .map(path => chaikinContourPath(path, NICHE_BOUNDARY_RENDERING.chaikinIterations))
-      .map(path => path.map(point => gridLatLng(originIx + point.x + 0.5, originIy + point.y + 0.5)))
-      .filter(path => path.length >= 3);
+      .map((path) => simplifyContourPath(path, NICHE_BOUNDARY_RENDERING.simplifyToleranceCells))
+      .map((path) => chaikinContourPath(path, NICHE_BOUNDARY_RENDERING.chaikinIterations))
+      .map((path) =>
+        path.map((point) => gridLatLng(originIx + point.x + 0.5, originIy + point.y + 0.5))
+      )
+      .filter((path) => path.length >= 3);
 
     nicheBoundaryCache.set(cacheKey, paths);
     if (nicheBoundaryCache.size > 80) {
@@ -9678,21 +10657,24 @@
 
   function normalizeLatLngPath(path = []) {
     return (Array.isArray(path) ? path : [])
-      .map(point => Array.isArray(point)
-        ? [Number(point[0]), Number(point[1])]
-        : [Number(point?.lat), Number(point?.lng)])
+      .map((point) =>
+        Array.isArray(point)
+          ? [Number(point[0]), Number(point[1])]
+          : [Number(point?.lat), Number(point?.lng)]
+      )
       .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
   }
 
   function normalizeLatLngPaths(paths = []) {
     return (Array.isArray(paths) ? paths : [])
       .map(normalizeLatLngPath)
-      .filter(path => path.length >= 2);
+      .filter((path) => path.length >= 2);
   }
 
   function offsetLatLngPathByPixels(path = [], offsetPx = 0) {
     const normalized = normalizeLatLngPath(path);
-    if (!map?.latLngToLayerPoint || !map?.layerPointToLatLng || normalized.length < 2 || !offsetPx) return normalized;
+    if (!map?.latLngToLayerPoint || !map?.layerPointToLatLng || normalized.length < 2 || !offsetPx)
+      return normalized;
     const points = normalized.map(([lat, lng]) => map.latLngToLayerPoint(L.latLng(lat, lng)));
     return points.map((point, index) => {
       const prev = points[Math.max(0, index - 1)];
@@ -9711,9 +10693,7 @@
     if (!face?.enabled) return null;
     const outerPaths = normalizeLatLngPaths(face.outer_paths || []);
     const cutPaths = normalizeLatLngPaths(face.cut_paths || []);
-    return outerPaths.length || cutPaths.length
-      ? { ...face, outerPaths, cutPaths }
-      : null;
+    return outerPaths.length || cutPaths.length ? { ...face, outerPaths, cutPaths } : null;
   }
 
   function growStructureCutoutPathsForNiche(niche) {
@@ -9735,7 +10715,10 @@
       });
     }
 
-    const gapPx = Math.max(1, Number(vectorFace.visual_gap_px || GROW_LOCAL_NICHE_RULE.osmVectorVisualGapPx));
+    const gapPx = Math.max(
+      1,
+      Number(vectorFace.visual_gap_px || GROW_LOCAL_NICHE_RULE.osmVectorVisualGapPx)
+    );
     const cutOffsetPx = gapPx + Math.max(0.9, Number(options.weight || 2.2) * 0.52);
     for (const cutPath of vectorFace.cutPaths || []) {
       for (const side of [-1, 1]) {
@@ -9768,9 +10751,11 @@
   function drawHeatPathVector(layer, polyline = [], visual = {}) {
     if (!Array.isArray(polyline) || polyline.length < 2) return;
     const points = polyline
-      .map((point) => Array.isArray(point)
-        ? [Number(point[0]), Number(point[1])]
-        : [Number(point?.lat), Number(point?.lng)])
+      .map((point) =>
+        Array.isArray(point)
+          ? [Number(point[0]), Number(point[1])]
+          : [Number(point?.lat), Number(point?.lng)]
+      )
       .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
     if (points.length < 2) return;
 
@@ -9806,30 +10791,33 @@
     for (const component of debug.components || []) {
       for (const cell of component.members || []) componentCellKeys.add(cell.key);
     }
-    const thresholdMode = debug.thresholdMode === "above"
-      ? "above"
-      : debug.thresholdMode === "grow" ? "grow" : "absolute";
+    const thresholdMode =
+      debug.thresholdMode === "above"
+        ? "above"
+        : debug.thresholdMode === "grow"
+          ? "grow"
+          : "absolute";
     const sampledLimit = 1400;
     const sampledStride = Math.max(1, Math.ceil(cells.length / sampledLimit));
 
     cells.forEach((cell, idx) => {
-      const hot = thresholdMode === "above"
-        ? Number(cell.signal || 0) > 0 && Number(cell.z || 0) >= Number(debug.zThreshold || 0)
-        : thresholdMode === "grow"
-          ? Number(cell.signal || 0) > 0
-          : Math.abs(cell.z) > debug.zThreshold;
+      const hot =
+        thresholdMode === "above"
+          ? Number(cell.signal || 0) > 0 && Number(cell.z || 0) >= Number(debug.zThreshold || 0)
+          : thresholdMode === "grow"
+            ? Number(cell.signal || 0) > 0
+            : Math.abs(cell.z) > debug.zThreshold;
       if (!hot && idx % sampledStride !== 0) return;
 
       const inAcceptedComponent = componentCellKeys.has(cell.key);
       const positive = cell.z >= 0;
-      const color = hot
-        ? positive ? "#66e39c" : "#d08cff"
-        : "rgba(255,255,255,0.16)";
-      const fillOpacity = hot && inAcceptedComponent
-        ? 0
-        : hot
-          ? Math.min(0.32, 0.08 + Math.abs(cell.z) * 0.05)
-          : 0.035;
+      const color = hot ? (positive ? "#66e39c" : "#d08cff") : "rgba(255,255,255,0.16)";
+      const fillOpacity =
+        hot && inAcceptedComponent
+          ? 0
+          : hot
+            ? Math.min(0.32, 0.08 + Math.abs(cell.z) * 0.05)
+            : 0.035;
 
       L.rectangle(leafletBoundsForCells(cell.ix, cell.iy, cell.ix, cell.iy), {
         pane: PANE,
@@ -9850,7 +10838,9 @@
       const outlineColor = strongerComponentColor(color);
       const softOutlines = state.controls.smartNicheHudPlots === true;
       const softPaths = softOutlines ? smoothedBoundaryPaths(component.members || []) : [];
-      const outlineSegments = softPaths.length ? softPaths : componentBoundarySegments(component.members || []);
+      const outlineSegments = softPaths.length
+        ? softPaths
+        : componentBoundarySegments(component.members || []);
 
       for (const cell of component.members || []) {
         L.rectangle(leafletBoundsForCells(cell.ix, cell.iy, cell.ix, cell.iy), {
@@ -9866,18 +10856,24 @@
       }
 
       if (outlineSegments.length) {
-        drawBoundarySegments(layer, outlineSegments, outlineColor, softOutlines ? {
-          weight: 2.3,
-          opacity: 0.78,
-          haloWeight: 5.2,
-          haloOpacity: 0.28,
-          lineCap: "round",
-          lineJoin: "round",
-          className: "gw-niche-mask-component-outline is-soft",
-          haloClassName: "gw-niche-mask-component-outline-halo is-soft"
-        } : {});
+        drawBoundarySegments(
+          layer,
+          outlineSegments,
+          outlineColor,
+          softOutlines
+            ? {
+                weight: 2.3,
+                opacity: 0.78,
+                haloWeight: 5.2,
+                haloOpacity: 0.28,
+                lineCap: "round",
+                lineJoin: "round",
+                className: "gw-niche-mask-component-outline is-soft",
+                haloClassName: "gw-niche-mask-component-outline-halo is-soft"
+              }
+            : {}
+        );
       }
-
     });
   }
 
@@ -9894,63 +10890,106 @@
 
     for (const niche of state.niches || []) {
       const originalRadius = Number(niche.radius_m || 75);
-      const radius = Math.max(GRID_SIZE_M * 0.75, Math.min(originalRadius * 0.18, GRID_SIZE_M * 1.15));
-      const componentCells = Number(niche.metrics?.component_cell_count || niche.metrics?.componentCellCount || 0);
+      const radius = Math.max(
+        GRID_SIZE_M * 0.75,
+        Math.min(originalRadius * 0.18, GRID_SIZE_M * 1.15)
+      );
+      const componentCells = Number(
+        niche.metrics?.component_cell_count || niche.metrics?.componentCellCount || 0
+      );
       const weight = Math.max(2, Math.min(6, 1.6 + Math.log1p(componentCells || 1) * 0.7));
       const home = isHomeNiche(niche);
       const bookmarked = isBookmarkedNiche(niche);
       const selected = selectedId && selectedId === nicheKey(niche);
-      const baseColor = home ? "#ffe66f" : bookmarked ? "#f0d18a" : componentColor(niche.metrics?.component_id || niche.source_key);
+      const baseColor = home
+        ? "#ffe66f"
+        : bookmarked
+          ? "#f0d18a"
+          : componentColor(niche.metrics?.component_id || niche.source_key);
       const visual = nicheVisualStyle(niche, baseColor);
       const color = home ? baseColor : bookmarked ? baseColor : visual.baseColor;
-      const constrainedGeometry = ["constrained_geometry_niche_v1", "trail_corridor_niche_v1", "heat_tendril_niche_v1", THRESHOLD_SUBDIVIDE_RULE.version, CELL_SEEDED_NICHE_ALGORITHM].includes(niche.metrics?.algorithm);
+      const constrainedGeometry = [
+        "constrained_geometry_niche_v1",
+        "trail_corridor_niche_v1",
+        "heat_tendril_niche_v1",
+        THRESHOLD_SUBDIVIDE_RULE.version,
+        CELL_SEEDED_NICHE_ALGORITHM
+      ].includes(niche.metrics?.algorithm);
       const growLocal = niche.metrics?.algorithm === GROW_LOCAL_NICHE_RULE.version;
       const vectorFace = growLocal ? growVectorFaceForNiche(niche) : null;
       const structureCutouts = growLocal ? growStructureCutoutPathsForNiche(niche) : [];
-      const softOutlines = !growLocal && (state.controls.smartNicheHudPlots === true || constrainedGeometry);
-      const specialCorridor = ["trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(String(niche.metrics?.algorithm || ""));
-      const heatPathPolyline = isHeatTendrilNiche(niche) && Array.isArray(niche.metrics?.heat_path_polyline)
-        ? niche.metrics.heat_path_polyline
-        : [];
-      const softPaths = softOutlines && !state.controls.showDetectorMask
-        ? cellsToSmoothedBoundaryPaths(niche.grid_cell_ids || [])
-        : [];
+      const softOutlines =
+        !growLocal && (state.controls.smartNicheHudPlots === true || constrainedGeometry);
+      const specialCorridor = ["trail_corridor_niche_v1", "heat_tendril_niche_v1"].includes(
+        String(niche.metrics?.algorithm || "")
+      );
+      const heatPathPolyline =
+        isHeatTendrilNiche(niche) && Array.isArray(niche.metrics?.heat_path_polyline)
+          ? niche.metrics.heat_path_polyline
+          : [];
+      const softPaths =
+        softOutlines && !state.controls.showDetectorMask
+          ? cellsToSmoothedBoundaryPaths(niche.grid_cell_ids || [])
+          : [];
       const outlineSegments = state.controls.showDetectorMask
         ? []
         : heatPathPolyline.length >= 2
           ? []
-        : softPaths.length
-          ? softPaths
-          : cellsToBoundarySegments(niche.grid_cell_ids || []);
+          : softPaths.length
+            ? softPaths
+            : cellsToBoundarySegments(niche.grid_cell_ids || []);
       const outlineOptions = {
-        weight: home ? 3.2 : (softOutlines ? 2.1 + visual.weightBoost : 2.4),
-        opacity: home ? 0.96 : (softOutlines ? 0.72 : 0.88),
+        weight: home ? 3.2 : softOutlines ? 2.1 + visual.weightBoost : 2.4,
+        opacity: home ? 0.96 : softOutlines ? 0.72 : 0.88,
         haloColor: !home && specialCorridor ? visual.haloColor : undefined,
-        haloWeight: home ? 6.4 : (softOutlines ? 5.0 + visual.haloBoost : 3.8),
-        haloOpacity: home ? 0.62 : bookmarked ? 0.46 : (specialCorridor ? 0.52 : (softOutlines ? 0.26 : 0.48)),
+        haloWeight: home ? 6.4 : softOutlines ? 5.0 + visual.haloBoost : 3.8,
+        haloOpacity: home
+          ? 0.62
+          : bookmarked
+            ? 0.46
+            : specialCorridor
+              ? 0.52
+              : softOutlines
+                ? 0.26
+                : 0.48,
         lineCap: softOutlines ? "round" : "square",
         lineJoin: softOutlines ? "round" : "miter",
         dashArray: !home && !bookmarked ? visual.dashArray : null,
-        className: `${specialCorridor && !home && !bookmarked ? visual.outlineClass : (softOutlines ? "gw-niche-visible-component-outline is-soft" : "gw-niche-visible-component-outline")}${home ? " is-home-niche" : ""}${bookmarked && !home ? " is-bookmarked-niche" : ""}`,
-        haloClassName: `${specialCorridor && !home && !bookmarked ? visual.haloClass : (softOutlines ? "gw-niche-visible-component-outline-halo is-soft" : "gw-niche-visible-component-outline-halo")}${home ? " is-home-niche" : ""}${bookmarked && !home ? " is-bookmarked-niche" : ""}`
+        className: `${specialCorridor && !home && !bookmarked ? visual.outlineClass : softOutlines ? "gw-niche-visible-component-outline is-soft" : "gw-niche-visible-component-outline"}${home ? " is-home-niche" : ""}${bookmarked && !home ? " is-bookmarked-niche" : ""}`,
+        haloClassName: `${specialCorridor && !home && !bookmarked ? visual.haloClass : softOutlines ? "gw-niche-visible-component-outline-halo is-soft" : "gw-niche-visible-component-outline-halo"}${home ? " is-home-niche" : ""}${bookmarked && !home ? " is-bookmarked-niche" : ""}`
       };
       if (vectorFace) {
-        drawGrowVectorFaceBoundary(layer, vectorFace, home ? strongerComponentColor(color) : visual.outlineColor, outlineOptions);
+        drawGrowVectorFaceBoundary(
+          layer,
+          vectorFace,
+          home ? strongerComponentColor(color) : visual.outlineColor,
+          outlineOptions
+        );
       } else {
-        drawBoundarySegments(layer, outlineSegments, home ? strongerComponentColor(color) : visual.outlineColor, outlineOptions);
+        drawBoundarySegments(
+          layer,
+          outlineSegments,
+          home ? strongerComponentColor(color) : visual.outlineColor,
+          outlineOptions
+        );
       }
       if (structureCutouts.length) {
-        drawBoundarySegments(layer, structureCutouts, home ? strongerComponentColor(color) : visual.outlineColor, {
-          ...outlineOptions,
-          weight: Math.max(1.2, outlineOptions.weight * 0.72),
-          opacity: Math.max(0.72, outlineOptions.opacity * 0.9),
-          haloWeight: Math.max(2.6, outlineOptions.weight + 1.1),
-          haloOpacity: Math.min(0.48, outlineOptions.haloOpacity),
-          lineCap: "round",
-          lineJoin: "round",
-          className: `${outlineOptions.className} is-grow-structure-cutout`,
-          haloClassName: `${outlineOptions.haloClassName} is-grow-structure-cutout`
-        });
+        drawBoundarySegments(
+          layer,
+          structureCutouts,
+          home ? strongerComponentColor(color) : visual.outlineColor,
+          {
+            ...outlineOptions,
+            weight: Math.max(1.2, outlineOptions.weight * 0.72),
+            opacity: Math.max(0.72, outlineOptions.opacity * 0.9),
+            haloWeight: Math.max(2.6, outlineOptions.weight + 1.1),
+            haloOpacity: Math.min(0.48, outlineOptions.haloOpacity),
+            lineCap: "round",
+            lineJoin: "round",
+            className: `${outlineOptions.className} is-grow-structure-cutout`,
+            haloClassName: `${outlineOptions.haloClassName} is-grow-structure-cutout`
+          }
+        );
       }
       if (!home && heatPathPolyline.length >= 2) {
         drawHeatPathVector(layer, heatPathPolyline, visual);
@@ -9960,19 +10999,25 @@
         pane: PANE,
         radius: selected ? radius : Math.max(GRID_SIZE_M * 0.58, radius * 0.82),
         color,
-        weight: selected
-          ? (home ? Math.max(weight, 4.4) : weight)
-          : bookmarked ? 2.8 : 2.2,
+        weight: selected ? (home ? Math.max(weight, 4.4) : weight) : bookmarked ? 2.8 : 2.2,
         opacity: selected ? (home ? 1 : 0.9) : bookmarked ? 0.92 : 0.82,
         fillColor: color,
         fillOpacity: selected
-          ? (home ? 0.34 : Math.max(0.1, Math.min(0.26, 0.08 + Math.log1p(componentCells || 1) * 0.03)))
-          : bookmarked ? 0.18 : (specialCorridor ? 0.2 : 0.12),
+          ? home
+            ? 0.34
+            : Math.max(0.1, Math.min(0.26, 0.08 + Math.log1p(componentCells || 1) * 0.03))
+          : bookmarked
+            ? 0.18
+            : specialCorridor
+              ? 0.2
+              : 0.12,
         interactive: true,
         className: `${home ? "gw-niche-home-circle" : ""}${bookmarked && !home ? " gw-niche-bookmarked-circle" : ""}${visual.circleClass && !bookmarked ? ` ${visual.circleClass}` : ""}${selected ? " is-selected-niche" : " is-unselected-niche"}`
       }).addTo(layer);
 
-      const coreCell = String(niche.metrics?.core_cell || niche.metrics?.peak_cell || "").split(",").map(Number);
+      const coreCell = String(niche.metrics?.core_cell || niche.metrics?.peak_cell || "")
+        .split(",")
+        .map(Number);
       if (constrainedGeometry && coreCell.length === 2 && coreCell.every(Number.isFinite)) {
         const core = latLngForCell(coreCell[0], coreCell[1]);
         L.circleMarker([core.lat, core.lng], {
@@ -10053,9 +11098,11 @@
     state.layerVisible = show === true;
     saveLayerVisible();
     drawNicheLayer();
-    window.dispatchEvent(new CustomEvent("gridwild:localnicheschange", {
-      detail: { visible: state.layerVisible }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gridwild:localnicheschange", {
+        detail: { visible: state.layerVisible }
+      })
+    );
     return state.layerVisible;
   }
 

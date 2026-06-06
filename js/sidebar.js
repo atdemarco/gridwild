@@ -6,10 +6,12 @@
     { key: "Plantae", label: "Plants" },
     { key: "Fungi", label: "Fungi" },
     { key: "Mammalia", label: "Mammals" },
-    { key: "Aves", label: "Birds" },
+    { key: "Aves", label: "Birds" }
   ];
 
-  function $(id) { return document.getElementById(id); }
+  function $(id) {
+    return document.getElementById(id);
+  }
 
   function readManualCoarseHeatEnabled() {
     const coarseToggle = $("toggleSuperchunkHeat");
@@ -29,73 +31,71 @@
     return selected;
   }
 
-
   // add state:
   function syncStateFromUI() {
-    
-  window.__gwFilters = window.__gwFilters || {};
-  window.__gwState = window.__gwState || {};
+    window.__gwFilters = window.__gwFilters || {};
+    window.__gwState = window.__gwState || {};
 
-  window.__gwFilters.showPoints = $("togglePoints")?.checked ?? false;
-  window.__gwFilters.showHeat = $("toggleHeat")?.checked ?? true;
-  window.__gwState.coarseHeatEnabled = readManualCoarseHeatEnabled();
-  window.__gwState.coarseHeatBinSize = Math.max(
-    2,
-    Math.min(64, Math.round(Number(window.__gwState.coarseHeatBinSize) || 8))
-  );
-  window.__gwState.heatZThresholdEnabled =
-    document.getElementById("toggleHeatZThreshold")?.checked ??
-    window.__gwState.heatZThresholdEnabled ??
-    false;
-  window.__gwState.heatZThreshold = Math.max(
-    -3,
-    Math.min(3, Number(window.__gwState.heatZThreshold) || 0)
-  );
-  window.__gwState.heatZThresholdDirection =
-    window.__gwState.heatZThresholdDirection === "below" ? "below" : "above";
-  window.__gwState.heatMorphMinEnabled =
-    document.getElementById("toggleHeatMorphMin")?.checked ??
-    window.__gwState.heatMorphMinEnabled ??
-    false;
-  window.__gwState.heatMorphMinSize = Math.max(
-    1,
-    Math.min(999, Math.round(Number(window.__gwState.heatMorphMinSize) || 10))
-  );
-  
-  window.__gwState.showOsmFeatures = $("toggleOsmBuildings")?.checked ?? true;
-  window.__gwState.showOsmBuildings = window.__gwState.showOsmFeatures;
-  window.__gwState.showSurveyView = $("toggleSurveyView")?.checked ?? true;
-  window.__gwState.showPatchView = $("togglePatchView")?.checked ?? true;
+    window.__gwFilters.showPoints = $("togglePoints")?.checked ?? false;
+    window.__gwFilters.showHeat = $("toggleHeat")?.checked ?? true;
+    window.__gwState.coarseHeatEnabled = readManualCoarseHeatEnabled();
+    window.__gwState.coarseHeatBinSize = Math.max(
+      2,
+      Math.min(64, Math.round(Number(window.__gwState.coarseHeatBinSize) || 8))
+    );
+    window.__gwState.heatZThresholdEnabled =
+      document.getElementById("toggleHeatZThreshold")?.checked ??
+      window.__gwState.heatZThresholdEnabled ??
+      false;
+    window.__gwState.heatZThreshold = Math.max(
+      -3,
+      Math.min(3, Number(window.__gwState.heatZThreshold) || 0)
+    );
+    window.__gwState.heatZThresholdDirection =
+      window.__gwState.heatZThresholdDirection === "below" ? "below" : "above";
+    window.__gwState.heatMorphMinEnabled =
+      document.getElementById("toggleHeatMorphMin")?.checked ??
+      window.__gwState.heatMorphMinEnabled ??
+      false;
+    window.__gwState.heatMorphMinSize = Math.max(
+      1,
+      Math.min(999, Math.round(Number(window.__gwState.heatMorphMinSize) || 10))
+    );
 
-  window.__gwState.heatMetric = getSelectedHeatMetric();
-  window.__gwFilters.iconicTaxa = getSelectedIconicTaxa();
-  window.__gwFilters.onlyMe = window.__gwFilters.onlyMe === true;
-  window.__gwState.onlyMeFilterEnabled = window.__gwFilters.onlyMe;
+    window.__gwState.showOsmFeatures = $("toggleOsmBuildings")?.checked ?? true;
+    window.__gwState.showOsmBuildings = window.__gwState.showOsmFeatures;
+    window.__gwState.showSurveyView = $("toggleSurveyView")?.checked ?? true;
+    window.__gwState.showPatchView = $("togglePatchView")?.checked ?? true;
 
-  window.__gwState.showPoints = $("togglePoints")?.checked ?? true;
-  window.__gwState.dynamicINatEnabled = $("toggleDynamicINat")?.checked ?? false;
-  window.__gwState.showShimmer = $("toggleShimmer")?.checked ?? false;
-  window.__gwState.showFog = $("toggleFog")?.checked ?? false;
-  window.__gwState.highContrastLensEnabled = window.__gwState.highContrastLensEnabled === true;
-  window.__gwState.metricUnitsEnabled = window.__gwState.metricUnitsEnabled === true;
-  window.__gwState.showGpsCircle = window.__gwState.showGpsCircle === true;
-  window.__gwState.showNicheSparkles = window.__gwState.showNicheSparkles === true;
-  window.__gwState.fogSmoothingEnabled = $("toggleFogSmoothing")?.checked ?? true;
-  window.__gwState.godsEyeEnabled = $("toggleGodsEye")?.checked ?? false;
-  window.__gwState.lockToLocation = $("toggleLockLocation")?.checked ?? true;
+    window.__gwState.heatMetric = getSelectedHeatMetric();
+    window.__gwFilters.iconicTaxa = getSelectedIconicTaxa();
+    window.__gwFilters.onlyMe = window.__gwFilters.onlyMe === true;
+    window.__gwState.onlyMeFilterEnabled = window.__gwFilters.onlyMe;
 
-  updateLegendText();
- saveUIState();
-  if (typeof paintLegendFromHeatFunction === "function") {
-  paintLegendFromHeatFunction();
-}
-if (typeof window.syncGridWildCoarseHeatControls === "function") {
-  window.syncGridWildCoarseHeatControls();
-}
-}
+    window.__gwState.showPoints = $("togglePoints")?.checked ?? true;
+    window.__gwState.dynamicINatEnabled = $("toggleDynamicINat")?.checked ?? false;
+    window.__gwState.showShimmer = $("toggleShimmer")?.checked ?? false;
+    window.__gwState.showFog = $("toggleFog")?.checked ?? false;
+    window.__gwState.highContrastLensEnabled = window.__gwState.highContrastLensEnabled === true;
+    window.__gwState.metricUnitsEnabled = window.__gwState.metricUnitsEnabled === true;
+    window.__gwState.showGpsCircle = window.__gwState.showGpsCircle === true;
+    window.__gwState.showNicheSparkles = window.__gwState.showNicheSparkles === true;
+    window.__gwState.fogSmoothingEnabled = $("toggleFogSmoothing")?.checked ?? true;
+    window.__gwState.godsEyeEnabled = $("toggleGodsEye")?.checked ?? false;
+    window.__gwState.lockToLocation = $("toggleLockLocation")?.checked ?? true;
+
+    updateLegendText();
+    saveUIState();
+    if (typeof paintLegendFromHeatFunction === "function") {
+      paintLegendFromHeatFunction();
+    }
+    if (typeof window.syncGridWildCoarseHeatControls === "function") {
+      window.syncGridWildCoarseHeatControls();
+    }
+  }
 
   function setQueryFromUI() {
- //this function is old- replaced by STATE   
+    //this function is old- replaced by STATE
     window.__gwFilters = window.__gwFilters || {};
     window.__gwFilters.showPoints = $("togglePoints")?.checked ?? false;
     window.__gwFilters.showHeat = $("toggleHeat")?.checked ?? true;
@@ -118,9 +118,7 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
     }
 
     const heatPane =
-      typeof map !== "undefined" && map?.getPane
-        ? map.getPane("gridHeatPane")
-        : null;
+      typeof map !== "undefined" && map?.getPane ? map.getPane("gridHeatPane") : null;
     if (heatPane) {
       if (enabled) heatPane.style.removeProperty("display");
       else heatPane.style.setProperty("display", "none", "important");
@@ -179,16 +177,15 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
   document.addEventListener("DOMContentLoaded", () => {
     buildChecklist();
 
-
     // heamap radiobutton list
-    document.querySelectorAll('input[name="heatMetric"]').forEach(el => {
-  el.addEventListener("change", () => {
-    syncStateFromUI();
-    if (typeof window.updateGrid === "function") {
-      window.updateGrid();
-    }
-  });
-});
+    document.querySelectorAll('input[name="heatMetric"]').forEach((el) => {
+      el.addEventListener("change", () => {
+        syncStateFromUI();
+        if (typeof window.updateGrid === "function") {
+          window.updateGrid();
+        }
+      });
+    });
 
     // Sidebar collapse
     $("sidebarToggle")?.addEventListener("click", () => {
@@ -196,100 +193,109 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
     });
 
     // Defaults
-   // window.__gwFilters = { showPoints: false, showHeat: true, iconicTaxa: [] };
+    // window.__gwFilters = { showPoints: false, showHeat: true, iconicTaxa: [] };
     window.__gwFilters = window.__gwFilters || {};
     applySavedUIState();
     syncStateFromUI();
     applyLayerVisibility({ loadHeatAssets: false });
     paintLegendFromHeatFunction();
 
-[
-  "togglePoints",
-  "toggleHeat",
-  "toggleSuperchunkHeat",
-  "toggleShimmer",
-  "toggleDynamicINat",
-  "toggleFog",
-  "toggleFogSmoothing",
-  "toggleGodsEye",
-  "toggleLockLocation",
-  "toggleOsmBuildings",
-  "toggleSurveyView",
-  "togglePatchView"
-].forEach(id => {
-  $(id)?.addEventListener("change", () => {
-    syncStateFromUI();
+    [
+      "togglePoints",
+      "toggleHeat",
+      "toggleSuperchunkHeat",
+      "toggleShimmer",
+      "toggleDynamicINat",
+      "toggleFog",
+      "toggleFogSmoothing",
+      "toggleGodsEye",
+      "toggleLockLocation",
+      "toggleOsmBuildings",
+      "toggleSurveyView",
+      "togglePatchView"
+    ].forEach((id) => {
+      $(id)?.addEventListener("change", () => {
+        syncStateFromUI();
 
-   if (id === "toggleLockLocation") {
-    if (window.__gwState.lockToLocation) {
-      window.__gwState.suspendAutoCenterUntil = 0;
-      window.__gwState.lockZoomMode = "close";
-      window.__gwState.lockZoom = 19;
-    } else {
-      window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
-      window.__gwState.lockZoomMode = "close";
-      window.__gwState.lockZoom = 19;
-    }
+        if (id === "toggleLockLocation") {
+          if (window.__gwState.lockToLocation) {
+            window.__gwState.suspendAutoCenterUntil = 0;
+            window.__gwState.lockZoomMode = "close";
+            window.__gwState.lockZoom = 19;
+          } else {
+            window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
+            window.__gwState.lockZoomMode = "close";
+            window.__gwState.lockZoom = 19;
+          }
 
-    if (typeof window.setLockButtonVisual === "function") {
-      window.setLockButtonVisual();
-    }
+          if (typeof window.setLockButtonVisual === "function") {
+            window.setLockButtonVisual();
+          }
 
-    if (typeof window.syncCompassTracking === "function") {
-      window.syncCompassTracking({
-        requestPermission: !!window.__gwState.lockToLocation
+          if (typeof window.syncCompassTracking === "function") {
+            window.syncCompassTracking({
+              requestPermission: !!window.__gwState.lockToLocation
+            });
+          }
+        }
+        applyLayerVisibility();
+
+        if (id === "toggleOsmBuildings") {
+          window.GridWildOsmFeaturesLayer?.setFeatureVisible?.(
+            "buildings",
+            window.__gwState.showOsmBuildings
+          );
+        }
+
+        if (id === "toggleSurveyView") {
+          if (window.GridWildSurveyLayer?.setSurveyViewEnabled) {
+            window.GridWildSurveyLayer.setSurveyViewEnabled(
+              window.__gwState.showSurveyView === true
+            );
+          } else {
+            window.GridWildSurveyLayer?.render?.();
+            window.dispatchEvent(
+              new CustomEvent("gridwild:surveyviewchange", {
+                detail: { showSurveyView: window.__gwState.showSurveyView === true }
+              })
+            );
+          }
+        }
+
+        if (id === "togglePatchView") {
+          if (window.GridWildPatches?.setVisible) {
+            window.GridWildPatches.setVisible(window.__gwState.showPatchView === true);
+          } else {
+            window.GridWildPatches?.render?.();
+            window.dispatchEvent(
+              new CustomEvent("gridwild:patchviewchange", {
+                detail: { visible: window.__gwState.showPatchView === true }
+              })
+            );
+          }
+        }
+
+        if (id === "toggleDynamicINat" && window.__gwState.dynamicINatEnabled) {
+          if (typeof window.maybeRefreshDynamicINat === "function") {
+            window.maybeRefreshDynamicINat(true);
+          }
+        }
+
+        if (
+          (id === "toggleFog" || id === "toggleSuperchunkHeat") &&
+          typeof window.updateGrid === "function"
+        ) {
+          window.updateGrid();
+        }
+
+        // show shimmer -- is this redundant wth the if statement right above here???
+        if (id === "toggleFog" || id === "toggleFogSmoothing" || id === "toggleShimmer") {
+          if (typeof window.updateGrid === "function") {
+            window.updateGrid();
+          }
+        }
       });
-    }
-  }
-    applyLayerVisibility();
-
-  if (id === "toggleOsmBuildings") {
-    window.GridWildOsmFeaturesLayer?.setFeatureVisible?.(
-      "buildings",
-      window.__gwState.showOsmBuildings
-    );
-  }
-
-  if (id === "toggleSurveyView") {
-    if (window.GridWildSurveyLayer?.setSurveyViewEnabled) {
-      window.GridWildSurveyLayer.setSurveyViewEnabled(window.__gwState.showSurveyView === true);
-    } else {
-      window.GridWildSurveyLayer?.render?.();
-      window.dispatchEvent(new CustomEvent("gridwild:surveyviewchange", {
-        detail: { showSurveyView: window.__gwState.showSurveyView === true }
-      }));
-    }
-  }
-
-  if (id === "togglePatchView") {
-    if (window.GridWildPatches?.setVisible) {
-      window.GridWildPatches.setVisible(window.__gwState.showPatchView === true);
-    } else {
-      window.GridWildPatches?.render?.();
-      window.dispatchEvent(new CustomEvent("gridwild:patchviewchange", {
-        detail: { visible: window.__gwState.showPatchView === true }
-      }));
-    }
-  }
-
-    if (id === "toggleDynamicINat" && window.__gwState.dynamicINatEnabled) {
-      if (typeof window.maybeRefreshDynamicINat === "function") {
-        window.maybeRefreshDynamicINat(true);
-      }
-    }
-
-    if ((id === "toggleFog" || id === "toggleSuperchunkHeat") && typeof window.updateGrid === "function") {
-      window.updateGrid();
-    }
-
-    // show shimmer -- is this redundant wth the if statement right above here???
-    if (id === "toggleFog" || id === "toggleFogSmoothing" || id === "toggleShimmer") {
-      if (typeof window.updateGrid === "function") {
-        window.updateGrid();
-      }
-    }
-  });
-});
+    });
 
     $("toggleHeat")?.addEventListener("change", () => {
       syncStateFromUI();
@@ -298,27 +304,34 @@ if (typeof window.syncGridWildCoarseHeatControls === "function") {
 
     // Any taxa change triggers refetch
     $("taxaChecklist")?.addEventListener("change", () => {
-  syncStateFromUI();
-  window.dispatchEvent(new CustomEvent("gridwild:filterschange", {
-    detail: { iconicTaxa: window.__gwFilters?.iconicTaxa || [] }
-  }));
-  applyLayerVisibility();
+      syncStateFromUI();
+      window.dispatchEvent(
+        new CustomEvent("gridwild:filterschange", {
+          detail: { iconicTaxa: window.__gwFilters?.iconicTaxa || [] }
+        })
+      );
+      applyLayerVisibility();
 
-  if (typeof window.updateGrid === "function") {
-    window.updateGrid();
-  }
+      if (typeof window.updateGrid === "function") {
+        window.updateGrid();
+      }
 
-  if (window.__gwState?.dynamicINatEnabled &&
-      typeof window.maybeRefreshDynamicINat === "function") {
-    window.maybeRefreshDynamicINat(true);
-  }
+      if (
+        window.__gwState?.dynamicINatEnabled &&
+        typeof window.maybeRefreshDynamicINat === "function"
+      ) {
+        window.maybeRefreshDynamicINat(true);
+      }
     });
   });
 })();
 
-
-window.parseGridWildLatLng = window.parseGridWildLatLng || function parseGridWildLatLng(text) {
-    const nums = String(text).trim().match(/-?\d+(?:\.\d+)?/g);
+window.parseGridWildLatLng =
+  window.parseGridWildLatLng ||
+  function parseGridWildLatLng(text) {
+    const nums = String(text)
+      .trim()
+      .match(/-?\d+(?:\.\d+)?/g);
     if (!nums || nums.length < 2) return null;
 
     const lat = Number(nums[0]);
@@ -330,9 +343,11 @@ window.parseGridWildLatLng = window.parseGridWildLatLng || function parseGridWil
     return { lat, lng };
   };
 
-window.jumpToGridWildGps = window.jumpToGridWildGps || function jumpToGridWildGps(lat, lng, options = {}) {
-  const parsed = window.parseGridWildLatLng(`${lat},${lng}`);
-  const status = options.statusEl || null;
+window.jumpToGridWildGps =
+  window.jumpToGridWildGps ||
+  function jumpToGridWildGps(lat, lng, options = {}) {
+    const parsed = window.parseGridWildLatLng(`${lat},${lng}`);
+    const status = options.statusEl || null;
 
     if (!parsed) {
       if (status) status.textContent = "Use format like 38.8895,-77.0353";
@@ -388,12 +403,12 @@ window.initJumpToGpsControl = function initJumpToGpsControl() {
 
   btn.addEventListener("click", jumpNow);
 
-  input.addEventListener("keydown", e => {
+  input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") jumpNow();
   });
 };
 
-  function getSelectedHeatMetric() {
+function getSelectedHeatMetric() {
   const selected = document.querySelector('input[name="heatMetric"]:checked');
   return selected?.value || "count";
 }
@@ -405,7 +420,7 @@ function getSelectedBaseMap() {
   return window.__gwState?.baseMap === "terrain" ? "terrain" : "street";
 }
 
-// below for state-based 
+// below for state-based
 function loadUIState() {
   try {
     const raw = localStorage.getItem("gw_ui_state");
@@ -431,11 +446,17 @@ function saveUIState() {
     showHeat: byId("toggleHeat")?.checked ?? true,
     coarseHeatEnabled: readCoarseHeatEnabled(),
     coarseHeatBinSize: window.__gwState?.coarseHeatBinSize ?? 8,
-    heatZThresholdEnabled: byId("toggleHeatZThreshold")?.checked ?? window.__gwState?.heatZThresholdEnabled ?? false,
+    heatZThresholdEnabled:
+      byId("toggleHeatZThreshold")?.checked ?? window.__gwState?.heatZThresholdEnabled ?? false,
     heatZThreshold: window.__gwState?.heatZThreshold ?? 0,
-    heatZThresholdDirection: window.__gwState?.heatZThresholdDirection === "below" ? "below" : "above",
-    heatMorphMinEnabled: byId("toggleHeatMorphMin")?.checked ?? window.__gwState?.heatMorphMinEnabled ?? false,
-    heatMorphMinSize: Math.max(1, Math.min(999, Math.round(Number(window.__gwState?.heatMorphMinSize) || 10))),
+    heatZThresholdDirection:
+      window.__gwState?.heatZThresholdDirection === "below" ? "below" : "above",
+    heatMorphMinEnabled:
+      byId("toggleHeatMorphMin")?.checked ?? window.__gwState?.heatMorphMinEnabled ?? false,
+    heatMorphMinSize: Math.max(
+      1,
+      Math.min(999, Math.round(Number(window.__gwState?.heatMorphMinSize) || 10))
+    ),
     dynamicINatEnabled: byId("toggleDynamicINat")?.checked ?? false,
     showShimmer: byId("toggleShimmer")?.checked ?? false,
     showFog: byId("toggleFog")?.checked ?? false,
@@ -454,7 +475,7 @@ function saveUIState() {
     showOsmBuildings: byId("toggleOsmBuildings")?.checked ?? true,
     showSurveyView: byId("toggleSurveyView")?.checked ?? true,
     showPatchView: byId("togglePatchView")?.checked ?? true
-    };
+  };
 
   localStorage.setItem("gw_ui_state", JSON.stringify(state));
 }
@@ -463,9 +484,10 @@ function applySavedUIState() {
   const byId = (id) => document.getElementById(id);
   const s = loadUIState();
 
-  if (byId("togglePoints"))       byId("togglePoints").checked = s.showPoints ?? false;
-  if (byId("toggleHeat"))         byId("toggleHeat").checked = s.showHeat ?? true;
-  if (byId("toggleSuperchunkHeat")) byId("toggleSuperchunkHeat").checked = s.coarseHeatEnabled ?? s.superchunkHeatEnabled ?? false;
+  if (byId("togglePoints")) byId("togglePoints").checked = s.showPoints ?? false;
+  if (byId("toggleHeat")) byId("toggleHeat").checked = s.showHeat ?? true;
+  if (byId("toggleSuperchunkHeat"))
+    byId("toggleSuperchunkHeat").checked = s.coarseHeatEnabled ?? s.superchunkHeatEnabled ?? false;
   window.__gwState = window.__gwState || {};
   const savedBaseMap = s.baseMap ?? localStorage.getItem("gridwildBaseMap");
   window.__gwState.baseMap = savedBaseMap === "terrain" ? "terrain" : "street";
@@ -476,30 +498,38 @@ function applySavedUIState() {
     Math.min(64, Math.round(Number(savedCoarseBinSize) || 8))
   );
   window.__gwState.heatZThresholdEnabled = s.heatZThresholdEnabled ?? false;
-  window.__gwState.heatZThreshold = Math.max(
-    -3,
-    Math.min(3, Number(s.heatZThreshold) || 0)
-  );
-  window.__gwState.heatZThresholdDirection = s.heatZThresholdDirection === "below" ? "below" : "above";
+  window.__gwState.heatZThreshold = Math.max(-3, Math.min(3, Number(s.heatZThreshold) || 0));
+  window.__gwState.heatZThresholdDirection =
+    s.heatZThresholdDirection === "below" ? "below" : "above";
   window.__gwState.heatMorphMinEnabled = s.heatMorphMinEnabled ?? false;
   window.__gwState.heatMorphMinSize = Math.max(
     1,
     Math.min(999, Math.round(Number(s.heatMorphMinSize) || 10))
   );
-  if (byId("toggleHeatZThreshold")) byId("toggleHeatZThreshold").checked = window.__gwState.heatZThresholdEnabled;
-  if (byId("gwHeatZThresholdInput")) byId("gwHeatZThresholdInput").value = window.__gwState.heatZThreshold.toFixed(1);
-  if (byId("gwHeatZThresholdSlider")) byId("gwHeatZThresholdSlider").value = String(window.__gwState.heatZThreshold);
+  if (byId("toggleHeatZThreshold"))
+    byId("toggleHeatZThreshold").checked = window.__gwState.heatZThresholdEnabled;
+  if (byId("gwHeatZThresholdInput"))
+    byId("gwHeatZThresholdInput").value = window.__gwState.heatZThreshold.toFixed(1);
+  if (byId("gwHeatZThresholdSlider"))
+    byId("gwHeatZThresholdSlider").value = String(window.__gwState.heatZThreshold);
   if (byId("gwHeatZThresholdDirectionBtn")) {
     const isBelow = window.__gwState.heatZThresholdDirection === "below";
     byId("gwHeatZThresholdDirectionBtn").innerHTML = isBelow ? "&le;" : "&ge;";
-    byId("gwHeatZThresholdDirectionBtn").setAttribute("aria-label", isBelow ? "Show heat cells below cutoff" : "Show heat cells above cutoff");
-    byId("gwHeatZThresholdDirectionBtn").title = isBelow ? "Show values below cutoff" : "Show values above cutoff";
+    byId("gwHeatZThresholdDirectionBtn").setAttribute(
+      "aria-label",
+      isBelow ? "Show heat cells below cutoff" : "Show heat cells above cutoff"
+    );
+    byId("gwHeatZThresholdDirectionBtn").title = isBelow
+      ? "Show values below cutoff"
+      : "Show values above cutoff";
   }
-  if (byId("toggleHeatMorphMin")) byId("toggleHeatMorphMin").checked = window.__gwState.heatMorphMinEnabled;
-  if (byId("gwHeatMorphMinSizeInput")) byId("gwHeatMorphMinSizeInput").value = String(window.__gwState.heatMorphMinSize);
-  if (byId("toggleDynamicINat"))  byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
-  if (byId("toggleShimmer"))      byId("toggleShimmer").checked = s.showShimmer ?? false;
-  if (byId("toggleFog"))          byId("toggleFog").checked = s.showFog ?? false;
+  if (byId("toggleHeatMorphMin"))
+    byId("toggleHeatMorphMin").checked = window.__gwState.heatMorphMinEnabled;
+  if (byId("gwHeatMorphMinSizeInput"))
+    byId("gwHeatMorphMinSizeInput").value = String(window.__gwState.heatMorphMinSize);
+  if (byId("toggleDynamicINat")) byId("toggleDynamicINat").checked = s.dynamicINatEnabled ?? false;
+  if (byId("toggleShimmer")) byId("toggleShimmer").checked = s.showShimmer ?? false;
+  if (byId("toggleFog")) byId("toggleFog").checked = s.showFog ?? false;
   window.__gwState.highContrastLensEnabled = s.highContrastLensEnabled ?? true;
   window.__gwState.hapticsEnabled = s.hapticsEnabled ?? true;
   window.__gwState.metricUnitsEnabled = s.metricUnitsEnabled === true;
@@ -507,9 +537,10 @@ function applySavedUIState() {
   window.__gwState.dayNightMode = s.dayNightMode === "night" ? "night" : "day";
   window.GridWildMapMode?.setMode?.(window.__gwState.dayNightMode, { persist: false });
   window.__gwState.showNicheSparkles = s.showNicheSparkles === true;
-  if (byId("toggleGodsEye"))      byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
+  if (byId("toggleGodsEye")) byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
-  if (byId("toggleFogSmoothing")) byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? false;
+  if (byId("toggleFogSmoothing"))
+    byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? false;
   if (byId("toggleOsmBuildings")) byId("toggleOsmBuildings").checked = s.showOsmBuildings ?? true;
   if (byId("toggleSurveyView")) byId("toggleSurveyView").checked = s.showSurveyView ?? true;
   if (byId("togglePatchView")) byId("togglePatchView").checked = s.showPatchView ?? true;
@@ -525,31 +556,23 @@ function applySavedUIState() {
 }
 
 function updateLegendText() {
-
   const foot = document.getElementById("gwLegendFoot");
   const subtitle = document.querySelector(".gw-legend-subtitle");
 
   if (!foot || !subtitle) return;
 
-  const lens =
-    window.__gwState?.activeLens || "classic";
+  const lens = window.__gwState?.activeLens || "classic";
 
-  const copy =
-    window.GWLegendCopy?.[lens] ||
-    window.GWLegendCopy?.classic;
+  const copy = window.GWLegendCopy?.[lens] || window.GWLegendCopy?.classic;
 
   if (!copy) return;
 
   subtitle.hidden = false;
   foot.hidden = false;
 
-  subtitle.textContent =
-    copy.subtitle || "";
+  subtitle.textContent = copy.subtitle || "";
 
-  foot.innerHTML =
-    (copy.lines || [])
-      .map(line => `<div>${line}</div>`)
-      .join("");
+  foot.innerHTML = (copy.lines || []).map((line) => `<div>${line}</div>`).join("");
 }
 
 function updateLegendTextOLD() {
@@ -558,15 +581,13 @@ function updateLegendTextOLD() {
   if (!foot || !subtitle) return;
 
   const useLog = window.__gwState?.logHeat ?? true;
-  const showSmallText = typeof window.shouldShowSmallText === "function"
-    ? window.shouldShowSmallText()
-    : true;
+  const showSmallText =
+    typeof window.shouldShowSmallText === "function" ? window.shouldShowSmallText() : true;
 
   subtitle.hidden = !showSmallText;
   foot.hidden = !showSmallText;
 
-  subtitle.textContent =
-    "Hue = observers • vividness = species • opacity = observations";
+  subtitle.textContent = "Hue = observers • vividness = species • opacity = observations";
 
   foot.textContent = useLog
     ? "More opaque = more observations (log-scaled)"
@@ -593,8 +614,8 @@ function paintLegendFromHeatFunction() {
 
   const huebar = document.querySelector(".gw-huebar");
 
-  const lowObsr  = window.metricsToFill({ count: 10, species: 8, observers: 1 });
-  const midObsr  = window.metricsToFill({ count: 10, species: 8, observers: 3 });
+  const lowObsr = window.metricsToFill({ count: 10, species: 8, observers: 1 });
+  const midObsr = window.metricsToFill({ count: 10, species: 8, observers: 3 });
   const highObsr = window.metricsToFill({ count: 10, species: 8, observers: 6 });
 
   if (huebar && lowObsr && midObsr && highObsr) {

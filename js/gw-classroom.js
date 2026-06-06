@@ -5,7 +5,10 @@
 
 (function () {
   const FEATURE_ALIASES = [
-    { terms: ["leaf edge", "leaf margin", "toothed leaf", "saw tooth"], keys: ["serrated_margin", "lobed_leaf"] },
+    {
+      terms: ["leaf edge", "leaf margin", "toothed leaf", "saw tooth"],
+      keys: ["serrated_margin", "lobed_leaf"]
+    },
     { terms: ["halteres", "fly balancers", "balancing organs"], keys: ["halteres"] },
     { terms: ["opposite leaves", "opposite leaf"], keys: ["opposite_leaves"] },
     { terms: ["alternate leaves", "alternate leaf"], keys: ["alternate_leaves"] },
@@ -602,7 +605,7 @@
     activeRoot = document.createElement("div");
     activeRoot.className = "gw-classroom-backdrop";
     document.body.appendChild(activeRoot);
-    activeRoot.addEventListener("click", evt => {
+    activeRoot.addEventListener("click", (evt) => {
       if (evt.target === activeRoot) close();
     });
 
@@ -612,7 +615,8 @@
 
   function currentRecord() {
     if (!state.records.length) return null;
-    const safeIndex = ((state.genusIndex % state.records.length) + state.records.length) % state.records.length;
+    const safeIndex =
+      ((state.genusIndex % state.records.length) + state.records.length) % state.records.length;
     return state.records[safeIndex] || null;
   }
 
@@ -688,7 +692,9 @@
       ? `<div class="gw-classroom-muted" style="padding:14px;">Loading codex...</div>`
       : state.error
         ? `<div class="gw-classroom-muted" style="padding:14px;">${esc(state.error)}</div>`
-        : window.GridWildGenusCodex?.renderRecordCardHtml?.(rec, { slideIndex: state.slideIndex }) || "";
+        : window.GridWildGenusCodex?.renderRecordCardHtml?.(rec, {
+            slideIndex: state.slideIndex
+          }) || "";
 
     return `
       <section class="gw-classroom-panel gw-classroom-codex-panel">
@@ -732,7 +738,7 @@
   function activeMarkRows() {
     return Object.entries(state.markDispositions)
       .map(([id, disposition]) => ({ mark: window.GridWildFieldMarks?.get?.(id), disposition }))
-      .filter(row => row.mark && row.disposition !== "unsure");
+      .filter((row) => row.mark && row.disposition !== "unsure");
   }
 
   function setMarkDisposition(id, disposition) {
@@ -833,7 +839,9 @@
         ${
           active.length
             ? `<div class="gw-fieldmark-active-row">
-                ${active.map(row => `
+                ${active
+                  .map(
+                    (row) => `
                   <button
                     class="gw-fieldmark-mark-btn ${row.disposition === "seen" ? "is-seen" : "is-out"}"
                     type="button"
@@ -842,7 +850,9 @@
                   >
                     ${row.disposition === "seen" ? "Seen" : "Out"}: ${esc(row.mark.label)}
                   </button>
-                `).join("")}
+                `
+                  )
+                  .join("")}
               </div>`
             : `<div class="gw-classroom-muted" style="margin-top:6px;">No field marks selected yet.</div>`
         }
@@ -852,7 +862,10 @@
         <div class="gw-fieldmark-mini-title">Possible directions</div>
         ${
           suggestions.length
-            ? suggestions.slice(0, 5).map(row => `
+            ? suggestions
+                .slice(0, 5)
+                .map(
+                  (row) => `
                 <div class="gw-fieldmark-suggestion">
                   <div class="gw-fieldmark-suggestion-name">
                     <span>${esc(row.label)}</span>
@@ -860,7 +873,9 @@
                   </div>
                   <div class="gw-fieldmark-suggestion-desc">${esc(row.desc)}</div>
                 </div>
-              `).join("")
+              `
+                )
+                .join("")
             : `<div class="gw-classroom-muted" style="margin-top:6px;">Select marks to get broad suggestions.</div>`
         }
       </div>
@@ -874,12 +889,16 @@
     }
 
     const groups = window.GridWildFieldMarks?.grouped?.(marks) || [];
-    return groups.map(group => `
+    return groups
+      .map(
+        (group) => `
       <div class="gw-fieldmark-category">
         <div class="gw-fieldmark-category-title">${esc(group.title)}</div>
         ${group.marks.map(renderMarkCard).join("")}
       </div>
-    `).join("");
+    `
+      )
+      .join("");
   }
 
   function renderMarkCard(mark) {
@@ -905,11 +924,12 @@
 
   function renderDispositionButton(id, value, disposition) {
     const label = value === "seen" ? "Seen" : value === "out" ? "Rule out" : "Unsure";
-    const cls = value === "seen" && disposition === "seen"
-      ? "is-seen"
-      : value === "out" && disposition === "out"
-        ? "is-out"
-        : "";
+    const cls =
+      value === "seen" && disposition === "seen"
+        ? "is-seen"
+        : value === "out" && disposition === "out"
+          ? "is-out"
+          : "";
 
     return `
       <button
@@ -959,8 +979,8 @@
   function bind(root) {
     root.querySelector("[data-gw-classroom-close]")?.addEventListener("click", close);
 
-    root.querySelectorAll("[data-gw-classroom-mode]").forEach(btn => {
-      btn.addEventListener("click", evt => {
+    root.querySelectorAll("[data-gw-classroom-mode]").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
         evt.preventDefault();
         setMode(btn.dataset.gwClassroomMode || "choice");
       });
@@ -1000,7 +1020,7 @@
     const search = root.querySelector("[data-gw-field-search]");
     if (search && !search.__gwFieldMarkBound) {
       search.__gwFieldMarkBound = true;
-      search.addEventListener("input", evt => {
+      search.addEventListener("input", (evt) => {
         state.markQuery = evt.target.value || "";
         refreshPracticeKeyPanel();
         const nextSearch = activeRoot?.querySelector("[data-gw-field-search]");
@@ -1012,30 +1032,30 @@
       });
     }
 
-    root.querySelectorAll("[data-gw-field-mark]").forEach(btn => {
+    root.querySelectorAll("[data-gw-field-mark]").forEach((btn) => {
       if (btn.__gwFieldMarkBound) return;
       btn.__gwFieldMarkBound = true;
-      btn.addEventListener("click", evt => {
+      btn.addEventListener("click", (evt) => {
         evt.preventDefault();
         evt.stopPropagation();
         setMarkDisposition(btn.dataset.gwFieldMark, btn.dataset.gwFieldDisposition || "unsure");
       });
     });
 
-    root.querySelectorAll("[data-gw-field-next]").forEach(btn => {
+    root.querySelectorAll("[data-gw-field-next]").forEach((btn) => {
       if (btn.__gwFieldMarkBound) return;
       btn.__gwFieldMarkBound = true;
-      btn.addEventListener("click", evt => {
+      btn.addEventListener("click", (evt) => {
         evt.preventDefault();
         evt.stopPropagation();
         moveQuiz(1);
       });
     });
 
-    root.querySelectorAll("[data-gw-field-reveal]").forEach(btn => {
+    root.querySelectorAll("[data-gw-field-reveal]").forEach((btn) => {
       if (btn.__gwFieldMarkBound) return;
       btn.__gwFieldMarkBound = true;
-      btn.addEventListener("click", evt => {
+      btn.addEventListener("click", (evt) => {
         evt.preventDefault();
         evt.stopPropagation();
         state.quizRevealed = !state.quizRevealed;
@@ -1045,23 +1065,35 @@
   }
 
   function featureOptions() {
-    const marks = window.GridWildFieldMarks?.list?.() || Object.entries(window.GridWildGenusCodex?.fieldMarks || {})
-      .map(([key, value]) => ({ id: key, label: value.label || key, explanation: value.desc || "" }));
+    const marks =
+      window.GridWildFieldMarks?.list?.() ||
+      Object.entries(window.GridWildGenusCodex?.fieldMarks || {}).map(([key, value]) => ({
+        id: key,
+        label: value.label || key,
+        explanation: value.desc || ""
+      }));
     return marks
-      .map(mark => ({ key: mark.id, label: mark.label || mark.id, desc: mark.explanation || mark.desc || "" }))
+      .map((mark) => ({
+        key: mark.id,
+        label: mark.label || mark.id,
+        desc: mark.explanation || mark.desc || ""
+      }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }
 
   function normalizeFeatureText(value) {
-    return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
   }
 
   function featureGroupsFromQuery(query) {
     const clean = normalizeFeatureText(query);
     if (!clean) return [];
-    return FEATURE_ALIASES
-      .filter(alias => alias.terms.some(term => clean.includes(normalizeFeatureText(term))))
-      .map(alias => alias.keys);
+    return FEATURE_ALIASES.filter((alias) =>
+      alias.terms.some((term) => clean.includes(normalizeFeatureText(term)))
+    ).map((alias) => alias.keys);
   }
 
   function textTokens(query) {
@@ -1069,57 +1101,60 @@
     if (groups.length) return [];
     return normalizeFeatureText(query)
       .split(/\s+/)
-      .filter(token => token.length > 2);
+      .filter((token) => token.length > 2);
   }
 
   function recordSearchText(rec) {
     const marks = window.GridWildGenusCodex?.fieldMarks || {};
     const markText = (rec?.fieldMarks || [])
-      .map(key => `${marks[key]?.label || ""} ${marks[key]?.desc || ""}`)
+      .map((key) => `${marks[key]?.label || ""} ${marks[key]?.desc || ""}`)
       .join(" ");
-    return normalizeFeatureText([
-      rec?.genus,
-      rec?.common,
-      rec?.family,
-      rec?.badge,
-      markText,
-      ...(rec?.lore || []),
-      ...(rec?.facts || [])
-    ].join(" "));
+    return normalizeFeatureText(
+      [
+        rec?.genus,
+        rec?.common,
+        rec?.family,
+        rec?.badge,
+        markText,
+        ...(rec?.lore || []),
+        ...(rec?.facts || [])
+      ].join(" ")
+    );
   }
 
   function recordMatchesFeature(rec, key) {
     if ((rec?.fieldMarks || []).includes(key)) return true;
-    const mark = window.GridWildFieldMarks?.get?.(key) || window.GridWildGenusCodex?.fieldMarks?.[key];
+    const mark =
+      window.GridWildFieldMarks?.get?.(key) || window.GridWildGenusCodex?.fieldMarks?.[key];
     if (!mark) return false;
     const hay = recordSearchText(rec);
     return normalizeFeatureText(`${mark.label} ${mark.explanation || mark.desc || ""}`)
       .split(/\s+/)
-      .filter(token => token.length > 3)
-      .some(token => hay.includes(token));
+      .filter((token) => token.length > 3)
+      .some((token) => hay.includes(token));
   }
 
   function filterRecords() {
     const records = state.records || [];
-    const selectedGroups = [...state.selectedFeatureKeys].map(key => [key]);
+    const selectedGroups = [...state.selectedFeatureKeys].map((key) => [key]);
     const queryGroups = featureGroupsFromQuery(state.keyQuery);
     const groups = [...selectedGroups, ...queryGroups];
     const tokens = textTokens(state.keyQuery);
 
     const scored = records
-      .map(rec => {
+      .map((rec) => {
         const hay = recordSearchText(rec);
         let score = 0;
 
-        const groupOk = groups.every(group => {
-          const hit = group.some(key => recordMatchesFeature(rec, key));
+        const groupOk = groups.every((group) => {
+          const hit = group.some((key) => recordMatchesFeature(rec, key));
           if (hit) score += 8;
           return hit;
         });
 
         if (!groupOk) return null;
 
-        const tokenOk = tokens.every(token => {
+        const tokenOk = tokens.every((token) => {
           const hit = hay.includes(token);
           if (hit) score += 3;
           return hit;
@@ -1133,12 +1168,10 @@
       .sort((a, b) => b.score - a.score || String(a.rec.genus).localeCompare(String(b.rec.genus)));
 
     if (!groups.length && !tokens.length) {
-      return records
-        .filter(rec => (rec.fieldMarks || []).length)
-        .slice(0, 18);
+      return records.filter((rec) => (rec.fieldMarks || []).length).slice(0, 18);
     }
 
-    return scored.map(row => row.rec).slice(0, 24);
+    return scored.map((row) => row.rec).slice(0, 24);
   }
 
   function openKeyWindow() {
@@ -1149,7 +1182,7 @@
     keyRoot = document.createElement("div");
     keyRoot.className = "gw-classroom-key-backdrop";
     document.body.appendChild(keyRoot);
-    keyRoot.addEventListener("click", evt => {
+    keyRoot.addEventListener("click", (evt) => {
       if (evt.target === keyRoot) closeKeyWindow();
     });
 
@@ -1183,7 +1216,9 @@
             placeholder="leaf edge, halteres, gills"
           >
           <div class="gw-classroom-chip-grid">
-            ${options.map(option => `
+            ${options
+              .map(
+                (option) => `
               <button
                 class="gw-classroom-chip ${state.selectedFeatureKeys.has(option.key) ? "is-selected" : ""}"
                 type="button"
@@ -1192,7 +1227,9 @@
               >
                 ${esc(option.label)}
               </button>
-            `).join("")}
+            `
+              )
+              .join("")}
           </div>
           <div class="gw-classroom-results" data-gw-classroom-results>
             ${renderKeyResults()}
@@ -1216,14 +1253,15 @@
       return `<div class="gw-classroom-muted">No possibles matched.</div>`;
     }
 
-    return results.map(rec => {
-      const marks = (rec.fieldMarks || [])
-        .map(key => window.GridWildGenusCodex?.fieldMarks?.[key]?.label || key)
-        .filter(Boolean)
-        .slice(0, 4)
-        .join(", ");
+    return results
+      .map((rec) => {
+        const marks = (rec.fieldMarks || [])
+          .map((key) => window.GridWildGenusCodex?.fieldMarks?.[key]?.label || key)
+          .filter(Boolean)
+          .slice(0, 4)
+          .join(", ");
 
-      return `
+        return `
         <div class="gw-classroom-result">
           <div>
             <div class="gw-classroom-result-name">${esc(rec.genus)}</div>
@@ -1235,7 +1273,8 @@
           </div>
         </div>
       `;
-    }).join("");
+      })
+      .join("");
   }
 
   function refreshKeyResults(root) {
@@ -1245,12 +1284,12 @@
 
   function bindKeyWindow(root) {
     root.querySelector("[data-gw-classroom-key-close]")?.addEventListener("click", closeKeyWindow);
-    root.querySelector("[data-gw-classroom-key-input]")?.addEventListener("input", evt => {
+    root.querySelector("[data-gw-classroom-key-input]")?.addEventListener("input", (evt) => {
       state.keyQuery = evt.target.value || "";
       refreshKeyResults(root);
     });
 
-    root.querySelectorAll("[data-gw-classroom-feature]").forEach(btn => {
+    root.querySelectorAll("[data-gw-classroom-feature]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const key = btn.dataset.gwClassroomFeature;
         if (state.selectedFeatureKeys.has(key)) state.selectedFeatureKeys.delete(key);
@@ -1259,16 +1298,16 @@
       });
     });
 
-    root.querySelectorAll("[data-gw-classroom-codex]").forEach(btn => {
+    root.querySelectorAll("[data-gw-classroom-codex]").forEach((btn) => {
       btn.addEventListener("click", () => {
         window.GridWildGenusCodex?.open?.(btn.dataset.gwClassroomCodex);
       });
     });
 
-    root.querySelectorAll("[data-gw-classroom-study]").forEach(btn => {
+    root.querySelectorAll("[data-gw-classroom-study]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const genus = btn.dataset.gwClassroomStudy || "";
-        const idx = state.records.findIndex(rec => rec.genus === genus);
+        const idx = state.records.findIndex((rec) => rec.genus === genus);
         if (idx >= 0) {
           state.genusIndex = idx;
           state.slideIndex = 0;
@@ -1281,7 +1320,7 @@
     });
   }
 
-  document.addEventListener("click", evt => {
+  document.addEventListener("click", (evt) => {
     const btn = evt.target.closest("[data-gw-classroom-open]");
     if (!btn) return;
     evt.preventDefault();
@@ -1289,7 +1328,7 @@
     open();
   });
 
-  document.addEventListener("keydown", evt => {
+  document.addEventListener("keydown", (evt) => {
     if (evt.key !== "Escape") return;
     if (keyRoot?.isConnected) {
       closeKeyWindow();

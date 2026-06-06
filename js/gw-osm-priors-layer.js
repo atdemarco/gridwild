@@ -128,7 +128,7 @@
         invalidate();
         scheduleRender();
       });
-      document.addEventListener("change", evt => {
+      document.addEventListener("change", (evt) => {
         if (evt.target?.id === "toggleOsmBuildings" && isOsmPriorLens()) {
           ensureOsmLayerEnabled();
         }
@@ -142,12 +142,9 @@
 
   function resizeCanvas() {
     ensureCanvas();
-    canvasLayout = window.GridWildCanvasPerf.layoutPaddedCanvas(
-      canvas,
-      ctx,
-      "osm-priors",
-      { bufferPx: VIEW_PAD_PX }
-    );
+    canvasLayout = window.GridWildCanvasPerf.layoutPaddedCanvas(canvas, ctx, "osm-priors", {
+      bufferPx: VIEW_PAD_PX
+    });
     topLeft = canvasLayout.topLeft;
   }
 
@@ -367,12 +364,24 @@
   function landuseClassForTags(tags = {}) {
     if (tags.building) return "building";
     if (tags.natural === "water" || tags.waterway === "riverbank") return "water";
+    if (
+      tags.amenity === "grave_yard" ||
+      tags.historic === "cemetery" ||
+      tags.landuse === "cemetery"
+    )
+      return "cemetery";
+    if (tags.natural === "wetland") return "wetland";
+    if (tags.natural === "scrub" || tags.natural === "heath") return "scrub";
+    if (tags.landuse === "allotments" || tags.landuse === "orchard") return "cultivated";
     if (tags.natural === "wood" || tags.landuse === "forest") return "wood";
-    if (tags.landuse === "grass" || tags.landuse === "meadow") return "grass";
+    if (tags.natural === "grassland" || tags.landuse === "grass" || tags.landuse === "meadow")
+      return "grass";
     if (
       tags.leisure === "park" ||
       tags.leisure === "garden" ||
       tags.leisure === "nature_reserve" ||
+      tags.boundary === "protected_area" ||
+      tags.boundary === "national_park" ||
       tags.landuse === "recreation_ground"
     ) {
       return "park";
@@ -398,14 +407,14 @@
       paths: (features.trails || []).map((feature, order) => projectFeature(feature, order)),
       roads: (features.roads || []).map((feature, order) => projectFeature(feature, order)),
       water,
-      waterClosed: water.filter(feature => feature.closed),
-      waterOpen: water.filter(feature => !feature.closed),
+      waterClosed: water.filter((feature) => feature.closed),
+      waterOpen: water.filter((feature) => !feature.closed),
       buildings: (features.buildings || []).map((feature, order) => projectFeature(feature, order)),
       landuse,
-      landuseClosed: landuse.filter(feature => feature.closed),
+      landuseClosed: landuse.filter((feature) => feature.closed),
       places: (features.places || [])
         .map((feature, order) => projectFeature(feature, order))
-        .filter(f => f.points.length)
+        .filter((f) => f.points.length)
     };
     projected.index = buildSpatialIndexes(projected);
 
@@ -439,7 +448,7 @@
       t,
       x,
       y,
-      side: Math.abs(cross) < 0.001 ? "center" : (cross > 0 ? "left" : "right")
+      side: Math.abs(cross) < 0.001 ? "center" : cross > 0 ? "left" : "right"
     };
   }
 
@@ -473,8 +482,8 @@
       const pi = pts[i];
       const pj = pts[j];
       const crosses =
-        ((pi.y > py) !== (pj.y > py)) &&
-        (px < (pj.x - pi.x) * (py - pi.y) / ((pj.y - pi.y) || 1e-9) + pi.x);
+        pi.y > py !== pj.y > py &&
+        px < ((pj.x - pi.x) * (py - pi.y)) / (pj.y - pi.y || 1e-9) + pi.x;
       if (crosses) inside = !inside;
     }
 
@@ -509,10 +518,10 @@
 
   function findContainingPolygon(px, py, polygonIndex) {
     const candidates = querySpatialIndex(polygonIndex, boundsAroundPoint(px, py))
-      .filter(poly => poly.closed)
+      .filter((poly) => poly.closed)
       .sort((a, b) => a.order - b.order);
 
-    return candidates.find(poly => pointInPolygon(px, py, poly)) || null;
+    return candidates.find((poly) => pointInPolygon(px, py, poly)) || null;
   }
 
   function nearestIndexedPlaceName(px, py, placeIndex) {
@@ -563,11 +572,7 @@
       }
     }
 
-    const cls = barrier.any
-      ? "crossing"
-      : nearestRoadDistanceM <= ROAD_NEAR_M
-        ? "near"
-        : "none";
+    const cls = barrier.any ? "crossing" : nearestRoadDistanceM <= ROAD_NEAR_M ? "near" : "none";
 
     return { barrier, cls };
   }
@@ -626,16 +631,23 @@
     const nearestRoad = nearestIndexedLine(px, py, index.roadSegments, ROAD_NEAR_M);
     const waterPoly = nearestIndexedPolygonDistance(px, py, index.waterPolygons, WET_EDGE_M);
     const waterLine = nearestIndexedLine(px, py, index.waterLineSegments, WET_EDGE_M);
-    const nearestWaterDistanceM = Math.min(
-      waterPoly.distance,
-      waterLine?.distance ?? Infinity
+    const nearestWaterDistanceM = Math.min(waterPoly.distance, waterLine?.distance ?? Infinity);
+    const building = nearestIndexedPolygonDistance(
+      px,
+      py,
+      index.buildingPolygons,
+      BUILDING_ADJACENT_M
     );
-    const building = nearestIndexedPolygonDistance(px, py, index.buildingPolygons, BUILDING_ADJACENT_M);
     const landuse = findContainingPolygon(px, py, index.landusePolygons);
     const insideWater = waterPoly.inside === true;
     const nearestPathDistanceM = nearestPath?.distance ?? Infinity;
     const nearestRoadDistanceM = nearestRoad?.distance ?? Infinity;
-    const roadSegments = querySpatialIndex(index.roadSegments, { minX: x0, minY: y0, maxX: x1, maxY: y1 });
+    const roadSegments = querySpatialIndex(index.roadSegments, {
+      minX: x0,
+      minY: y0,
+      maxX: x1,
+      maxY: y1
+    });
     const barrierInfo = roadBarrierForCell(x0, y0, x1, y1, roadSegments, nearestRoadDistanceM);
     const landuseClass = insideWater
       ? "water"
@@ -658,6 +670,10 @@
       insidePark: landuseClass === "park",
       insideWood: landuseClass === "wood",
       insideGrass: landuseClass === "grass",
+      insideWetland: landuseClass === "wetland",
+      insideScrub: landuseClass === "scrub",
+      insideCultivated: landuseClass === "cultivated",
+      insideCemetery: landuseClass === "cemetery",
       insideBuilding: building.inside === true,
 
       landuseClass,
@@ -682,7 +698,11 @@
     if (mode === "path-adjacency") {
       if (!Number.isFinite(osm.nearestPathDistanceM) || osm.nearestPathDistanceM > 32) return null;
       const t = 1 - Math.min(1, osm.nearestPathDistanceM / 32);
-      return { fill: "rgb(231, 166, 68)", alpha: 0.12 + 0.46 * t, stroke: osm.isPathAdjacent ? "rgba(255,238,176,0.8)" : null };
+      return {
+        fill: "rgb(231, 166, 68)",
+        alpha: 0.12 + 0.46 * t,
+        stroke: osm.isPathAdjacent ? "rgba(255,238,176,0.8)" : null
+      };
     }
 
     if (mode === "trail-side") {
@@ -696,16 +716,27 @@
     }
 
     if (mode === "wet-edge") {
-      if (osm.insideWater) return { fill: "rgb(53, 130, 178)", alpha: 0.46, stroke: "rgba(177,231,255,0.58)" };
-      if (osm.isWetEdge) return { fill: "rgb(73, 205, 214)", alpha: 0.48, stroke: "rgba(214,255,250,0.86)", hatch: true };
+      if (osm.insideWater)
+        return { fill: "rgb(53, 130, 178)", alpha: 0.46, stroke: "rgba(177,231,255,0.58)" };
+      if (osm.isWetEdge)
+        return {
+          fill: "rgb(73, 205, 214)",
+          alpha: 0.48,
+          stroke: "rgba(214,255,250,0.86)",
+          hatch: true
+        };
       return null;
     }
 
     if (mode === "barrier-map") {
-      if (osm.insideBuilding) return { fill: "rgb(100, 74, 55)", alpha: 0.58, stroke: "rgba(255,225,188,0.72)" };
-      if (osm.roadBarrierClass === "crossing") return { fill: "rgb(205, 59, 54)", alpha: 0.52, stroke: "rgba(255,220,214,0.78)" };
-      if (osm.roadBarrierClass === "near") return { fill: "rgb(226, 143, 65)", alpha: 0.28, stroke: "rgba(255,217,165,0.52)" };
-      if (osm.distanceToBuildingM <= BUILDING_ADJACENT_M) return { fill: "rgb(128, 91, 66)", alpha: 0.22, stroke: "rgba(255,225,188,0.56)" };
+      if (osm.insideBuilding)
+        return { fill: "rgb(100, 74, 55)", alpha: 0.58, stroke: "rgba(255,225,188,0.72)" };
+      if (osm.roadBarrierClass === "crossing")
+        return { fill: "rgb(205, 59, 54)", alpha: 0.52, stroke: "rgba(255,220,214,0.78)" };
+      if (osm.roadBarrierClass === "near")
+        return { fill: "rgb(226, 143, 65)", alpha: 0.28, stroke: "rgba(255,217,165,0.52)" };
+      if (osm.distanceToBuildingM <= BUILDING_ADJACENT_M)
+        return { fill: "rgb(128, 91, 66)", alpha: 0.22, stroke: "rgba(255,225,188,0.56)" };
       return null;
     }
 
@@ -714,6 +745,10 @@
         park: ["rgb(79, 154, 86)", 0.34],
         wood: ["rgb(37, 112, 76)", 0.42],
         grass: ["rgb(156, 174, 77)", 0.34],
+        wetland: ["rgb(76, 150, 134)", 0.38],
+        scrub: ["rgb(109, 142, 76)", 0.34],
+        cultivated: ["rgb(164, 133, 67)", 0.32],
+        cemetery: ["rgb(118, 133, 106)", 0.32],
         water: ["rgb(58, 134, 182)", 0.42],
         building: ["rgb(102, 80, 64)", 0.48]
       };
@@ -821,12 +856,7 @@
       ctx.globalAlpha = 0.82;
       ctx.strokeStyle = style.stroke;
       ctx.lineWidth = 1.2;
-      ctx.strokeRect(
-        rect.x + 0.5,
-        rect.y + 0.5,
-        Math.max(1, rect.w - 1),
-        Math.max(1, rect.h - 1)
-      );
+      ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, Math.max(1, rect.w - 1), Math.max(1, rect.h - 1));
     }
 
     return rect;
@@ -946,9 +976,7 @@
         }
 
         if (mode === "barrier-map") {
-          const barrier = strideCells === 1
-            ? cell.osm.barrierBetweenNeighbors
-            : { any: true };
+          const barrier = strideCells === 1 ? cell.osm.barrierBetweenNeighbors : { any: true };
           if (barrier?.any) barrierRects.push({ x0: x, y0: y, x1, y1, barrier });
         }
       }
@@ -967,10 +995,7 @@
   }
 
   function scheduleRender(evt) {
-    if (
-      evt?.type === "move" &&
-      window.GridWildCanvasPerf?.canvasCoversViewport?.(canvasLayout)
-    ) {
+    if (evt?.type === "move" && window.GridWildCanvasPerf?.canvasCoversViewport?.(canvasLayout)) {
       return;
     }
 
@@ -986,7 +1011,8 @@
   function handleLensChange(lens = window.__gwState?.activeLens) {
     window.__gwState = window.__gwState || {};
     window.__gwState.osmPriorsEnabled = isOsmPriorLens(lens);
-    window.__gwState.osmPriorsMode = getModeForLens(lens) || window.__gwState.osmPriorsMode || "path-adjacency";
+    window.__gwState.osmPriorsMode =
+      getModeForLens(lens) || window.__gwState.osmPriorsMode || "path-adjacency";
 
     if (isOsmPriorLens(lens)) {
       ensureOsmLayerEnabled();

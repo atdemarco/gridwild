@@ -4,7 +4,20 @@
   const STYLE_ID = "gwObservationActivityStyles";
   const DAY_MS = 24 * 60 * 60 * 1000;
   const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const MONTH_LABELS = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+  ];
 
   function esc(s) {
     return String(s ?? "")
@@ -60,7 +73,10 @@
   }
 
   function getObservationUrl(obs) {
-    return obs?.uri || (obs?.id ? `https://www.inaturalist.org/observations/${encodeURIComponent(obs.id)}` : "");
+    return (
+      obs?.uri ||
+      (obs?.id ? `https://www.inaturalist.org/observations/${encodeURIComponent(obs.id)}` : "")
+    );
   }
 
   function injectStyles() {
@@ -368,7 +384,7 @@
     let minDate = null;
     let maxDate = null;
 
-    observations.forEach(obs => {
+    observations.forEach((obs) => {
       const date = parseObservationDate(obs);
       if (!date) return;
 
@@ -392,7 +408,9 @@
 
   function getCalendarRange(summary) {
     const end = summary.maxDate ? new Date(summary.maxDate) : new Date();
-    const start = summary.minDate ? new Date(summary.minDate) : new Date(end.getTime() - 27 * DAY_MS);
+    const start = summary.minDate
+      ? new Date(summary.minDate)
+      : new Date(end.getTime() - 27 * DAY_MS);
     start.setHours(0, 0, 0, 0);
     end.setHours(0, 0, 0, 0);
 
@@ -411,7 +429,7 @@
 
   function renderCalendar(summary, selectedDay) {
     const { start, end } = getCalendarRange(summary);
-    const maxCount = Math.max(1, ...Array.from(summary.days.values()).map(list => list.length));
+    const maxCount = Math.max(1, ...Array.from(summary.days.values()).map((list) => list.length));
     const days = [];
     const monthLabels = [];
     const totalDays = Math.floor((end - start) / DAY_MS) + 1;
@@ -420,7 +438,9 @@
     for (let w = 0; w < weeks; w++) {
       const d = new Date(start.getTime() + w * 7 * DAY_MS);
       if (d.getDate() <= 7 || w === 0) {
-        monthLabels.push(`<div class="gw-activity-month" style="grid-column:${w + 2};grid-row:1;">${MONTH_LABELS[d.getMonth()]}</div>`);
+        monthLabels.push(
+          `<div class="gw-activity-month" style="grid-column:${w + 2};grid-row:1;">${MONTH_LABELS[d.getMonth()]}</div>`
+        );
       }
     }
 
@@ -430,7 +450,11 @@
       const count = summary.days.get(key)?.length || 0;
       const week = Math.floor(i / 7);
       const day = date.getDay();
-      const label = date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+      const label = date.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      });
       days.push(`
         <button
           class="gw-activity-day ${key === selectedDay ? "is-selected" : ""}"
@@ -454,11 +478,19 @@
   }
 
   function renderClock(summary, selectedHour) {
-    const maxCount = Math.max(1, ...summary.hours.map(list => list.length));
-    return summary.hours.map((list, hour) => {
-      const height = Math.max(3, (list.length / maxCount) * 150);
-      const label = hour === 0 ? "12a" : hour === 12 ? "12p" : hour % 6 === 0 ? String(hour > 12 ? hour - 12 : hour) : "";
-      return `
+    const maxCount = Math.max(1, ...summary.hours.map((list) => list.length));
+    return summary.hours
+      .map((list, hour) => {
+        const height = Math.max(3, (list.length / maxCount) * 150);
+        const label =
+          hour === 0
+            ? "12a"
+            : hour === 12
+              ? "12p"
+              : hour % 6 === 0
+                ? String(hour > 12 ? hour - 12 : hour)
+                : "";
+        return `
         <button
           class="gw-activity-hour ${hour === selectedHour ? "is-selected" : ""}"
           type="button"
@@ -470,7 +502,8 @@
           <span class="gw-activity-hour-label">${esc(label)}</span>
         </button>
       `;
-    }).join("");
+      })
+      .join("");
   }
 
   function hourLabel(hour) {
@@ -490,20 +523,28 @@
   }
 
   function renderObservationRows(observations) {
-    const rows = observations.slice(0, 30).map(obs => {
-      const url = getObservationUrl(obs);
-      const date = parseObservationDate(obs);
-      const observed = date
-        ? date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-        : "unknown";
-      const row = `
+    const rows = observations
+      .slice(0, 30)
+      .map((obs) => {
+        const url = getObservationUrl(obs);
+        const date = parseObservationDate(obs);
+        const observed = date
+          ? date.toLocaleString([], {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit"
+            })
+          : "unknown";
+        const row = `
         <span class="gw-activity-row-name">${esc(getDisplayName(obs))}</span>
         <span class="gw-activity-row-meta">${esc(observed)}</span>
       `;
-      return url
-        ? `<a class="gw-activity-row" href="${esc(url)}" target="_blank" rel="noopener">${row}</a>`
-        : `<div class="gw-activity-row">${row}</div>`;
-    }).join("");
+        return url
+          ? `<a class="gw-activity-row" href="${esc(url)}" target="_blank" rel="noopener">${row}</a>`
+          : `<div class="gw-activity-row">${row}</div>`;
+      })
+      .join("");
 
     if (!observations.length) {
       return `<div class="gw-observation-gallery-subtitle">No observations in this slice yet.</div>`;
@@ -550,7 +591,7 @@
       return {
         title: selectedDay ? `${selectedDay} Timeline` : "Timeline",
         mode: "day",
-        observations: selectedDay ? (summary.days.get(selectedDay) || []) : observations
+        observations: selectedDay ? summary.days.get(selectedDay) || [] : observations
       };
     }
 
@@ -652,13 +693,13 @@
       `;
 
       modal.querySelector("#gwObservationActivityCloseBtn").onclick = close;
-      modal.querySelector("#gwActivityCreateWildlistBtn")?.addEventListener("click", evt => {
+      modal.querySelector("#gwActivityCreateWildlistBtn")?.addEventListener("click", (evt) => {
         evt.preventDefault();
         createSelectedWildlist();
       });
 
-      modal.querySelectorAll(".gw-activity-day").forEach(btn => {
-        btn.addEventListener("click", evt => {
+      modal.querySelectorAll(".gw-activity-day").forEach((btn) => {
+        btn.addEventListener("click", (evt) => {
           evt.preventDefault();
           if (btn.dataset.count === "0") return;
           selectedDay = btn.dataset.day;
@@ -667,8 +708,8 @@
         });
       });
 
-      modal.querySelectorAll(".gw-activity-hour").forEach(btn => {
-        btn.addEventListener("click", evt => {
+      modal.querySelectorAll(".gw-activity-hour").forEach((btn) => {
+        btn.addEventListener("click", (evt) => {
           evt.preventDefault();
           selectedHour = Number(btn.dataset.hour);
           render();
@@ -676,11 +717,11 @@
       });
     }
 
-    modal.addEventListener("click", evt => {
+    modal.addEventListener("click", (evt) => {
       if (evt.target === modal) close();
     });
 
-    modal.addEventListener("keydown", evt => {
+    modal.addEventListener("keydown", (evt) => {
       if (evt.key === "Escape") close();
     });
 

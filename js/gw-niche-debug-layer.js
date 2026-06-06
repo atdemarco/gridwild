@@ -13,7 +13,13 @@
   let lastInspection = null;
   let listenersBound = false;
 
-  const REGION_MODES = new Set(["regions-pass1", "regions-pass2", "regions-pass3", "region-boundaries", "region-evidence"]);
+  const REGION_MODES = new Set([
+    "regions-pass1",
+    "regions-pass2",
+    "regions-pass3",
+    "region-boundaries",
+    "region-evidence"
+  ]);
   const EDGE_INSPECT_MODES = new Set(["graph-strong-links", "graph-cut-links"]);
 
   function ensurePane() {
@@ -142,14 +148,16 @@
       if (mode === "osm-context") {
         fillCell(cell, landuseColor(cell));
       } else if (mode === "path-adjacent") {
-        if (cell.osm?.isPathAdjacent) fillCell(cell, "rgba(236, 170, 66, 0.52)", "rgba(255,240,180,0.65)");
+        if (cell.osm?.isPathAdjacent)
+          fillCell(cell, "rgba(236, 170, 66, 0.52)", "rgba(255,240,180,0.65)");
       } else if (mode === "path-side") {
         if (!cell.osm?.isPathAdjacent) continue;
-        const fill = cell.osm.nearestPathSide === "left"
-          ? "rgba(68, 151, 224, 0.48)"
-          : cell.osm.nearestPathSide === "right"
-            ? "rgba(232, 112, 72, 0.48)"
-            : "rgba(226, 204, 92, 0.34)";
+        const fill =
+          cell.osm.nearestPathSide === "left"
+            ? "rgba(68, 151, 224, 0.48)"
+            : cell.osm.nearestPathSide === "right"
+              ? "rgba(232, 112, 72, 0.48)"
+              : "rgba(226, 204, 92, 0.34)";
         fillCell(cell, fill);
       }
     }
@@ -173,7 +181,8 @@
 
   function drawGraphEdges(result, cutOnly) {
     const passKey = window.GridWildNichePartition?.passWeightKey?.(pass) || "pass1Context";
-    const threshold = window.GridWildNichePartition?.thresholdForPass?.(pass, result.options || {}) || 0.5;
+    const threshold =
+      window.GridWildNichePartition?.thresholdForPass?.(pass, result.options || {}) || 0.5;
 
     ctx.lineCap = "round";
     for (const edge of result.graph.edges) {
@@ -197,7 +206,8 @@
 
   function activeEdgeInfo(edge, result) {
     const passKey = window.GridWildNichePartition?.passWeightKey?.(pass) || "pass1Context";
-    const threshold = window.GridWildNichePartition?.thresholdForPass?.(pass, result.options || {}) || 0.5;
+    const threshold =
+      window.GridWildNichePartition?.thresholdForPass?.(pass, result.options || {}) || 0.5;
     const weight = Number(edge.passWeights?.[passKey] ?? edge.weight ?? 0);
     return {
       passKey,
@@ -230,19 +240,30 @@
     if (r.sameTrailSide) lines.push("same trail side");
     if (r.bothPathAdjacent) lines.push("both path-adjacent");
     if (r.bothWetEdge) lines.push("both wet-edge");
-    if (Number.isFinite(r.signalSimilarity)) lines.push(`signal similarity: ${Number(r.signalSimilarity).toFixed(2)}`);
+    if (Number.isFinite(r.signalSimilarity))
+      lines.push(`signal similarity: ${Number(r.signalSimilarity).toFixed(2)}`);
     if (Number(r.signalNeighborhoodSize) > 1) {
-      lines.push(`signal pool: ${Number(r.signalNeighborhoodSize)}x${Number(r.signalNeighborhoodSize)}`);
+      lines.push(
+        `signal pool: ${Number(r.signalNeighborhoodSize)}x${Number(r.signalNeighborhoodSize)}`
+      );
     }
-    if (Number.isFinite(r.signalSupport)) lines.push(`signal support: ${Number(r.signalSupport).toFixed(2)}`);
+    if (Number.isFinite(r.signalSupport))
+      lines.push(`signal support: ${Number(r.signalSupport).toFixed(2)}`);
     if (Number(r.signalActiveCellsA) || Number(r.signalActiveCellsB)) {
-      lines.push(`active cells: ${Number(r.signalActiveCellsA) || 0} / ${Number(r.signalActiveCellsB) || 0}`);
+      lines.push(
+        `active cells: ${Number(r.signalActiveCellsA) || 0} / ${Number(r.signalActiveCellsB) || 0}`
+      );
     }
-    if ((r.roadBarrierPenalty || 0) > 0) lines.push(`road penalty: ${Number(r.roadBarrierPenalty).toFixed(2)}`);
-    if ((r.waterBarrierPenalty || 0) > 0) lines.push(`water penalty: ${Number(r.waterBarrierPenalty).toFixed(2)}`);
-    if ((r.insideBuildingPenalty || 0) > 0) lines.push(`building penalty: ${Number(r.insideBuildingPenalty).toFixed(2)}`);
-    if ((r.gradientPenalty || 0) > 0) lines.push(`gradient penalty: ${Number(r.gradientPenalty).toFixed(2)}`);
-    if ((r.abruptLandusePenalty || 0) > 0) lines.push(`land-use transition penalty: ${Number(r.abruptLandusePenalty).toFixed(2)}`);
+    if ((r.roadBarrierPenalty || 0) > 0)
+      lines.push(`road penalty: ${Number(r.roadBarrierPenalty).toFixed(2)}`);
+    if ((r.waterBarrierPenalty || 0) > 0)
+      lines.push(`water penalty: ${Number(r.waterBarrierPenalty).toFixed(2)}`);
+    if ((r.insideBuildingPenalty || 0) > 0)
+      lines.push(`building penalty: ${Number(r.insideBuildingPenalty).toFixed(2)}`);
+    if ((r.gradientPenalty || 0) > 0)
+      lines.push(`gradient penalty: ${Number(r.gradientPenalty).toFixed(2)}`);
+    if ((r.abruptLandusePenalty || 0) > 0)
+      lines.push(`land-use transition penalty: ${Number(r.abruptLandusePenalty).toFixed(2)}`);
 
     return lines;
   }
@@ -259,7 +280,7 @@
   function drawRegions(result) {
     const regions = regionsForMode(result);
     for (const region of regions) {
-      const fill = regionColor(region.id, mode === "region-boundaries" ? 0.10 : 0.36);
+      const fill = regionColor(region.id, mode === "region-boundaries" ? 0.1 : 0.36);
       for (const cell of region.cells) {
         fillCell(cell, fill);
       }
@@ -273,7 +294,12 @@
       ctx.lineWidth = 1.4;
       for (const cell of region.cells) {
         const rect = cellRect(cell);
-        ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, Math.max(1, rect.w - 1), Math.max(1, rect.h - 1));
+        ctx.strokeRect(
+          rect.x + 0.5,
+          rect.y + 0.5,
+          Math.max(1, rect.w - 1),
+          Math.max(1, rect.h - 1)
+        );
       }
     }
   }
@@ -290,7 +316,8 @@
     }
 
     canvas.style.display = "block";
-    canvas.style.pointerEvents = (mode === "region-evidence" || EDGE_INSPECT_MODES.has(mode)) ? "auto" : "none";
+    canvas.style.pointerEvents =
+      mode === "region-evidence" || EDGE_INSPECT_MODES.has(mode) ? "auto" : "none";
 
     if (mode === "osm-context" || mode === "path-adjacent" || mode === "path-side") {
       drawCellsByMode(lastResult);
@@ -395,7 +422,8 @@
   }
 
   function handleCanvasClick(evt) {
-    if (!visible || !lastResult || (mode !== "region-evidence" && !EDGE_INSPECT_MODES.has(mode))) return;
+    if (!visible || !lastResult || (mode !== "region-evidence" && !EDGE_INSPECT_MODES.has(mode)))
+      return;
     const rect = canvas.getBoundingClientRect();
     const containerPoint = L.point(evt.clientX - rect.left, evt.clientY - rect.top);
 
@@ -403,22 +431,22 @@
       const hit = nearestDisplayedEdge(containerPoint);
       lastInspection = hit
         ? {
-          type: "edge",
-          id: hit.edge.id,
-          a: hit.edge.a,
-          b: hit.edge.b,
-          weight: hit.info.weight,
-          threshold: hit.info.threshold,
-          cut: hit.info.cut,
-          passWeights: hit.edge.passWeights,
-          reasons: hit.edge.reasons,
-          evidence: evidenceForEdge(hit.edge, hit.info)
-        }
+            type: "edge",
+            id: hit.edge.id,
+            a: hit.edge.a,
+            b: hit.edge.b,
+            weight: hit.info.weight,
+            threshold: hit.info.threshold,
+            cut: hit.info.cut,
+            passWeights: hit.edge.passWeights,
+            reasons: hit.edge.reasons,
+            evidence: evidenceForEdge(hit.edge, hit.info)
+          }
         : {
-          type: "edge",
-          id: "No edge selected",
-          evidence: ["Click closer to a visible graph link."]
-        };
+            type: "edge",
+            id: "No edge selected",
+            evidence: ["Click closer to a visible graph link."]
+          };
       console.info?.("GridWild niche edge evidence", lastInspection);
       notify();
       return;
@@ -430,11 +458,11 @@
 
     lastInspection = region
       ? {
-        type: "region",
-        id: region.id,
-        evidence: region.evidence,
-        stats: region.stats
-      }
+          type: "region",
+          id: region.id,
+          evidence: region.evidence,
+          stats: region.stats
+        }
       : null;
 
     console.info?.("GridWild niche evidence", lastInspection);
@@ -442,15 +470,17 @@
   }
 
   function notify() {
-    window.dispatchEvent(new CustomEvent("gwNicheDebugUpdated", {
-      detail: {
-        visible,
-        mode,
-        pass,
-        result: lastResult,
-        inspection: lastInspection
-      }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwNicheDebugUpdated", {
+        detail: {
+          visible,
+          mode,
+          pass,
+          result: lastResult,
+          inspection: lastInspection
+        }
+      })
+    );
   }
 
   window.GridWildNicheDebug = {

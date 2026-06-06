@@ -3,10 +3,7 @@ const { accountTableHint, requireAccountSession } = require("./_gridwild-account
 
 const PRESENCE_TABLE = "player_presence";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function tableHint(err) {
   const message = accountTableHint(err);
@@ -35,9 +32,7 @@ exports.handler = async function (event) {
     });
 
     const visibility = cleanVisibility(body.visibility);
-    const status = visibility === "hidden"
-      ? "offline"
-      : cleanStatus(body.status || "online");
+    const status = visibility === "hidden" ? "offline" : cleanStatus(body.status || "online");
     const now = new Date().toISOString();
     const patch = {
       player_id: playerId,
@@ -57,9 +52,7 @@ exports.handler = async function (event) {
       patch.accuracy_meters = Number.isFinite(Number(body.accuracy_meters))
         ? Number(body.accuracy_meters)
         : null;
-      patch.heading = Number.isFinite(Number(body.heading))
-        ? Number(body.heading)
-        : null;
+      patch.heading = Number.isFinite(Number(body.heading)) ? Number(body.heading) : null;
       patch.last_seen_at = now;
       patch.last_logout_at = null;
     } else {

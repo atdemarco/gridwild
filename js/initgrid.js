@@ -13,9 +13,7 @@ window.shouldShowSmallText = shouldShowSmallText;
 function getCurrentUserCellIndices() {
   if (typeof lastFix === "undefined" || !lastFix) return null;
 
-  const p = map.options.crs.project(
-    L.latLng(lastFix.latitude, lastFix.longitude)
-  );
+  const p = map.options.crs.project(L.latLng(lastFix.latitude, lastFix.longitude));
 
   return {
     ix: Math.floor(p.x / GRID_SIZE_M),
@@ -93,18 +91,24 @@ window.GridWildCanvasPerf = (function (existing = {}) {
   function getDpr(label = "canvas") {
     const nativeDpr = window.devicePixelRatio || 1;
     const configuredCap = Number(window.__gwState?.canvasDprCap);
-    const cap = Number.isFinite(configuredCap) && configuredCap > 0
-      ? configuredCap
-      : (isMobileLike() ? 1.5 : nativeDpr);
+    const cap =
+      Number.isFinite(configuredCap) && configuredCap > 0
+        ? configuredCap
+        : isMobileLike()
+          ? 1.5
+          : nativeDpr;
 
     return Math.max(1, Math.min(nativeDpr, cap));
   }
 
   function getBufferPx(requestedPx, viewport = map.getSize()) {
     const requested = Number(requestedPx);
-    const preferred = Number.isFinite(requested) && requested >= 0
-      ? requested
-      : (isMobileLike() ? MOBILE_BUFFER_PX : DEFAULT_BUFFER_PX);
+    const preferred =
+      Number.isFinite(requested) && requested >= 0
+        ? requested
+        : isMobileLike()
+          ? MOBILE_BUFFER_PX
+          : DEFAULT_BUFFER_PX;
     const width = Math.max(1, Number(viewport?.x) || 1);
     const height = Math.max(1, Number(viewport?.y) || 1);
     const areaDelta = width * height * (MAX_PADDED_AREA_RATIO - 1);
@@ -150,10 +154,7 @@ window.GridWildCanvasPerf = (function (existing = {}) {
     if (!layout || layout.zoom !== map.getZoom()) return false;
 
     const viewport = map.getSize();
-    if (
-      layout.viewportWidth !== viewport.x ||
-      layout.viewportHeight !== viewport.y
-    ) {
+    if (layout.viewportWidth !== viewport.x || layout.viewportHeight !== viewport.y) {
       return false;
     }
 
@@ -161,10 +162,12 @@ window.GridWildCanvasPerf = (function (existing = {}) {
     const bottomRight = map.containerPointToLayerPoint(viewport);
     const edge = Math.max(0, Math.min(layout.bufferPx, Number(edgePx) || 0));
 
-    return topLeft.x >= layout.topLeft.x + edge &&
+    return (
+      topLeft.x >= layout.topLeft.x + edge &&
       topLeft.y >= layout.topLeft.y + edge &&
       bottomRight.x <= layout.topLeft.x + layout.width - edge &&
-      bottomRight.y <= layout.topLeft.y + layout.height - edge;
+      bottomRight.y <= layout.topLeft.y + layout.height - edge
+    );
   }
 
   return {
@@ -208,25 +211,27 @@ function updateGridHeatMeterTransform() {
   const transform = crs?.transformation;
   const scale = crs?.scale?.(map.getZoom());
   const pixelOrigin = map.getPixelOrigin?.();
-  const values = transform && Number.isFinite(scale) && pixelOrigin
-    ? {
-      a: Number(transform._a),
-      b: Number(transform._b),
-      c: Number(transform._c),
-      d: Number(transform._d),
-      scale,
-      originX: pixelOrigin.x + gridHeatCanvasTopLeft.x,
-      originY: pixelOrigin.y + gridHeatCanvasTopLeft.y
-    }
-    : null;
+  const values =
+    transform && Number.isFinite(scale) && pixelOrigin
+      ? {
+          a: Number(transform._a),
+          b: Number(transform._b),
+          c: Number(transform._c),
+          d: Number(transform._d),
+          scale,
+          originX: pixelOrigin.x + gridHeatCanvasTopLeft.x,
+          originY: pixelOrigin.y + gridHeatCanvasTopLeft.y
+        }
+      : null;
 
-  gridHeatMeterTransform = values &&
+  gridHeatMeterTransform =
+    values &&
     Number.isFinite(values.a) &&
     Number.isFinite(values.b) &&
     Number.isFinite(values.c) &&
     Number.isFinite(values.d)
-    ? values
-    : null;
+      ? values
+      : null;
 }
 
 function gridHeatPointForMeters(x, y) {
@@ -252,7 +257,7 @@ function resizeGridHeatCanvas() {
   updateGridHeatMeterTransform();
 }
 
-window.setShimmerVisible = function(show = true) {
+window.setShimmerVisible = function (show = true) {
   window.__gwState = window.__gwState || {};
   window.__gwState.showShimmer = !!show;
 
@@ -272,7 +277,6 @@ map.getPane("gridShimmerPane").style.display = "none";
 
 // 20 ft in meters
 const GRID_SIZE_M = 20 * 0.3048;
-
 
 function getCaptiveFrac(metrics) {
   if (!metrics) return 0;
@@ -296,9 +300,9 @@ function gridDateIsoFromMs(ms) {
 }
 
 function captiveFracToShimmerStyle(frac) {
-  if (frac < 0.20) return null;
+  if (frac < 0.2) return null;
 
-  if (frac < 0.40) {
+  if (frac < 0.4) {
     return {
       tileSizePx: 18,
       streakWidthPx: 1.0,
@@ -308,11 +312,11 @@ function captiveFracToShimmerStyle(frac) {
     };
   }
 
-  if (frac < 0.70) {
+  if (frac < 0.7) {
     return {
       tileSizePx: 16,
       streakWidthPx: 1.15,
-      overlayOpacity: 0.40,
+      overlayOpacity: 0.4,
       strokeA: "rgba(255,255,255,0.42)",
       strokeB: "rgba(255,255,255,0.16)"
     };
@@ -427,9 +431,7 @@ function macroCellBoundsLL(ix0, iy0) {
   const x0 = ix0 * GRID_SIZE_M;
   const y0 = iy0 * GRID_SIZE_M;
   const sw = map.options.crs.unproject(L.point(x0, y0));
-  const ne = map.options.crs.unproject(
-    L.point(x0 + CENTER_MACRO_SIZE_M, y0 + CENTER_MACRO_SIZE_M)
-  );
+  const ne = map.options.crs.unproject(L.point(x0 + CENTER_MACRO_SIZE_M, y0 + CENTER_MACRO_SIZE_M));
   return { sw, ne };
 }
 
@@ -495,11 +497,12 @@ function getGodsEyeBlastState(now = Date.now()) {
   const expandMs = Number(pulse.expandMs || GODS_EYE_BLAST_EXPAND_MS);
   const holdMs = Number(pulse.holdMs || GODS_EYE_BLAST_HOLD_MS);
   const collapseMs = Number(pulse.collapseMs || GODS_EYE_BLAST_COLLAPSE_MS);
-  const phase = elapsed <= expandMs
-    ? smoothStep(elapsed / expandMs)
-    : elapsed <= expandMs + holdMs
-      ? 1
-      : smoothStep((duration - elapsed) / collapseMs);
+  const phase =
+    elapsed <= expandMs
+      ? smoothStep(elapsed / expandMs)
+      : elapsed <= expandMs + holdMs
+        ? 1
+        : smoothStep((duration - elapsed) / collapseMs);
 
   const maxRadius = Number(pulse.maxRadiusCells || GODS_EYE_BLAST_MAX_RADIUS_CELLS);
   return {
@@ -579,10 +582,7 @@ function isGridWildTransientVisibleCell(key) {
 function getGridWildTransientRevealStrength(key, now = Date.now()) {
   if (isGodsEyeTransientVisibleCell(key)) return 1;
 
-  return Math.max(
-    getAvatarTransientRevealStrength(key),
-    getGodsEyeBlastRevealStrength(key, now)
-  );
+  return Math.max(getAvatarTransientRevealStrength(key), getGodsEyeBlastRevealStrength(key, now));
 }
 
 function isGridWildTransientRevealCell(key, now = Date.now()) {
@@ -630,7 +630,6 @@ window.getGridWildTransientRevealStrength = getGridWildTransientRevealStrength;
 window.isGridWildTransientRevealCell = isGridWildTransientRevealCell;
 window.triggerGodsEyeBlast = triggerGodsEyeBlast;
 
-
 function markCenterMacroVisitedByGodsEye(force = false) {
   const state = window.__gwState || {};
   if (!state.godsEyeEnabled) return;
@@ -646,9 +645,7 @@ function markCenterMacroVisitedByGodsEye(force = false) {
   const timestamp = Date.now();
   const keys = getCenterMacroCellKeys();
 
-
-
-  keys.forEach(key => {
+  keys.forEach((key) => {
     window.GridWildFog.markVisited(key, timestamp);
   });
 
@@ -657,7 +654,7 @@ function markCenterMacroVisitedByGodsEye(force = false) {
   }
 
   if (typeof window.updateGrid === "function") {
-  window.updateGrid();
+    window.updateGrid();
   }
 
   if (typeof window.refreshGridWildMobileInfo === "function") {
@@ -668,7 +665,6 @@ function markCenterMacroVisitedByGodsEye(force = false) {
 window.markCenterMacroVisitedByGodsEye = markCenterMacroVisitedByGodsEye;
 
 function summarizeCenterMacroSquare() {
-
   const counts = window.__staticGridCounts;
   if (!(counts instanceof Map) || (counts.size === 0 && !window.GridWildPyriteLake?.hasData?.())) {
     return null;
@@ -690,9 +686,10 @@ function summarizeCenterMacroSquare() {
     nCells += 1;
 
     const [ix, iy] = key.split(",").map(Number);
-    const m = Number.isFinite(ix) && Number.isFinite(iy)
-      ? getDisplayMetricsForCell(ix, iy, counts.get(key) || null)
-      : counts.get(key);
+    const m =
+      Number.isFinite(ix) && Number.isFinite(iy)
+        ? getDisplayMetricsForCell(ix, iy, counts.get(key) || null)
+        : counts.get(key);
     if (!m) continue;
 
     const obs = m.count || 0;
@@ -710,13 +707,10 @@ function summarizeCenterMacroSquare() {
     if (observers > maxObservers) maxObservers = observers;
   }
 
-
   // COOL CUSTOM FANCY METRICS!
-  const speciesDensity = sumObs > 0 ? (sumSpecies / sumObs) : 0;
+  const speciesDensity = sumObs > 0 ? sumSpecies / sumObs : 0;
   //const discoveryScore = sumSpecies / (sumObservers + 1);
-  const discoveryScore =  sumSpecies / Math.max(1, sumObservers); // smooth
-
-
+  const discoveryScore = sumSpecies / Math.max(1, sumObservers); // smooth
 
   return {
     nCells,
@@ -735,7 +729,6 @@ function summarizeCenterMacroSquare() {
   };
 }
 
-
 function getCellKeyForLatLng(lat, lng) {
   const p = map.options.crs.project(L.latLng(lat, lng));
   const ix = Math.floor(p.x / GRID_SIZE_M);
@@ -745,184 +738,184 @@ function getCellKeyForLatLng(lat, lng) {
 
 window.getCellKeyForLatLng = getCellKeyForLatLng;
 
-window.GridWildGrid = window.GridWildGrid || (function () {
-  function latLngToCell(latlng) {
-    const ll = Array.isArray(latlng)
-      ? L.latLng(latlng[0], latlng[1])
-      : L.latLng(latlng);
-    const p = map.options.crs.project(ll);
-    return {
-      ix: Math.floor(p.x / GRID_SIZE_M),
-      iy: Math.floor(p.y / GRID_SIZE_M)
-    };
-  }
+window.GridWildGrid =
+  window.GridWildGrid ||
+  (function () {
+    function latLngToCell(latlng) {
+      const ll = Array.isArray(latlng) ? L.latLng(latlng[0], latlng[1]) : L.latLng(latlng);
+      const p = map.options.crs.project(ll);
+      return {
+        ix: Math.floor(p.x / GRID_SIZE_M),
+        iy: Math.floor(p.y / GRID_SIZE_M)
+      };
+    }
 
-  function cellKey(ix, iy) {
-    return `${ix},${iy}`;
-  }
+    function cellKey(ix, iy) {
+      return `${ix},${iy}`;
+    }
 
-  function normalizeCellBounds(a, b) {
-    return {
-      minIx: Math.min(a.ix, b.ix),
-      maxIx: Math.max(a.ix, b.ix),
-      minIy: Math.min(a.iy, b.iy),
-      maxIy: Math.max(a.iy, b.iy)
-    };
-  }
+    function normalizeCellBounds(a, b) {
+      return {
+        minIx: Math.min(a.ix, b.ix),
+        maxIx: Math.max(a.ix, b.ix),
+        minIy: Math.min(a.iy, b.iy),
+        maxIy: Math.max(a.iy, b.iy)
+      };
+    }
 
-  function boundsToLatLngBounds(bounds) {
-    const { sw } = fineCellBoundsLL(bounds.minIx, bounds.minIy);
-    const { ne } = fineCellBoundsLL(bounds.maxIx, bounds.maxIy);
-    return L.latLngBounds(sw, ne);
-  }
+    function boundsToLatLngBounds(bounds) {
+      const { sw } = fineCellBoundsLL(bounds.minIx, bounds.minIy);
+      const { ne } = fineCellBoundsLL(bounds.maxIx, bounds.maxIy);
+      return L.latLngBounds(sw, ne);
+    }
 
-  function centerAreaBounds(radiusCells = 7) {
-    const radius = Math.max(1, Math.round(Number(radiusCells) || 7));
-    const center = getCenterFineCell();
-    return {
-      minIx: center.ix - radius,
-      maxIx: center.ix + radius,
-      minIy: center.iy - radius,
-      maxIy: center.iy + radius
-    };
-  }
+    function centerAreaBounds(radiusCells = 7) {
+      const radius = Math.max(1, Math.round(Number(radiusCells) || 7));
+      const center = getCenterFineCell();
+      return {
+        minIx: center.ix - radius,
+        maxIx: center.ix + radius,
+        minIy: center.iy - radius,
+        maxIy: center.iy + radius
+      };
+    }
 
-  function cellsForBounds(bounds) {
-    const out = [];
-    if (!bounds) return out;
+    function cellsForBounds(bounds) {
+      const out = [];
+      if (!bounds) return out;
 
-    for (let iy = bounds.minIy; iy <= bounds.maxIy; iy++) {
-      for (let ix = bounds.minIx; ix <= bounds.maxIx; ix++) {
-        const key = cellKey(ix, iy);
-        const baseMetrics =
-          window.__richGridMetrics?.get(key) ||
-          window.__staticGridCounts?.get(key) ||
-          null;
-        const displayMetrics = getDisplayMetricsForCell(ix, iy, baseMetrics || null);
+      for (let iy = bounds.minIy; iy <= bounds.maxIy; iy++) {
+        for (let ix = bounds.minIx; ix <= bounds.maxIx; ix++) {
+          const key = cellKey(ix, iy);
+          const baseMetrics =
+            window.__richGridMetrics?.get(key) || window.__staticGridCounts?.get(key) || null;
+          const displayMetrics = getDisplayMetricsForCell(ix, iy, baseMetrics || null);
 
-        out.push({
-          ix,
-          iy,
-          key,
-          metrics: displayMetrics || null,
-          style: displayMetrics ? metricsToFill(displayMetrics) : null,
-          bounds: fineCellBoundsLL(ix, iy)
-        });
+          out.push({
+            ix,
+            iy,
+            key,
+            metrics: displayMetrics || null,
+            style: displayMetrics ? metricsToFill(displayMetrics) : null,
+            bounds: fineCellBoundsLL(ix, iy)
+          });
+        }
       }
+
+      return out;
     }
 
-    return out;
-  }
+    function selectedIconicTaxa() {
+      const taxa = window.__gwFilters?.iconicTaxa || [];
+      return Array.isArray(taxa) ? taxa.filter(Boolean) : [];
+    }
 
-  function selectedIconicTaxa() {
-    const taxa = window.__gwFilters?.iconicTaxa || [];
-    return Array.isArray(taxa) ? taxa.filter(Boolean) : [];
-  }
+    function filteredSquareGeneraRecord(rec, taxa) {
+      if (!rec || !taxa?.length) return rec;
 
-  function filteredSquareGeneraRecord(rec, taxa) {
-    if (!rec || !taxa?.length) return rec;
+      const selected = new Set(taxa);
+      const genera = (Array.isArray(rec.genera) ? rec.genera : []).filter((row) =>
+        selected.has(row?.iconic_taxon_name || "Unknown")
+      );
 
-    const selected = new Set(taxa);
-    const genera = (Array.isArray(rec.genera) ? rec.genera : [])
-      .filter(row => selected.has(row?.iconic_taxon_name || "Unknown"));
+      if (!genera.length) return null;
 
-    if (!genera.length) return null;
+      const totalCount = (Array.isArray(rec.genera) ? rec.genera : []).reduce(
+        (sum, row) => sum + (Number(row?.count) || 0),
+        0
+      );
+      const filteredCount = genera.reduce((sum, row) => sum + (Number(row?.count) || 0), 0);
+      const ratio = totalCount > 0 ? Math.max(0, Math.min(1, filteredCount / totalCount)) : 1;
 
-    const totalCount = (Array.isArray(rec.genera) ? rec.genera : [])
-      .reduce((sum, row) => sum + (Number(row?.count) || 0), 0);
-    const filteredCount = genera.reduce((sum, row) => sum + (Number(row?.count) || 0), 0);
-    const ratio = totalCount > 0
-      ? Math.max(0, Math.min(1, filteredCount / totalCount))
-      : 1;
+      const topObservers = (Array.isArray(rec.top_observers) ? rec.top_observers : [])
+        .map((row) => ({
+          ...row,
+          count: Math.round((Number(row?.count) || 0) * ratio),
+          species: Math.max(1, Math.round((Number(row?.species) || 0) * ratio))
+        }))
+        .filter((row) => row.count > 0);
 
-    const topObservers = (Array.isArray(rec.top_observers) ? rec.top_observers : [])
-      .map(row => ({
-        ...row,
-        count: Math.round((Number(row?.count) || 0) * ratio),
-        species: Math.max(1, Math.round((Number(row?.species) || 0) * ratio))
-      }))
-      .filter(row => row.count > 0);
+      return {
+        ...rec,
+        genera,
+        top_observers: topObservers
+      };
+    }
+
+    function activeFilterSignature() {
+      return [
+        window.__gwFilters?.onlyMe === true ? "me" : "all",
+        selectedIconicTaxa().sort().join(",")
+      ].join("|");
+    }
+
+    async function mergedGeneraRecordForBounds(bounds, options = {}) {
+      if (!bounds) return { genera: [], __metrics: null };
+
+      if (options.applyFilters && window.GridWildMeOverlayFilter?.isActive?.()) {
+        return (
+          window.GridWildMeOverlayFilter.generaRecordForBounds?.(bounds) || {
+            genera: [],
+            top_observers: [],
+            __metrics: null
+          }
+        );
+      }
+
+      const jobs = [];
+
+      for (let iy = bounds.minIy; iy <= bounds.maxIy; iy++) {
+        for (let ix = bounds.minIx; ix <= bounds.maxIx; ix++) {
+          if (!hasStaticGoldCellForGenera(ix, iy)) continue;
+          jobs.push(getSquareGeneraRecord(ix, iy));
+        }
+      }
+
+      let records = (await Promise.all(jobs)).filter(Boolean);
+      const taxa = options.applyFilters ? selectedIconicTaxa() : [];
+
+      if (options.applyFilters) {
+        if (taxa.length) {
+          records = records.map((rec) => filteredSquareGeneraRecord(rec, taxa)).filter(Boolean);
+        }
+      }
+
+      const pyriteRecords =
+        window.GridWildPyriteLake?.recordsForBounds?.(bounds, {
+          iconicTaxa: taxa
+        }) || [];
+      records = records.concat(pyriteRecords);
+
+      return mergeSquareGeneraRecords(records);
+    }
+
+    function currentUserCell() {
+      return getCurrentUserCellIndices();
+    }
+
+    function centerCell() {
+      return getCenterFineCell();
+    }
 
     return {
-      ...rec,
-      genera,
-      top_observers: topObservers
+      gridSizeM: GRID_SIZE_M,
+      latLngToCell,
+      cellKey,
+      normalizeCellBounds,
+      boundsToLatLngBounds,
+      centerAreaBounds,
+      cellsForBounds,
+      mergedGeneraRecordForBounds,
+      activeFilterSignature,
+      currentUserCell,
+      centerCell,
+      cellBounds: fineCellBoundsLL,
+      metricsToFill,
+      loadObserverDictionary,
+      observerMeta: getObserverMeta,
+      escapeHtml
     };
-  }
-
-  function activeFilterSignature() {
-    return [
-      window.__gwFilters?.onlyMe === true ? "me" : "all",
-      selectedIconicTaxa().sort().join(",")
-    ].join("|");
-  }
-
-  async function mergedGeneraRecordForBounds(bounds, options = {}) {
-    if (!bounds) return { genera: [], __metrics: null };
-
-    if (options.applyFilters && window.GridWildMeOverlayFilter?.isActive?.()) {
-      return window.GridWildMeOverlayFilter.generaRecordForBounds?.(bounds) ||
-        { genera: [], top_observers: [], __metrics: null };
-    }
-
-    const jobs = [];
-
-    for (let iy = bounds.minIy; iy <= bounds.maxIy; iy++) {
-      for (let ix = bounds.minIx; ix <= bounds.maxIx; ix++) {
-        if (!hasStaticGoldCellForGenera(ix, iy)) continue;
-        jobs.push(getSquareGeneraRecord(ix, iy));
-      }
-    }
-
-    let records = (await Promise.all(jobs)).filter(Boolean);
-    const taxa = options.applyFilters ? selectedIconicTaxa() : [];
-
-    if (options.applyFilters) {
-      if (taxa.length) {
-        records = records
-          .map(rec => filteredSquareGeneraRecord(rec, taxa))
-          .filter(Boolean);
-      }
-    }
-
-    const pyriteRecords = window.GridWildPyriteLake?.recordsForBounds?.(bounds, {
-      iconicTaxa: taxa
-    }) || [];
-    records = records.concat(pyriteRecords);
-
-    return mergeSquareGeneraRecords(records);
-  }
-
-  function currentUserCell() {
-    return getCurrentUserCellIndices();
-  }
-
-  function centerCell() {
-    return getCenterFineCell();
-  }
-
-  return {
-    gridSizeM: GRID_SIZE_M,
-    latLngToCell,
-    cellKey,
-    normalizeCellBounds,
-    boundsToLatLngBounds,
-    centerAreaBounds,
-    cellsForBounds,
-    mergedGeneraRecordForBounds,
-    activeFilterSignature,
-    currentUserCell,
-    centerCell,
-    cellBounds: fineCellBoundsLL,
-    metricsToFill,
-    loadObserverDictionary,
-    observerMeta: getObserverMeta,
-    escapeHtml
-  };
-})();
-
-
-
+  })();
 
 function getCenterSquareLabel() {
   const n = CENTER_MACRO_SIZE_CELLS;
@@ -930,54 +923,40 @@ function getCenterSquareLabel() {
   return `Center square (${n}×${n} cells ≈ ${widthFeet} ft × ${widthFeet} ft)`;
 }
 
-
 window.updateHudCenterSummary = async function updateHudCenterSummary() {
-
   const el = document.getElementById("gwSummaryBody");
   if (!el) return;
 
-  const titleEl =
-    document.querySelector("#gwSummaryPane .gw-summary-title");
+  const titleEl = document.querySelector("#gwSummaryPane .gw-summary-title");
 
   if (titleEl) {
     titleEl.textContent = getCenterSquareLabel();
   }
 
   try {
-
     const keys = getCenterMacroCellKeys();
 
     const squareRecords = await Promise.all(
       keys.map((key) => {
         const [ixStr, iyStr] = key.split(",");
-        return getSquareGeneraRecord(
-          Number(ixStr),
-          Number(iyStr)
-        );
+        return getSquareGeneraRecord(Number(ixStr), Number(iyStr));
       })
     );
 
-    const merged =
-      mergeSquareGeneraRecords(
-        squareRecords.filter(Boolean)
-      );
+    const merged = mergeSquareGeneraRecords(squareRecords.filter(Boolean));
 
     const m = merged.__metrics;
 
     if (!m) {
-      el.innerHTML =
-        `<div class="gw-muted">No center-square data.</div>`;
+      el.innerHTML = `<div class="gw-muted">No center-square data.</div>`;
       return;
     }
 
-    const speciesDensity =
-      m.count > 0 ? (m.species / m.count) : 0;
+    const speciesDensity = m.count > 0 ? m.species / m.count : 0;
 
-    const discoveryScore =
-      m.species / Math.max(1, m.count * 0.25);
+    const discoveryScore = m.species / Math.max(1, m.count * 0.25);
 
-    const dominant =
-      m.dominant_iconic || "Unknown";
+    const dominant = m.dominant_iconic || "Unknown";
 
     el.innerHTML = `
       <div class="gw-summary-grid">
@@ -1014,7 +993,7 @@ window.updateHudCenterSummary = async function updateHudCenterSummary() {
 
         <div class="gw-summary-k">Seasonality</div>
         <div class="gw-summary-v">
-          ${(100*m.seasonal_strength).toFixed(0)}%
+          ${(100 * m.seasonal_strength).toFixed(0)}%
         </div>
 
         <div class="gw-summary-k">Dominant life</div>
@@ -1024,13 +1003,10 @@ window.updateHudCenterSummary = async function updateHudCenterSummary() {
 
       </div>
     `;
-
-  } catch(err) {
-
+  } catch (err) {
     console.warn("Center summary failed:", err);
 
-    el.innerHTML =
-      `<div class="gw-muted">Could not load center summary.</div>`;
+    el.innerHTML = `<div class="gw-muted">Could not load center summary.</div>`;
   }
 };
 
@@ -1039,9 +1015,9 @@ window.updateHudCenterSummary = function updateHudCenterSummaryOLD() {
   if (!el) return;
 
   const titleEl = document.querySelector("#gwSummaryPane .gw-summary-title");
-if (titleEl) {
-  titleEl.textContent = getCenterSquareLabel();
-}
+  if (titleEl) {
+    titleEl.textContent = getCenterSquareLabel();
+  }
 
   const s = summarizeCenterMacroSquare();
   if (!s) {
@@ -1121,11 +1097,7 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
     }
 
     const mergedTop = Array.from(agg.values())
-      .sort((a, b) =>
-        (b.count - a.count) ||
-        (b.species - a.species) ||
-        (a.observer_id - b.observer_id)
-      )
+      .sort((a, b) => b.count - a.count || b.species - a.species || a.observer_id - b.observer_id)
       .slice(0, 5);
 
     if (!mergedTop.length) {
@@ -1135,19 +1107,22 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
 
     el.innerHTML = `
       <div class="gw-list">
-        ${mergedTop.map((row, idx) => {
-          const meta = getObserverMeta(observerDict, row.observer_id) || {};
-          const login = meta.login || `user ${row.observer_id}`;
-          const name = meta.name || "";
-          const icon = meta.icon_url || "";
-          const count = Number(row.count || 0);
-          const species = Number(row.species || 0);
+        ${mergedTop
+          .map((row, idx) => {
+            const meta = getObserverMeta(observerDict, row.observer_id) || {};
+            const login = meta.login || `user ${row.observer_id}`;
+            const name = meta.name || "";
+            const icon = meta.icon_url || "";
+            const count = Number(row.count || 0);
+            const species = Number(row.species || 0);
 
-          return `
+            return `
             <div class="gw-rowline">
               <span style="display:flex;align-items:center;gap:10px;min-width:0;">
                 <span class="gw-muted">#${idx + 1}</span>
-                ${icon ? `
+                ${
+                  icon
+                    ? `
                   <img
                     src="${escapeHtml(icon)}"
                     alt=""
@@ -1160,7 +1135,9 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
                       border:1px solid rgba(0,0,0,0.08);
                     "
                   >
-                ` : ""}
+                `
+                    : ""
+                }
                 <span style="min-width:0;display:flex;flex-direction:column;line-height:1.15;">
                   <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                   <a
@@ -1173,11 +1150,15 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
                     @${escapeHtml(login)}
                   </a>
                 </span>
-                  ${name ? `
+                  ${
+                    name
+                      ? `
                     <span class="gw-muted" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                       ${escapeHtml(name)}
                     </span>
-                  ` : ""}
+                  `
+                      : ""
+                  }
                 </span>
               </span>
 
@@ -1186,7 +1167,8 @@ window.updateTopObserversPanel = async function updateTopObserversPanel() {
               </span>
             </div>
           `;
-        }).join("")}
+          })
+          .join("")}
       </div>
     `;
   } catch (err) {
@@ -1199,19 +1181,18 @@ function mergeSquareGeneraRecords(squareRecords) {
   const genusMap = new Map();
   const observerMap = new Map();
 
-  const mergedMetrics =
-    window.GWMetrics?.mergeSquareMetrics
-      ? window.GWMetrics.mergeSquareMetrics(squareRecords)
-      : null;
-      
+  const mergedMetrics = window.GWMetrics?.mergeSquareMetrics
+    ? window.GWMetrics.mergeSquareMetrics(squareRecords)
+    : null;
+
   for (const rec of squareRecords) {
     const genera = Array.isArray(rec?.genera) ? rec.genera : [];
 
     for (const g of genera) {
       const iconic = g?.iconic_taxon_name || "Unknown";
-      const order  = g?.order_name || "Unknown";
+      const order = g?.order_name || "Unknown";
       const family = g?.family_name || "Unknown";
-      const genus  = g?.genus_name || "Unknown";
+      const genus = g?.genus_name || "Unknown";
 
       const key = [iconic, order, family, genus].join("||");
 
@@ -1239,11 +1220,12 @@ function mergeSquareGeneraRecords(squareRecords) {
     for (const row of observers) {
       const observerId = Number(row?.observer_id);
       const observerLogin = String(row?.observer_login || "").trim();
-      const observerKey = Number.isFinite(observerId) && observerId > 0
-        ? `id:${observerId}`
-        : observerLogin
-          ? `login:${observerLogin}`
-          : "";
+      const observerKey =
+        Number.isFinite(observerId) && observerId > 0
+          ? `id:${observerId}`
+          : observerLogin
+            ? `login:${observerLogin}`
+            : "";
       if (!observerKey) continue;
 
       if (!observerMap.has(observerKey)) {
@@ -1268,15 +1250,16 @@ function mergeSquareGeneraRecords(squareRecords) {
 
   return {
     genera: Array.from(genusMap.values()),
-    top_observers: Array.from(observerMap.values())
-      .sort((a, b) =>
-        (b.count - a.count) ||
-        (b.species - a.species) ||
-        String(a.observer_login || a.observer_id || "").localeCompare(String(b.observer_login || b.observer_id || ""))
-      ),
+    top_observers: Array.from(observerMap.values()).sort(
+      (a, b) =>
+        b.count - a.count ||
+        b.species - a.species ||
+        String(a.observer_login || a.observer_id || "").localeCompare(
+          String(b.observer_login || b.observer_id || "")
+        )
+    ),
     __metrics: mergedMetrics
   };
-
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1319,8 +1302,10 @@ function flushCoarseDataVersionBumps() {
   coarseDataVersionFirstQueuedAt = 0;
   if (!pendingCoarseDataVersionKinds.size) return;
 
-  const versions = window.__gwCoarseDataVersions =
-    window.__gwCoarseDataVersions || { superchunks: 0, rich: 0 };
+  const versions = (window.__gwCoarseDataVersions = window.__gwCoarseDataVersions || {
+    superchunks: 0,
+    rich: 0
+  });
 
   for (const pendingKind of pendingCoarseDataVersionKinds) {
     versions[pendingKind] = (Number(versions[pendingKind]) || 0) + 1;
@@ -1341,9 +1326,7 @@ function queueCoarseDataVersionBump(kind) {
   if (coarseDataVersionTimer) window.clearTimeout(coarseDataVersionTimer);
 
   const elapsed = now - coarseDataVersionFirstQueuedAt;
-  const delay = elapsed >= COARSE_DATA_VERSION_MAX_WAIT_MS
-    ? 0
-    : COARSE_DATA_VERSION_DEBOUNCE_MS;
+  const delay = elapsed >= COARSE_DATA_VERSION_MAX_WAIT_MS ? 0 : COARSE_DATA_VERSION_DEBOUNCE_MS;
 
   coarseDataVersionTimer = window.setTimeout(flushCoarseDataVersionBumps, delay);
 }
@@ -1357,7 +1340,6 @@ function getCoarseDataVersions() {
 }
 
 window.getGridWildCoarseDataVersions = getCoarseDataVersions;
-
 
 const GENERA_SUPERCHUNK_SIZE_FALLBACK = 32; // legacy assets generated by the MATLAB writer
 const GENERA_SUPERCHUNK_BASE = "assets/square_genera_superchunks";
@@ -1445,18 +1427,17 @@ async function loadGridWildStaticAssets() {
 
   try {
     const heatUrl = await getGridAssetUrl("heat", "assets/dc_heat.csv");
-    await Promise.allSettled([
-      loadObserverDictionary(),
-      loadStaticHeatmapCsv(heatUrl)
-    ]).then((results) => {
-      const [observerResult, heatResult] = results;
-      if (observerResult.status === "rejected") {
-        console.warn("GridWild observer dictionary unavailable.", observerResult.reason);
+    await Promise.allSettled([loadObserverDictionary(), loadStaticHeatmapCsv(heatUrl)]).then(
+      (results) => {
+        const [observerResult, heatResult] = results;
+        if (observerResult.status === "rejected") {
+          console.warn("GridWild observer dictionary unavailable.", observerResult.reason);
+        }
+        if (heatResult.status === "rejected") {
+          console.warn("GridWild heat map unavailable.", heatResult.reason);
+        }
       }
-      if (heatResult.status === "rejected") {
-        console.warn("GridWild heat map unavailable.", heatResult.reason);
-      }
-    });
+    );
   } finally {
     finishRegularGridDataDownloadToast();
   }
@@ -1467,11 +1448,10 @@ let gridWildStaticAssetsPromise = null;
 function ensureGridWildStaticAssetsLoaded() {
   if (gridWildStaticAssetsPromise) return gridWildStaticAssetsPromise;
 
-  gridWildStaticAssetsPromise = loadGridWildStaticAssets()
-    .catch((err) => {
-      gridWildStaticAssetsPromise = null;
-      throw err;
-    });
+  gridWildStaticAssetsPromise = loadGridWildStaticAssets().catch((err) => {
+    gridWildStaticAssetsPromise = null;
+    throw err;
+  });
 
   return gridWildStaticAssetsPromise;
 }
@@ -1481,8 +1461,9 @@ function scheduleGridWildStaticAssetsLoad(delay = 1000) {
   if (gridWildStaticAssetsPromise) return;
 
   const start = () => {
-    ensureGridWildStaticAssetsLoaded()
-      .catch((err) => console.warn("GridWild static map assets unavailable.", err));
+    ensureGridWildStaticAssetsLoaded().catch((err) =>
+      console.warn("GridWild static map assets unavailable.", err)
+    );
   };
 
   if (typeof window.requestIdleCallback === "function") {
@@ -1628,9 +1609,7 @@ async function ensureGridWildAssetManifest() {
 
 function getGeneraSuperchunkSize() {
   const size = Number(window.__gwAssetManifest?.superchunk_size);
-  return Number.isFinite(size) && size > 0
-    ? Math.floor(size)
-    : GENERA_SUPERCHUNK_SIZE_FALLBACK;
+  return Number.isFinite(size) && size > 0 ? Math.floor(size) : GENERA_SUPERCHUNK_SIZE_FALLBACK;
 }
 
 function getGeneraSuperchunkKey(ix, iy) {
@@ -1677,7 +1656,7 @@ async function loadGeneraSuperchunkOLD(ix, iy) {
   }
 
   const data = await resp.json();
-//  console.log("GENERA loaded keys sample", Object.keys(data?.squares || {}).slice(0, 20));
+  //  console.log("GENERA loaded keys sample", Object.keys(data?.squares || {}).slice(0, 20));
   cache.set(key, data);
   queueCoarseDataVersionBump("superchunks");
   return data;
@@ -1728,9 +1707,14 @@ function buildRichMetricsForGeneraRecord(ix, iy, rec) {
     observers: Number(staticMetrics.observers) || 0,
     n_captive: Number(staticMetrics.n_captive) || 0,
     last_observed: richMetrics.last_observed || staticMetrics.last_observed || null,
-    median_last10_observed: richMetrics.median_last10_observed || staticMetrics.median_last10_observed || null,
-    last_observed_ms: Number(richMetrics.last_observed_ms) || Number(staticMetrics.last_observed_ms) || 0,
-    median_last10_observed_ms: Number(richMetrics.median_last10_observed_ms) || Number(staticMetrics.median_last10_observed_ms) || 0
+    median_last10_observed:
+      richMetrics.median_last10_observed || staticMetrics.median_last10_observed || null,
+    last_observed_ms:
+      Number(richMetrics.last_observed_ms) || Number(staticMetrics.last_observed_ms) || 0,
+    median_last10_observed_ms:
+      Number(richMetrics.median_last10_observed_ms) ||
+      Number(staticMetrics.median_last10_observed_ms) ||
+      0
   };
 }
 
@@ -1743,28 +1727,30 @@ async function warmRichMetricsForCell(ix, iy) {
   if (pending.has(key)) return pending.get(key);
   if (isCoarseHeatEnabled() && window.__richGridMetricsCoarsePending?.has?.(key)) return null;
 
-  const job = getSquareGeneraRecord(ix, iy).then((rec) => {
-    const merged = buildRichMetricsForGeneraRecord(ix, iy, rec);
-    if (!merged) return null;
+  const job = getSquareGeneraRecord(ix, iy)
+    .then((rec) => {
+      const merged = buildRichMetricsForGeneraRecord(ix, iy, rec);
+      if (!merged) return null;
 
-    richCache.set(key, merged);
-    queueCoarseDataVersionBump("rich");
-    return merged;
-  }).finally(() => {
-    pending.delete(key);
-  });
+      richCache.set(key, merged);
+      queueCoarseDataVersionBump("rich");
+      return merged;
+    })
+    .finally(() => {
+      pending.delete(key);
+    });
 
   pending.set(key, job);
   return job;
 }
 
 function richMetricsHydrationState() {
-  const state = window.__gwRichMetricsHydrationState =
-    window.__gwRichMetricsHydrationState || {};
+  const state = (window.__gwRichMetricsHydrationState = window.__gwRichMetricsHydrationState || {});
 
   if (!(state.requestedCells instanceof Set)) state.requestedCells = new Set();
   if (!(state.requestedSuperchunks instanceof Set)) state.requestedSuperchunks = new Set();
-  if (!(state.requestedNetworkSuperchunks instanceof Set)) state.requestedNetworkSuperchunks = new Set();
+  if (!(state.requestedNetworkSuperchunks instanceof Set))
+    state.requestedNetworkSuperchunks = new Set();
   if (!(state.queuedBySuperchunk instanceof Map)) state.queuedBySuperchunk = new Map();
   if (!Array.isArray(state.jobQueue)) state.jobQueue = [];
   state.activeJobs = Math.max(0, Number(state.activeJobs) || 0);
@@ -1808,10 +1794,7 @@ function resetCoarseRichHydrationView(viewKey) {
 function pumpCoarseRichHydrationJobs() {
   const state = richMetricsHydrationState();
 
-  while (
-    state.activeJobs < COARSE_HEAT_RICH_SUPERCHUNK_CONCURRENCY &&
-    state.jobQueue.length
-  ) {
+  while (state.activeJobs < COARSE_HEAT_RICH_SUPERCHUNK_CONCURRENCY && state.jobQueue.length) {
     const job = state.jobQueue.shift();
     state.activeJobs++;
 
@@ -1939,210 +1922,218 @@ window.getGridWildRichHydrationStats = function getGridWildRichHydrationStats() 
 
 // Modular iconic-taxon overlay adapter. It leaves the base static metrics and
 // lens recipes intact, but swaps in filtered metrics right before painting.
-window.GridWildIconicOverlayFilter = window.GridWildIconicOverlayFilter || (function () {
-  let enabled = true;
+window.GridWildIconicOverlayFilter =
+  window.GridWildIconicOverlayFilter ||
+  (function () {
+    let enabled = true;
 
-  function selectedTaxa() {
-    const taxa = window.__gwFilters?.iconicTaxa || [];
-    return Array.isArray(taxa) ? taxa.filter(Boolean) : [];
-  }
-
-  function isActive() {
-    return enabled && selectedTaxa().length > 0;
-  }
-
-  function getCachedSquareRecord(ix, iy) {
-    const cache = window.__squareGeneraSuperchunkCache;
-    if (!(cache instanceof Map)) return null;
-
-    const chunk = cache.get(getGeneraSuperchunkKey(ix, iy));
-    const squareId = encodeGeneraSquareId(ix, iy);
-    return chunk?.squares?.[squareId] || null;
-  }
-
-  function rowsForRecord(rec) {
-    if (!rec) return [];
-    if (Array.isArray(rec.genera)) return rec.genera;
-    if (rec.genera) return [rec.genera];
-    return [];
-  }
-
-  function requestRecord(ix, iy) {
-    warmRichMetricsForCell(ix, iy).then((metrics) => {
-      if (metrics) scheduleGridHeatCanvasRender();
-    });
-  }
-
-  function metricsForCell(ix, iy, baseMetrics = {}, options = {}) {
-    if (!isActive()) return baseMetrics;
-    if (!window.GWMetrics?.buildSquareMetrics) return baseMetrics;
-
-    const rec = getCachedSquareRecord(ix, iy);
-    if (!rec) {
-      if (options.requestMissingRecord !== false) requestRecord(ix, iy);
-      return null;
+    function selectedTaxa() {
+      const taxa = window.__gwFilters?.iconicTaxa || [];
+      return Array.isArray(taxa) ? taxa.filter(Boolean) : [];
     }
 
-    const taxa = new Set(selectedTaxa());
-    const filteredRows = rowsForRecord(rec)
-      .filter(row => taxa.has(row?.iconic_taxon_name || "Unknown"));
-
-    if (!filteredRows.length) return null;
-
-    const filtered = window.GWMetrics.buildSquareMetrics({ genera: filteredRows });
-    if (!filtered || (filtered.count || 0) <= 0) return null;
-
-    const totalCount = Number(baseMetrics.count) || Number(rec.__metrics?.count) || filtered.count;
-    const ratio = totalCount > 0
-      ? Math.max(0, Math.min(1, filtered.count / totalCount))
-      : 1;
-
-    return {
-      ...baseMetrics,
-      ...filtered,
-      observers: Math.round((Number(baseMetrics.observers) || 0) * ratio),
-      n_captive: Math.round((Number(baseMetrics.n_captive) || 0) * ratio),
-      last_observed: baseMetrics.last_observed || filtered.last_observed || null,
-      median_last10_observed: baseMetrics.median_last10_observed || filtered.median_last10_observed || null,
-      last_observed_ms: Number(baseMetrics.last_observed_ms) || Number(filtered.last_observed_ms) || 0,
-      median_last10_observed_ms: Number(baseMetrics.median_last10_observed_ms) || Number(filtered.median_last10_observed_ms) || 0,
-      nActiveSquares: filtered.count > 0 ? 1 : 0
-    };
-  }
-
-  function setEnabled(value) {
-    enabled = value !== false;
-    scheduleGridHeatCanvasRender();
-  }
-
-  return {
-    isActive,
-    metricsForCell,
-    selectedTaxa,
-    setEnabled
-  };
-})();
-
-window.GridWildMeOverlayFilter = window.GridWildMeOverlayFilter || (function () {
-  let cache = null;
-  let signature = "";
-  let genusTaxonomyByName = null;
-
-  const MONTH_COUNT = 12;
-
-  function isActive() {
-    return window.__gwFilters?.onlyMe === true;
-  }
-
-  function selectedTaxa() {
-    const taxa = window.__gwFilters?.iconicTaxa || [];
-    return Array.isArray(taxa) ? taxa.filter(Boolean) : [];
-  }
-
-  function obsSignature(observations) {
-    const first = observations[0];
-    const last = observations[observations.length - 1];
-    return [
-      observations.length,
-      first?.id || "",
-      first?.observed_on || first?.time_observed_at || first?.created_at || "",
-      last?.id || "",
-      last?.observed_on || last?.time_observed_at || last?.created_at || ""
-    ].join("|");
-  }
-
-  function dateIsoFromMs(ms) {
-    if (!Number.isFinite(ms) || ms <= 0) return null;
-    return new Date(ms).toISOString().slice(0, 10);
-  }
-
-  function parseObsTimeMs(obs) {
-    const raw = obs?.observed_on || obs?.time_observed_at || obs?.created_at || "";
-    const ms = raw ? Date.parse(raw) : 0;
-    return Number.isFinite(ms) ? ms : 0;
-  }
-
-  function entropy(values) {
-    const total = values.reduce((sum, value) => sum + (Number(value) || 0), 0);
-    if (!total) return 0;
-
-    return values.reduce((h, value) => {
-      const p = (Number(value) || 0) / total;
-      return p > 0 ? h - p * Math.log2(p) : h;
-    }, 0);
-  }
-
-  function makeAccumulator() {
-    return {
-      count: 0,
-      genusSet: new Set(),
-      iconic_counts: {},
-      month_totals: Array(MONTH_COUNT).fill(0),
-      lastObservedMs: 0,
-      recentObservedMs: []
-    };
-  }
-
-  function addObservation(acc, obs) {
-    acc.count++;
-
-    const genus = obs.genus_name || obs.scientific_name || obs.taxon || "Unknown";
-    if (genus) acc.genusSet.add(genus);
-
-    const iconic = obs.iconic_taxon_name || "Unknown";
-    acc.iconic_counts[iconic] = (acc.iconic_counts[iconic] || 0) + 1;
-
-    const ms = parseObsTimeMs(obs);
-    if (ms) {
-      acc.lastObservedMs = Math.max(acc.lastObservedMs, ms);
-      acc.recentObservedMs.push(ms);
-      acc.recentObservedMs.sort((a, b) => b - a);
-      if (acc.recentObservedMs.length > 10) acc.recentObservedMs.length = 10;
-
-      const month = new Date(ms).getUTCMonth();
-      if (month >= 0 && month < MONTH_COUNT) acc.month_totals[month]++;
+    function isActive() {
+      return enabled && selectedTaxa().length > 0;
     }
-  }
 
-  async function getGenusTaxonomyByName() {
-    if (genusTaxonomyByName) return genusTaxonomyByName;
+    function getCachedSquareRecord(ix, iy) {
+      const cache = window.__squareGeneraSuperchunkCache;
+      if (!(cache instanceof Map)) return null;
 
-    genusTaxonomyByName = new Map();
-    try {
-      const dict = await loadGenusTaxonomyDictionary();
-      for (const rec of Object.values(dict || {})) {
-        const name = rec?.name || rec?.genus_name;
-        if (name && !genusTaxonomyByName.has(name)) {
-          genusTaxonomyByName.set(name, rec);
-        }
+      const chunk = cache.get(getGeneraSuperchunkKey(ix, iy));
+      const squareId = encodeGeneraSquareId(ix, iy);
+      return chunk?.squares?.[squareId] || null;
+    }
+
+    function rowsForRecord(rec) {
+      if (!rec) return [];
+      if (Array.isArray(rec.genera)) return rec.genera;
+      if (rec.genera) return [rec.genera];
+      return [];
+    }
+
+    function requestRecord(ix, iy) {
+      warmRichMetricsForCell(ix, iy).then((metrics) => {
+        if (metrics) scheduleGridHeatCanvasRender();
+      });
+    }
+
+    function metricsForCell(ix, iy, baseMetrics = {}, options = {}) {
+      if (!isActive()) return baseMetrics;
+      if (!window.GWMetrics?.buildSquareMetrics) return baseMetrics;
+
+      const rec = getCachedSquareRecord(ix, iy);
+      if (!rec) {
+        if (options.requestMissingRecord !== false) requestRecord(ix, iy);
+        return null;
       }
-    } catch (err) {
-      console.warn("GridWild Me taxonomy lookup unavailable.", err);
+
+      const taxa = new Set(selectedTaxa());
+      const filteredRows = rowsForRecord(rec).filter((row) =>
+        taxa.has(row?.iconic_taxon_name || "Unknown")
+      );
+
+      if (!filteredRows.length) return null;
+
+      const filtered = window.GWMetrics.buildSquareMetrics({ genera: filteredRows });
+      if (!filtered || (filtered.count || 0) <= 0) return null;
+
+      const totalCount =
+        Number(baseMetrics.count) || Number(rec.__metrics?.count) || filtered.count;
+      const ratio = totalCount > 0 ? Math.max(0, Math.min(1, filtered.count / totalCount)) : 1;
+
+      return {
+        ...baseMetrics,
+        ...filtered,
+        observers: Math.round((Number(baseMetrics.observers) || 0) * ratio),
+        n_captive: Math.round((Number(baseMetrics.n_captive) || 0) * ratio),
+        last_observed: baseMetrics.last_observed || filtered.last_observed || null,
+        median_last10_observed:
+          baseMetrics.median_last10_observed || filtered.median_last10_observed || null,
+        last_observed_ms:
+          Number(baseMetrics.last_observed_ms) || Number(filtered.last_observed_ms) || 0,
+        median_last10_observed_ms:
+          Number(baseMetrics.median_last10_observed_ms) ||
+          Number(filtered.median_last10_observed_ms) ||
+          0,
+        nActiveSquares: filtered.count > 0 ? 1 : 0
+      };
     }
 
-    return genusTaxonomyByName;
-  }
+    function setEnabled(value) {
+      enabled = value !== false;
+      scheduleGridHeatCanvasRender();
+    }
 
-  function cellForObservation(obs) {
-    const lat = Number(obs?.lat);
-    const lng = Number(obs?.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return {
+      isActive,
+      metricsForCell,
+      selectedTaxa,
+      setEnabled
+    };
+  })();
 
-    const key = getCellKeyForLatLng(lat, lng);
-    const comma = key.indexOf(",");
-    if (comma <= 0) return null;
+window.GridWildMeOverlayFilter =
+  window.GridWildMeOverlayFilter ||
+  (function () {
+    let cache = null;
+    let signature = "";
+    let genusTaxonomyByName = null;
 
-    const ix = Number(key.slice(0, comma));
-    const iy = Number(key.slice(comma + 1));
-    return Number.isFinite(ix) && Number.isFinite(iy) ? { ix, iy } : null;
-  }
+    const MONTH_COUNT = 12;
 
-  function observationsForCellBounds(bounds) {
-    if (!bounds) return [];
+    function isActive() {
+      return window.__gwFilters?.onlyMe === true;
+    }
 
-    const taxa = new Set(selectedTaxa());
-    return (window.GridWildRecentINat?.getRecentObservations?.() || [])
-      .filter(obs => {
+    function selectedTaxa() {
+      const taxa = window.__gwFilters?.iconicTaxa || [];
+      return Array.isArray(taxa) ? taxa.filter(Boolean) : [];
+    }
+
+    function obsSignature(observations) {
+      const first = observations[0];
+      const last = observations[observations.length - 1];
+      return [
+        observations.length,
+        first?.id || "",
+        first?.observed_on || first?.time_observed_at || first?.created_at || "",
+        last?.id || "",
+        last?.observed_on || last?.time_observed_at || last?.created_at || ""
+      ].join("|");
+    }
+
+    function dateIsoFromMs(ms) {
+      if (!Number.isFinite(ms) || ms <= 0) return null;
+      return new Date(ms).toISOString().slice(0, 10);
+    }
+
+    function parseObsTimeMs(obs) {
+      const raw = obs?.observed_on || obs?.time_observed_at || obs?.created_at || "";
+      const ms = raw ? Date.parse(raw) : 0;
+      return Number.isFinite(ms) ? ms : 0;
+    }
+
+    function entropy(values) {
+      const total = values.reduce((sum, value) => sum + (Number(value) || 0), 0);
+      if (!total) return 0;
+
+      return values.reduce((h, value) => {
+        const p = (Number(value) || 0) / total;
+        return p > 0 ? h - p * Math.log2(p) : h;
+      }, 0);
+    }
+
+    function makeAccumulator() {
+      return {
+        count: 0,
+        genusSet: new Set(),
+        iconic_counts: {},
+        month_totals: Array(MONTH_COUNT).fill(0),
+        lastObservedMs: 0,
+        recentObservedMs: []
+      };
+    }
+
+    function addObservation(acc, obs) {
+      acc.count++;
+
+      const genus = obs.genus_name || obs.scientific_name || obs.taxon || "Unknown";
+      if (genus) acc.genusSet.add(genus);
+
+      const iconic = obs.iconic_taxon_name || "Unknown";
+      acc.iconic_counts[iconic] = (acc.iconic_counts[iconic] || 0) + 1;
+
+      const ms = parseObsTimeMs(obs);
+      if (ms) {
+        acc.lastObservedMs = Math.max(acc.lastObservedMs, ms);
+        acc.recentObservedMs.push(ms);
+        acc.recentObservedMs.sort((a, b) => b - a);
+        if (acc.recentObservedMs.length > 10) acc.recentObservedMs.length = 10;
+
+        const month = new Date(ms).getUTCMonth();
+        if (month >= 0 && month < MONTH_COUNT) acc.month_totals[month]++;
+      }
+    }
+
+    async function getGenusTaxonomyByName() {
+      if (genusTaxonomyByName) return genusTaxonomyByName;
+
+      genusTaxonomyByName = new Map();
+      try {
+        const dict = await loadGenusTaxonomyDictionary();
+        for (const rec of Object.values(dict || {})) {
+          const name = rec?.name || rec?.genus_name;
+          if (name && !genusTaxonomyByName.has(name)) {
+            genusTaxonomyByName.set(name, rec);
+          }
+        }
+      } catch (err) {
+        console.warn("GridWild Me taxonomy lookup unavailable.", err);
+      }
+
+      return genusTaxonomyByName;
+    }
+
+    function cellForObservation(obs) {
+      const lat = Number(obs?.lat);
+      const lng = Number(obs?.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+      const key = getCellKeyForLatLng(lat, lng);
+      const comma = key.indexOf(",");
+      if (comma <= 0) return null;
+
+      const ix = Number(key.slice(0, comma));
+      const iy = Number(key.slice(comma + 1));
+      return Number.isFinite(ix) && Number.isFinite(iy) ? { ix, iy } : null;
+    }
+
+    function observationsForCellBounds(bounds) {
+      if (!bounds) return [];
+
+      const taxa = new Set(selectedTaxa());
+      return (window.GridWildRecentINat?.getRecentObservations?.() || []).filter((obs) => {
         const cell = cellForObservation(obs);
         if (!cell) return false;
         if (
@@ -2155,304 +2146,300 @@ window.GridWildMeOverlayFilter = window.GridWildMeOverlayFilter || (function () 
         }
         return !taxa.size || taxa.has(obs?.iconic_taxon_name || "Unknown");
       });
-  }
-
-  async function generaRecordForBounds(bounds) {
-    const observations = observationsForCellBounds(bounds);
-    if (!observations.length) {
-      return { genera: [], top_observers: [], __metrics: null };
     }
 
-    const taxonomyByName = await getGenusTaxonomyByName();
-    const genusMap = new Map();
-
-    for (const obs of observations) {
-      const genus =
-        obs?.genus_name ||
-        String(obs?.scientific_name || obs?.taxon || "Unknown").split(/\s+/)[0] ||
-        "Unknown";
-      const taxonomy = taxonomyByName.get(genus);
-      const path = Array.isArray(taxonomy?.path_names) ? taxonomy.path_names : [];
-      const iconic = obs?.iconic_taxon_name || path[2] || "Unknown";
-      const order = path[3] || "Unknown";
-      const family = path[4] || "Unknown";
-      const key = [iconic, order, family, genus].join("||");
-
-      if (!genusMap.has(key)) {
-        genusMap.set(key, {
-          iconic_taxon_name: iconic,
-          order_name: order,
-          family_name: family,
-          genus_name: genus,
-          count: 0,
-          month_counts: new Array(12).fill(0)
-        });
+    async function generaRecordForBounds(bounds) {
+      const observations = observationsForCellBounds(bounds);
+      if (!observations.length) {
+        return { genera: [], top_observers: [], __metrics: null };
       }
 
-      const dest = genusMap.get(key);
-      dest.count += 1;
+      const taxonomyByName = await getGenusTaxonomyByName();
+      const genusMap = new Map();
 
-      const ms = parseObsTimeMs(obs);
-      if (ms) {
-        const month = new Date(ms).getUTCMonth();
-        if (month >= 0 && month < MONTH_COUNT) dest.month_counts[month] += 1;
-      }
-    }
+      for (const obs of observations) {
+        const genus =
+          obs?.genus_name ||
+          String(obs?.scientific_name || obs?.taxon || "Unknown").split(/\s+/)[0] ||
+          "Unknown";
+        const taxonomy = taxonomyByName.get(genus);
+        const path = Array.isArray(taxonomy?.path_names) ? taxonomy.path_names : [];
+        const iconic = obs?.iconic_taxon_name || path[2] || "Unknown";
+        const order = path[3] || "Unknown";
+        const family = path[4] || "Unknown";
+        const key = [iconic, order, family, genus].join("||");
 
-    const genera = Array.from(genusMap.values());
-    const metrics = window.GWMetrics?.buildSquareMetrics
-      ? window.GWMetrics.buildSquareMetrics({ genera })
-      : null;
-    const username = window.__gwUser?.username || "me";
-    const species = new Set(genera.map(row => row.genus_name).filter(Boolean)).size;
-
-    return {
-      genera,
-      top_observers: [{
-        observer_login: username,
-        observer_name: username === "me" ? "Me" : `@${username}`,
-        count: observations.length,
-        species
-      }],
-      __metrics: metrics ? { ...metrics, observers: 1 } : null
-    };
-  }
-
-  function finalizeMetrics(acc) {
-    if (!acc || acc.count <= 0) return null;
-
-    const sortedTimes = acc.recentObservedMs
-      .filter(Number.isFinite)
-      .sort((a, b) => b - a);
-
-    const lastObservedMs = acc.lastObservedMs || sortedTimes[0] || 0;
-    const lastTen = sortedTimes.slice(0, 10).sort((a, b) => a - b);
-    const medianIdx = Math.floor(lastTen.length / 2);
-    const medianLast10ObservedMs = lastTen.length
-      ? (lastTen.length % 2
-        ? lastTen[medianIdx]
-        : (lastTen[medianIdx - 1] + lastTen[medianIdx]) / 2)
-      : lastObservedMs;
-
-    const peak = Math.max(...acc.month_totals);
-    const total = acc.month_totals.reduce((sum, value) => sum + value, 0);
-    const dominant =
-      Object.entries(acc.iconic_counts)
-        .sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
-
-    return {
-      count: acc.count,
-      species: acc.genusSet.size,
-      genera: acc.genusSet.size,
-      observers: 1,
-      n_captive: 0,
-      iconic_counts: { ...acc.iconic_counts },
-      dominant_iconic: dominant,
-      iconic_n: Object.keys(acc.iconic_counts).length,
-      month_totals: acc.month_totals.slice(),
-      peak_month: acc.month_totals.indexOf(peak) + 1,
-      seasonal_strength: total ? peak / total : 0,
-      month_entropy: entropy(acc.month_totals),
-      last_observed: dateIsoFromMs(lastObservedMs),
-      median_last10_observed: dateIsoFromMs(medianLast10ObservedMs),
-      last_observed_ms: lastObservedMs,
-      median_last10_observed_ms: medianLast10ObservedMs,
-      nActiveSquares: 1,
-      activity_score: Math.log1p(acc.count) * (1 + acc.genusSet.size * 0.05)
-    };
-  }
-
-  function mergeMetricsRecords(records) {
-    const merged = {
-      count: 0,
-      species: 0,
-      genera: 0,
-      observers: 1,
-      n_captive: 0,
-      iconic_counts: {},
-      month_totals: Array(MONTH_COUNT).fill(0),
-      last_observed: null,
-      median_last10_observed: null,
-      last_observed_ms: 0,
-      median_last10_observed_ms: 0,
-      nActiveSquares: 1
-    };
-
-    for (const rec of records) {
-      if (!rec) continue;
-
-      merged.count += Number(rec.count) || 0;
-      merged.species += Number(rec.species) || 0;
-      merged.genera += Number(rec.genera) || 0;
-
-      const lastMs = Number(rec.last_observed_ms) || parseGridDateMs(rec.last_observed);
-      if (lastMs > merged.last_observed_ms) {
-        merged.last_observed_ms = lastMs;
-        merged.last_observed = dateIsoFromMs(lastMs);
-      }
-
-      const medianMs = Number(rec.median_last10_observed_ms) || parseGridDateMs(rec.median_last10_observed);
-      if (medianMs > merged.median_last10_observed_ms) {
-        merged.median_last10_observed_ms = medianMs;
-        merged.median_last10_observed = dateIsoFromMs(medianMs);
-      }
-
-      for (const [iconic, count] of Object.entries(rec.iconic_counts || {})) {
-        merged.iconic_counts[iconic] =
-          (merged.iconic_counts[iconic] || 0) + (Number(count) || 0);
-      }
-
-      (rec.month_totals || []).forEach((count, index) => {
-        if (index >= 0 && index < MONTH_COUNT) {
-          merged.month_totals[index] += Number(count) || 0;
+        if (!genusMap.has(key)) {
+          genusMap.set(key, {
+            iconic_taxon_name: iconic,
+            order_name: order,
+            family_name: family,
+            genus_name: genus,
+            count: 0,
+            month_counts: new Array(12).fill(0)
+          });
         }
-      });
+
+        const dest = genusMap.get(key);
+        dest.count += 1;
+
+        const ms = parseObsTimeMs(obs);
+        if (ms) {
+          const month = new Date(ms).getUTCMonth();
+          if (month >= 0 && month < MONTH_COUNT) dest.month_counts[month] += 1;
+        }
+      }
+
+      const genera = Array.from(genusMap.values());
+      const metrics = window.GWMetrics?.buildSquareMetrics
+        ? window.GWMetrics.buildSquareMetrics({ genera })
+        : null;
+      const username = window.__gwUser?.username || "me";
+      const species = new Set(genera.map((row) => row.genus_name).filter(Boolean)).size;
+
+      return {
+        genera,
+        top_observers: [
+          {
+            observer_login: username,
+            observer_name: username === "me" ? "Me" : `@${username}`,
+            count: observations.length,
+            species
+          }
+        ],
+        __metrics: metrics ? { ...metrics, observers: 1 } : null
+      };
     }
 
-    if (merged.count <= 0) return null;
+    function finalizeMetrics(acc) {
+      if (!acc || acc.count <= 0) return null;
 
-    const peak = Math.max(...merged.month_totals);
-    const total = merged.month_totals.reduce((sum, value) => sum + value, 0);
-    const dominant =
-      Object.entries(merged.iconic_counts)
-        .sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
+      const sortedTimes = acc.recentObservedMs.filter(Number.isFinite).sort((a, b) => b - a);
 
-    merged.iconic_n = Object.keys(merged.iconic_counts).length;
-    merged.dominant_iconic = dominant;
-    merged.peak_month = merged.month_totals.indexOf(peak) + 1;
-    merged.seasonal_strength = total ? peak / total : 0;
-    merged.month_entropy = entropy(merged.month_totals);
-    merged.activity_score = Math.log1p(merged.count) * (1 + merged.species * 0.05);
+      const lastObservedMs = acc.lastObservedMs || sortedTimes[0] || 0;
+      const lastTen = sortedTimes.slice(0, 10).sort((a, b) => a - b);
+      const medianIdx = Math.floor(lastTen.length / 2);
+      const medianLast10ObservedMs = lastTen.length
+        ? lastTen.length % 2
+          ? lastTen[medianIdx]
+          : (lastTen[medianIdx - 1] + lastTen[medianIdx]) / 2
+        : lastObservedMs;
 
-    return merged;
-  }
+      const peak = Math.max(...acc.month_totals);
+      const total = acc.month_totals.reduce((sum, value) => sum + value, 0);
+      const dominant =
+        Object.entries(acc.iconic_counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
 
-  function buildCache() {
-    const observations = window.GridWildRecentINat?.getRecentObservations?.() || [];
-    const nextSignature = obsSignature(observations);
-    if (cache && signature === nextSignature) return cache;
+      return {
+        count: acc.count,
+        species: acc.genusSet.size,
+        genera: acc.genusSet.size,
+        observers: 1,
+        n_captive: 0,
+        iconic_counts: { ...acc.iconic_counts },
+        dominant_iconic: dominant,
+        iconic_n: Object.keys(acc.iconic_counts).length,
+        month_totals: acc.month_totals.slice(),
+        peak_month: acc.month_totals.indexOf(peak) + 1,
+        seasonal_strength: total ? peak / total : 0,
+        month_entropy: entropy(acc.month_totals),
+        last_observed: dateIsoFromMs(lastObservedMs),
+        median_last10_observed: dateIsoFromMs(medianLast10ObservedMs),
+        last_observed_ms: lastObservedMs,
+        median_last10_observed_ms: medianLast10ObservedMs,
+        nActiveSquares: 1,
+        activity_score: Math.log1p(acc.count) * (1 + acc.genusSet.size * 0.05)
+      };
+    }
 
-    signature = nextSignature;
-    cache = new Map();
+    function mergeMetricsRecords(records) {
+      const merged = {
+        count: 0,
+        species: 0,
+        genera: 0,
+        observers: 1,
+        n_captive: 0,
+        iconic_counts: {},
+        month_totals: Array(MONTH_COUNT).fill(0),
+        last_observed: null,
+        median_last10_observed: null,
+        last_observed_ms: 0,
+        median_last10_observed_ms: 0,
+        nActiveSquares: 1
+      };
 
-    for (const obs of observations) {
-      const lat = Number(obs?.lat);
-      const lng = Number(obs?.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      for (const rec of records) {
+        if (!rec) continue;
 
-      const key = getCellKeyForLatLng(lat, lng);
-      const iconic = obs.iconic_taxon_name || "Unknown";
+        merged.count += Number(rec.count) || 0;
+        merged.species += Number(rec.species) || 0;
+        merged.genera += Number(rec.genera) || 0;
 
-      if (!cache.has(key)) {
-        cache.set(key, {
-          all: makeAccumulator(),
-          byIconic: new Map()
+        const lastMs = Number(rec.last_observed_ms) || parseGridDateMs(rec.last_observed);
+        if (lastMs > merged.last_observed_ms) {
+          merged.last_observed_ms = lastMs;
+          merged.last_observed = dateIsoFromMs(lastMs);
+        }
+
+        const medianMs =
+          Number(rec.median_last10_observed_ms) || parseGridDateMs(rec.median_last10_observed);
+        if (medianMs > merged.median_last10_observed_ms) {
+          merged.median_last10_observed_ms = medianMs;
+          merged.median_last10_observed = dateIsoFromMs(medianMs);
+        }
+
+        for (const [iconic, count] of Object.entries(rec.iconic_counts || {})) {
+          merged.iconic_counts[iconic] = (merged.iconic_counts[iconic] || 0) + (Number(count) || 0);
+        }
+
+        (rec.month_totals || []).forEach((count, index) => {
+          if (index >= 0 && index < MONTH_COUNT) {
+            merged.month_totals[index] += Number(count) || 0;
+          }
         });
       }
 
-      const entry = cache.get(key);
-      addObservation(entry.all, obs);
+      if (merged.count <= 0) return null;
 
-      if (!entry.byIconic.has(iconic)) {
-        entry.byIconic.set(iconic, makeAccumulator());
-      }
-      addObservation(entry.byIconic.get(iconic), obs);
+      const peak = Math.max(...merged.month_totals);
+      const total = merged.month_totals.reduce((sum, value) => sum + value, 0);
+      const dominant =
+        Object.entries(merged.iconic_counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
+
+      merged.iconic_n = Object.keys(merged.iconic_counts).length;
+      merged.dominant_iconic = dominant;
+      merged.peak_month = merged.month_totals.indexOf(peak) + 1;
+      merged.seasonal_strength = total ? peak / total : 0;
+      merged.month_entropy = entropy(merged.month_totals);
+      merged.activity_score = Math.log1p(merged.count) * (1 + merged.species * 0.05);
+
+      return merged;
     }
 
-    for (const [key, entry] of cache.entries()) {
-      const byIconicMetrics = new Map();
-      for (const [iconic, acc] of entry.byIconic.entries()) {
-        const metrics = finalizeMetrics(acc);
-        if (metrics) byIconicMetrics.set(iconic, metrics);
+    function buildCache() {
+      const observations = window.GridWildRecentINat?.getRecentObservations?.() || [];
+      const nextSignature = obsSignature(observations);
+      if (cache && signature === nextSignature) return cache;
+
+      signature = nextSignature;
+      cache = new Map();
+
+      for (const obs of observations) {
+        const lat = Number(obs?.lat);
+        const lng = Number(obs?.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+        const key = getCellKeyForLatLng(lat, lng);
+        const iconic = obs.iconic_taxon_name || "Unknown";
+
+        if (!cache.has(key)) {
+          cache.set(key, {
+            all: makeAccumulator(),
+            byIconic: new Map()
+          });
+        }
+
+        const entry = cache.get(key);
+        addObservation(entry.all, obs);
+
+        if (!entry.byIconic.has(iconic)) {
+          entry.byIconic.set(iconic, makeAccumulator());
+        }
+        addObservation(entry.byIconic.get(iconic), obs);
       }
 
-      cache.set(key, {
-        all: finalizeMetrics(entry.all),
-        byIconic: byIconicMetrics
-      });
+      for (const [key, entry] of cache.entries()) {
+        const byIconicMetrics = new Map();
+        for (const [iconic, acc] of entry.byIconic.entries()) {
+          const metrics = finalizeMetrics(acc);
+          if (metrics) byIconicMetrics.set(iconic, metrics);
+        }
+
+        cache.set(key, {
+          all: finalizeMetrics(entry.all),
+          byIconic: byIconicMetrics
+        });
+      }
+
+      return cache;
     }
 
-    return cache;
-  }
+    function entriesInMeterBounds(startX, endX, startY, endY) {
+      if (!isActive()) return [];
 
-  function entriesInMeterBounds(startX, endX, startY, endY) {
-    if (!isActive()) return [];
+      const minIx = Math.floor(startX / GRID_SIZE_M);
+      const maxIx = Math.floor((endX - GRID_SIZE_M) / GRID_SIZE_M);
+      const minIy = Math.floor(startY / GRID_SIZE_M);
+      const maxIy = Math.floor((endY - GRID_SIZE_M) / GRID_SIZE_M);
+      const taxa = new Set(selectedTaxa());
+      const entries = [];
 
-    const minIx = Math.floor(startX / GRID_SIZE_M);
-    const maxIx = Math.floor((endX - GRID_SIZE_M) / GRID_SIZE_M);
-    const minIy = Math.floor(startY / GRID_SIZE_M);
-    const maxIy = Math.floor((endY - GRID_SIZE_M) / GRID_SIZE_M);
-    const taxa = new Set(selectedTaxa());
-    const entries = [];
+      for (const [key, entry] of buildCache().entries()) {
+        const comma = key.indexOf(",");
+        if (comma <= 0) continue;
 
-    for (const [key, entry] of buildCache().entries()) {
-      const comma = key.indexOf(",");
-      if (comma <= 0) continue;
+        const ix = Number(key.slice(0, comma));
+        const iy = Number(key.slice(comma + 1));
+        if (
+          !Number.isFinite(ix) ||
+          !Number.isFinite(iy) ||
+          ix < minIx ||
+          ix > maxIx ||
+          iy < minIy ||
+          iy > maxIy
+        ) {
+          continue;
+        }
 
-      const ix = Number(key.slice(0, comma));
-      const iy = Number(key.slice(comma + 1));
-      if (
-        !Number.isFinite(ix) ||
-        !Number.isFinite(iy) ||
-        ix < minIx ||
-        ix > maxIx ||
-        iy < minIy ||
-        iy > maxIy
-      ) {
-        continue;
+        let metrics = entry.all || null;
+        if (taxa.size) {
+          const records = Array.from(taxa)
+            .map((taxon) => entry.byIconic.get(taxon))
+            .filter(Boolean);
+          metrics = records.length === 1 ? records[0] : mergeMetricsRecords(records);
+        }
+
+        if (metrics) entries.push({ ix, iy, key, metrics });
       }
 
-      let metrics = entry.all || null;
-      if (taxa.size) {
-        const records = Array.from(taxa)
-          .map(taxon => entry.byIconic.get(taxon))
-          .filter(Boolean);
-        metrics = records.length === 1
-          ? records[0]
-          : mergeMetricsRecords(records);
-      }
-
-      if (metrics) entries.push({ ix, iy, key, metrics });
+      return entries;
     }
 
-    return entries;
-  }
+    function metricsForCell(ix, iy) {
+      if (!isActive()) return null;
+      const entry = buildCache().get(`${ix},${iy}`);
+      if (!entry) return null;
 
-  function metricsForCell(ix, iy) {
-    if (!isActive()) return null;
-    const entry = buildCache().get(`${ix},${iy}`);
-    if (!entry) return null;
+      const taxa = new Set(selectedTaxa());
+      if (!taxa.size) return entry.all || null;
 
-    const taxa = new Set(selectedTaxa());
-    if (!taxa.size) return entry.all || null;
+      const records = Array.from(taxa)
+        .map((taxon) => entry.byIconic.get(taxon))
+        .filter(Boolean);
 
-    const records = Array.from(taxa)
-      .map(taxon => entry.byIconic.get(taxon))
-      .filter(Boolean);
+      if (!records.length) return null;
+      if (records.length === 1) return records[0];
 
-    if (!records.length) return null;
-    if (records.length === 1) return records[0];
+      return mergeMetricsRecords(records);
+    }
 
-    return mergeMetricsRecords(records);
-  }
+    function invalidate() {
+      cache = null;
+      signature = "";
+      window.GridWildCoarseHeatCache?.invalidate?.();
+      scheduleGridHeatCanvasRender();
+    }
 
-  function invalidate() {
-    cache = null;
-    signature = "";
-    window.GridWildCoarseHeatCache?.invalidate?.();
-    scheduleGridHeatCanvasRender();
-  }
+    window.addEventListener("gwRecentINatUpdated", invalidate);
 
-  window.addEventListener("gwRecentINatUpdated", invalidate);
-
-  return {
-    isActive,
-    metricsForCell,
-    entriesInMeterBounds,
-    generaRecordForBounds,
-    invalidate
-  };
-})();
+    return {
+      isActive,
+      metricsForCell,
+      entriesInMeterBounds,
+      generaRecordForBounds,
+      invalidate
+    };
+  })();
 
 function getDisplayMetricsForCell(ix, iy, baseMetrics = {}, options = {}) {
   if (window.GridWildMeOverlayFilter?.isActive?.()) {
@@ -2462,9 +2449,10 @@ function getDisplayMetricsForCell(ix, iy, baseMetrics = {}, options = {}) {
   const staticMetrics = hasGridMetricSignal(baseMetrics)
     ? window.GridWildIconicOverlayFilter?.metricsForCell?.(ix, iy, baseMetrics, options) || null
     : null;
-  const pyriteMetrics = window.GridWildPyriteLake?.getMetricsForCell?.(ix, iy, {
-    iconicTaxa: window.GridWildIconicOverlayFilter?.selectedTaxa?.() || []
-  }) || null;
+  const pyriteMetrics =
+    window.GridWildPyriteLake?.getMetricsForCell?.(ix, iy, {
+      iconicTaxa: window.GridWildIconicOverlayFilter?.selectedTaxa?.() || []
+    }) || null;
 
   return mergeDisplayMetricRecords([staticMetrics, pyriteMetrics]);
 }
@@ -2536,7 +2524,8 @@ function mergeDisplayMetricRecords(records) {
       merged.last_observed = gridDateIsoFromMs(lastMs);
     }
 
-    const medianMs = Number(rec.median_last10_observed_ms) || parseGridDateMs(rec.median_last10_observed);
+    const medianMs =
+      Number(rec.median_last10_observed_ms) || parseGridDateMs(rec.median_last10_observed);
     if (medianMs > merged.median_last10_observed_ms) {
       merged.median_last10_observed_ms = medianMs;
       merged.median_last10_observed = gridDateIsoFromMs(medianMs);
@@ -2545,8 +2534,8 @@ function mergeDisplayMetricRecords(records) {
 
   const peak = Math.max(...merged.month_totals);
   const total = merged.month_totals.reduce((sum, value) => sum + value, 0);
-  const dominant = Object.entries(merged.iconic_counts)
-    .sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
+  const dominant =
+    Object.entries(merged.iconic_counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
 
   merged.iconic_n = Object.keys(merged.iconic_counts).length;
   merged.dominant_iconic = dominant;
@@ -2608,9 +2597,6 @@ window.warmRichMetricsAroundCenter = function warmRichMetricsAroundCenter(radius
   }
 };
 
-
-
-
 function escapeHtml(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -2623,11 +2609,7 @@ function escapeHtml(s) {
 function getObserverMeta(observerDict, observerId) {
   if (!observerDict) return null;
 
-  return (
-    observerDict[String(observerId)] ||
-    observerDict[`id_${observerId}`] ||
-    null
-  );
+  return observerDict[String(observerId)] || observerDict[`id_${observerId}`] || null;
 }
 
 window.__genusNameToTaxonomyEntry = window.__genusNameToTaxonomyEntry || null;
@@ -2685,18 +2667,18 @@ function buildTaxonomyTreeFromSquareRecord(squareRec) {
 
   for (const g of genera) {
     const iconic = g?.iconic_taxon_name || "Unknown";
-    const order  = g?.order_name || "Unknown";
+    const order = g?.order_name || "Unknown";
     const family = g?.family_name || "Unknown";
-    const genus  = g?.genus_name || "Unknown";
+    const genus = g?.genus_name || "Unknown";
 
     const genusKey = [iconic, order, family, genus].join("||");
     const n = Math.max(1, Number(g?.count) || 1);
 
     const fixedPath = [
       { name: iconic, rank: "iconic_taxon" },
-      { name: order,  rank: "order" },
+      { name: order, rank: "order" },
       { name: family, rank: "family" },
-      { name: genus,  rank: "genus" }
+      { name: genus, rank: "genus" }
     ];
 
     let node = root;
@@ -2728,12 +2710,12 @@ function buildTaxonomyTreeFromSquareRecord(squareRec) {
 }
 
 function finalizeTree(node, parent = null, out = []) {
-  const kids = Array.from(node.children.values())
-    .sort((a, b) =>
+  const kids = Array.from(node.children.values()).sort(
+    (a, b) =>
       (b.genusCount || 0) - (a.genusCount || 0) ||
       (b.weight || 0) - (a.weight || 0) ||
       a.name.localeCompare(b.name)
-    );
+  );
 
   const finalized = {
     name: node.name,
@@ -2742,7 +2724,7 @@ function finalizeTree(node, parent = null, out = []) {
     genusCount: node.genusCount || 0,
     depth: node.depth || 0,
     parent,
-    children: kids.map(child => finalizeTree(child, node.name, out))
+    children: kids.map((child) => finalizeTree(child, node.name, out))
   };
 
   out.push(finalized);
@@ -2806,7 +2788,6 @@ function assignTreeLayout(root) {
   };
 }
 
-
 function flattenTree(root) {
   const nodes = [];
   const edges = [];
@@ -2814,32 +2795,29 @@ function flattenTree(root) {
   function walk(node, parent = null) {
     nodes.push(node);
     if (parent) edges.push({ source: parent, target: node });
-    (node.children || []).forEach(child => walk(child, node));
+    (node.children || []).forEach((child) => walk(child, node));
   }
 
   walk(root);
   return { nodes, edges };
 }
 
-
 function slugifyCladoName(s) {
-  return String(s || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "node";
+  return (
+    String(s || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "node"
+  );
 }
 
 function annotateTreePaths(node, parentPath = "root") {
-  const myPath = node.depth === 0
-    ? "root"
-    : `${parentPath}/${slugifyCladoName(node.name)}`;
+  const myPath = node.depth === 0 ? "root" : `${parentPath}/${slugifyCladoName(node.name)}`;
 
   node._path = myPath;
-  (node.children || []).forEach(child => annotateTreePaths(child, myPath));
+  (node.children || []).forEach((child) => annotateTreePaths(child, myPath));
   return node;
 }
-
-
 
 // ─────────────────────────────────────────────────────────────
 // Simple pie-navigation state
@@ -2854,7 +2832,7 @@ function findNodeByPath(node, path) {
   if (!node) return null;
   if (node._path === path) return node;
 
-  for (const child of (node.children || [])) {
+  for (const child of node.children || []) {
     const found = findNodeByPath(child, path);
     if (found) return found;
   }
@@ -2878,15 +2856,14 @@ function colorForPieSlice(child, diversityFrac, siblingIndexFrac = 0.5) {
   const baseHue = 120 + 18 * siblingIndexFrac;
 
   // Diversity drives vividness and a bit of darkness
-  const sat = 28 + 58 * diversityFrac;     // low diversity = duller
-  const light = 70 - 20 * diversityFrac;   // high diversity = a bit darker/richer
+  const sat = 28 + 58 * diversityFrac; // low diversity = duller
+  const light = 70 - 20 * diversityFrac; // high diversity = a bit darker/richer
 
   return `hsl(${baseHue}, ${sat}%, ${light}%)`;
 }
 
-
 function polarToCartesian(cx, cy, r, angleDeg) {
-  const a = (angleDeg - 90) * Math.PI / 180;
+  const a = ((angleDeg - 90) * Math.PI) / 180;
   return {
     x: cx + r * Math.cos(a),
     y: cy + r * Math.sin(a)
@@ -2899,7 +2876,7 @@ function describeArc(cx, cy, rOuter, rInner, startAngle, endAngle) {
   const p3 = polarToCartesian(cx, cy, rInner, endAngle);
   const p4 = polarToCartesian(cx, cy, rInner, startAngle);
 
-  const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
 
   return [
     `M ${p1.x} ${p1.y}`,
@@ -2911,20 +2888,21 @@ function describeArc(cx, cy, rOuter, rInner, startAngle, endAngle) {
 }
 
 function getDisplayName(node) {
-  return window.GridWildTaxonomy?.displayName?.(node.rank, node.name) ||
+  return (
+    window.GridWildTaxonomy?.displayName?.(node.rank, node.name) ||
     window.GridWildTaxonomy?.displayName?.("iconic_taxon", node.name) ||
-    node.name;
+    node.name
+  );
 }
 
 function renderPieSvg(node) {
-  
-const mobile = window.matchMedia("(max-width: 700px), (pointer: coarse)").matches;
-const W = 260;
-const H = mobile ? 10 : 240;
-const cx     = 130;
-const cy     = mobile ? 5 : 120;
-const rOuter = mobile ? 100 : 92;
-const rInner = mobile ? 20 : 28;
+  const mobile = window.matchMedia("(max-width: 700px), (pointer: coarse)").matches;
+  const W = 260;
+  const H = mobile ? 10 : 240;
+  const cx = 130;
+  const cy = mobile ? 5 : 120;
+  const rOuter = mobile ? 100 : 92;
+  const rInner = mobile ? 20 : 28;
 
   const showSmallText = shouldShowSmallText();
 
@@ -2942,29 +2920,25 @@ const rInner = mobile ? 20 : 28;
   }
 
   const total = kids.reduce((s, k) => s + Math.max(1, k.weight || 1), 0) || 1;
-  const maxDiversity = Math.max(...kids.map(k => k.genusCount || 0), 1);
+  const maxDiversity = Math.max(...kids.map((k) => k.genusCount || 0), 1);
 
   let cursor = 0;
-  const slices = kids.map((child, i) => {
-    const value = Math.max(1, child.weight || 1);
-    const frac = value / total;
-    const startAngle = cursor * 360;
-    const endAngle = (cursor + frac) * 360;
-    cursor += frac;
+  const slices = kids
+    .map((child, i) => {
+      const value = Math.max(1, child.weight || 1);
+      const frac = value / total;
+      const startAngle = cursor * 360;
+      const endAngle = (cursor + frac) * 360;
+      cursor += frac;
 
-    const mid = 0.5 * (startAngle + endAngle);
-    const labelPt = polarToCartesian(cx, cy, 62, mid);
-    
-    // const fill = colorForPieDepth(child.depth || 1, i / Math.max(1, kids.length - 1));
-    const diversityFrac = (child.genusCount || 0) / maxDiversity;
-    const fill = colorForPieSlice(
-      child,
-      diversityFrac,
-      i / Math.max(1, kids.length - 1)
-    );
+      const mid = 0.5 * (startAngle + endAngle);
+      const labelPt = polarToCartesian(cx, cy, 62, mid);
 
+      // const fill = colorForPieDepth(child.depth || 1, i / Math.max(1, kids.length - 1));
+      const diversityFrac = (child.genusCount || 0) / maxDiversity;
+      const fill = colorForPieSlice(child, diversityFrac, i / Math.max(1, kids.length - 1));
 
-    return `
+      return `
       <g class="gw-pie-slice-group" data-node-path="${escapeHtml(child._path || "")}">
         <title>
         ${getDisplayName(child)} (${child.name}) • ${child.weight} obs • ${child.genusCount} genera
@@ -2976,7 +2950,9 @@ const rInner = mobile ? 20 : 28;
           stroke="rgba(255,255,255,0.95)"
           stroke-width="1.5"
         />
-        ${frac > 0.06 ? `
+        ${
+          frac > 0.06
+            ? `
           <text
             x="${labelPt.x}"
             y="${labelPt.y}"
@@ -2987,10 +2963,13 @@ const rInner = mobile ? 20 : 28;
             fill="rgba(28, 22, 14, 0.96)"
             pointer-events="none"
           >${escapeHtml(getDisplayName(child))}</text>
-        ` : ""}
+        `
+            : ""
+        }
       </g>
     `;
-  }).join("");
+    })
+    .join("");
 
   return `
     <svg id="gwCladoSvg" class="gw-clado-svg" viewBox="0 0 ${W} ${H}">
@@ -3017,11 +2996,15 @@ const rInner = mobile ? 20 : 28;
 >
   ${escapeHtml(getDisplayName(node))}
 </text>
-      ${showSmallText ? `
+      ${
+        showSmallText
+          ? `
         <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="10.5" opacity="0.64">
           tap slice to drill in
         </text>
-      ` : ""}
+      `
+          : ""
+      }
     </svg>
   `;
 }
@@ -3050,14 +3033,14 @@ function bindCladogramInteractions() {
 
     const nextNode = findNodeByPath(state.fullTree, nodePath);
     if (!nextNode) return;
- 
+
     if (!nextNode.children || nextNode.children.length === 0) {
-    const genusName = nextNode.name || nextNode.label || nextNode.genus_name || "";
-    if (genusName && window.GridWildGenusCodex) {
-      window.GridWildGenusCodex.open(genusName);
+      const genusName = nextNode.name || nextNode.label || nextNode.genus_name || "";
+      if (genusName && window.GridWildGenusCodex) {
+        window.GridWildGenusCodex.open(genusName);
+      }
+      return;
     }
-    return;
-   }
 
     state.pathStack = state.pathStack || [];
     state.pathStack.push(state.currentNodePath || "root");
@@ -3130,7 +3113,6 @@ function getCladoElements() {
   };
 }
 
-
 function getPointerDistance(a, b) {
   const dx = a.clientX - b.clientX;
   const dy = a.clientY - b.clientY;
@@ -3143,9 +3125,6 @@ function getPointerMidpoint(a, b) {
     clientY: 0.5 * (a.clientY + b.clientY)
   };
 }
-
-
-
 
 function formatViewBox(vb) {
   return `${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
@@ -3176,8 +3155,7 @@ window.updateHudCladogram = async function updateHudCladogram() {
     const subtitleEl = document.querySelector("#gwCladoPane .gw-clado-subtitle");
     if (subtitleEl) {
       subtitleEl.hidden = !showSmallText;
-      subtitleEl.textContent =
-        `Center ${CENTER_MACRO_SIZE_CELLS}×${CENTER_MACRO_SIZE_CELLS} square taxonomy: iconic taxon → order → family → genus; slice size = observations, color vividness = genus diversity`;
+      subtitleEl.textContent = `Center ${CENTER_MACRO_SIZE_CELLS}×${CENTER_MACRO_SIZE_CELLS} square taxonomy: iconic taxon → order → family → genus; slice size = observations, color vividness = genus diversity`;
     }
 
     const hintEl = document.querySelector("#gwCladoPane .gw-clado-hint");
@@ -3210,7 +3188,6 @@ window.updateHudCladogram = async function updateHudCladogram() {
     el.className = "";
     el.innerHTML = renderPieSvg(tree);
     bindCladogramInteractions();
-
   } catch (err) {
     console.warn("Failed to update cladogram:", err);
     el.className = "gw-clado-empty";
@@ -3222,19 +3199,18 @@ function findNodeByPath(node, path) {
   if (!node) return null;
   if (node._path === path) return node;
 
-  for (const child of (node.children || [])) {
+  for (const child of node.children || []) {
     const found = findNodeByPath(child, path);
     if (found) return found;
   }
   return null;
 }
 
-
 // Optional: style (grid lines)
 const GRID_LINE_STYLE = {
   pane: "gridPane",
   interactive: false,
-  weight: .8,
+  weight: 0.8,
   opacity: 0.25
   // color: "#000"   // uncomment if you want to force a color
 };
@@ -3287,13 +3263,12 @@ function countToFill(count) {
   const sat = 85;
   const light = 60 - 12 * t;
   const fillColor = `hsl(${hue.toFixed(1)}, ${sat}%, ${light.toFixed(1)}%)`;
-  const fillOpacity = 0.10 + 0.55 * Math.pow(t, 0.85);
+  const fillOpacity = 0.1 + 0.55 * Math.pow(t, 0.85);
 
   return { fillColor, fillOpacity };
 }
 
-
-function metricsToFill(metrics){
+function metricsToFill(metrics) {
   if (window.GWLenses?.compose) {
     return window.GWLenses.compose(metrics);
   }
@@ -3315,20 +3290,20 @@ function metricsToFillOLD(metrics) {
   const SPECIES_CAP = 15;
   const OBSERVER_CAP = 6;
 
-// make room for log scaling on the colormap...
-//  const tObs = Math.min(obs, OBS_CAP) / OBS_CAP;
-const logDen = Math.log1p(OBS_CAP);
-const tObsLinear = Math.min(obs, OBS_CAP) / OBS_CAP;
-const tObsLog = Math.log1p(Math.min(obs, OBS_CAP)) / logDen;
-const useLog = window.__gwState?.logHeat ?? true;
-const tObs = useLog ? tObsLog : tObsLinear;
+  // make room for log scaling on the colormap...
+  //  const tObs = Math.min(obs, OBS_CAP) / OBS_CAP;
+  const logDen = Math.log1p(OBS_CAP);
+  const tObsLinear = Math.min(obs, OBS_CAP) / OBS_CAP;
+  const tObsLog = Math.log1p(Math.min(obs, OBS_CAP)) / logDen;
+  const useLog = window.__gwState?.logHeat ?? true;
+  const tObs = useLog ? tObsLog : tObsLinear;
 
-// make room for log scaling of species... :\
-//  const tSpecies = Math.min(species, SPECIES_CAP) / SPECIES_CAP;
-const logDenSpecies = Math.log1p(SPECIES_CAP);
-const tSpeciesLinear = Math.min(species, SPECIES_CAP) / SPECIES_CAP;
-const tSpeciesLog = Math.log1p(Math.min(species, SPECIES_CAP)) / logDenSpecies;
-const tSpecies = useLog ? tSpeciesLog : tSpeciesLinear;
+  // make room for log scaling of species... :\
+  //  const tSpecies = Math.min(species, SPECIES_CAP) / SPECIES_CAP;
+  const logDenSpecies = Math.log1p(SPECIES_CAP);
+  const tSpeciesLinear = Math.min(species, SPECIES_CAP) / SPECIES_CAP;
+  const tSpeciesLog = Math.log1p(Math.min(species, SPECIES_CAP)) / logDenSpecies;
+  const tSpecies = useLog ? tSpeciesLog : tSpeciesLinear;
 
   const tObservers = Math.min(observers, OBSERVER_CAP) / OBSERVER_CAP;
 
@@ -3372,9 +3347,9 @@ function getPaddedBoundsMeters() {
   const maxY = Math.max(pNWm.y, pSEm.y);
 
   const startX = snapDown(minX, GRID_SIZE_M);
-  const endX   = snapUp(maxX, GRID_SIZE_M);
+  const endX = snapUp(maxX, GRID_SIZE_M);
   const startY = snapDown(minY, GRID_SIZE_M);
-  const endY   = snapUp(maxY, GRID_SIZE_M);
+  const endY = snapUp(maxY, GRID_SIZE_M);
 
   return { startX, endX, startY, endY };
 }
@@ -3438,11 +3413,10 @@ function updateGridHeat(results) {
   }
 }
 
-window.updateGridHeatmap = function(results) {
+window.updateGridHeatmap = function (results) {
   // Keep caching results for popup logic, etc.
   window.__inatLastResults = Array.isArray(results) ? results : [];
 };
-
 
 // Grid lines rendering
 function updateGridLines() {
@@ -3695,7 +3669,7 @@ function countObsInCell(ix, iy, results) {
 
 function classifyCell(count) {
   if (count <= 0) return { label: "Undiscovered", badge: "FOG" };
-  if (count < 5)  return { label: "Lightly Scouted", badge: "SCOUT" };
+  if (count < 5) return { label: "Lightly Scouted", badge: "SCOUT" };
   if (count < 15) return { label: "Active Zone", badge: "ACTIVE" };
   return { label: "Hotspot", badge: "HOT" };
 }
@@ -3726,7 +3700,7 @@ function summarizeSquareGenera(squareRec) {
 
   const topGenera = genera
     .slice(0, 5)
-    .map(g => `${g.genus_name} (${g.count})`)
+    .map((g) => `${g.genus_name} (${g.count})`)
     .join(", ");
 
   return {
@@ -3768,9 +3742,7 @@ function buildRPGPopupHTML({ ix, iy, centerLL, metrics, genusSummary }) {
         <div class="rpg-stat">
           <div class="rpg-k">Captive</div>
           <div class="rpg-v">${
-            metrics.count > 0
-              ? `${Math.round(100 * metrics.n_captive / metrics.count)}%`
-              : "0%"
+            metrics.count > 0 ? `${Math.round((100 * metrics.n_captive) / metrics.count)}%` : "0%"
           }</div>
         </div>
 
@@ -3820,10 +3792,7 @@ async function __onGridDblClick(e) {
   const { swLL, neLL } = gridIndexToBoundsLL(ix, iy);
   flashGridCell(swLL, neLL);
 
-  const centerLL = L.latLng(
-    (swLL.lat + neLL.lat) / 2,
-    (swLL.lng + neLL.lng) / 2
-  );
+  const centerLL = L.latLng((swLL.lat + neLL.lat) / 2, (swLL.lng + neLL.lng) / 2);
 
   // Pull precomputed square metrics from static heat store
   const metrics = getStaticMetricsForCell(ix, iy);
@@ -3886,8 +3855,9 @@ window.setHeatVisible = function (visible) {
   window.__gwFilters.showHeat = !!visible;
 
   if (visible) {
-    ensureGridWildStaticAssetsLoaded()
-      .catch((err) => console.warn("GridWild heat assets unavailable.", err));
+    ensureGridWildStaticAssetsLoaded().catch((err) =>
+      console.warn("GridWild heat assets unavailable.", err)
+    );
   }
 
   ensureGridHeatCanvas();
@@ -3901,7 +3871,6 @@ window.setHeatVisible = function (visible) {
   scheduleGridHeatCanvasRender();
 };
 // End allow  UI to toggle the heat overlay
-
 
 const STATIC_HEAT_CSV_WORKER_URL = "js/gw-heat-csv-worker.js";
 const STATIC_HEAT_FALLBACK_YIELD_ROWS = 1500;
@@ -3934,7 +3903,7 @@ function loadStaticHeatmapCsvInWorker(url) {
       callback(value);
     }
 
-    worker.onmessage = event => {
+    worker.onmessage = (event) => {
       const message = event.data || {};
 
       if (message.type === "chunk") {
@@ -3959,7 +3928,7 @@ function loadStaticHeatmapCsvInWorker(url) {
       }
     };
 
-    worker.onerror = event => {
+    worker.onerror = (event) => {
       finish(reject, new Error(event.message || "Static heat CSV worker failed."));
     };
 
@@ -3968,7 +3937,7 @@ function loadStaticHeatmapCsvInWorker(url) {
 }
 
 function parseStaticHeatCsvColumns(header) {
-  const columns = header.split(",").map(value => value.trim());
+  const columns = header.split(",").map((value) => value.trim());
   const col = (...names) => {
     for (const name of names) {
       const index = columns.indexOf(name);
@@ -3990,7 +3959,7 @@ function parseStaticHeatCsvColumns(header) {
 }
 
 function yieldStaticHeatFallback() {
-  return new Promise(resolve => window.setTimeout(resolve, 0));
+  return new Promise((resolve) => window.setTimeout(resolve, 0));
 }
 
 async function loadStaticHeatmapCsvFallback(url) {
@@ -4037,12 +4006,9 @@ async function loadStaticHeatmapCsvFallback(url) {
       continue;
     }
 
-    const lastObserved = columns.lastObserved >= 0
-      ? (parts[columns.lastObserved] || null)
-      : null;
-    const medianLast10Observed = columns.medianLast10 >= 0
-      ? (parts[columns.medianLast10] || null)
-      : null;
+    const lastObserved = columns.lastObserved >= 0 ? parts[columns.lastObserved] || null : null;
+    const medianLast10Observed =
+      columns.medianLast10 >= 0 ? parts[columns.medianLast10] || null : null;
 
     counts.set(`${ix},${iy}`, {
       count,
@@ -4067,10 +4033,13 @@ async function loadStaticHeatmapCsvFallback(url) {
 
 function installStaticHeatmapCounts(counts) {
   window.__staticGridCounts = counts;
+  window.__gwStaticHeatLoaded = true;
   window.GridWildCoarseHeatCache?.invalidate?.();
-  window.dispatchEvent(new CustomEvent("gridwild:staticheatloaded", {
-    detail: { count: counts?.size || 0 }
-  }));
+  window.dispatchEvent(
+    new CustomEvent("gridwild:staticheatloaded", {
+      detail: { count: counts?.size || 0 }
+    })
+  );
 
   updateStaticGridHeat();
 
@@ -4137,17 +4106,16 @@ function getHeatZThresholdDirection() {
 }
 
 function buildZStats(values) {
-  const nums = values
-    .map(Number)
-    .filter(Number.isFinite);
+  const nums = values.map(Number).filter(Number.isFinite);
 
   if (!nums.length) return null;
 
   const mean = nums.reduce((sum, value) => sum + value, 0) / nums.length;
-  const variance = nums.reduce((sum, value) => {
-    const d = value - mean;
-    return sum + d * d;
-  }, 0) / nums.length;
+  const variance =
+    nums.reduce((sum, value) => {
+      const d = value - mean;
+      return sum + d * d;
+    }, 0) / nums.length;
 
   return {
     mean,
@@ -4167,9 +4135,14 @@ function passesHeatZThreshold(value, stats) {
 const HEAT_MORPH_DEFAULT_MIN_SIZE = 10;
 const HEAT_MORPH_MAX_SIZE = 999;
 const HEAT_MORPH_OFFSETS = [
-  [-1, -1], [0, -1], [1, -1],
-  [-1, 0],           [1, 0],
-  [-1, 1],  [0, 1],  [1, 1]
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+  [-1, 0],
+  [1, 0],
+  [-1, 1],
+  [0, 1],
+  [1, 1]
 ];
 
 function clampHeatMorphSize(value, fallback) {
@@ -4272,10 +4245,7 @@ function collectRegularHeatItems(counts, startX, endX, startY, endY) {
       const iy = Math.floor(y / GRID_SIZE_M);
       const key = `${ix},${iy}`;
 
-      const metrics =
-        window.__richGridMetrics?.get(key) ||
-        counts.get(key) ||
-        null;
+      const metrics = window.__richGridMetrics?.get(key) || counts.get(key) || null;
 
       const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics);
       if (!displayMetrics) continue;
@@ -4300,7 +4270,7 @@ function collectRegularHeatItems(counts, startX, endX, startY, endY) {
 
 function collectMeHeatItems(entries = []) {
   return entries
-    .map(entry => {
+    .map((entry) => {
       const heatValue = getHeatValueForCell(entry.metrics);
       if (heatValue <= 0) return null;
       return {
@@ -4332,10 +4302,7 @@ function collectRegularHeatZStats(counts, startX, endX, startY, endY) {
       const iy = Math.floor(y / GRID_SIZE_M);
       const key = `${ix},${iy}`;
 
-      const metrics =
-        window.__richGridMetrics?.get(key) ||
-        counts.get(key) ||
-        null;
+      const metrics = window.__richGridMetrics?.get(key) || counts.get(key) || null;
 
       const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics);
 
@@ -4366,7 +4333,7 @@ function getEffectiveCoarseHeatBinSize() {
 function getHeatMapMetersPerPixel() {
   const zoom = map.getZoom();
   const lat = map.getCenter().lat;
-  return (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, zoom);
+  return (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom);
 }
 
 function getHeatMapZoomMultiplier() {
@@ -4452,109 +4419,113 @@ window.syncGridWildCoarseHeatControls = syncCoarseHeatControls;
 
 // Coarse heat bin cache. The key includes a render signature because source
 // membership depends on the active metric and overlay filters.
-window.GridWildCoarseHeatCache = window.GridWildCoarseHeatCache || (function () {
-  const MAX_ENTRIES = 20000;
-  const EMPTY_RESULT = Symbol("empty coarse heat bin");
-  let dataVersion = 0;
-  let cache = new Map();
-  let hits = 0;
-  let misses = 0;
-  let emptyHits = 0;
+window.GridWildCoarseHeatCache =
+  window.GridWildCoarseHeatCache ||
+  (function () {
+    const MAX_ENTRIES = 20000;
+    const EMPTY_RESULT = Symbol("empty coarse heat bin");
+    let dataVersion = 0;
+    let cache = new Map();
+    let hits = 0;
+    let misses = 0;
+    let emptyHits = 0;
 
-  function makeKey(anchorIx, anchorIy, binSize, signature = "") {
-    return `${dataVersion}|${signature}|${binSize}|${anchorIx}|${anchorIy}`;
-  }
-
-  function readValue(value) {
-    return value === EMPTY_RESULT ? null : value;
-  }
-
-  function get(anchorIx, anchorIy, binSize, signature, compute) {
-    if (typeof signature === "function") {
-      compute = signature;
-      signature = "";
+    function makeKey(anchorIx, anchorIy, binSize, signature = "") {
+      return `${dataVersion}|${signature}|${binSize}|${anchorIx}|${anchorIy}`;
     }
 
-    const key = makeKey(anchorIx, anchorIy, binSize, signature);
-    if (cache.has(key)) {
-      const value = cache.get(key);
-      cache.delete(key);
-      cache.set(key, value);
-      hits++;
-      if (value === EMPTY_RESULT) emptyHits++;
-      return readValue(value);
+    function readValue(value) {
+      return value === EMPTY_RESULT ? null : value;
     }
 
-    misses++;
-    const value = compute();
-    cache.set(key, value == null ? EMPTY_RESULT : value);
+    function get(anchorIx, anchorIy, binSize, signature, compute) {
+      if (typeof signature === "function") {
+        compute = signature;
+        signature = "";
+      }
 
-    if (cache.size > MAX_ENTRIES) {
-      const oldestKey = cache.keys().next().value;
-      cache.delete(oldestKey);
-    }
+      const key = makeKey(anchorIx, anchorIy, binSize, signature);
+      if (cache.has(key)) {
+        const value = cache.get(key);
+        cache.delete(key);
+        cache.set(key, value);
+        hits++;
+        if (value === EMPTY_RESULT) emptyHits++;
+        return readValue(value);
+      }
 
-    return value;
-  }
+      misses++;
+      const value = compute();
+      cache.set(key, value == null ? EMPTY_RESULT : value);
 
-  function invalidate() {
-    dataVersion++;
-    cache.clear();
-    hits = 0;
-    misses = 0;
-    emptyHits = 0;
-  }
+      if (cache.size > MAX_ENTRIES) {
+        const oldestKey = cache.keys().next().value;
+        cache.delete(oldestKey);
+      }
 
-  return {
-    get,
-    invalidate,
-    size: () => cache.size,
-    stats: () => ({ size: cache.size, hits, misses, emptyHits, dataVersion })
-  };
-})();
-
-window.GridWildCoarseHeatTileCache = window.GridWildCoarseHeatTileCache || (function () {
-  const MAX_ENTRIES = COARSE_HEAT_TILE_CACHE_MAX;
-  const cache = new Map();
-  let hits = 0;
-  let misses = 0;
-
-  function get(key, compute) {
-    if (cache.has(key)) {
-      const value = cache.get(key);
-      cache.delete(key);
-      cache.set(key, value);
-      hits++;
       return value;
     }
 
-    misses++;
-    const value = compute();
-    if (value == null) return value;
-
-    cache.set(key, value);
-
-    while (cache.size > MAX_ENTRIES) {
-      const oldestKey = cache.keys().next().value;
-      cache.delete(oldestKey);
+    function invalidate() {
+      dataVersion++;
+      cache.clear();
+      hits = 0;
+      misses = 0;
+      emptyHits = 0;
     }
 
-    return value;
-  }
+    return {
+      get,
+      invalidate,
+      size: () => cache.size,
+      stats: () => ({ size: cache.size, hits, misses, emptyHits, dataVersion })
+    };
+  })();
 
-  function invalidate() {
-    cache.clear();
-    hits = 0;
-    misses = 0;
-  }
+window.GridWildCoarseHeatTileCache =
+  window.GridWildCoarseHeatTileCache ||
+  (function () {
+    const MAX_ENTRIES = COARSE_HEAT_TILE_CACHE_MAX;
+    const cache = new Map();
+    let hits = 0;
+    let misses = 0;
 
-  return {
-    get,
-    invalidate,
-    size: () => cache.size,
-    stats: () => ({ size: cache.size, hits, misses })
-  };
-})();
+    function get(key, compute) {
+      if (cache.has(key)) {
+        const value = cache.get(key);
+        cache.delete(key);
+        cache.set(key, value);
+        hits++;
+        return value;
+      }
+
+      misses++;
+      const value = compute();
+      if (value == null) return value;
+
+      cache.set(key, value);
+
+      while (cache.size > MAX_ENTRIES) {
+        const oldestKey = cache.keys().next().value;
+        cache.delete(oldestKey);
+      }
+
+      return value;
+    }
+
+    function invalidate() {
+      cache.clear();
+      hits = 0;
+      misses = 0;
+    }
+
+    return {
+      get,
+      invalidate,
+      size: () => cache.size,
+      stats: () => ({ size: cache.size, hits, misses })
+    };
+  })();
 
 function median(values) {
   const nums = values
@@ -4565,27 +4536,24 @@ function median(values) {
   if (!nums.length) return 0;
 
   const mid = Math.floor(nums.length / 2);
-  return nums.length % 2
-    ? nums[mid]
-    : (nums[mid - 1] + nums[mid]) / 2;
+  return nums.length % 2 ? nums[mid] : (nums[mid - 1] + nums[mid]) / 2;
 }
 
 function coarseHeatLensNeedsRichMetrics(lens = window.__gwState?.activeLens || "classic") {
-  return window.GridWildIconicOverlayFilter?.isActive?.() === true ||
+  return (
+    window.GridWildIconicOverlayFilter?.isActive?.() === true ||
     lens === "dominantlife" ||
     lens === "seasonalpulse" ||
     lens === "stability" ||
     lens === "breadth" ||
     lens === "cultivated" ||
-    lens === "wildbalance";
+    lens === "wildbalance"
+  );
 }
 
 function isFineCellInBounds(ix, iy, bounds) {
   if (!bounds) return true;
-  return ix >= bounds.minIx &&
-    ix < bounds.maxIx &&
-    iy >= bounds.minIy &&
-    iy < bounds.maxIy;
+  return ix >= bounds.minIx && ix < bounds.maxIx && iy >= bounds.minIy && iy < bounds.maxIy;
 }
 
 function getCoarseRichHydrationSignature() {
@@ -4647,18 +4615,14 @@ function makeCoarseHeatSourceLookup(options = {}) {
     }
 
     const richMetrics = window.__richGridMetrics?.get(key) || null;
-    const baseMetrics =
-      richMetrics ||
-      (counts instanceof Map ? counts.get(key) : null) ||
-      null;
+    const baseMetrics = richMetrics || (counts instanceof Map ? counts.get(key) : null) || null;
 
     const displayMetrics = getDisplayMetricsForCell(ix, iy, baseMetrics, {
       requestMissingRecord: false
     });
     const heatValue = getHeatValueForCell(displayMetrics);
-    const source = displayMetrics && heatValue > 0
-      ? { ix, iy, key, metrics: displayMetrics, heatValue }
-      : null;
+    const source =
+      displayMetrics && heatValue > 0 ? { ix, iy, key, metrics: displayMetrics, heatValue } : null;
     const entry = {
       key,
       baseMetrics,
@@ -4729,12 +4693,8 @@ function getCoarseHeatCacheSignature() {
 function getCachedCoarseMedianMetrics(anchorIx, anchorIy, binSize, sourceLookup, signature) {
   const cache = window.GridWildCoarseHeatCache;
   if (cache?.get) {
-    return cache.get(
-      anchorIx,
-      anchorIy,
-      binSize,
-      signature,
-      () => getCoarseMedianMetrics(anchorIx, anchorIy, binSize, sourceLookup)
+    return cache.get(anchorIx, anchorIy, binSize, signature, () =>
+      getCoarseMedianMetrics(anchorIx, anchorIy, binSize, sourceLookup)
     );
   }
 
@@ -4786,9 +4746,7 @@ function getCoarseMedianMetrics(anchorIx, anchorIy, binSize, sourceLookup) {
   const counts = window.__staticGridCounts;
   if (!(counts instanceof Map) && !window.GridWildPyriteLake?.hasData?.()) return null;
 
-  const lookup = typeof sourceLookup === "function"
-    ? sourceLookup
-    : makeCoarseHeatSourceLookup();
+  const lookup = typeof sourceLookup === "function" ? sourceLookup : makeCoarseHeatSourceLookup();
   const values = {
     count: [],
     species: [],
@@ -4808,9 +4766,8 @@ function getCoarseMedianMetrics(anchorIx, anchorIy, binSize, sourceLookup) {
   for (let ix = anchorIx; ix < anchorIx + binSize; ix++) {
     for (let iy = anchorIy; iy < anchorIy + binSize; iy++) {
       const source = lookup(ix, iy, { warm: false });
-      const hasRawSignal = typeof lookup.hasRawSignal === "function"
-        ? lookup.hasRawSignal(ix, iy)
-        : Boolean(source);
+      const hasRawSignal =
+        typeof lookup.hasRawSignal === "function" ? lookup.hasRawSignal(ix, iy) : Boolean(source);
       if (!hasRawSignal) continue;
       if (binSize > 1 && !hasCoarseHeatSourceNeighbor(ix, iy, lookup)) continue;
       if (typeof lookup.warmCell === "function") lookup.warmCell(ix, iy);
@@ -4823,8 +4780,11 @@ function getCoarseMedianMetrics(anchorIx, anchorIy, binSize, sourceLookup) {
       const observers = Number(displayMetrics.observers) || 0;
       const nCaptive = Number(displayMetrics.n_captive) || 0;
       const genera = Number(displayMetrics.genera) || species;
-      const lastObservedMs = Number(displayMetrics.last_observed_ms) || parseGridDateMs(displayMetrics.last_observed);
-      const medianLast10Ms = Number(displayMetrics.median_last10_observed_ms) || parseGridDateMs(displayMetrics.median_last10_observed);
+      const lastObservedMs =
+        Number(displayMetrics.last_observed_ms) || parseGridDateMs(displayMetrics.last_observed);
+      const medianLast10Ms =
+        Number(displayMetrics.median_last10_observed_ms) ||
+        parseGridDateMs(displayMetrics.median_last10_observed);
 
       values.count.push(count);
       values.species.push(species);
@@ -4843,8 +4803,8 @@ function getCoarseMedianMetrics(anchorIx, anchorIy, binSize, sourceLookup) {
 
   const peak = Math.max(...lensFields.month_totals);
   const total = lensFields.month_totals.reduce((sum, value) => sum + value, 0);
-  const dominant = Object.entries(lensFields.iconic_counts)
-    .sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
+  const dominant =
+    Object.entries(lensFields.iconic_counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
 
   return {
     count: median(values.count),
@@ -5004,8 +4964,13 @@ function isCoarseHeatTileCacheSafe(binSize) {
 
 function renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSignature) {
   const tileFineCells = getCoarseHeatTileFineCells(binSize);
-  const { minIx, minIy, maxIx, maxIy, layerBounds: tileBounds } =
-    coarseHeatTileBounds(tileIx, tileIy, tileFineCells);
+  const {
+    minIx,
+    minIy,
+    maxIx,
+    maxIy,
+    layerBounds: tileBounds
+  } = coarseHeatTileBounds(tileIx, tileIy, tileFineCells);
   const canvasW = Math.max(1, Math.round(tileBounds.w));
   const canvasH = Math.max(1, Math.round(tileBounds.h));
 
@@ -5022,13 +4987,7 @@ function renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSigna
 
   for (let ix = minIx; ix < maxIx; ix += binSize) {
     for (let iy = minIy; iy < maxIy; iy += binSize) {
-      const metrics = getCachedCoarseMedianMetrics(
-        ix,
-        iy,
-        binSize,
-        sourceLookup,
-        sourceSignature
-      );
+      const metrics = getCachedCoarseMedianMetrics(ix, iy, binSize, sourceLookup, sourceSignature);
       if (!metrics) continue;
 
       const heatValue = getHeatValueForCell(metrics);
@@ -5104,9 +5063,8 @@ function renderCoarseTiledHeatCanvas() {
   for (let tileIx = startTileIx; tileIx <= endTileIx; tileIx++) {
     for (let tileIy = startTileIy; tileIy <= endTileIy; tileIy++) {
       const key = getCoarseHeatTileKey(tileIx, tileIy, binSize, tileSignature);
-      const tile = window.GridWildCoarseHeatTileCache.get(
-        key,
-        () => renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSignature)
+      const tile = window.GridWildCoarseHeatTileCache.get(key, () =>
+        renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSignature)
       );
       if (tile == null) return renderCoarseMedianHeatCanvasDirect();
       if (!tile?.painted) continue;
@@ -5131,7 +5089,6 @@ function renderCoarseTiledHeatCanvas() {
   gridHeatCtx.globalAlpha = 1;
   return painted;
 }
-
 
 function updateStaticGridHeat() {
   warmRichMetricsForVisibleCells();
@@ -5175,13 +5132,13 @@ function updateStaticGridHeatOLD() {
       const y = iy * GRID_SIZE_M;
       const sw = map.options.crs.unproject(L.point(x, y));
       const ne = map.options.crs.unproject(L.point(x + GRID_SIZE_M, y + GRID_SIZE_M));
-      const fogState = fogOn && window.GridWildFog
-        ? window.GridWildFog.getCellFogState(key)
-        : null;
+      const fogState = fogOn && window.GridWildFog ? window.GridWildFog.getCellFogState(key) : null;
       const transientRevealStrength =
-      typeof window.getGridWildTransientRevealStrength === "function"
-      ? window.getGridWildTransientRevealStrength(key)
-      : (window.isGridWildTransientVisibleCell?.(key) ? 1 : 0);
+        typeof window.getGridWildTransientRevealStrength === "function"
+          ? window.getGridWildTransientRevealStrength(key)
+          : window.isGridWildTransientVisibleCell?.(key)
+            ? 1
+            : 0;
       const godsEyeTransientVisible = transientRevealStrength > 0;
 
       if (
@@ -5211,14 +5168,11 @@ function updateStaticGridHeatOLD() {
       const iy = Math.floor(y / GRID_SIZE_M);
       const key = `${ix},${iy}`;
 
-      const metrics =
-        window.__richGridMetrics?.get(key) ||
-        counts.get(key);
+      const metrics = window.__richGridMetrics?.get(key) || counts.get(key);
 
       if (!metrics) continue;
 
-      const displayMetrics =
-        getDisplayMetricsForCell(ix, iy, metrics || {});
+      const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics || {});
 
       if (!displayMetrics) continue;
 
@@ -5237,9 +5191,11 @@ function updateStaticGridHeatOLD() {
       let fogState = null;
 
       const transientRevealStrength =
-      typeof window.getGridWildTransientRevealStrength === "function"
-      ? window.getGridWildTransientRevealStrength(key)
-      : (window.isGridWildTransientVisibleCell?.(key) ? 1 : 0);
+        typeof window.getGridWildTransientRevealStrength === "function"
+          ? window.getGridWildTransientRevealStrength(key)
+          : window.isGridWildTransientVisibleCell?.(key)
+            ? 1
+            : 0;
       const godsEyeTransientVisible = transientRevealStrength > 0;
 
       if (fogOn && window.GridWildFog) {
@@ -5269,18 +5225,12 @@ function updateStaticGridHeatOLD() {
 
       // Surveyed cells are visible but slightly misted/faded over time
       if (fogOn && fogState?.state === "surveyed") {
-        style.fillOpacity = Math.max(
-          0.08,
-          Number(baseStyle.fillOpacity || 0.25) * fogState.reveal
-        );
+        style.fillOpacity = Math.max(0.08, Number(baseStyle.fillOpacity || 0.25) * fogState.reveal);
       }
 
       // Documented cells get a stronger permanent “known land” treatment
       if (fogOn && fogState?.state === "documented") {
-        style.fillOpacity = Math.min(
-          0.92,
-          Number(baseStyle.fillOpacity || 0.35) + 0.12
-        );
+        style.fillOpacity = Math.min(0.92, Number(baseStyle.fillOpacity || 0.35) + 0.12);
       }
 
       L.rectangle([sw, ne], {
@@ -5373,10 +5323,12 @@ function isGridHeatInteractionEvent(evt) {
 }
 
 function isGridHeatSettledEvent(evt) {
-  return evt?.type === "moveend" ||
+  return (
+    evt?.type === "moveend" ||
     evt?.type === "zoomend" ||
     evt?.type === "resize" ||
-    evt?.type === "viewreset";
+    evt?.type === "viewreset"
+  );
 }
 
 function requestGridHeatCanvasFrame() {
@@ -5437,8 +5389,10 @@ function drawFineHeatItem(item, fogOn) {
   let fogState = null;
   const transientRevealStrength =
     typeof window.getGridWildTransientRevealStrength === "function"
-    ? window.getGridWildTransientRevealStrength(key)
-    : (window.isGridWildTransientVisibleCell?.(key) ? 1 : 0);
+      ? window.getGridWildTransientRevealStrength(key)
+      : window.isGridWildTransientVisibleCell?.(key)
+        ? 1
+        : 0;
   const godsEyeTransientVisible = transientRevealStrength > 0;
 
   if (fogOn && window.GridWildFog) {
@@ -5510,29 +5464,38 @@ function renderGridHeatCanvas() {
   const meHeatEntries = meHeatActive
     ? window.GridWildMeOverlayFilter.entriesInMeterBounds(startX, endX, startY, endY)
     : null;
-  const meHeatItems = meHeatActive && heatMorphologyActive
-    ? collectMeHeatItems(meHeatEntries)
-    : null;
-  const regularHeatItems = !meHeatActive && heatMorphologyActive
-    ? collectRegularHeatItems(counts, startX, endX, startY, endY)
-    : null;
+  const meHeatItems =
+    meHeatActive && heatMorphologyActive ? collectMeHeatItems(meHeatEntries) : null;
+  const regularHeatItems =
+    !meHeatActive && heatMorphologyActive
+      ? collectRegularHeatItems(counts, startX, endX, startY, endY)
+      : null;
   const heatZStats = isHeatZThresholdEnabled()
-    ? (meHeatActive
-      ? buildZStats((meHeatItems || meHeatEntries).map(entry => getHeatValueForCell(entry.metrics)).filter(value => value > 0))
-      : (regularHeatItems
-        ? buildZStats(regularHeatItems.map(item => item.heatValue))
-        : collectRegularHeatZStats(counts, startX, endX, startY, endY)))
+    ? meHeatActive
+      ? buildZStats(
+          (meHeatItems || meHeatEntries)
+            .map((entry) => getHeatValueForCell(entry.metrics))
+            .filter((value) => value > 0)
+        )
+      : regularHeatItems
+        ? buildZStats(regularHeatItems.map((item) => item.heatValue))
+        : collectRegularHeatZStats(counts, startX, endX, startY, endY)
     : null;
   const heatMorphologyMask = heatMorphologyActive
     ? buildThresholdedHeatMorphologyMask(meHeatItems || regularHeatItems || [], heatZStats)
     : null;
 
   if (meHeatActive) {
-    for (const item of (meHeatItems || meHeatEntries)) {
+    for (const item of meHeatItems || meHeatEntries) {
       const { key, metrics: displayMetrics } = item;
       const heatValue = getHeatValueForCell(displayMetrics);
       if (heatValue <= 0) continue;
-      if (heatMorphologyMask ? !heatMorphologyMask.has(key) : !passesHeatZThreshold(heatValue, heatZStats)) continue;
+      if (
+        heatMorphologyMask
+          ? !heatMorphologyMask.has(key)
+          : !passesHeatZThreshold(heatValue, heatZStats)
+      )
+        continue;
 
       drawFineHeatItem(item, fogOn);
     }
@@ -5557,10 +5520,7 @@ function renderGridHeatCanvas() {
       const iy = Math.floor(y / GRID_SIZE_M);
       const key = `${ix},${iy}`;
 
-      const metrics =
-        window.__richGridMetrics?.get(key) ||
-        counts.get(key) ||
-        null;
+      const metrics = window.__richGridMetrics?.get(key) || counts.get(key) || null;
 
       const displayMetrics = getDisplayMetricsForCell(ix, iy, metrics);
 
@@ -5577,8 +5537,10 @@ function renderGridHeatCanvas() {
 
       const transientRevealStrength =
         typeof window.getGridWildTransientRevealStrength === "function"
-        ? window.getGridWildTransientRevealStrength(key)
-        : (window.isGridWildTransientVisibleCell?.(key) ? 1 : 0);
+          ? window.getGridWildTransientRevealStrength(key)
+          : window.isGridWildTransientVisibleCell?.(key)
+            ? 1
+            : 0;
       const godsEyeTransientVisible = transientRevealStrength > 0;
 
       if (fogOn && window.GridWildFog) {
@@ -5652,13 +5614,7 @@ function renderCoarseMedianHeatCanvasDirect() {
 
   for (let ix = startAnchorX; ix <= endAnchorX; ix += binSize) {
     for (let iy = startAnchorY; iy <= endAnchorY; iy += binSize) {
-      const metrics = getCachedCoarseMedianMetrics(
-        ix,
-        iy,
-        binSize,
-        sourceLookup,
-        cacheSignature
-      );
+      const metrics = getCachedCoarseMedianMetrics(ix, iy, binSize, sourceLookup, cacheSignature);
       if (!metrics) continue;
 
       const heatValue = getHeatValueForCell(metrics);
@@ -5669,29 +5625,34 @@ function renderCoarseMedianHeatCanvasDirect() {
   }
 
   const heatZStats = isHeatZThresholdEnabled()
-    ? buildZStats(items.map(item => item.heatValue))
+    ? buildZStats(items.map((item) => item.heatValue))
     : null;
   const heatMorphologyMask = isHeatMorphologyEnabled()
     ? buildThresholdedHeatMorphologyMask(items, heatZStats, { step: binSize })
     : null;
 
   for (const item of items) {
-      const { ix, iy, metrics, heatValue, key } = item;
-      if (heatMorphologyMask ? !heatMorphologyMask.has(key) : !passesHeatZThreshold(heatValue, heatZStats)) continue;
+    const { ix, iy, metrics, heatValue, key } = item;
+    if (
+      heatMorphologyMask
+        ? !heatMorphologyMask.has(key)
+        : !passesHeatZThreshold(heatValue, heatZStats)
+    )
+      continue;
 
-      const baseStyle = metricsToFill(metrics);
-      if (!baseStyle) continue;
+    const baseStyle = metricsToFill(metrics);
+    if (!baseStyle) continue;
 
-      const x0 = ix * GRID_SIZE_M;
-      const y0 = iy * GRID_SIZE_M;
-      const x1 = x0 + binSize * GRID_SIZE_M;
-      const y1 = y0 + binSize * GRID_SIZE_M;
-      const pxRect = coarseHeatPaintRect(gridMetersRectLayerBounds(x0, y0, x1, y1));
+    const x0 = ix * GRID_SIZE_M;
+    const y0 = iy * GRID_SIZE_M;
+    const x1 = x0 + binSize * GRID_SIZE_M;
+    const y1 = y0 + binSize * GRID_SIZE_M;
+    const pxRect = coarseHeatPaintRect(gridMetersRectLayerBounds(x0, y0, x1, y1));
 
-      gridHeatCtx.globalAlpha = Math.min(0.82, Number(baseStyle.fillOpacity || 0.25));
-      gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
-      gridHeatCtx.fillRect(pxRect.x, pxRect.y, pxRect.w, pxRect.h);
-      painted++;
+    gridHeatCtx.globalAlpha = Math.min(0.82, Number(baseStyle.fillOpacity || 0.25));
+    gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
+    gridHeatCtx.fillRect(pxRect.x, pxRect.y, pxRect.w, pxRect.h);
+    painted++;
   }
 
   gridHeatCtx.globalAlpha = 1;
@@ -5745,8 +5706,7 @@ function buzzOnQuestTargetEntry() {
   vibrateGridWild([70, 35, 95]);
 }
 
-
-window.handleUserPositionUpdate = async function(lat, lng, force = false) {
+window.handleUserPositionUpdate = async function (lat, lng, force = false) {
   const cellKey = latLngToDisplayCellKey(lat, lng);
 
   window.__gwState = window.__gwState || {};
@@ -5762,19 +5722,18 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
     suspendUntil !== Number.POSITIVE_INFINITY &&
     now >= suspendUntil;
 
-  const enteredNewCell = force || (cellKey !== state.lastUserCellKey);
+  const enteredNewCell = force || cellKey !== state.lastUserCellKey;
   state.lastUserCellKey = cellKey;
 
   if (movedToNewCell) {
     const questStatus = window.GridWildQuestLayer?.activeTargetStatus?.(lat, lng) || null;
-    const questAreaKey = questStatus?.questId && questStatus?.targetKey
-      ? `${questStatus.questId}:${questStatus.targetKey}`
-      : "";
+    const questAreaKey =
+      questStatus?.questId && questStatus?.targetKey
+        ? `${questStatus.questId}:${questStatus.targetKey}`
+        : "";
     const previousQuestAreaKey = state.lastHapticQuestTargetAreaKey || "";
     const enteredQuestTarget =
-      questStatus?.inside === true &&
-      questAreaKey &&
-      questAreaKey !== previousQuestAreaKey;
+      questStatus?.inside === true && questAreaKey && questAreaKey !== previousQuestAreaKey;
 
     if (enteredQuestTarget) {
       buzzOnQuestTargetEntry();
@@ -5816,7 +5775,6 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
     }
   }
 
-
   // Update grid and related UI if we entered a new cell
 
   if (enteredNewCell) {
@@ -5828,7 +5786,6 @@ window.handleUserPositionUpdate = async function(lat, lng, force = false) {
       window.maybeRefreshDynamicINat(false, cellKey);
     }
   }
-
 };
 
 function getCenterMacroBoundsForCurrentLocation() {
@@ -5887,11 +5844,11 @@ function clampCladoViewBox(vb, baseW, baseH) {
   // Give MUCH more room at the bottom so the leaf tips/labels
   // can be dragged fully into view.
   // ------------------------------------------------------------
-  const padLeft   = Math.max(18, baseW * 0.10);
-  const padRight  = Math.max(24, baseW * 0.16);
-  const padTop    = Math.max(18, baseH * 0.10);
+  const padLeft = Math.max(18, baseW * 0.1);
+  const padRight = Math.max(24, baseW * 0.16);
+  const padTop = Math.max(18, baseH * 0.1);
   //const padBottom = Math.max(150, baseH * 0.88);   // <- bigger bottom allowance
-  const padBottom = Math.max(10, baseH * 0.1);   // <- bigger bottom allowance
+  const padBottom = Math.max(10, baseH * 0.1); // <- bigger bottom allowance
 
   const minX = -padLeft;
   const maxX = baseW - vb.w + padRight;

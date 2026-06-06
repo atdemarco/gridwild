@@ -12,11 +12,7 @@ async function requireStartedQuest(supabase, playerId, questId) {
       .eq("player_id", playerId)
       .eq("quest_id", questId)
       .maybeSingle(),
-    supabase
-      .from("quests")
-      .select("*")
-      .eq("id", questId)
-      .maybeSingle()
+    supabase.from("quests").select("*").eq("id", questId).maybeSingle()
   ]);
 
   if (playerQuestResult.error) throw playerQuestResult.error;

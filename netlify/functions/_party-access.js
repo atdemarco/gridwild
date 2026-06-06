@@ -33,9 +33,7 @@ async function requirePartyAccess(supabase, options = {}) {
 
   if (memberError) throw memberError;
 
-  const isLeader =
-    party.created_by === playerId ||
-    membership?.role === "leader";
+  const isLeader = party.created_by === playerId || membership?.role === "leader";
   const canReadPublic = options.allowPublicRead === true && party.visibility === "public";
 
   if (!membership && !canReadPublic) {

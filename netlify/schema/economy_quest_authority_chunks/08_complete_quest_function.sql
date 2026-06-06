@@ -188,6 +188,8 @@ begin
       then least(100, greatest(0, coalesce(v_quest.reward_wildpoints, 0)))
     when v_quest.source = 'local_niche'
       then least(200, greatest(0, coalesce(v_quest.reward_wildpoints, 0)))
+    when v_quest.source = 'patch'
+      then least(150, greatest(0, coalesce(v_quest.reward_wildpoints, 0)))
     else 0
   end;
 
@@ -270,4 +272,3 @@ begin
   );
 end;
 $$;
-

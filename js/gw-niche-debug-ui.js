@@ -235,7 +235,7 @@
       pass: Number($("gwNicheDebugPass")?.value || 1),
       trailMode: $("gwNicheDebugTrailMode")?.value || "corridor",
       pass1Threshold: Number($("gwNicheDebugPass1")?.value || 0.45),
-      pass2Threshold: Number($("gwNicheDebugPass2")?.value || 0.50),
+      pass2Threshold: Number($("gwNicheDebugPass2")?.value || 0.5),
       pass3Threshold: Number($("gwNicheDebugPass3")?.value || 0.55)
     };
   }
@@ -267,7 +267,9 @@
 
       const result = window.GridWildNicheDebug?.runCurrentView?.(readOptions());
       if (result) {
-        toast(`Niche graph ready: ${result.cells.length} cells, ${result.graph.edges.length} edges`);
+        toast(
+          `Niche graph ready: ${result.cells.length} cells, ${result.graph.edges.length} edges`
+        );
       }
       return result;
     } catch (err) {
@@ -296,11 +298,16 @@
     $("gwNicheDebugPass")?.addEventListener("change", () => {
       window.GridWildNicheDebug?.setPass?.($("gwNicheDebugPass").value);
     });
-    ["gwNicheDebugPass1", "gwNicheDebugPass2", "gwNicheDebugPass3"].forEach(id => {
+    ["gwNicheDebugPass1", "gwNicheDebugPass2", "gwNicheDebugPass3"].forEach((id) => {
       syncSliderValue(id);
       $(id)?.addEventListener("input", () => syncSliderValue(id));
     });
-    ["gwNicheDebugPass1", "gwNicheDebugPass2", "gwNicheDebugPass3", "gwNicheDebugTrailMode"].forEach(id => {
+    [
+      "gwNicheDebugPass1",
+      "gwNicheDebugPass2",
+      "gwNicheDebugPass3",
+      "gwNicheDebugTrailMode"
+    ].forEach((id) => {
       $(id)?.addEventListener("change", () => {
         if (window.GridWildNicheDebug?.getLastResult?.()) run();
       });
@@ -343,7 +350,10 @@
           <div>${regionCounts(result)}</div>
           <div>Stride: ${result.debug?.visibleStrideCells || 1} | OSM path cells: ${result.osmPriorsSummary.pathAdjacent}</div>
           <div>Pass 2 Lens: ${p2Size}x${p2Size} pool | min ${p2Active} cells / ${p2Obs} obs</div>
-          ${warnings.slice(0, 2).map(w => `<div class="gw-niche-debug-warn">${w}</div>`).join("")}
+          ${warnings
+            .slice(0, 2)
+            .map((w) => `<div class="gw-niche-debug-warn">${w}</div>`)
+            .join("")}
         `;
       }
     }
@@ -351,18 +361,19 @@
     if (evidence) {
       const inspection = detail.inspection;
       if (!inspection) {
-        evidence.innerHTML = "<div>Evidence mode: click a region. Link modes: click a visible edge.</div>";
+        evidence.innerHTML =
+          "<div>Evidence mode: click a region. Link modes: click a visible edge.</div>";
       } else {
         if (inspection.type === "edge") {
           evidence.innerHTML = `
             <div><b>${inspection.id}</b></div>
             ${inspection.a && inspection.b ? `<div>${inspection.a} -> ${inspection.b}</div>` : ""}
-            ${(inspection.evidence || []).map(item => `<div>${item}</div>`).join("")}
+            ${(inspection.evidence || []).map((item) => `<div>${item}</div>`).join("")}
           `;
         } else {
           evidence.innerHTML = `
             <div><b>${inspection.id}</b></div>
-            ${(inspection.evidence || []).map(item => `<div>${item}</div>`).join("")}
+            ${(inspection.evidence || []).map((item) => `<div>${item}</div>`).join("")}
           `;
         }
       }
@@ -372,7 +383,7 @@
   function init() {
     injectCss();
     $("gwNicheDebugToggle")?.remove();
-    window.addEventListener("gwNicheDebugUpdated", evt => updateStatus(evt.detail || {}));
+    window.addEventListener("gwNicheDebugUpdated", (evt) => updateStatus(evt.detail || {}));
   }
 
   document.addEventListener("DOMContentLoaded", init);

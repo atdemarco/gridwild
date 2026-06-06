@@ -150,8 +150,7 @@
   }
 
   function localNichesEnabled() {
-    return window.GridWildLocalNiches?.isVisible?.() ??
-      window.__gwState?.showLocalNiches !== false;
+    return window.GridWildLocalNiches?.isVisible?.() ?? window.__gwState?.showLocalNiches !== false;
   }
 
   function surveyViewEnabled() {
@@ -179,11 +178,13 @@
   }
 
   function displayNicheTitle(niche) {
-    return window.GridWildLocalNiches?.buildNicheDisplayTitle?.(niche) ||
+    return (
+      window.GridWildLocalNiches?.buildNicheDisplayTitle?.(niche) ||
       niche?.short_title ||
       niche?.title ||
       niche?.primary_place_label ||
-      "Home niche";
+      "Home niche"
+    );
   }
 
   function nicheSubtitle(niche) {
@@ -209,12 +210,16 @@
   }
 
   function joinedSurveys() {
-    return surveyRows().filter(survey => window.GridWildSurveyLayer?.isJoined?.(survey.id));
+    return surveyRows().filter((survey) => window.GridWildSurveyLayer?.isJoined?.(survey.id));
   }
 
   function currentSurvey() {
     const joined = joinedSurveys();
-    return joined.find(survey => window.GridWildSurveyLayer?.isVisible?.(survey.id)) || joined[0] || null;
+    return (
+      joined.find((survey) => window.GridWildSurveyLayer?.isVisible?.(survey.id)) ||
+      joined[0] ||
+      null
+    );
   }
 
   function surveySubtitle(survey) {
@@ -284,11 +289,12 @@
 
     return `
       <div class="gw-field-list">
-        ${rows.map(niche => {
-          const key = niche.id || niche.source_key || niche.metrics?.source_key || "";
-          const home = isHomeNiche(niche);
-          const saved = window.GridWildLocalNiches?.isBookmarkedNiche?.(niche) === true;
-          return `
+        ${rows
+          .map((niche) => {
+            const key = niche.id || niche.source_key || niche.metrics?.source_key || "";
+            const home = isHomeNiche(niche);
+            const saved = window.GridWildLocalNiches?.isBookmarkedNiche?.(niche) === true;
+            return `
             <div class="gw-rowline gw-field-row" data-gw-field-open-niche="${esc(key)}">
               <span class="gw-field-row-main">
                 <span class="gw-field-row-title">${esc(displayNicheTitle(niche))}</span>
@@ -301,7 +307,8 @@
               </span>
             </div>
           `;
-        }).join("")}
+          })
+          .join("")}
       </div>
     `;
   }
@@ -318,7 +325,9 @@
 
     return `
       <div class="gw-field-list">
-        ${rows.map(patch => `
+        ${rows
+          .map(
+            (patch) => `
           <div class="gw-rowline gw-field-row" data-gw-field-open-patch="${esc(patch.id)}">
             <span class="gw-field-row-main">
               <span class="gw-field-row-title">${esc(patchTitle(patch))}</span>
@@ -329,7 +338,9 @@
               <button class="gw-mini-btn" data-gw-field-open-patch="${esc(patch.id)}" type="button">Open</button>
             </span>
           </div>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
     `;
   }
@@ -346,9 +357,10 @@
 
     return `
       <div class="gw-field-list">
-        ${rows.map(survey => {
-          const visible = window.GridWildSurveyLayer?.isVisible?.(survey.id);
-          return `
+        ${rows
+          .map((survey) => {
+            const visible = window.GridWildSurveyLayer?.isVisible?.(survey.id);
+            return `
             <div class="gw-rowline gw-field-row" data-gw-field-open-survey="${esc(survey.id)}">
               <span class="gw-field-row-main">
                 <span class="gw-field-row-title">${esc(survey.name || "Untitled survey")}</span>
@@ -361,18 +373,20 @@
               </span>
             </div>
           `;
-        }).join("")}
+          })
+          .join("")}
       </div>
     `;
   }
 
   function savedNicheRows() {
-    const home = window.GridWildLocalNiches?.getHomeNiche?.() || window.__gwState?.homeNiche || null;
+    const home =
+      window.GridWildLocalNiches?.getHomeNiche?.() || window.__gwState?.homeNiche || null;
     const saved = window.GridWildLocalNiches?.getBookmarkedNiches?.() || [];
     const seen = new Set();
     return [home, ...saved]
       .filter(Boolean)
-      .filter(niche => {
+      .filter((niche) => {
         const key = String(niche.id || niche.source_key || niche.metrics?.source_key || "");
         if (!key || seen.has(key)) return false;
         seen.add(key);
@@ -390,7 +404,7 @@
     window.__gwState = window.__gwState || {};
 
     if (window.ensureGridWildLocalNichesLoaded) {
-      await window.ensureGridWildLocalNichesLoaded().catch(err => {
+      await window.ensureGridWildLocalNichesLoaded().catch((err) => {
         console.warn("Could not load local niches for Field toggle:", err);
       });
     }
@@ -412,16 +426,18 @@
     if (typeof window.saveUIState === "function") window.saveUIState();
     window.GridWildHudTaxaFilter?.sync?.();
     renderIntoPage();
-    window.dispatchEvent(new CustomEvent("gridwild:fieldcontextchange", {
-      detail: { visible: desired }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gridwild:fieldcontextchange", {
+        detail: { visible: desired }
+      })
+    );
   }
 
   async function openNicheSelector() {
     ensureSelectorStyles();
 
     if (window.ensureGridWildLocalNichesLoaded) {
-      await window.ensureGridWildLocalNichesLoaded().catch(err => {
+      await window.ensureGridWildLocalNichesLoaded().catch((err) => {
         console.warn("Could not load local niches:", err);
       });
     }
@@ -446,7 +462,7 @@
       if (rows) rows.innerHTML = renderNicheSelectorRows();
     };
 
-    root.onclick = async evt => {
+    root.onclick = async (evt) => {
       if (evt.target === root || evt.target.closest("#gwFieldNicheCancel")) {
         root.remove();
         return;
@@ -490,11 +506,12 @@
     const rows = nicheRows();
     if (!rows.length) return `<div class="gw-muted">No nearby or saved niches loaded yet.</div>`;
 
-    return rows.map(niche => {
-      const key = niche.id || niche.source_key || niche.metrics?.source_key || "";
-      const home = isHomeNiche(niche);
-      const saved = window.GridWildLocalNiches?.isBookmarkedNiche?.(niche) === true;
-      return `
+    return rows
+      .map((niche) => {
+        const key = niche.id || niche.source_key || niche.metrics?.source_key || "";
+        const home = isHomeNiche(niche);
+        const saved = window.GridWildLocalNiches?.isBookmarkedNiche?.(niche) === true;
+        return `
         <div class="gw-rowline gw-field-selector-row">
           <span class="gw-field-selector-main">
             <span>${esc(displayNicheTitle(niche))}</span>
@@ -507,20 +524,23 @@
           </span>
         </div>
       `;
-    }).join("");
+      })
+      .join("");
   }
 
   function nicheRows() {
     const seen = new Set();
     const rows = [
-      ...(window.GridWildLocalNiches?.getHomeNiche?.() ? [window.GridWildLocalNiches.getHomeNiche()] : []),
+      ...(window.GridWildLocalNiches?.getHomeNiche?.()
+        ? [window.GridWildLocalNiches.getHomeNiche()]
+        : []),
       ...(window.GridWildLocalNiches?.getBookmarkedNiches?.() || []),
       ...(window.GridWildLocalNiches?.getNiches?.() || [])
     ];
 
     return rows
       .filter(Boolean)
-      .filter(niche => {
+      .filter((niche) => {
         const key = String(niche.id || niche.source_key || niche.metrics?.source_key || "");
         if (!key || seen.has(key)) return false;
         seen.add(key);
@@ -534,7 +554,9 @@
   }
 
   function isHomeNiche(niche) {
-    const homeId = String(window.__gwState?.homeNicheId || window.GridWildLocalNiches?.getHomeNiche?.()?.id || "");
+    const homeId = String(
+      window.__gwState?.homeNicheId || window.GridWildLocalNiches?.getHomeNiche?.()?.id || ""
+    );
     const id = String(niche?.id || "");
     return Boolean(niche?.is_home_niche || (homeId && id && homeId === id));
   }
@@ -577,7 +599,7 @@
 
   async function openSurveyList() {
     if (window.ensureGridWildSurveyDataLoaded) {
-      await window.ensureGridWildSurveyDataLoaded().catch(err => {
+      await window.ensureGridWildSurveyDataLoaded().catch((err) => {
         console.warn("Could not load survey data:", err);
       });
     }
@@ -595,7 +617,9 @@
   }
 
   function openCenterSquarePopup() {
-    document.querySelectorAll(".gw-quest-modal-backdrop.gw-field-center-backdrop").forEach(el => el.remove());
+    document
+      .querySelectorAll(".gw-quest-modal-backdrop.gw-field-center-backdrop")
+      .forEach((el) => el.remove());
     const root = document.createElement("div");
     root.className = "gw-quest-modal-backdrop gw-field-center-backdrop";
     root.innerHTML = `
@@ -624,7 +648,7 @@
     `;
 
     document.body.appendChild(root);
-    root.onclick = evt => {
+    root.onclick = (evt) => {
       if (evt.target === root || evt.target.closest("#gwFieldCenterClose")) root.remove();
     };
 
@@ -644,7 +668,7 @@
     if (target.dataset?.fieldSheetBound === "true") return;
     if (target.dataset) target.dataset.fieldSheetBound = "true";
 
-    target.addEventListener("click", evt => {
+    target.addEventListener("click", (evt) => {
       if (evt.target.closest("#gwFieldMasterToggle")) {
         setFieldContextVisible(!fieldContextEnabled());
         return;

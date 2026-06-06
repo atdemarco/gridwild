@@ -13,7 +13,8 @@
   }
 
   function homeNicheBadgeHtml() {
-    const home = window.GridWildLocalNiches?.getHomeNiche?.() || window.__gwState?.homeNiche || null;
+    const home =
+      window.GridWildLocalNiches?.getHomeNiche?.() || window.__gwState?.homeNiche || null;
     const title = home?.short_title || home?.title || "";
     if (!title) return "";
 
@@ -43,7 +44,7 @@
     try {
       const raw = localStorage.getItem("gw_user_achievements_v1");
       const store = raw ? JSON.parse(raw) : {};
-      return Object.values(store).filter(x => x?.unlocked).length;
+      return Object.values(store).filter((x) => x?.unlocked).length;
     } catch {
       return 0;
     }
@@ -54,36 +55,36 @@
 
     return {
       total: quests.length,
-      completed: quests.filter(q => q.status === "completed" || q.status === "complete").length,
-      active: quests.filter(q => q.status === "active").length
+      completed: quests.filter((q) => q.status === "completed" || q.status === "complete").length,
+      active: quests.filter((q) => q.status === "active").length
     };
   }
 
   function frameStyle(frame) {
-  if (!frame) return "";
+    if (!frame) return "";
 
-  if (frame.id === "brass_field_frame") {
-    return "border:3px solid rgba(215,183,116,0.85);";
+    if (frame.id === "brass_field_frame") {
+      return "border:3px solid rgba(215,183,116,0.85);";
+    }
+
+    if (frame.id === "fern_border") {
+      return "border:3px solid rgba(90,190,110,0.85);box-shadow:0 0 0 4px rgba(90,190,110,0.12);";
+    }
+
+    if (frame.id === "beetle_carapace_frame") {
+      return "border:3px solid rgba(120,90,180,0.9);box-shadow:0 0 18px rgba(160,110,255,0.22);";
+    }
+
+    if (frame.id === "museum_label_frame") {
+      return "border:3px double rgba(240,209,138,0.85);";
+    }
+
+    return "";
   }
-
-  if (frame.id === "fern_border") {
-    return "border:3px solid rgba(90,190,110,0.85);box-shadow:0 0 0 4px rgba(90,190,110,0.12);";
-  }
-
-  if (frame.id === "beetle_carapace_frame") {
-    return "border:3px solid rgba(120,90,180,0.9);box-shadow:0 0 18px rgba(160,110,255,0.22);";
-  }
-
-  if (frame.id === "museum_label_frame") {
-    return "border:3px double rgba(240,209,138,0.85);";
-  }
-
-  return "";
-}
 
   function open() {
     window.GridWildStore?.ensureStyles?.();
-    document.querySelectorAll(".gw-store-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".gw-store-backdrop").forEach((el) => el.remove());
 
     const character = window.GridWildCharacter?.load?.() || {};
     const economy = window.GridWildEconomy?.load?.() || {};
@@ -198,7 +199,7 @@
 
     document.body.appendChild(root);
 
-    root.onclick = evt => {
+    root.onclick = (evt) => {
       if (evt.target === root) root.remove();
     };
 

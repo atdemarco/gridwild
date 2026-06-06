@@ -14,7 +14,7 @@ function parseGridDateMs(value) {
 }
 
 function parseColumns(header) {
-  const columns = header.split(",").map(value => value.trim());
+  const columns = header.split(",").map((value) => value.trim());
   const col = (...names) => {
     for (const name of names) {
       const index = columns.indexOf(name);
@@ -88,12 +88,9 @@ function parseHeatCsv(text) {
       continue;
     }
 
-    const lastObserved = columns.lastObserved >= 0
-      ? (parts[columns.lastObserved] || null)
-      : null;
-    const medianLast10Observed = columns.medianLast10 >= 0
-      ? (parts[columns.medianLast10] || null)
-      : null;
+    const lastObserved = columns.lastObserved >= 0 ? parts[columns.lastObserved] || null : null;
+    const medianLast10Observed =
+      columns.medianLast10 >= 0 ? parts[columns.medianLast10] || null : null;
 
     rows.push([
       `${ix},${iy}`,
@@ -115,7 +112,7 @@ function parseHeatCsv(text) {
   self.postMessage({ type: "done", count: parsedCount });
 }
 
-self.onmessage = async event => {
+self.onmessage = async (event) => {
   const url = event.data?.url;
 
   try {

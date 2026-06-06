@@ -32,12 +32,14 @@
   }
 
   function getEconomy() {
-    return window.GridWildEconomy?.load?.() || {
-      wildPoints: 0,
-      prestigeTokens: 0,
-      ownedItems: [],
-      equipped: {}
-    };
+    return (
+      window.GridWildEconomy?.load?.() || {
+        wildPoints: 0,
+        prestigeTokens: 0,
+        ownedItems: [],
+        equipped: {}
+      }
+    );
   }
 
   function owns(itemId) {
@@ -49,10 +51,7 @@
 
     const dbRows = window.__gwState?.playerAchievements;
     if (!Array.isArray(dbRows)) return false;
-    return dbRows.some(row =>
-      row.achievement_id === id &&
-      row.unlocked === true
-    );
+    return dbRows.some((row) => row.achievement_id === id && row.unlocked === true);
   }
 
   function isLocked(item) {
@@ -71,14 +70,14 @@
   function achievementLabel(id) {
     if (!id) return "";
 
-    const def = window.GridWildAchievements?.DEFINITIONS?.find?.(d => d.id === id);
+    const def = window.GridWildAchievements?.DEFINITIONS?.find?.((d) => d.id === id);
 
     if (def?.name) return def.name;
 
     return String(id)
       .replace(/_/g, " ")
       .replace(/\bobs\b/i, "observations")
-      .replace(/\b\w/g, c => c.toUpperCase());
+      .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   function rarityLabel(rarity) {
@@ -100,26 +99,30 @@
     const items = getCatalog();
 
     if (catId === "featured") {
-      return items.filter(x =>
-        x.featured ||
-        ["rare", "epic", "legendary", "seasonal"].includes(String(x.rarity || "").toLowerCase())
+      return items.filter(
+        (x) =>
+          x.featured ||
+          ["rare", "epic", "legendary", "seasonal"].includes(String(x.rarity || "").toLowerCase())
       ).length;
     }
 
-    return items.filter(x => x.category === catId).length;
+    return items.filter((x) => x.category === catId).length;
   }
 
   function filteredItems() {
     const items = getCatalog();
 
     if (activeCategory === "featured") {
-      return items.filter(x =>
-        x.featured ||
-        ["rare", "epic", "legendary", "seasonal"].includes(String(x.rarity || "").toLowerCase())
-      ).slice(0, 24);
+      return items
+        .filter(
+          (x) =>
+            x.featured ||
+            ["rare", "epic", "legendary", "seasonal"].includes(String(x.rarity || "").toLowerCase())
+        )
+        .slice(0, 24);
     }
 
-    return items.filter(x => x.category === activeCategory);
+    return items.filter((x) => x.category === activeCategory);
   }
 
   function injectStyles() {
@@ -378,7 +381,7 @@
   function showToast(message, sub = "") {
     injectStyles();
 
-    document.querySelectorAll(".gw-store-toast").forEach(el => el.remove());
+    document.querySelectorAll(".gw-store-toast").forEach((el) => el.remove());
 
     const toast = document.createElement("div");
     toast.className = "gw-store-toast";
@@ -392,7 +395,8 @@
   }
 
   function renderTabs() {
-    return CATEGORIES.map(c => `
+    return CATEGORIES.map(
+      (c) => `
       <button
         class="gw-store-tab ${c.id === activeCategory ? "active" : ""}"
         data-store-category="${esc(c.id)}"
@@ -401,7 +405,8 @@
         ${esc(c.label)}
         <span class="gw-store-count">${categoryCount(c.id)}</span>
       </button>
-    `).join("");
+    `
+    ).join("");
   }
 
   function getItemBadge(item, state) {
@@ -509,7 +514,7 @@
         <div class="gw-store-grid">
           ${
             items.length
-              ? items.map(item => renderItem(item, state)).join("")
+              ? items.map((item) => renderItem(item, state)).join("")
               : `<div class="gw-muted">No items in this category yet.</div>`
           }
         </div>
@@ -525,7 +530,7 @@
   }
 
   async function buyOrEquip(itemId, root) {
-    const item = getCatalog().find(x => x.id === itemId);
+    const item = getCatalog().find((x) => x.id === itemId);
     if (!item) return;
 
     const owned = owns(item.id);
@@ -558,22 +563,22 @@
   }
 
   function bindInside(root) {
-    root.querySelectorAll(".gw-store-tab").forEach(btn => {
+    root.querySelectorAll(".gw-store-tab").forEach((btn) => {
       btn.onclick = () => {
         activeCategory = btn.dataset.storeCategory || "featured";
         renderInto(root);
       };
     });
 
-    root.querySelectorAll("[data-store-buy]").forEach(btn => {
+    root.querySelectorAll("[data-store-buy]").forEach((btn) => {
       btn.onclick = async () => {
-      btn.disabled = true;
-      try {
-        await buyOrEquip(btn.dataset.storeBuy, root);
-      } finally {
-        btn.disabled = false;
-      }
-    };
+        btn.disabled = true;
+        try {
+          await buyOrEquip(btn.dataset.storeBuy, root);
+        } finally {
+          btn.disabled = false;
+        }
+      };
     });
 
     root.querySelector("#gwStoreCloseBtn")?.addEventListener("click", () => {
@@ -589,14 +594,14 @@
   function open() {
     injectStyles();
 
-    document.querySelectorAll(".gw-store-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".gw-store-backdrop").forEach((el) => el.remove());
 
     const root = document.createElement("div");
     root.className = "gw-store-backdrop";
 
     document.body.appendChild(root);
 
-    root.onclick = evt => {
+    root.onclick = (evt) => {
       if (evt.target === root) root.remove();
     };
 

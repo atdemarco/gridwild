@@ -1,10 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
@@ -14,10 +11,7 @@ exports.handler = async function (event) {
 
     if (!player_id) throw new Error("player_id is required");
 
-    const { error } = await supabase
-      .from("local_niche_stewards")
-      .delete()
-      .eq("user_id", player_id);
+    const { error } = await supabase.from("local_niche_stewards").delete().eq("user_id", player_id);
 
     if (error) throw error;
 

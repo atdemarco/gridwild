@@ -7,17 +7,14 @@ const {
   questReward
 } = require("./_quest-authority");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
     await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
     const { player_id, title, description, quest_type, recipe, source } = body;
-    const safeSource = ["manual", "today", "onboarding"].includes(source)
+    const safeSource = ["manual", "today", "onboarding", "patch"].includes(source)
       ? source
       : "manual";
     const safeQuestType = quest_type === "identify" ? "identify" : "explore";
@@ -29,24 +26,51 @@ exports.handler = async function (event) {
       source: safeSource,
       questType: safeQuestType
     });
-    const result = await issueQuest(supabase, {
-      playerId: player_id,
-      title,
-      description,
-      questType: safeQuestType,
-      recipe: safeRecipe,
-      source: safeSource,
-      rewardWildpoints: questReward(safeRecipe, safeSource),
-      issuanceKey: safeSource === "onboarding"
-        ? "onboarding:v1"
-        : questIssuanceKey(safeSource, safeQuestType, safeRecipe)
-    });
+    if (safeRecipe.targetLocation === "target_set" && !safeRecipe.target?.cells?.length) {
+      throw new Error("Target-set quests require at least one server-checkable cell.");
+    }
+    if (safeRecipe.targetLocation === "patch_polygon" && !safeRecipe.target?.rings?.length) {
+      throw new Error("Patch-polygon quests require a server-checkable Patch boundary.");
+    }
+
+    const issue = (source, options = {}) =>
+      issueQuest(supabase, {
+        playerId: player_id,
+        title,
+        description,
+        questType: safeQuestType,
+        recipe: safeRecipe,
+        source,
+        rewardWildpoints: Number.isFinite(options.rewardWildpoints)
+          ? options.rewardWildpoints
+          : questReward(safeRecipe, source),
+        issuanceKey:
+          source === "onboarding"
+            ? "onboarding:v1"
+            : questIssuanceKey(source, safeQuestType, safeRecipe)
+      });
+
+    let result;
+    let compatibilitySource = null;
+    try {
+      result = await issue(safeSource);
+    } catch (err) {
+      const oldPatchSourceRpc =
+        safeSource === "patch" && /Quest source is not allowed/i.test(String(err?.message || ""));
+      if (!oldPatchSourceRpc) throw err;
+
+      compatibilitySource = "today";
+      result = await issue(compatibilitySource, {
+        rewardWildpoints: Math.min(150, questReward(safeRecipe, safeSource))
+      });
+    }
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         quest: result.quest,
-        already_issued: !!result.already_issued
+        already_issued: !!result.already_issued,
+        compatibility_source: compatibilitySource
       })
     };
   } catch (err) {

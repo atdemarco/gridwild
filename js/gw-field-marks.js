@@ -404,7 +404,9 @@ Gall shape on plant
     }
   ];
 
-  const CATEGORY_BY_KEY = Object.fromEntries(CATEGORY_DEFS.map(category => [category.key, category]));
+  const CATEGORY_BY_KEY = Object.fromEntries(
+    CATEGORY_DEFS.map((category) => [category.key, category])
+  );
 
   const SIGNAL_RULES = [
     { re: /halteres|sponge-like fly|one pair of wings/i, groups: ["true_flies"] },
@@ -419,11 +421,17 @@ Gall shape on plant
     { re: /fern|sori|fiddleheads/i, groups: ["ferns"] },
     { re: /moss/i, groups: ["mosses"] },
     { re: /lichen/i, groups: ["lichens"] },
-    { re: /gills|pores|spore print|cap|stalk|volva|puffball|shelf|coral fungus|jelly fungus|mushroom/i, groups: ["fungi"] },
+    {
+      re: /gills|pores|spore print|cap|stalk|volva|puffball|shelf|coral fungus|jelly fungus|mushroom/i,
+      groups: ["fungi"]
+    },
     { re: /flower|petal|stamen|bract|catkin|umbel|raceme|panicle/i, groups: ["flowering_plants"] },
     { re: /cone|needle|scale-like leaf/i, groups: ["conifers"] },
     { re: /berry|fruit|seed|pod|samara|acorn|drupe|capsule/i, groups: ["fruiting_plants"] },
-    { re: /leaf|stem|vine|tree|shrub|herb|woody|rosette|bark|sap|thorny|succulent/i, groups: ["plants"] }
+    {
+      re: /leaf|stem|vine|tree|shrub|herb|woody|rosette|bark|sap|thorny|succulent/i,
+      groups: ["plants"]
+    }
   ];
 
   const GROUPS = {
@@ -509,7 +517,7 @@ Gall shape on plant
   function lines(raw) {
     return String(raw || "")
       .split(/\r?\n/)
-      .map(line => line.trim())
+      .map((line) => line.trim())
       .filter(Boolean);
   }
 
@@ -518,16 +526,16 @@ Gall shape on plant
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, " ")
       .split(/\s+/)
-      .filter(word => word.length > 2);
+      .filter((word) => word.length > 2);
   }
 
   function inferAliases(label) {
     const aliases = new Set([label]);
     String(label)
       .split(/\s+vs\s+|\/|:|,/i)
-      .map(part => part.trim())
-      .filter(part => part.length > 3)
-      .forEach(part => aliases.add(part));
+      .map((part) => part.trim())
+      .filter((part) => part.length > 3)
+      .forEach((part) => aliases.add(part));
     return [...aliases];
   }
 
@@ -555,7 +563,7 @@ Gall shape on plant
   function splitContrast(label) {
     return String(label || "")
       .split(/\s+vs\s+|\/|,/i)
-      .map(part => part.trim())
+      .map((part) => part.trim())
       .filter(Boolean);
   }
 
@@ -576,16 +584,23 @@ Gall shape on plant
     "woody stem": "a hard, persistent stem with bark or twiggy growth",
     "non woody stem": "a softer green stem that does not form permanent wood",
     "non woody": "soft green stem tissue rather than bark or wood",
-    "vine climber": "a plant that leans, twines, climbs, or grabs support instead of standing alone",
+    "vine climber":
+      "a plant that leans, twines, climbs, or grabs support instead of standing alone",
     climber: "a plant that uses another surface for support",
-    "self supporting plant": "a plant that holds itself upright without climbing or trailing over support",
-    "grass like": "narrow leaves and jointed or grass-like stems, often needing close inspection of sheaths and seed heads",
+    "self supporting plant":
+      "a plant that holds itself upright without climbing or trailing over support",
+    "grass like":
+      "narrow leaves and jointed or grass-like stems, often needing close inspection of sheaths and seed heads",
     broadleaf: "a plant with wider, flatter leaves rather than grass-like blades",
     "broadleaf plant": "a plant with wider, flatter leaves rather than grass-like blades",
-    "fern like fronds": "leafy fronds that are often divided into many small segments and do not bear flowers",
-    "seed plant leaves": "ordinary seed-plant leaves from flowering plants or conifers, rather than fern fronds",
-    "moss like mat": "a low cushion or carpet of very small plants, often soft and close to the surface",
-    "vascular plant": "a plant with internal water-conducting tissue, usually with clear stems, roots, or larger leaves",
+    "fern like fronds":
+      "leafy fronds that are often divided into many small segments and do not bear flowers",
+    "seed plant leaves":
+      "ordinary seed-plant leaves from flowering plants or conifers, rather than fern fronds",
+    "moss like mat":
+      "a low cushion or carpet of very small plants, often soft and close to the surface",
+    "vascular plant":
+      "a plant with internal water-conducting tissue, usually with clear stems, roots, or larger leaves",
     aquatic: "growing in water",
     emergent: "rooted in water or saturated soil but rising above the surface",
     terrestrial: "growing on land rather than in water",
@@ -597,7 +612,8 @@ Gall shape on plant
     "twining vine habit": "a climbing stem that wraps around its support",
     "tendril climbing habit": "a climber using thin curling tendrils to grab support",
     "trailing groundcover habit": "stems running along the ground rather than standing upright",
-    "tree bark texture": "the surface pattern of bark, such as smooth, furrowed, flaky, plated, or peeling",
+    "tree bark texture":
+      "the surface pattern of bark, such as smooth, furrowed, flaky, plated, or peeling",
     "young green stems": "new soft stems, often green and flexible",
     "woody old stems": "older hard stems with bark, scars, or twiggy structure",
     "hollow stem": "a stem with an empty center when viewed at a break or cut end",
@@ -610,20 +626,26 @@ Gall shape on plant
     "succulent fleshy plant": "thick water-storing leaves or stems",
     evergreen: "keeping green leaves through the dormant season",
     deciduous: "dropping leaves for part of the year",
-    "annual looking weedy habit": "fast, soft growth with many flowers or seeds, like a plant completing life in one season",
+    "annual looking weedy habit":
+      "fast, soft growth with many flowers or seeds, like a plant completing life in one season",
     "opposite leaves": "two leaves attached at the same node, directly across from one another",
     "alternate leaves": "one leaf per node, switching sides as you move up the stem",
     "whorled leaves": "three or more leaves attached around the same node",
     "basal leaves only": "leaves mostly or entirely at ground level, with little leafy stem above",
-    "leaves clustered at branch tips": "leaves packed near twig ends instead of spread evenly along the branch",
+    "leaves clustered at branch tips":
+      "leaves packed near twig ends instead of spread evenly along the branch",
     "two ranked leaves": "leaves arranged in two flat rows along the stem",
-    "spiral leaf arrangement": "leaves stepping around the stem in a spiral rather than forming opposite pairs",
+    "spiral leaf arrangement":
+      "leaves stepping around the stem in a spiral rather than forming opposite pairs",
     "paired leaflets": "leaflets occurring in pairs along a compound leaf",
-    "leaf arrangement changes up stem": "lower and upper leaves attach differently on the same plant",
-    "dense overlapping scale like leaves": "tiny leaves packed over each other like shingles, often hugging a twig",
+    "leaf arrangement changes up stem":
+      "lower and upper leaves attach differently on the same plant",
+    "dense overlapping scale like leaves":
+      "tiny leaves packed over each other like shingles, often hugging a twig",
     "simple leaf": "one undivided blade, even if the edge is toothed or lobed",
     "compound leaf": "one leaf divided into separate leaflets on a shared stalk",
-    "pinnately compound leaf": "leaflets arranged along both sides of a central stalk, like a feather",
+    "pinnately compound leaf":
+      "leaflets arranged along both sides of a central stalk, like a feather",
     "palmately compound leaf": "leaflets spreading from one point, like fingers from a palm",
     "trifoliate leaf": "a compound leaf with three leaflets",
     "needle like leaf": "a long, narrow, stiff leaf shaped like a needle",
@@ -634,7 +656,8 @@ Gall shape on plant
     "lance shaped leaf": "a narrow leaf that is widest below the middle and tapers to a point",
     "linear leaf": "a very narrow leaf with nearly parallel sides",
     "lobed leaf": "a blade with rounded or pointed projections cut into the outline",
-    "deeply divided leaf": "a blade cut so deeply that the divisions nearly reach the midrib or base",
+    "deeply divided leaf":
+      "a blade cut so deeply that the divisions nearly reach the midrib or base",
     "fan shaped leaf": "a leaf spreading outward from a narrow base like a fan",
     "spoon shaped leaf": "a leaf narrow at the base and broader near the rounded tip",
     "arrowhead shaped leaf": "a leaf with pointed basal lobes, like an arrowhead",
@@ -688,7 +711,8 @@ Gall shape on plant
     "tubular flower": "a flower shaped like a tube",
     "bell shaped flower": "a flower flaring like a bell",
     "pea shaped flower": "a flower with banner, wing, and keel parts like a pea or bean flower",
-    "daisy like composite flower": "a flower head made of many small flowers, often with ray and disk florets",
+    "daisy like composite flower":
+      "a flower head made of many small flowers, often with ray and disk florets",
     "umbel flower cluster": "flower stalks radiating from one point like umbrella ribs",
     "spike flower cluster": "stalkless or nearly stalkless flowers arranged along a central stem",
     "raceme flower cluster": "stalked flowers arranged along a central stem",
@@ -719,7 +743,8 @@ Gall shape on plant
     "burr with hooks": "a seed or fruit covered with hooks that catch on fur or clothing",
     "parachute like seeds": "seeds with hairs or plumes that catch the wind",
     "milkweed style silky seeds": "seeds attached to long silky hairs",
-    "seed head persistent after flowering": "dry flower or seed structures remain after petals fade",
+    "seed head persistent after flowering":
+      "dry flower or seed structures remain after petals fade",
     "fruit color": "the visible color of mature or ripening fruit",
     "fruit position upright": "fruit held above or along the stem",
     "fruit position dangling": "fruit hanging downward",
@@ -728,10 +753,12 @@ Gall shape on plant
     "seed pod splitting pattern": "the way a dry pod opens to release seeds",
     "cone scale shape": "the form and edge of the overlapping cone scales",
     "fruit season": "the time of year when fruit is visible",
-    "sedges have edges triangular stem": "many sedges have three-sided stems you can feel or see in cross-section",
+    "sedges have edges triangular stem":
+      "many sedges have three-sided stems you can feel or see in cross-section",
     "round rush stem": "rush stems are often round or cylindrical",
     "jointed grass stem": "grasses often show nodes or joints along the stem",
-    "grass blade ligule": "a small flap, membrane, or line of hairs where the blade meets the sheath",
+    "grass blade ligule":
+      "a small flap, membrane, or line of hairs where the blade meets the sheath",
     "grass blade auricles": "small ear-like lobes at the base of the blade",
     "open leaf sheath": "the sheath margins overlap but are not fused into a tube",
     "closed leaf sheath": "the sheath forms a tube around the stem",
@@ -745,14 +772,16 @@ Gall shape on plant
     "seed head upright": "the seed head stands erect",
     "awns present": "bristle-like tips or tails attached to spikelets or seeds",
     "rhizome spreading colony": "an underground stem spreads and makes a patch of connected shoots",
-    "wetland grass like habitat": "grass-like plants growing in wet soil, marshes, edges, or shallow water",
+    "wetland grass like habitat":
+      "grass-like plants growing in wet soil, marshes, edges, or shallow water",
     "fern frond once divided": "a fern frond divided one time into leaflets or pinnae",
     "fern frond twice divided": "a fern frond whose pinnae are divided again into smaller segments",
     "fern sori position": "where the spore patches sit on the underside or edge of the frond",
     "round sori": "round fern spore patches",
     "linear sori": "long narrow fern spore patches",
     "sori covered by indusium": "spore patches partly covered by a thin flap or membrane",
-    "fertile fronds different from sterile fronds": "spore-bearing fronds look different from non-spore fronds",
+    "fertile fronds different from sterile fronds":
+      "spore-bearing fronds look different from non-spore fronds",
     "fiddleheads present": "young fern fronds coiled like scrolls",
     "moss cushion": "a rounded mound of moss",
     "moss carpet": "a flat spreading sheet of moss",
@@ -772,7 +801,8 @@ Gall shape on plant
     "growing on rock": "attached to stone",
     "growing on soil": "attached to bare ground",
     "moss lichen substrate specificity": "the kind of surface a moss or lichen seems restricted to",
-    "cap shape": "the outline of the mushroom cap, such as convex, flat, bell-shaped, depressed, or shelf-like",
+    "cap shape":
+      "the outline of the mushroom cap, such as convex, flat, bell-shaped, depressed, or shelf-like",
     "cap color": "the visible color of the mushroom cap, noting age and moisture",
     "cap surface slimy": "a slippery or sticky cap surface",
     "cap surface dry": "a non-sticky cap surface",
@@ -801,7 +831,8 @@ Gall shape on plant
     "mushroom odor": "a noticeable smell such as mealy, almond-like, fishy, spicy, or unpleasant",
     "spore print color": "the color of spores dropped onto a surface",
     "seasonal fruiting pattern": "the time of year and weather pattern when the fungus appears",
-    "mycorrhizal tree association": "a fungus growing with particular trees through root partnerships",
+    "mycorrhizal tree association":
+      "a fungus growing with particular trees through root partnerships",
     "six legs visible": "adult insects have three pairs of legs",
     "three body regions visible": "insects have head, thorax, and abdomen",
     "winged adult": "the adult has wings",
@@ -865,10 +896,17 @@ Gall shape on plant
     "gall shape on plant": "a swelling or growth made by the plant around an insect or mite"
   };
 
-  const GLOSSARY_BY_KEY = Object.fromEntries(Object.entries(FIELD_MARK_GLOSSARY).map(([key, value]) => [
-    key.toLowerCase().replace(/&/g, " and ").replace(/\bvs\b/g, " ").replace(/[^a-z0-9]+/g, " ").trim(),
-    value
-  ]));
+  const GLOSSARY_BY_KEY = Object.fromEntries(
+    Object.entries(FIELD_MARK_GLOSSARY).map(([key, value]) => [
+      key
+        .toLowerCase()
+        .replace(/&/g, " and ")
+        .replace(/\bvs\b/g, " ")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim(),
+      value
+    ])
+  );
 
   function glossaryKey(value) {
     return String(value || "")
@@ -894,7 +932,7 @@ Gall shape on plant
     if (exact) return exact;
     const hit = Object.keys(GLOSSARY_BY_KEY)
       .sort((a, b) => b.length - a.length)
-      .find(candidate => key.includes(candidate) || (key.length >= 9 && candidate.includes(key)));
+      .find((candidate) => key.includes(candidate) || (key.length >= 9 && candidate.includes(key)));
     return hit ? GLOSSARY_BY_KEY[hit] : "";
   }
 
@@ -910,17 +948,16 @@ Gall shape on plant
     ].filter(Boolean);
 
     return rawParts.map((part, index) => {
-      const contextual = bases.map(base => `${base} ${part}`);
-      const candidates = index === 0
-        ? [part, ...contextual]
-        : [...contextual, part];
-      const definition = candidates.map(exactDefinitionForTerm).find(Boolean) || definitionForTerm(part);
+      const contextual = bases.map((base) => `${base} ${part}`);
+      const candidates = index === 0 ? [part, ...contextual] : [...contextual, part];
+      const definition =
+        candidates.map(exactDefinitionForTerm).find(Boolean) || definitionForTerm(part);
       return { part, definition: definition || "" };
     });
   }
 
   function hasAny(text, words) {
-    return words.some(word => text.includes(word));
+    return words.some((word) => text.includes(word));
   }
 
   function escXml(value) {
@@ -933,7 +970,10 @@ Gall shape on plant
   }
 
   function shortCaption(label) {
-    const text = String(label || "").replace(/\s+vs\s+/ig, " / ").replace(/\s+/g, " ").trim();
+    const text = String(label || "")
+      .replace(/\s+vs\s+/gi, " / ")
+      .replace(/\s+/g, " ")
+      .trim();
     return text.length > 30 ? `${text.slice(0, 27)}...` : text;
   }
 
@@ -949,105 +989,232 @@ Gall shape on plant
   }
 
   function leafBody(kind = "oval") {
-    if (kind === "needle") return `<path d="M80 20 C74 46 74 72 80 96 C86 72 86 46 80 20Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 22 L80 94" stroke="currentColor" stroke-width="1.6" opacity="0.7"></path>`;
-    if (kind === "linear") return `<path d="M70 18 C66 44 66 72 70 98 L90 98 C94 72 94 44 90 18Z" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="2"></path><path d="M80 20 L80 97" stroke="currentColor" stroke-width="1.6" opacity="0.7"></path>`;
-    if (kind === "heart") return `<path d="M80 94 C46 66 39 36 59 26 C70 20 78 27 80 38 C82 27 90 20 101 26 C121 36 114 66 80 94Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 40 L80 92" stroke="currentColor" stroke-width="1.4" opacity="0.65"></path>`;
-    if (kind === "lobed") return `<path d="M80 18 C93 28 91 42 103 49 C92 54 101 70 87 73 C88 84 83 91 80 98 C77 91 72 84 73 73 C59 70 68 54 57 49 C69 42 67 28 80 18Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 24 L80 94" stroke="currentColor" stroke-width="1.4" opacity="0.65"></path>`;
-    if (kind === "fan") return `<path d="M80 96 C50 78 43 50 54 28 C72 38 88 38 106 28 C117 50 110 78 80 96Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 96 L56 31 M80 96 L80 39 M80 96 L104 31" stroke="currentColor" stroke-width="1.3" opacity="0.62"></path>`;
-    if (kind === "round") return `<circle cx="80" cy="58" r="32" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></circle><path d="M80 90 L80 102" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>`;
-    if (kind === "arrow") return `<path d="M80 20 C96 34 107 55 112 80 C97 75 87 80 80 96 C73 80 63 75 48 80 C53 55 64 34 80 20Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 26 L80 94" stroke="currentColor" stroke-width="1.4" opacity="0.65"></path>`;
+    if (kind === "needle")
+      return `<path d="M80 20 C74 46 74 72 80 96 C86 72 86 46 80 20Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 22 L80 94" stroke="currentColor" stroke-width="1.6" opacity="0.7"></path>`;
+    if (kind === "linear")
+      return `<path d="M70 18 C66 44 66 72 70 98 L90 98 C94 72 94 44 90 18Z" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="2"></path><path d="M80 20 L80 97" stroke="currentColor" stroke-width="1.6" opacity="0.7"></path>`;
+    if (kind === "heart")
+      return `<path d="M80 94 C46 66 39 36 59 26 C70 20 78 27 80 38 C82 27 90 20 101 26 C121 36 114 66 80 94Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 40 L80 92" stroke="currentColor" stroke-width="1.4" opacity="0.65"></path>`;
+    if (kind === "lobed")
+      return `<path d="M80 18 C93 28 91 42 103 49 C92 54 101 70 87 73 C88 84 83 91 80 98 C77 91 72 84 73 73 C59 70 68 54 57 49 C69 42 67 28 80 18Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 24 L80 94" stroke="currentColor" stroke-width="1.4" opacity="0.65"></path>`;
+    if (kind === "fan")
+      return `<path d="M80 96 C50 78 43 50 54 28 C72 38 88 38 106 28 C117 50 110 78 80 96Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 96 L56 31 M80 96 L80 39 M80 96 L104 31" stroke="currentColor" stroke-width="1.3" opacity="0.62"></path>`;
+    if (kind === "round")
+      return `<circle cx="80" cy="58" r="32" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></circle><path d="M80 90 L80 102" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>`;
+    if (kind === "arrow")
+      return `<path d="M80 20 C96 34 107 55 112 80 C97 75 87 80 80 96 C73 80 63 75 48 80 C53 55 64 34 80 20Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 26 L80 94" stroke="currentColor" stroke-width="1.4" opacity="0.65"></path>`;
     return `<path d="M80 18 C47 35 43 75 80 99 C117 75 113 35 80 18Z" fill="currentColor" opacity="0.17" stroke="currentColor" stroke-width="2"></path><path d="M80 22 L80 96 M80 55 C68 50 60 44 54 35 M80 64 C94 58 103 50 109 39" stroke="currentColor" stroke-width="1.4" opacity="0.65" fill="none"></path>`;
   }
 
   function plantStemSketch(label, mode) {
     const stem = `<path d="M80 18 L80 92" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>`;
-    const leaf = (x, y, flip = 1) => `<ellipse cx="${x}" cy="${y}" rx="19" ry="8" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2" transform="rotate(${flip * 24} ${x} ${y})"></ellipse>`;
+    const leaf = (x, y, flip = 1) =>
+      `<ellipse cx="${x}" cy="${y}" rx="19" ry="8" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2" transform="rotate(${flip * 24} ${x} ${y})"></ellipse>`;
     let body = stem;
-    if (mode === "opposite") body += `${leaf(57, 36, -1)}${leaf(103, 36, 1)}${leaf(58, 64, 1)}${leaf(102, 64, -1)}`;
-    else if (mode === "whorled") body += `${leaf(55, 46, -1)}${leaf(105, 46, 1)}${leaf(80, 29, 0)}${leaf(80, 63, 0)}<circle cx="80" cy="46" r="4" fill="currentColor"></circle>`;
-    else if (mode === "basal") body = `<path d="M80 86 L80 52" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>${[0, 45, 90, 135, 180, 225, 270, 315].map(a => `<ellipse cx="80" cy="84" rx="22" ry="8" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.8" transform="rotate(${a} 80 84)"></ellipse>`).join("")}`;
-    else if (mode === "scale") body += [26, 35, 44, 53, 62, 71, 80].map((y, i) => `<path d="M80 ${y} C${i % 2 ? 101 : 59} ${y - 8} ${i % 2 ? 102 : 58} ${y + 8} 80 ${y + 13}Z" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="1.5"></path>`).join("");
+    if (mode === "opposite")
+      body += `${leaf(57, 36, -1)}${leaf(103, 36, 1)}${leaf(58, 64, 1)}${leaf(102, 64, -1)}`;
+    else if (mode === "whorled")
+      body += `${leaf(55, 46, -1)}${leaf(105, 46, 1)}${leaf(80, 29, 0)}${leaf(80, 63, 0)}<circle cx="80" cy="46" r="4" fill="currentColor"></circle>`;
+    else if (mode === "basal")
+      body = `<path d="M80 86 L80 52" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<ellipse cx="80" cy="84" rx="22" ry="8" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.8" transform="rotate(${a} 80 84)"></ellipse>`).join("")}`;
+    else if (mode === "scale")
+      body += [26, 35, 44, 53, 62, 71, 80]
+        .map(
+          (y, i) =>
+            `<path d="M80 ${y} C${i % 2 ? 101 : 59} ${y - 8} ${i % 2 ? 102 : 58} ${y + 8} 80 ${y + 13}Z" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="1.5"></path>`
+        )
+        .join("");
     else body += `${leaf(58, 30, -1)}${leaf(102, 45, 1)}${leaf(58, 61, -1)}${leaf(102, 77, 1)}`;
     return sketchFrame(label, body);
   }
 
   function plantHabitSketch(label, text) {
     let body = `<path d="M28 91 L132 91" stroke="currentColor" stroke-width="2" opacity="0.35"></path>`;
-    if (text.includes("tree")) body += `<path d="M80 88 L80 43" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path><circle cx="80" cy="35" r="24" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="2"></circle>`;
-    else if (text.includes("vine") || text.includes("twining") || text.includes("tendril")) body += `<path d="M56 90 C105 80 49 54 94 43 C121 36 96 24 116 18" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"></path><path d="M94 43 C105 43 110 35 103 31" stroke="currentColor" stroke-width="1.8" fill="none"></path>`;
-    else if (text.includes("mat") || text.includes("creeping") || text.includes("trailing")) body += `<path d="M34 82 C56 68 76 93 98 77 C116 65 125 78 134 70" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"></path><circle cx="55" cy="72" r="6" fill="currentColor" opacity="0.22"></circle><circle cx="97" cy="78" r="6" fill="currentColor" opacity="0.22"></circle>`;
-    else if (text.includes("clumping") || text.includes("tussock") || text.includes("grass")) body += [52, 62, 72, 82, 92, 102].map((x, i) => `<path d="M80 90 C${x} ${66 - i * 2} ${x + 2} 43 ${x - 4} 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"></path>`).join("");
-    else body += `<path d="M80 89 L80 39 M80 58 C60 45 50 34 42 20 M80 61 C101 48 111 37 119 24 M80 73 C61 69 48 66 36 58 M80 75 C99 72 113 68 128 60" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"></path>`;
+    if (text.includes("tree"))
+      body += `<path d="M80 88 L80 43" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path><circle cx="80" cy="35" r="24" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="2"></circle>`;
+    else if (text.includes("vine") || text.includes("twining") || text.includes("tendril"))
+      body += `<path d="M56 90 C105 80 49 54 94 43 C121 36 96 24 116 18" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"></path><path d="M94 43 C105 43 110 35 103 31" stroke="currentColor" stroke-width="1.8" fill="none"></path>`;
+    else if (text.includes("mat") || text.includes("creeping") || text.includes("trailing"))
+      body += `<path d="M34 82 C56 68 76 93 98 77 C116 65 125 78 134 70" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"></path><circle cx="55" cy="72" r="6" fill="currentColor" opacity="0.22"></circle><circle cx="97" cy="78" r="6" fill="currentColor" opacity="0.22"></circle>`;
+    else if (text.includes("clumping") || text.includes("tussock") || text.includes("grass"))
+      body += [52, 62, 72, 82, 92, 102]
+        .map(
+          (x, i) =>
+            `<path d="M80 90 C${x} ${66 - i * 2} ${x + 2} 43 ${x - 4} 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"></path>`
+        )
+        .join("");
+    else
+      body += `<path d="M80 89 L80 39 M80 58 C60 45 50 34 42 20 M80 61 C101 48 111 37 119 24 M80 73 C61 69 48 66 36 58 M80 75 C99 72 113 68 128 60" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"></path>`;
     return sketchFrame(label, body);
   }
 
   function flowerSketch(label, text) {
     let body = `<path d="M80 92 L80 63" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>`;
-    if (text.includes("umbel")) body += [40, 60, 80, 100, 120].map(x => `<path d="M80 64 L${x} 31" stroke="currentColor" stroke-width="1.7" opacity="0.7"></path><circle cx="${x}" cy="29" r="7" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="1.6"></circle>`).join("");
-    else if (text.includes("spike") || text.includes("catkin")) body = `<path d="M80 92 L80 25" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>${[35,45,55,65,75].map((y,i) => `<circle cx="${i % 2 ? 92 : 68}" cy="${y}" r="7" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="1.6"></circle>`).join("")}`;
-    else if (text.includes("raceme") || text.includes("panicle")) body += `<path d="M80 70 C62 57 58 45 50 31 M80 66 C98 54 103 43 112 29 M80 78 C62 75 50 69 40 59 M80 75 C101 70 113 65 124 55" stroke="currentColor" stroke-width="1.8" fill="none"></path>${[50,112,40,124].map((x,i) => `<circle cx="${x}" cy="${[31,29,59,55][i]}" r="6" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="1.5"></circle>`).join("")}`;
-    else if (text.includes("tubular") || text.includes("bell")) body += `<path d="M64 35 C66 22 94 22 96 35 L89 65 C84 72 76 72 71 65Z" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></path>`;
-    else if (text.includes("daisy")) body += [0,45,90,135].map(a => `<ellipse cx="80" cy="42" rx="8" ry="24" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="1.5" transform="rotate(${a} 80 42)"></ellipse>`).join("") + `<circle cx="80" cy="42" r="10" fill="currentColor" opacity="0.28"></circle>`;
-    else body += [0,60,120].map(a => `<ellipse cx="80" cy="42" rx="12" ry="26" fill="currentColor" opacity="0.14" stroke="currentColor" stroke-width="1.6" transform="rotate(${a} 80 42)"></ellipse>`).join("") + `<circle cx="80" cy="42" r="7" fill="currentColor" opacity="0.32"></circle>`;
+    if (text.includes("umbel"))
+      body += [40, 60, 80, 100, 120]
+        .map(
+          (x) =>
+            `<path d="M80 64 L${x} 31" stroke="currentColor" stroke-width="1.7" opacity="0.7"></path><circle cx="${x}" cy="29" r="7" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="1.6"></circle>`
+        )
+        .join("");
+    else if (text.includes("spike") || text.includes("catkin"))
+      body = `<path d="M80 92 L80 25" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>${[35, 45, 55, 65, 75].map((y, i) => `<circle cx="${i % 2 ? 92 : 68}" cy="${y}" r="7" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="1.6"></circle>`).join("")}`;
+    else if (text.includes("raceme") || text.includes("panicle"))
+      body += `<path d="M80 70 C62 57 58 45 50 31 M80 66 C98 54 103 43 112 29 M80 78 C62 75 50 69 40 59 M80 75 C101 70 113 65 124 55" stroke="currentColor" stroke-width="1.8" fill="none"></path>${[50, 112, 40, 124].map((x, i) => `<circle cx="${x}" cy="${[31, 29, 59, 55][i]}" r="6" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="1.5"></circle>`).join("")}`;
+    else if (text.includes("tubular") || text.includes("bell"))
+      body += `<path d="M64 35 C66 22 94 22 96 35 L89 65 C84 72 76 72 71 65Z" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></path>`;
+    else if (text.includes("daisy"))
+      body +=
+        [0, 45, 90, 135]
+          .map(
+            (a) =>
+              `<ellipse cx="80" cy="42" rx="8" ry="24" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="1.5" transform="rotate(${a} 80 42)"></ellipse>`
+          )
+          .join("") + `<circle cx="80" cy="42" r="10" fill="currentColor" opacity="0.28"></circle>`;
+    else
+      body +=
+        [0, 60, 120]
+          .map(
+            (a) =>
+              `<ellipse cx="80" cy="42" rx="12" ry="26" fill="currentColor" opacity="0.14" stroke="currentColor" stroke-width="1.6" transform="rotate(${a} 80 42)"></ellipse>`
+          )
+          .join("") + `<circle cx="80" cy="42" r="7" fill="currentColor" opacity="0.32"></circle>`;
     return sketchFrame(label, body);
   }
 
   function fruitSketch(label, text) {
     let body = `<path d="M36 90 L124 90" stroke="currentColor" stroke-width="2" opacity="0.35"></path>`;
-    if (text.includes("samara") || text.includes("winged")) body += `<ellipse cx="68" cy="55" rx="28" ry="10" fill="currentColor" opacity="0.14" stroke="currentColor" stroke-width="2" transform="rotate(-26 68 55)"></ellipse><circle cx="94" cy="66" r="8" fill="currentColor" opacity="0.25"></circle>`;
-    else if (text.includes("pod") || text.includes("capsule")) body += `<path d="M56 36 C82 27 109 37 112 71 C86 81 59 70 56 36Z" fill="currentColor" opacity="0.14" stroke="currentColor" stroke-width="2"></path><path d="M60 43 C77 58 91 63 108 68" stroke="currentColor" stroke-width="1.5" opacity="0.7"></path>`;
-    else if (text.includes("cone")) body += [30,42,54,66,78].map((y,i) => `<path d="M80 ${y} C${55 + i * 3} ${y + 9} ${105 - i * 3} ${y + 9} 80 ${y + 20}Z" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="1.4"></path>`).join("");
-    else if (text.includes("burr")) body += `<circle cx="80" cy="58" r="25" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="2"></circle>${[20,50,80,110,140,170,210,250,290,330].map(a => `<path d="M80 58 L${80 + Math.cos(a * Math.PI / 180) * 36} ${58 + Math.sin(a * Math.PI / 180) * 36}" stroke="currentColor" stroke-width="1.4"></path>`).join("")}`;
-    else if (text.includes("parachute") || text.includes("silky")) body += `<path d="M80 77 L80 48" stroke="currentColor" stroke-width="1.8"></path><path d="M80 48 C52 35 50 22 80 21 C110 22 108 35 80 48Z" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="1.7"></path><ellipse cx="80" cy="83" rx="7" ry="10" fill="currentColor" opacity="0.22"></ellipse>`;
-    else body += [58,80,102].map((x,i) => `<circle cx="${x}" cy="${54 + (i % 2) * 11}" r="15" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></circle>`).join("") + `<path d="M80 38 L80 25" stroke="currentColor" stroke-width="2"></path>`;
+    if (text.includes("samara") || text.includes("winged"))
+      body += `<ellipse cx="68" cy="55" rx="28" ry="10" fill="currentColor" opacity="0.14" stroke="currentColor" stroke-width="2" transform="rotate(-26 68 55)"></ellipse><circle cx="94" cy="66" r="8" fill="currentColor" opacity="0.25"></circle>`;
+    else if (text.includes("pod") || text.includes("capsule"))
+      body += `<path d="M56 36 C82 27 109 37 112 71 C86 81 59 70 56 36Z" fill="currentColor" opacity="0.14" stroke="currentColor" stroke-width="2"></path><path d="M60 43 C77 58 91 63 108 68" stroke="currentColor" stroke-width="1.5" opacity="0.7"></path>`;
+    else if (text.includes("cone"))
+      body += [30, 42, 54, 66, 78]
+        .map(
+          (y, i) =>
+            `<path d="M80 ${y} C${55 + i * 3} ${y + 9} ${105 - i * 3} ${y + 9} 80 ${y + 20}Z" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="1.4"></path>`
+        )
+        .join("");
+    else if (text.includes("burr"))
+      body += `<circle cx="80" cy="58" r="25" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="2"></circle>${[20, 50, 80, 110, 140, 170, 210, 250, 290, 330].map((a) => `<path d="M80 58 L${80 + Math.cos((a * Math.PI) / 180) * 36} ${58 + Math.sin((a * Math.PI) / 180) * 36}" stroke="currentColor" stroke-width="1.4"></path>`).join("")}`;
+    else if (text.includes("parachute") || text.includes("silky"))
+      body += `<path d="M80 77 L80 48" stroke="currentColor" stroke-width="1.8"></path><path d="M80 48 C52 35 50 22 80 21 C110 22 108 35 80 48Z" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="1.7"></path><ellipse cx="80" cy="83" rx="7" ry="10" fill="currentColor" opacity="0.22"></ellipse>`;
+    else
+      body +=
+        [58, 80, 102]
+          .map(
+            (x, i) =>
+              `<circle cx="${x}" cy="${54 + (i % 2) * 11}" r="15" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></circle>`
+          )
+          .join("") + `<path d="M80 38 L80 25" stroke="currentColor" stroke-width="2"></path>`;
     return sketchFrame(label, body);
   }
 
   function grassSketch(label, text) {
     let body = `<path d="M80 92 L80 28" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>`;
-    if (text.includes("triangular")) body = `<polygon points="80,29 45,88 115,88" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="2"></polygon><text x="80" y="76" text-anchor="middle" fill="currentColor" opacity="0.65" font-size="22" font-weight="900">3</text>`;
-    else if (text.includes("round rush")) body = `<circle cx="80" cy="62" r="31" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2.3"></circle><circle cx="80" cy="62" r="8" fill="currentColor" opacity="0.2"></circle>`;
-    else if (text.includes("ligule") || text.includes("auricle") || text.includes("sheath")) body += `<path d="M80 62 C61 61 54 70 51 86 M80 62 C99 61 106 70 109 86" stroke="currentColor" stroke-width="2" fill="none"></path><path d="M67 60 C73 53 87 53 93 60" stroke="currentColor" stroke-width="2" fill="none" opacity="0.8"></path>`;
-    else if (text.includes("spikelet") || text.includes("awn") || text.includes("seed head")) body += [38,48,58,68,78].map((y,i) => `<path d="M80 ${y} L${i % 2 ? 107 : 53} ${y - 8}" stroke="currentColor" stroke-width="1.8"></path><path d="M${i % 2 ? 107 : 53} ${y - 8} L${i % 2 ? 120 : 40} ${y - 18}" stroke="currentColor" stroke-width="1" opacity="0.65"></path>`).join("");
-    else body += `<path d="M80 90 C55 58 52 35 49 20 M80 91 C101 62 105 37 112 19 M80 92 C73 62 72 39 72 21 M80 92 C89 61 91 38 91 20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"></path>`;
+    if (text.includes("triangular"))
+      body = `<polygon points="80,29 45,88 115,88" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="2"></polygon><text x="80" y="76" text-anchor="middle" fill="currentColor" opacity="0.65" font-size="22" font-weight="900">3</text>`;
+    else if (text.includes("round rush"))
+      body = `<circle cx="80" cy="62" r="31" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2.3"></circle><circle cx="80" cy="62" r="8" fill="currentColor" opacity="0.2"></circle>`;
+    else if (text.includes("ligule") || text.includes("auricle") || text.includes("sheath"))
+      body += `<path d="M80 62 C61 61 54 70 51 86 M80 62 C99 61 106 70 109 86" stroke="currentColor" stroke-width="2" fill="none"></path><path d="M67 60 C73 53 87 53 93 60" stroke="currentColor" stroke-width="2" fill="none" opacity="0.8"></path>`;
+    else if (text.includes("spikelet") || text.includes("awn") || text.includes("seed head"))
+      body += [38, 48, 58, 68, 78]
+        .map(
+          (y, i) =>
+            `<path d="M80 ${y} L${i % 2 ? 107 : 53} ${y - 8}" stroke="currentColor" stroke-width="1.8"></path><path d="M${i % 2 ? 107 : 53} ${y - 8} L${i % 2 ? 120 : 40} ${y - 18}" stroke="currentColor" stroke-width="1" opacity="0.65"></path>`
+        )
+        .join("");
+    else
+      body += `<path d="M80 90 C55 58 52 35 49 20 M80 91 C101 62 105 37 112 19 M80 92 C73 62 72 39 72 21 M80 92 C89 61 91 38 91 20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"></path>`;
     return sketchFrame(label, body);
   }
 
   function cryptogamSketch(label, text) {
     let body = `<path d="M34 88 L126 88" stroke="currentColor" stroke-width="2" opacity="0.35"></path>`;
-    if (text.includes("fiddlehead")) body += `<path d="M81 92 C78 72 92 64 93 49 C94 33 77 27 68 38 C59 49 70 60 80 53" stroke="currentColor" stroke-width="5" fill="none" stroke-linecap="round"></path>`;
-    else if (text.includes("fern") || text.includes("sori") || text.includes("indusium")) body += `<path d="M80 92 L80 22" stroke="currentColor" stroke-width="3"></path>${[34,44,54,64,74].map(y => `<path d="M80 ${y} C62 ${y - 7} 51 ${y - 7} 42 ${y - 4} M80 ${y} C98 ${y - 7} 109 ${y - 7} 118 ${y - 4}" stroke="currentColor" stroke-width="2" fill="none"></path>`).join("")}${hasAny(text, ["sori", "indusium"]) ? [47,57,67,77].map(y => `<circle cx="60" cy="${y}" r="3" fill="currentColor" opacity="0.32"></circle><circle cx="100" cy="${y}" r="3" fill="currentColor" opacity="0.32"></circle>`).join("") : ""}`;
-    else if (text.includes("lichen")) body += text.includes("fruticose") ? `<path d="M80 88 C73 67 63 54 54 40 M80 88 C86 67 96 53 111 38 M80 88 C80 66 82 52 79 31" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"></path>` : text.includes("crustose") ? `<path d="M45 70 C54 42 78 45 90 35 C108 39 119 52 116 75 C94 89 63 86 45 70Z" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="2"></path>` : `<path d="M45 73 C55 45 78 48 84 61 C96 42 118 53 116 76 C100 89 82 81 72 86 C58 83 51 81 45 73Z" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="2"></path>`;
-    else body += `<path d="M42 84 C55 69 69 80 80 67 C91 80 106 69 119 84" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"></path>${[52,70,92,110].map(x => `<path d="M${x} 82 L${x} 54" stroke="currentColor" stroke-width="1.8"></path><ellipse cx="${x}" cy="50" rx="6" ry="9" fill="currentColor" opacity="0.18" stroke="currentColor" stroke-width="1.3"></ellipse>`).join("")}`;
+    if (text.includes("fiddlehead"))
+      body += `<path d="M81 92 C78 72 92 64 93 49 C94 33 77 27 68 38 C59 49 70 60 80 53" stroke="currentColor" stroke-width="5" fill="none" stroke-linecap="round"></path>`;
+    else if (text.includes("fern") || text.includes("sori") || text.includes("indusium"))
+      body += `<path d="M80 92 L80 22" stroke="currentColor" stroke-width="3"></path>${[34, 44, 54, 64, 74].map((y) => `<path d="M80 ${y} C62 ${y - 7} 51 ${y - 7} 42 ${y - 4} M80 ${y} C98 ${y - 7} 109 ${y - 7} 118 ${y - 4}" stroke="currentColor" stroke-width="2" fill="none"></path>`).join("")}${hasAny(text, ["sori", "indusium"]) ? [47, 57, 67, 77].map((y) => `<circle cx="60" cy="${y}" r="3" fill="currentColor" opacity="0.32"></circle><circle cx="100" cy="${y}" r="3" fill="currentColor" opacity="0.32"></circle>`).join("") : ""}`;
+    else if (text.includes("lichen"))
+      body += text.includes("fruticose")
+        ? `<path d="M80 88 C73 67 63 54 54 40 M80 88 C86 67 96 53 111 38 M80 88 C80 66 82 52 79 31" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"></path>`
+        : text.includes("crustose")
+          ? `<path d="M45 70 C54 42 78 45 90 35 C108 39 119 52 116 75 C94 89 63 86 45 70Z" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="2"></path>`
+          : `<path d="M45 73 C55 45 78 48 84 61 C96 42 118 53 116 76 C100 89 82 81 72 86 C58 83 51 81 45 73Z" fill="currentColor" opacity="0.13" stroke="currentColor" stroke-width="2"></path>`;
+    else
+      body += `<path d="M42 84 C55 69 69 80 80 67 C91 80 106 69 119 84" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"></path>${[52, 70, 92, 110].map((x) => `<path d="M${x} 82 L${x} 54" stroke="currentColor" stroke-width="1.8"></path><ellipse cx="${x}" cy="50" rx="6" ry="9" fill="currentColor" opacity="0.18" stroke="currentColor" stroke-width="1.3"></ellipse>`).join("")}`;
     return sketchFrame(label, body);
   }
 
   function fungusSketch(label, text) {
     let body = `<path d="M33 91 L127 91" stroke="currentColor" stroke-width="2" opacity="0.35"></path>`;
-    if (text.includes("shelf") || text.includes("bracket")) body += `<path d="M55 45 C86 24 125 37 132 65 C103 75 75 70 55 57Z" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></path><path d="M52 88 L52 28" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>`;
-    else if (text.includes("puffball")) body += `<circle cx="80" cy="58" r="30" fill="currentColor" opacity="0.14" stroke="currentColor" stroke-width="2"></circle><path d="M71 87 L89 87" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>`;
-    else if (text.includes("coral")) body += `<path d="M80 90 L80 55 M80 65 L58 43 M80 65 L103 43 M58 43 L49 29 M58 43 L65 28 M103 43 L97 27 M103 43 L116 31" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"></path>`;
-    else if (text.includes("spore print")) body += `<path d="M48 72 C70 83 91 83 113 72" stroke="currentColor" stroke-width="2" fill="none"></path>${[58,70,82,94,106].map(x => `<ellipse cx="${x}" cy="78" rx="6" ry="2" fill="currentColor" opacity="0.25"></ellipse>`).join("")}<path d="M55 45 C65 21 95 21 105 45 C92 54 68 54 55 45Z" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></path>`;
+    if (text.includes("shelf") || text.includes("bracket"))
+      body += `<path d="M55 45 C86 24 125 37 132 65 C103 75 75 70 55 57Z" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></path><path d="M52 88 L52 28" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>`;
+    else if (text.includes("puffball"))
+      body += `<circle cx="80" cy="58" r="30" fill="currentColor" opacity="0.14" stroke="currentColor" stroke-width="2"></circle><path d="M71 87 L89 87" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>`;
+    else if (text.includes("coral"))
+      body += `<path d="M80 90 L80 55 M80 65 L58 43 M80 65 L103 43 M58 43 L49 29 M58 43 L65 28 M103 43 L97 27 M103 43 L116 31" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"></path>`;
+    else if (text.includes("spore print"))
+      body += `<path d="M48 72 C70 83 91 83 113 72" stroke="currentColor" stroke-width="2" fill="none"></path>${[58, 70, 82, 94, 106].map((x) => `<ellipse cx="${x}" cy="78" rx="6" ry="2" fill="currentColor" opacity="0.25"></ellipse>`).join("")}<path d="M55 45 C65 21 95 21 105 45 C92 54 68 54 55 45Z" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></path>`;
     else {
       body += `<path d="M55 45 C65 21 95 21 105 45 C92 54 68 54 55 45Z" fill="currentColor" opacity="0.16" stroke="currentColor" stroke-width="2"></path><path d="M72 50 C70 64 68 78 64 91 L96 91 C92 78 90 64 88 50Z" fill="currentColor" opacity="0.1" stroke="currentColor" stroke-width="2"></path>`;
-      if (text.includes("gill")) body += [63,72,81,90,99].map(x => `<path d="M80 49 L${x} 60" stroke="currentColor" stroke-width="1.5" opacity="0.75"></path>`).join("");
-      if (text.includes("pore")) body += [65,75,85,95].map(x => `<circle cx="${x}" cy="58" r="2" fill="currentColor" opacity="0.65"></circle>`).join("");
-      if (text.includes("teeth") || text.includes("spines")) body += [66,76,86,96].map(x => `<path d="M${x} 53 L${x - 3} 64 L${x + 3} 64Z" fill="currentColor" opacity="0.22" stroke="currentColor" stroke-width="1"></path>`).join("");
-      if (text.includes("ring")) body += `<path d="M65 65 C75 70 85 70 95 65" stroke="currentColor" stroke-width="3" fill="none"></path>`;
-      if (text.includes("volva") || text.includes("base") || text.includes("bulbous")) body += `<path d="M58 90 C66 101 94 101 102 90" stroke="currentColor" stroke-width="3" fill="none"></path>`;
+      if (text.includes("gill"))
+        body += [63, 72, 81, 90, 99]
+          .map(
+            (x) =>
+              `<path d="M80 49 L${x} 60" stroke="currentColor" stroke-width="1.5" opacity="0.75"></path>`
+          )
+          .join("");
+      if (text.includes("pore"))
+        body += [65, 75, 85, 95]
+          .map(
+            (x) => `<circle cx="${x}" cy="58" r="2" fill="currentColor" opacity="0.65"></circle>`
+          )
+          .join("");
+      if (text.includes("teeth") || text.includes("spines"))
+        body += [66, 76, 86, 96]
+          .map(
+            (x) =>
+              `<path d="M${x} 53 L${x - 3} 64 L${x + 3} 64Z" fill="currentColor" opacity="0.22" stroke="currentColor" stroke-width="1"></path>`
+          )
+          .join("");
+      if (text.includes("ring"))
+        body += `<path d="M65 65 C75 70 85 70 95 65" stroke="currentColor" stroke-width="3" fill="none"></path>`;
+      if (text.includes("volva") || text.includes("base") || text.includes("bulbous"))
+        body += `<path d="M58 90 C66 101 94 101 102 90" stroke="currentColor" stroke-width="3" fill="none"></path>`;
     }
     return sketchFrame(label, body);
   }
 
   function insectSketch(label, text) {
     let body = `<ellipse cx="80" cy="56" rx="18" ry="25" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2"></ellipse><circle cx="80" cy="27" r="14" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2"></circle><ellipse cx="80" cy="84" rx="16" ry="18" fill="currentColor" opacity="0.1" stroke="currentColor" stroke-width="2"></ellipse>`;
-    if (text.includes("wing") || text.includes("elytra") || text.includes("halteres")) body += `<ellipse cx="55" cy="52" rx="23" ry="12" fill="currentColor" opacity="0.11" stroke="currentColor" stroke-width="1.8" transform="rotate(-28 55 52)"></ellipse><ellipse cx="105" cy="52" rx="23" ry="12" fill="currentColor" opacity="0.11" stroke="currentColor" stroke-width="1.8" transform="rotate(28 105 52)"></ellipse>${text.includes("halteres") ? `<circle cx="54" cy="76" r="5" fill="currentColor" opacity="0.25"></circle><circle cx="106" cy="76" r="5" fill="currentColor" opacity="0.25"></circle>` : ""}${text.includes("elytra") ? `<path d="M80 35 L80 81" stroke="currentColor" stroke-width="2" opacity="0.7"></path>` : ""}${text.includes("venation") || text.includes("lacewing") ? `<path d="M40 52 L70 50 M90 50 L120 52 M48 45 L61 60 M112 45 L99 60" stroke="currentColor" stroke-width="1" opacity="0.65"></path>` : ""}`;
-    if (text.includes("antennae") || text.includes("snout") || text.includes("eyes") || text.includes("mouth") || text.includes("jaws") || text.includes("proboscis") || text.includes("beak")) body += `<path d="M70 18 C56 5 44 11 42 24 M90 18 C104 5 116 11 118 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"></path>${text.includes("clubbed") ? `<circle cx="42" cy="24" r="4" fill="currentColor"></circle><circle cx="118" cy="24" r="4" fill="currentColor"></circle>` : ""}${text.includes("proboscis") || text.includes("beak") || text.includes("snout") ? `<path d="M80 35 C77 48 83 56 80 70" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"></path>` : ""}`;
-    body += [43,55,68].map(y => `<path d="M64 ${y} L38 ${y - 9} M96 ${y} L122 ${y - 9}" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>`).join("");
-    if (text.includes("jumping")) body += `<path d="M64 70 L33 96 M96 70 L127 96" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>`;
-    if (text.includes("pollen")) body += `<circle cx="37" cy="95" r="6" fill="currentColor" opacity="0.25"></circle><circle cx="123" cy="95" r="6" fill="currentColor" opacity="0.25"></circle>`;
-    if (text.includes("leaf-mining")) body = `<path d="M80 18 C48 36 45 74 80 98 C115 74 112 36 80 18Z" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2"></path><path d="M58 73 C75 63 63 48 82 42 C98 37 92 28 105 25" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"></path>`;
-    if (text.includes("gall")) body = `<path d="M80 18 C48 36 45 74 80 98 C115 74 112 36 80 18Z" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2"></path><circle cx="86" cy="58" r="16" fill="currentColor" opacity="0.22" stroke="currentColor" stroke-width="2"></circle>`;
+    if (text.includes("wing") || text.includes("elytra") || text.includes("halteres"))
+      body += `<ellipse cx="55" cy="52" rx="23" ry="12" fill="currentColor" opacity="0.11" stroke="currentColor" stroke-width="1.8" transform="rotate(-28 55 52)"></ellipse><ellipse cx="105" cy="52" rx="23" ry="12" fill="currentColor" opacity="0.11" stroke="currentColor" stroke-width="1.8" transform="rotate(28 105 52)"></ellipse>${text.includes("halteres") ? `<circle cx="54" cy="76" r="5" fill="currentColor" opacity="0.25"></circle><circle cx="106" cy="76" r="5" fill="currentColor" opacity="0.25"></circle>` : ""}${text.includes("elytra") ? `<path d="M80 35 L80 81" stroke="currentColor" stroke-width="2" opacity="0.7"></path>` : ""}${text.includes("venation") || text.includes("lacewing") ? `<path d="M40 52 L70 50 M90 50 L120 52 M48 45 L61 60 M112 45 L99 60" stroke="currentColor" stroke-width="1" opacity="0.65"></path>` : ""}`;
+    if (
+      text.includes("antennae") ||
+      text.includes("snout") ||
+      text.includes("eyes") ||
+      text.includes("mouth") ||
+      text.includes("jaws") ||
+      text.includes("proboscis") ||
+      text.includes("beak")
+    )
+      body += `<path d="M70 18 C56 5 44 11 42 24 M90 18 C104 5 116 11 118 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"></path>${text.includes("clubbed") ? `<circle cx="42" cy="24" r="4" fill="currentColor"></circle><circle cx="118" cy="24" r="4" fill="currentColor"></circle>` : ""}${text.includes("proboscis") || text.includes("beak") || text.includes("snout") ? `<path d="M80 35 C77 48 83 56 80 70" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"></path>` : ""}`;
+    body += [43, 55, 68]
+      .map(
+        (y) =>
+          `<path d="M64 ${y} L38 ${y - 9} M96 ${y} L122 ${y - 9}" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>`
+      )
+      .join("");
+    if (text.includes("jumping"))
+      body += `<path d="M64 70 L33 96 M96 70 L127 96" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>`;
+    if (text.includes("pollen"))
+      body += `<circle cx="37" cy="95" r="6" fill="currentColor" opacity="0.25"></circle><circle cx="123" cy="95" r="6" fill="currentColor" opacity="0.25"></circle>`;
+    if (text.includes("leaf-mining"))
+      body = `<path d="M80 18 C48 36 45 74 80 98 C115 74 112 36 80 18Z" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2"></path><path d="M58 73 C75 63 63 48 82 42 C98 37 92 28 105 25" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"></path>`;
+    if (text.includes("gall"))
+      body = `<path d="M80 18 C48 36 45 74 80 98 C115 74 112 36 80 18Z" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2"></path><circle cx="86" cy="58" r="16" fill="currentColor" opacity="0.22" stroke="currentColor" stroke-width="2"></circle>`;
     return sketchFrame(label, body);
   }
 
@@ -1062,59 +1229,101 @@ Gall shape on plant
       return plantStemSketch(label, "alternate");
     }
     if (mark.category === "leaf_shape" || mark.category === "leaf_surface") {
-      const kind = text.includes("needle") ? "needle" : text.includes("linear") || text.includes("strap") ? "linear" : text.includes("heart") ? "heart" : text.includes("lobed") || text.includes("divided") ? "lobed" : text.includes("fan") ? "fan" : text.includes("round") || text.includes("kidney") ? "round" : text.includes("arrow") ? "arrow" : "oval";
+      const kind = text.includes("needle")
+        ? "needle"
+        : text.includes("linear") || text.includes("strap")
+          ? "linear"
+          : text.includes("heart")
+            ? "heart"
+            : text.includes("lobed") || text.includes("divided")
+              ? "lobed"
+              : text.includes("fan")
+                ? "fan"
+                : text.includes("round") || text.includes("kidney")
+                  ? "round"
+                  : text.includes("arrow")
+                    ? "arrow"
+                    : "oval";
       return sketchFrame(label, leafBody(kind));
     }
-    if (category.lane === "plant" && mark.category === "plant_form") return plantHabitSketch(label, text);
+    if (category.lane === "plant" && mark.category === "plant_form")
+      return plantHabitSketch(label, text);
     if (category.lane === "plant" && mark.category === "flowers") return flowerSketch(label, text);
     if (category.lane === "plant" && mark.category === "fruits") return fruitSketch(label, text);
-    if (category.lane === "plant" && mark.category === "grass_like") return grassSketch(label, text);
+    if (category.lane === "plant" && mark.category === "grass_like")
+      return grassSketch(label, text);
     if (category.lane === "cryptogam") return cryptogamSketch(label, text);
     if (category.lane === "fungus") return fungusSketch(label, text);
     if (category.lane === "insect") return insectSketch(label, text);
-    return sketchFrame(label, `<circle cx="80" cy="58" r="30" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2"></circle><path d="M58 58 L102 58 M80 36 L80 80" stroke="currentColor" stroke-width="2" opacity="0.55"></path>`);
+    return sketchFrame(
+      label,
+      `<circle cx="80" cy="58" r="30" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2"></circle><path d="M58 58 L102 58 M80 36 L80 80" stroke="currentColor" stroke-width="2" opacity="0.55"></path>`
+    );
   }
 
   function inferSummary(label, category) {
     const text = String(label || "").toLowerCase();
     const parts = splitContrast(label);
     if (parts.length > 1) {
-      const definedParts = definitionsForContrast(label).filter(row => row.definition);
+      const definedParts = definitionsForContrast(label).filter((row) => row.definition);
       if (definedParts.length) {
-        return `${label} separates ${definedParts.map(row => `${lowerFirst(row.part)} (${row.definition})`).join("; ")}.`;
+        return `${label} separates ${definedParts.map((row) => `${lowerFirst(row.part)} (${row.definition})`).join("; ")}.`;
       }
       return `${label} is a choice between visible states. Use it to name what you actually see, then let the rest of the organism confirm or weaken that choice.`;
     }
     const direct = definitionForTerm(label);
     if (direct) return `${label}: ${direct}.`;
-    if (category.key === "leaf_arrangement") return `${label} describes where leaves attach to the stem. Leaf arrangement is often one of the quickest plant clues because it is read at the node, not from leaf shape alone.`;
-    if (category.key === "leaf_shape") return `${label} describes the outline or construction of a leaf blade. Shape is useful when paired with arrangement, margin, veins, and the plant's overall form.`;
-    if (category.key === "leaf_surface") return `${label} names a detail of a leaf edge, tip, base, surface, or vein pattern. These small traits often separate look-alike plants.`;
-    if (category.key === "flowers") return `${label} is a flower or flower-cluster clue. Flowers can be brief, but when present they carry strong information about plant groups.`;
-    if (category.key === "fruits") return `${label} is a fruit, seed, or cone clue. These marks describe mature reproductive structures and how they protect or move seeds.`;
-    if (category.key === "grass_like") return `${label} is a grass-like plant clue. Sedges, rushes, and grasses often require stem, sheath, ligule, and seed-head details.`;
-    if (category.lane === "cryptogam") return `${label} is a small-plant or lichen clue. These marks focus on fronds, spores, cushions, mats, lobes, crusts, and the surface they grow on.`;
-    if (category.lane === "fungus") return `${label} is a mushroom or fungus clue. Good fungus notes combine the cap, underside, stalk/base, growth form, substrate, and season.`;
-    if (category.lane === "insect") return `${label} is an insect clue. Insects are often narrowed by body plan, wings, antennae, mouthparts, legs, posture, and behavior.`;
-    if (hasAny(text, ["tree", "shrub", "herb", "stem", "vine", "clump", "mat", "rosette"])) return `${label} is a whole-organism clue. Start with the plant's growth form before zooming in on leaves or flowers.`;
+    if (category.key === "leaf_arrangement")
+      return `${label} describes where leaves attach to the stem. Leaf arrangement is often one of the quickest plant clues because it is read at the node, not from leaf shape alone.`;
+    if (category.key === "leaf_shape")
+      return `${label} describes the outline or construction of a leaf blade. Shape is useful when paired with arrangement, margin, veins, and the plant's overall form.`;
+    if (category.key === "leaf_surface")
+      return `${label} names a detail of a leaf edge, tip, base, surface, or vein pattern. These small traits often separate look-alike plants.`;
+    if (category.key === "flowers")
+      return `${label} is a flower or flower-cluster clue. Flowers can be brief, but when present they carry strong information about plant groups.`;
+    if (category.key === "fruits")
+      return `${label} is a fruit, seed, or cone clue. These marks describe mature reproductive structures and how they protect or move seeds.`;
+    if (category.key === "grass_like")
+      return `${label} is a grass-like plant clue. Sedges, rushes, and grasses often require stem, sheath, ligule, and seed-head details.`;
+    if (category.lane === "cryptogam")
+      return `${label} is a small-plant or lichen clue. These marks focus on fronds, spores, cushions, mats, lobes, crusts, and the surface they grow on.`;
+    if (category.lane === "fungus")
+      return `${label} is a mushroom or fungus clue. Good fungus notes combine the cap, underside, stalk/base, growth form, substrate, and season.`;
+    if (category.lane === "insect")
+      return `${label} is an insect clue. Insects are often narrowed by body plan, wings, antennae, mouthparts, legs, posture, and behavior.`;
+    if (hasAny(text, ["tree", "shrub", "herb", "stem", "vine", "clump", "mat", "rosette"]))
+      return `${label} is a whole-organism clue. Start with the plant's growth form before zooming in on leaves or flowers.`;
     return `${label} is field-guide language for one thing you can see. It helps turn an observation into describable evidence before it becomes an ID.`;
   }
 
   function inferWhy(label, category) {
     const text = String(label || "").toLowerCase();
-    if (category.key === "leaf_arrangement") return "Leaves attach at nodes in repeated patterns. Because that pattern is often stable within a plant group, it can quickly narrow the search.";
-    if (hasAny(text, ["simple", "compound", "leaflet", "terminal leaflet"])) return "Confusing a leaflet with a whole leaf sends an ID in the wrong direction. Look for buds at the base of true leaves.";
-    if (hasAny(text, ["margin", "tip", "base", "vein", "hairy", "glabrous", "waxy", "rough"])) return "Leaf details are small but durable. They are especially helpful when flowers or fruits are missing.";
-    if (category.key === "flowers") return "Flower shape and cluster style often reflect plant family relationships, pollination style, and season.";
-    if (category.key === "fruits") return "Fruits and seeds preserve clues after flowers fade. Their shape, texture, and dispersal structures can be very diagnostic.";
-    if (category.key === "grass_like") return "Grass-like plants look similar from a distance, so keys lean heavily on stems, sheaths, ligules, spikelets, and awns.";
-    if (hasAny(text, ["sori", "indusium", "fiddlehead", "frond"])) return "Fern IDs often depend on frond division and sori because ferns do not have flowers or seeds.";
-    if (hasAny(text, ["lichen", "soredia", "apothecia"])) return "Lichen growth form and surface structures give you a shared vocabulary before microscopic or chemical details are needed.";
-    if (hasAny(text, ["gill", "pore", "teeth", "spore"])) return "The underside or spore surface is one of the main places fungi reveal their structure.";
-    if (hasAny(text, ["stalk", "ring", "volva", "base"])) return "Stalk and base details can disappear if a mushroom is picked carelessly, so they are worth checking in place.";
-    if (hasAny(text, ["wing", "elytra", "halteres", "venation"])) return "Wing number, texture, resting posture, and venation are major shortcuts in insect identification.";
-    if (hasAny(text, ["antennae", "mouthparts", "eyes", "snout", "jaws", "proboscis"])) return "Head details often reveal how an insect feeds and which broad group it belongs to.";
-    if (hasAny(text, ["legs", "pollen", "proleg", "case", "mine", "gall"])) return "Leg shape and behavior show how the animal moves, feeds, or lives, which can be as useful as body color.";
+    if (category.key === "leaf_arrangement")
+      return "Leaves attach at nodes in repeated patterns. Because that pattern is often stable within a plant group, it can quickly narrow the search.";
+    if (hasAny(text, ["simple", "compound", "leaflet", "terminal leaflet"]))
+      return "Confusing a leaflet with a whole leaf sends an ID in the wrong direction. Look for buds at the base of true leaves.";
+    if (hasAny(text, ["margin", "tip", "base", "vein", "hairy", "glabrous", "waxy", "rough"]))
+      return "Leaf details are small but durable. They are especially helpful when flowers or fruits are missing.";
+    if (category.key === "flowers")
+      return "Flower shape and cluster style often reflect plant family relationships, pollination style, and season.";
+    if (category.key === "fruits")
+      return "Fruits and seeds preserve clues after flowers fade. Their shape, texture, and dispersal structures can be very diagnostic.";
+    if (category.key === "grass_like")
+      return "Grass-like plants look similar from a distance, so keys lean heavily on stems, sheaths, ligules, spikelets, and awns.";
+    if (hasAny(text, ["sori", "indusium", "fiddlehead", "frond"]))
+      return "Fern IDs often depend on frond division and sori because ferns do not have flowers or seeds.";
+    if (hasAny(text, ["lichen", "soredia", "apothecia"]))
+      return "Lichen growth form and surface structures give you a shared vocabulary before microscopic or chemical details are needed.";
+    if (hasAny(text, ["gill", "pore", "teeth", "spore"]))
+      return "The underside or spore surface is one of the main places fungi reveal their structure.";
+    if (hasAny(text, ["stalk", "ring", "volva", "base"]))
+      return "Stalk and base details can disappear if a mushroom is picked carelessly, so they are worth checking in place.";
+    if (hasAny(text, ["wing", "elytra", "halteres", "venation"]))
+      return "Wing number, texture, resting posture, and venation are major shortcuts in insect identification.";
+    if (hasAny(text, ["antennae", "mouthparts", "eyes", "snout", "jaws", "proboscis"]))
+      return "Head details often reveal how an insect feeds and which broad group it belongs to.";
+    if (hasAny(text, ["legs", "pollen", "proleg", "case", "mine", "gall"]))
+      return "Leg shape and behavior show how the animal moves, feeds, or lives, which can be as useful as body color.";
     return "This clue gets stronger when it agrees with several other field marks from the same organism.";
   }
 
@@ -1123,51 +1332,96 @@ Gall shape on plant
     const categoryText = String(category?.title || "visible field mark").toLowerCase();
     const direct = definitionForTerm(label);
 
-    if (/tree|shrub|herb/.test(text)) return "Step back first. Compare a single woody trunk, many woody stems from the base, or soft green stems that die back.";
-    if (/woody|non-woody/.test(text)) return "Feel or look at the stem. Woody stems are firm and persistent; non-woody stems are softer, greener, and seasonal.";
-    if (/vine|climber|twining|tendril/.test(text)) return "Look for a stem that depends on another plant or surface, coils around support, or grabs with tendrils.";
-    if (/aquatic|emergent/.test(text)) return "Check whether the plant is rooted in water, rising through water, floating, or growing fully on land.";
-    if (/rosette/.test(text)) return "Look for leaves arranged in a low circle at the base, often before a flowering stem rises.";
-    if (/milky sap/.test(text)) return "Only if safe and appropriate, note whether a broken leaf or stem releases white or colored sap.";
-    if (/aromatic|odor/.test(text)) return "Gently crush a small leaf if allowed, then describe the smell in plain words.";
-    if (/triangular stem|sedges have edges/.test(text)) return "Feel or view the stem in cross-section. Many sedges have a three-sided stem instead of a round one.";
-    if (/round rush stem/.test(text)) return "Roll the stem gently between fingers or look at a cut end; rush stems often feel round rather than edged.";
-    if (/jointed grass stem/.test(text)) return "Look for swollen nodes along the stem where grass leaves and sheaths attach.";
-    if (/ligule|auricle|sheath/.test(text)) return "Pull a grass leaf gently away from the stem and inspect the collar area where blade and sheath meet.";
-    if (/spikelet|awn|grass head|seed head/.test(text)) return "Look at the seed head closely. Note small spikelets, bristles, awns, and whether the head droops or stands upright.";
-    if (/opposite leaves/.test(text)) return "Find a stem node and check whether two leaves leave the stem directly across from each other.";
-    if (/alternate leaves/.test(text)) return "Trace the stem node by node. Alternate leaves attach one at a time, switching sides as they climb the stem.";
-    if (/whorled leaves/.test(text)) return "Look for three or more leaves attached around the same point on the stem.";
-    if (/dense overlapping scale-like leaves/.test(text)) return "Look for tiny leaves packed over one another like roof shingles, often hugging a twig or stem.";
-    if (/gills present/.test(text)) return "Look under the cap for thin, radiating plates instead of a smooth or sponge-like underside.";
-    if (/pores instead of gills/.test(text)) return "Look under the cap for many small holes or a sponge-like surface rather than plates.";
-    if (/teeth|spines/.test(text)) return "Look under the fruiting body for downward points or little spines.";
-    if (/stalk present/.test(text)) return "Check whether the fruiting body has a central or side stalk, or whether it sits directly on the surface.";
-    if (/ring on stalk/.test(text)) return "Look for a skirt, band, or raised zone around the mushroom stalk.";
-    if (/volva|cup at base/.test(text)) return "Check the very base of the stalk for a cup, sack, or rim. You may need to see the whole base.";
-    if (/cap/.test(text)) return "Start with the top of the fruiting body: its shape, color, texture, and surface details.";
-    if (/fern frond/.test(text)) return "Look at one whole fern leaf and count how many times the blade is divided.";
-    if (/sori/.test(text)) return "Check the underside of fern fronds for spore patches, then note their shape and position.";
-    if (/moss/.test(text)) return "Look closely at the small green growth form: cushion, carpet, hairpoint, capsule, or leaf nerve.";
-    if (/liverwort/.test(text)) return "Decide whether the plant looks leafy with tiny rows of leaves or thalloid like a flat green ribbon.";
-    if (/lichen/.test(text)) return "Look at the lichen body shape and surface: crust, leaf-like lobes, shrubby branches, cups, discs, or powder.";
-    if (/antennae/.test(text)) return "Check the head first and compare the antenna shape, length, and texture.";
-    if (/wing|elytra|halteres/.test(text)) return "Look at the wings at rest: count visible pairs, note coverings, and check for tiny structures behind them.";
-    if (/legs|proleg|raptorial|jumping|swimming/.test(text)) return "Look at leg shape and placement, especially enlarged, spiny, swimming, grabbing, or extra larval legs.";
-    if (direct) return `Check the ${lowerFirst(categoryText)} and confirm the plain meaning: ${direct}.`;
-    if (/flower/.test(text)) return "Look at one flower and its cluster: color, shape, symmetry, petal number, and where it sits on the plant.";
-    if (/fruit|seed|pod|cone|acorn|samara|capsule/.test(text)) return "Look at mature reproductive structures and how they are held, clustered, or opened.";
-    if (/leaf/.test(text)) return "Use several leaves, not just one. Check attachment, blade shape, edge, surface, veins, and underside.";
-    if (/stem|bark|sap|thorn|spine|vine|shrub|tree|herb/.test(text)) return "Step back for whole-plant form, then inspect stems for texture, support, sap, or armature.";
-    if (category.key === "plant_form") return "Start with the whole organism: height, branching, support, stem texture, and whether it grows upright, trailing, clumped, or matted.";
-    if (category.key === "leaf_shape") return "Hold one typical mature leaf flat and describe the blade outline, divisions, and leaflet pattern.";
-    if (category.key === "leaf_surface") return "Inspect the leaf edge, tip, base, upper surface, underside, and veins with the best light you have.";
-    if (category.key === "flowers") return "Look for the freshest open flowers and the whole cluster, not just one petal.";
-    if (category.key === "fruits") return "Look for mature fruits or seeds and note whether they are fleshy, dry, winged, hooked, clustered, or cone-like.";
-    if (category.key === "grass_like") return "Look low on the plant for stem shape, nodes, sheaths, ligules, and the way spikelets or seed heads are arranged.";
-    if (category.lane === "cryptogam") return "Use a close view. Shape, surface texture, spore structures, and the growing surface matter more than size.";
-    if (category.lane === "fungus") return "Photograph or inspect the top, side, underside, full stalk base, and what it is growing from.";
-    if (category.lane === "insect") return "Use a clear view of the head, thorax, abdomen, wings, legs, and antennae before relying on color.";
+    if (/tree|shrub|herb/.test(text))
+      return "Step back first. Compare a single woody trunk, many woody stems from the base, or soft green stems that die back.";
+    if (/woody|non-woody/.test(text))
+      return "Feel or look at the stem. Woody stems are firm and persistent; non-woody stems are softer, greener, and seasonal.";
+    if (/vine|climber|twining|tendril/.test(text))
+      return "Look for a stem that depends on another plant or surface, coils around support, or grabs with tendrils.";
+    if (/aquatic|emergent/.test(text))
+      return "Check whether the plant is rooted in water, rising through water, floating, or growing fully on land.";
+    if (/rosette/.test(text))
+      return "Look for leaves arranged in a low circle at the base, often before a flowering stem rises.";
+    if (/milky sap/.test(text))
+      return "Only if safe and appropriate, note whether a broken leaf or stem releases white or colored sap.";
+    if (/aromatic|odor/.test(text))
+      return "Gently crush a small leaf if allowed, then describe the smell in plain words.";
+    if (/triangular stem|sedges have edges/.test(text))
+      return "Feel or view the stem in cross-section. Many sedges have a three-sided stem instead of a round one.";
+    if (/round rush stem/.test(text))
+      return "Roll the stem gently between fingers or look at a cut end; rush stems often feel round rather than edged.";
+    if (/jointed grass stem/.test(text))
+      return "Look for swollen nodes along the stem where grass leaves and sheaths attach.";
+    if (/ligule|auricle|sheath/.test(text))
+      return "Pull a grass leaf gently away from the stem and inspect the collar area where blade and sheath meet.";
+    if (/spikelet|awn|grass head|seed head/.test(text))
+      return "Look at the seed head closely. Note small spikelets, bristles, awns, and whether the head droops or stands upright.";
+    if (/opposite leaves/.test(text))
+      return "Find a stem node and check whether two leaves leave the stem directly across from each other.";
+    if (/alternate leaves/.test(text))
+      return "Trace the stem node by node. Alternate leaves attach one at a time, switching sides as they climb the stem.";
+    if (/whorled leaves/.test(text))
+      return "Look for three or more leaves attached around the same point on the stem.";
+    if (/dense overlapping scale-like leaves/.test(text))
+      return "Look for tiny leaves packed over one another like roof shingles, often hugging a twig or stem.";
+    if (/gills present/.test(text))
+      return "Look under the cap for thin, radiating plates instead of a smooth or sponge-like underside.";
+    if (/pores instead of gills/.test(text))
+      return "Look under the cap for many small holes or a sponge-like surface rather than plates.";
+    if (/teeth|spines/.test(text))
+      return "Look under the fruiting body for downward points or little spines.";
+    if (/stalk present/.test(text))
+      return "Check whether the fruiting body has a central or side stalk, or whether it sits directly on the surface.";
+    if (/ring on stalk/.test(text))
+      return "Look for a skirt, band, or raised zone around the mushroom stalk.";
+    if (/volva|cup at base/.test(text))
+      return "Check the very base of the stalk for a cup, sack, or rim. You may need to see the whole base.";
+    if (/cap/.test(text))
+      return "Start with the top of the fruiting body: its shape, color, texture, and surface details.";
+    if (/fern frond/.test(text))
+      return "Look at one whole fern leaf and count how many times the blade is divided.";
+    if (/sori/.test(text))
+      return "Check the underside of fern fronds for spore patches, then note their shape and position.";
+    if (/moss/.test(text))
+      return "Look closely at the small green growth form: cushion, carpet, hairpoint, capsule, or leaf nerve.";
+    if (/liverwort/.test(text))
+      return "Decide whether the plant looks leafy with tiny rows of leaves or thalloid like a flat green ribbon.";
+    if (/lichen/.test(text))
+      return "Look at the lichen body shape and surface: crust, leaf-like lobes, shrubby branches, cups, discs, or powder.";
+    if (/antennae/.test(text))
+      return "Check the head first and compare the antenna shape, length, and texture.";
+    if (/wing|elytra|halteres/.test(text))
+      return "Look at the wings at rest: count visible pairs, note coverings, and check for tiny structures behind them.";
+    if (/legs|proleg|raptorial|jumping|swimming/.test(text))
+      return "Look at leg shape and placement, especially enlarged, spiny, swimming, grabbing, or extra larval legs.";
+    if (direct)
+      return `Check the ${lowerFirst(categoryText)} and confirm the plain meaning: ${direct}.`;
+    if (/flower/.test(text))
+      return "Look at one flower and its cluster: color, shape, symmetry, petal number, and where it sits on the plant.";
+    if (/fruit|seed|pod|cone|acorn|samara|capsule/.test(text))
+      return "Look at mature reproductive structures and how they are held, clustered, or opened.";
+    if (/leaf/.test(text))
+      return "Use several leaves, not just one. Check attachment, blade shape, edge, surface, veins, and underside.";
+    if (/stem|bark|sap|thorn|spine|vine|shrub|tree|herb/.test(text))
+      return "Step back for whole-plant form, then inspect stems for texture, support, sap, or armature.";
+    if (category.key === "plant_form")
+      return "Start with the whole organism: height, branching, support, stem texture, and whether it grows upright, trailing, clumped, or matted.";
+    if (category.key === "leaf_shape")
+      return "Hold one typical mature leaf flat and describe the blade outline, divisions, and leaflet pattern.";
+    if (category.key === "leaf_surface")
+      return "Inspect the leaf edge, tip, base, upper surface, underside, and veins with the best light you have.";
+    if (category.key === "flowers")
+      return "Look for the freshest open flowers and the whole cluster, not just one petal.";
+    if (category.key === "fruits")
+      return "Look for mature fruits or seeds and note whether they are fleshy, dry, winged, hooked, clustered, or cone-like.";
+    if (category.key === "grass_like")
+      return "Look low on the plant for stem shape, nodes, sheaths, ligules, and the way spikelets or seed heads are arranged.";
+    if (category.lane === "cryptogam")
+      return "Use a close view. Shape, surface texture, spore structures, and the growing surface matter more than size.";
+    if (category.lane === "fungus")
+      return "Photograph or inspect the top, side, underside, full stalk base, and what it is growing from.";
+    if (category.lane === "insect")
+      return "Use a clear view of the head, thorax, abdomen, wings, legs, and antennae before relying on color.";
 
     return `Look for this as a visible ${categoryText} clue. Say what you can see before deciding what it means.`;
   }
@@ -1175,13 +1429,14 @@ Gall shape on plant
   function inferCompare(label, category) {
     const parts = splitContrast(label);
     if (parts.length > 1) {
-      const definedParts = definitionsForContrast(label).filter(row => row.definition);
+      const definedParts = definitionsForContrast(label).filter((row) => row.definition);
       if (definedParts.length) {
-        return `Decide which state fits best: ${definedParts.map(row => `${row.part} = ${row.definition}`).join("; ")}.`;
+        return `Decide which state fits best: ${definedParts.map((row) => `${row.part} = ${row.definition}`).join("; ")}.`;
       }
-      const joined = parts.length === 2
-        ? `${parts[0]} and ${parts[1]}`
-        : `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
+      const joined =
+        parts.length === 2
+          ? `${parts[0]} and ${parts[1]}`
+          : `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
       return `Compare ${joined}, then choose the closest visible state.`;
     }
 
@@ -1189,11 +1444,16 @@ Gall shape on plant
     const direct = definitionForTerm(label);
     if (direct) return `Confirm it on more than one view when possible: ${label} means ${direct}.`;
     if (/gills/.test(text)) return "Compare with pores, teeth, folds, or a smooth underside.";
-    if (/pores/.test(text)) return "Compare with true gills: pores look like holes, while gills look like plates.";
-    if (/opposite|alternate|whorled/.test(text)) return "Compare leaf attachment at multiple stem nodes; one odd shoot can mislead you.";
-    if (/lichen/.test(text)) return "Compare crustose, foliose, and fruticose forms before using color alone.";
-    if (/moss|liverwort/.test(text)) return "Compare growth form and capsules; moisture can make small plants look very different.";
-    if (/wing|antennae|legs|mouthparts/.test(text)) return "Compare the same body part across nearby insects, because posture can hide details.";
+    if (/pores/.test(text))
+      return "Compare with true gills: pores look like holes, while gills look like plates.";
+    if (/opposite|alternate|whorled/.test(text))
+      return "Compare leaf attachment at multiple stem nodes; one odd shoot can mislead you.";
+    if (/lichen/.test(text))
+      return "Compare crustose, foliose, and fruticose forms before using color alone.";
+    if (/moss|liverwort/.test(text))
+      return "Compare growth form and capsules; moisture can make small plants look very different.";
+    if (/wing|antennae|legs|mouthparts/.test(text))
+      return "Compare the same body part across nearby insects, because posture can hide details.";
     return `Compare the ${lowerFirst(category?.title)} details that could be confused with ${lowerFirst(label)}. A field mark is stronger when several clues agree.`;
   }
 
@@ -1202,15 +1462,24 @@ Gall shape on plant
     if (/fung|mushroom|gill|pore|stalk|volva|spore/.test(text)) {
       return "This is an identification clue only, not an edibility or safety decision.";
     }
-    if (/leaf/.test(text)) return "Check mature leaves and more than one branch; seedlings and new shoots can break the usual pattern.";
-    if (/flower|fruit|seed/.test(text)) return "Season matters. The same plant may show this mark only briefly.";
-    if (/moss|lichen|liverwort/.test(text)) return "Moisture, age, and substrate can change color and shape.";
-    if (/insect|wing|antennae|legs|body/.test(text)) return "A photo angle can hide parts. Treat missing details as unknown, not absent.";
+    if (/leaf/.test(text))
+      return "Check mature leaves and more than one branch; seedlings and new shoots can break the usual pattern.";
+    if (/flower|fruit|seed/.test(text))
+      return "Season matters. The same plant may show this mark only briefly.";
+    if (/moss|lichen|liverwort/.test(text))
+      return "Moisture, age, and substrate can change color and shape.";
+    if (/insect|wing|antennae|legs|body/.test(text))
+      return "A photo angle can hide parts. Treat missing details as unknown, not absent.";
     return `If ${lowerFirst(label)} conflicts with another visible mark, record both and keep the ID broader.`;
   }
 
   function fieldNoteTarget(category) {
-    if (category.key === "leaf_arrangement" || category.key === "leaf_shape" || category.key === "leaf_surface") return "leaf or stem node";
+    if (
+      category.key === "leaf_arrangement" ||
+      category.key === "leaf_shape" ||
+      category.key === "leaf_surface"
+    )
+      return "leaf or stem node";
     if (category.key === "flowers") return "flower or flower cluster";
     if (category.key === "fruits") return "fruit, seed, or cone";
     if (category.key === "grass_like") return "stem, sheath, or seed head";
@@ -1233,43 +1502,71 @@ Gall shape on plant
 
     if (lane === "plant") {
       if (key === "plant_form") {
-        if (hasAny(text, ["tree", "bark", "woody old", "deciduous"])) add("Fagaceae", "Betulaceae", "Sapindaceae", "Platanaceae");
-        if (hasAny(text, ["shrub", "branching bushy"])) add("Rosaceae", "Ericaceae", "Caprifoliaceae", "Rhamnaceae");
-        if (hasAny(text, ["herb", "non-woody", "annual", "weedy"])) add("Asteraceae", "Brassicaceae", "Plantaginaceae", "Amaranthaceae");
-        if (hasAny(text, ["vine", "climber", "twining", "tendril", "trailing"])) add("Vitaceae", "Convolvulaceae", "Fabaceae", "Cucurbitaceae");
-        if (hasAny(text, ["grass-like", "tussock", "clumping"])) add("Poaceae", "Cyperaceae", "Juncaceae");
-        if (hasAny(text, ["fern-like", "fronds"])) add("Polypodiaceae", "Dryopteridaceae", "Pteridaceae");
-        if (hasAny(text, ["moss-like", "mat-forming", "creeping"])) add("Bryaceae", "Polytrichaceae", "Caryophyllaceae", "Crassulaceae");
-        if (hasAny(text, ["aquatic", "emergent"])) add("Nymphaeaceae", "Alismataceae", "Araceae", "Typhaceae");
-        if (hasAny(text, ["rosette"])) add("Asteraceae", "Plantaginaceae", "Brassicaceae", "Crassulaceae");
+        if (hasAny(text, ["tree", "bark", "woody old", "deciduous"]))
+          add("Fagaceae", "Betulaceae", "Sapindaceae", "Platanaceae");
+        if (hasAny(text, ["shrub", "branching bushy"]))
+          add("Rosaceae", "Ericaceae", "Caprifoliaceae", "Rhamnaceae");
+        if (hasAny(text, ["herb", "non-woody", "annual", "weedy"]))
+          add("Asteraceae", "Brassicaceae", "Plantaginaceae", "Amaranthaceae");
+        if (hasAny(text, ["vine", "climber", "twining", "tendril", "trailing"]))
+          add("Vitaceae", "Convolvulaceae", "Fabaceae", "Cucurbitaceae");
+        if (hasAny(text, ["grass-like", "tussock", "clumping"]))
+          add("Poaceae", "Cyperaceae", "Juncaceae");
+        if (hasAny(text, ["fern-like", "fronds"]))
+          add("Polypodiaceae", "Dryopteridaceae", "Pteridaceae");
+        if (hasAny(text, ["moss-like", "mat-forming", "creeping"]))
+          add("Bryaceae", "Polytrichaceae", "Caryophyllaceae", "Crassulaceae");
+        if (hasAny(text, ["aquatic", "emergent"]))
+          add("Nymphaeaceae", "Alismataceae", "Araceae", "Typhaceae");
+        if (hasAny(text, ["rosette"]))
+          add("Asteraceae", "Plantaginaceae", "Brassicaceae", "Crassulaceae");
         if (hasAny(text, ["single stem", "upright"])) add("Apiaceae", "Asteraceae", "Poaceae");
         if (hasAny(text, ["hollow stem"])) add("Apiaceae", "Poaceae", "Polygonaceae");
-        if (hasAny(text, ["square stem", "aromatic", "odor"])) add("Lamiaceae", "Rutaceae", "Apiaceae", "Myrtaceae");
-        if (hasAny(text, ["milky", "sap"])) add("Apocynaceae", "Euphorbiaceae", "Moraceae", "Papaveraceae");
-        if (hasAny(text, ["thorny", "spiny"])) add("Rosaceae", "Cactaceae", "Berberidaceae", "Rhamnaceae");
+        if (hasAny(text, ["square stem", "aromatic", "odor"]))
+          add("Lamiaceae", "Rutaceae", "Apiaceae", "Myrtaceae");
+        if (hasAny(text, ["milky", "sap"]))
+          add("Apocynaceae", "Euphorbiaceae", "Moraceae", "Papaveraceae");
+        if (hasAny(text, ["thorny", "spiny"]))
+          add("Rosaceae", "Cactaceae", "Berberidaceae", "Rhamnaceae");
         if (hasAny(text, ["succulent", "fleshy"])) add("Crassulaceae", "Cactaceae", "Aizoaceae");
-        if (hasAny(text, ["evergreen", "needle", "scale-like"])) add("Pinaceae", "Cupressaceae", "Taxaceae", "Ericaceae");
+        if (hasAny(text, ["evergreen", "needle", "scale-like"]))
+          add("Pinaceae", "Cupressaceae", "Taxaceae", "Ericaceae");
       } else if (key === "leaf_arrangement") {
-        if (hasAny(text, ["opposite", "paired"])) add("Lamiaceae", "Rubiaceae", "Caprifoliaceae", "Oleaceae", "Sapindaceae");
-        if (hasAny(text, ["alternate", "spiral"])) add("Fagaceae", "Rosaceae", "Betulaceae", "Salicaceae", "Ericaceae");
-        if (hasAny(text, ["whorled"])) add("Rubiaceae", "Apocynaceae", "Gentianaceae", "Plantaginaceae");
-        if (hasAny(text, ["basal"])) add("Plantaginaceae", "Asteraceae", "Brassicaceae", "Primulaceae");
-        if (hasAny(text, ["branch tips", "clustered"])) add("Ericaceae", "Theaceae", "Aquifoliaceae", "Pinaceae");
+        if (hasAny(text, ["opposite", "paired"]))
+          add("Lamiaceae", "Rubiaceae", "Caprifoliaceae", "Oleaceae", "Sapindaceae");
+        if (hasAny(text, ["alternate", "spiral"]))
+          add("Fagaceae", "Rosaceae", "Betulaceae", "Salicaceae", "Ericaceae");
+        if (hasAny(text, ["whorled"]))
+          add("Rubiaceae", "Apocynaceae", "Gentianaceae", "Plantaginaceae");
+        if (hasAny(text, ["basal"]))
+          add("Plantaginaceae", "Asteraceae", "Brassicaceae", "Primulaceae");
+        if (hasAny(text, ["branch tips", "clustered"]))
+          add("Ericaceae", "Theaceae", "Aquifoliaceae", "Pinaceae");
         if (hasAny(text, ["two-ranked"])) add("Poaceae", "Orchidaceae", "Taxaceae", "Ulmaceae");
-        if (hasAny(text, ["changes up stem"])) add("Araceae", "Ranunculaceae", "Asteraceae", "Brassicaceae");
-        if (hasAny(text, ["dense overlapping", "scale-like"])) add("Cupressaceae", "Selaginellaceae", "Lycopodiaceae");
+        if (hasAny(text, ["changes up stem"]))
+          add("Araceae", "Ranunculaceae", "Asteraceae", "Brassicaceae");
+        if (hasAny(text, ["dense overlapping", "scale-like"]))
+          add("Cupressaceae", "Selaginellaceae", "Lycopodiaceae");
       } else if (key === "leaf_shape") {
-        if (hasAny(text, ["simple leaf"])) add("Fagaceae", "Betulaceae", "Salicaceae", "Rosaceae", "Ericaceae");
-        if (hasAny(text, ["compound", "leaflet"])) add("Fabaceae", "Sapindaceae", "Anacardiaceae", "Juglandaceae", "Rosaceae");
-        if (hasAny(text, ["pinnately"])) add("Fabaceae", "Rosaceae", "Juglandaceae", "Anacardiaceae");
+        if (hasAny(text, ["simple leaf"]))
+          add("Fagaceae", "Betulaceae", "Salicaceae", "Rosaceae", "Ericaceae");
+        if (hasAny(text, ["compound", "leaflet"]))
+          add("Fabaceae", "Sapindaceae", "Anacardiaceae", "Juglandaceae", "Rosaceae");
+        if (hasAny(text, ["pinnately"]))
+          add("Fabaceae", "Rosaceae", "Juglandaceae", "Anacardiaceae");
         if (hasAny(text, ["palmately"])) add("Sapindaceae", "Araliaceae", "Vitaceae", "Malvaceae");
-        if (hasAny(text, ["trifoliate"])) add("Fabaceae", "Rutaceae", "Anacardiaceae", "Oxalidaceae");
+        if (hasAny(text, ["trifoliate"]))
+          add("Fabaceae", "Rutaceae", "Anacardiaceae", "Oxalidaceae");
         if (hasAny(text, ["needle", "bundle"])) add("Pinaceae", "Taxaceae", "Cupressaceae");
         if (hasAny(text, ["scale-like"])) add("Cupressaceae", "Selaginellaceae", "Lycopodiaceae");
-        if (hasAny(text, ["strap", "linear"])) add("Poaceae", "Cyperaceae", "Iridaceae", "Orchidaceae", "Amaryllidaceae");
-        if (hasAny(text, ["heart-shaped", "kidney-shaped"])) add("Malvaceae", "Violaceae", "Aristolochiaceae", "Menispermaceae");
-        if (hasAny(text, ["oval", "elliptic", "lance"])) add("Rosaceae", "Ericaceae", "Salicaceae", "Lauraceae");
-        if (hasAny(text, ["lobed", "deeply divided"])) add("Sapindaceae", "Fagaceae", "Ranunculaceae", "Araliaceae");
+        if (hasAny(text, ["strap", "linear"]))
+          add("Poaceae", "Cyperaceae", "Iridaceae", "Orchidaceae", "Amaryllidaceae");
+        if (hasAny(text, ["heart-shaped", "kidney-shaped"]))
+          add("Malvaceae", "Violaceae", "Aristolochiaceae", "Menispermaceae");
+        if (hasAny(text, ["oval", "elliptic", "lance"]))
+          add("Rosaceae", "Ericaceae", "Salicaceae", "Lauraceae");
+        if (hasAny(text, ["lobed", "deeply divided"]))
+          add("Sapindaceae", "Fagaceae", "Ranunculaceae", "Araliaceae");
         if (hasAny(text, ["fan-shaped"])) add("Ginkgoaceae", "Arecaceae");
         if (hasAny(text, ["spoon-shaped"])) add("Plantaginaceae", "Asteraceae", "Crassulaceae");
         if (hasAny(text, ["arrowhead"])) add("Alismataceae", "Araceae");
@@ -1277,45 +1574,72 @@ Gall shape on plant
         if (hasAny(text, ["asymmetric"])) add("Ulmaceae", "Begoniaceae", "Cannabaceae");
         if (hasAny(text, ["juvenile", "adult"])) add("Araceae", "Moraceae", "Euphorbiaceae");
       } else if (key === "leaf_surface") {
-        if (hasAny(text, ["smooth leaf margin"])) add("Cornaceae", "Magnoliaceae", "Ericaceae", "Lauraceae");
-        if (hasAny(text, ["serrated", "toothed", "double-toothed"])) add("Rosaceae", "Betulaceae", "Ulmaceae", "Salicaceae");
+        if (hasAny(text, ["smooth leaf margin"]))
+          add("Cornaceae", "Magnoliaceae", "Ericaceae", "Lauraceae");
+        if (hasAny(text, ["serrated", "toothed", "double-toothed"]))
+          add("Rosaceae", "Betulaceae", "Ulmaceae", "Salicaceae");
         if (hasAny(text, ["wavy"])) add("Fagaceae", "Ericaceae", "Polygonaceae");
         if (hasAny(text, ["lobed margin"])) add("Fagaceae", "Sapindaceae", "Ranunculaceae");
         if (hasAny(text, ["spiny margin"])) add("Aquifoliaceae", "Cactaceae", "Berberidaceae");
         if (hasAny(text, ["rolled-under"])) add("Ericaceae", "Rosaceae");
         if (hasAny(text, ["pointed", "drip-tip"])) add("Lauraceae", "Magnoliaceae", "Araceae");
         if (hasAny(text, ["rounded", "notched"])) add("Ericaceae", "Rosaceae", "Malvaceae");
-        if (hasAny(text, ["heart-shaped leaf base", "tapered", "unequal"])) add("Malvaceae", "Ulmaceae", "Aristolochiaceae");
-        if (hasAny(text, ["hairy", "fuzzy"])) add("Boraginaceae", "Lamiaceae", "Asteraceae", "Malvaceae");
-        if (hasAny(text, ["glabrous", "waxy", "glossy"])) add("Lauraceae", "Magnoliaceae", "Aquifoliaceae", "Araceae");
+        if (hasAny(text, ["heart-shaped leaf base", "tapered", "unequal"]))
+          add("Malvaceae", "Ulmaceae", "Aristolochiaceae");
+        if (hasAny(text, ["hairy", "fuzzy"]))
+          add("Boraginaceae", "Lamiaceae", "Asteraceae", "Malvaceae");
+        if (hasAny(text, ["glabrous", "waxy", "glossy"]))
+          add("Lauraceae", "Magnoliaceae", "Aquifoliaceae", "Araceae");
         if (hasAny(text, ["rough", "sandpapery"])) add("Ulmaceae", "Boraginaceae", "Cannabaceae");
         if (hasAny(text, ["silvery"])) add("Elaeagnaceae", "Asteraceae", "Salicaceae");
         if (hasAny(text, ["parallel veins"])) add("Poaceae", "Orchidaceae", "Iridaceae", "Araceae");
-        if (hasAny(text, ["net-like", "pinnate veins", "strong midrib"])) add("Fagaceae", "Rosaceae", "Salicaceae");
+        if (hasAny(text, ["net-like", "pinnate veins", "strong midrib"]))
+          add("Fagaceae", "Rosaceae", "Salicaceae");
         if (hasAny(text, ["palmate veins"])) add("Malvaceae", "Vitaceae", "Sapindaceae");
-        if (hasAny(text, ["translucent dots", "glands"])) add("Rutaceae", "Hypericaceae", "Myrtaceae");
+        if (hasAny(text, ["translucent dots", "glands"]))
+          add("Rutaceae", "Hypericaceae", "Myrtaceae");
         if (hasAny(text, ["stipules"])) add("Rosaceae", "Rubiaceae", "Polygonaceae");
-        if (hasAny(text, ["sheathing", "petiole"])) add("Poaceae", "Cyperaceae", "Apiaceae", "Araceae");
+        if (hasAny(text, ["sheathing", "petiole"]))
+          add("Poaceae", "Cyperaceae", "Apiaceae", "Araceae");
       } else if (key === "flowers") {
         if (hasAny(text, ["radial"])) add("Rosaceae", "Ranunculaceae", "Caryophyllaceae");
-        if (hasAny(text, ["bilateral", "irregular", "lip"])) add("Fabaceae", "Lamiaceae", "Orchidaceae", "Plantaginaceae");
-        if (hasAny(text, ["number of petals", "petals separate"])) add("Rosaceae", "Brassicaceae", "Caryophyllaceae");
-        if (hasAny(text, ["fused", "tubular"])) add("Solanaceae", "Ericaceae", "Convolvulaceae", "Lamiaceae");
+        if (hasAny(text, ["bilateral", "irregular", "lip"]))
+          add("Fabaceae", "Lamiaceae", "Orchidaceae", "Plantaginaceae");
+        if (hasAny(text, ["number of petals", "petals separate"]))
+          add("Rosaceae", "Brassicaceae", "Caryophyllaceae");
+        if (hasAny(text, ["fused", "tubular"]))
+          add("Solanaceae", "Ericaceae", "Convolvulaceae", "Lamiaceae");
         if (hasAny(text, ["bell-shaped"])) add("Ericaceae", "Campanulaceae", "Solanaceae");
         if (hasAny(text, ["pea-shaped"])) add("Fabaceae");
         if (hasAny(text, ["daisy-like", "composite"])) add("Asteraceae");
         if (hasAny(text, ["umbel"])) add("Apiaceae", "Araliaceae", "Amaryllidaceae");
-        if (hasAny(text, ["spike", "raceme", "panicle"])) add("Plantaginaceae", "Brassicaceae", "Poaceae", "Polygonaceae");
+        if (hasAny(text, ["spike", "raceme", "panicle"]))
+          add("Plantaginaceae", "Brassicaceae", "Poaceae", "Polygonaceae");
         if (hasAny(text, ["catkin"])) add("Betulaceae", "Fagaceae", "Salicaceae", "Juglandaceae");
         if (hasAny(text, ["cone-like"])) add("Asteraceae", "Pinaceae", "Cupressaceae");
         if (hasAny(text, ["bracts"])) add("Euphorbiaceae", "Nyctaginaceae", "Cornaceae");
-        if (hasAny(text, ["spur"])) add("Ranunculaceae", "Violaceae", "Orchidaceae", "Tropaeolaceae");
+        if (hasAny(text, ["spur"]))
+          add("Ranunculaceae", "Violaceae", "Orchidaceae", "Tropaeolaceae");
         if (hasAny(text, ["stamens"])) add("Myrtaceae", "Rosaceae", "Hypericaceae");
-        if (hasAny(text, ["separate male", "female"])) add("Cucurbitaceae", "Fagaceae", "Betulaceae", "Euphorbiaceae");
-        if (hasAny(text, ["fragrant", "color", "season", "solitary", "clustered", "leaf axils", "stem tips", "tiny"])) add("Rosaceae", "Asteraceae", "Lamiaceae", "Ericaceae", "Orchidaceae");
+        if (hasAny(text, ["separate male", "female"]))
+          add("Cucurbitaceae", "Fagaceae", "Betulaceae", "Euphorbiaceae");
+        if (
+          hasAny(text, [
+            "fragrant",
+            "color",
+            "season",
+            "solitary",
+            "clustered",
+            "leaf axils",
+            "stem tips",
+            "tiny"
+          ])
+        )
+          add("Rosaceae", "Asteraceae", "Lamiaceae", "Ericaceae", "Orchidaceae");
       } else if (key === "fruits") {
         if (hasAny(text, ["berry"])) add("Ericaceae", "Solanaceae", "Vitaceae", "Caprifoliaceae");
-        if (hasAny(text, ["capsule"])) add("Papaveraceae", "Onagraceae", "Plantaginaceae", "Malvaceae");
+        if (hasAny(text, ["capsule"]))
+          add("Papaveraceae", "Onagraceae", "Plantaginaceae", "Malvaceae");
         if (hasAny(text, ["pod", "legume"])) add("Fabaceae", "Brassicaceae", "Apocynaceae");
         if (hasAny(text, ["samara", "winged"])) add("Sapindaceae", "Oleaceae", "Ulmaceae");
         if (hasAny(text, ["acorn", "nut"])) add("Fagaceae", "Juglandaceae", "Betulaceae");
@@ -1326,54 +1650,118 @@ Gall shape on plant
         if (hasAny(text, ["burr", "hooks"])) add("Asteraceae", "Boraginaceae", "Rosaceae");
         if (hasAny(text, ["parachute"])) add("Asteraceae", "Apocynaceae");
         if (hasAny(text, ["silky"])) add("Apocynaceae", "Salicaceae");
-        if (hasAny(text, ["persistent", "beak", "awn"])) add("Geraniaceae", "Poaceae", "Ranunculaceae", "Asteraceae");
-        if (hasAny(text, ["fruit color", "upright", "dangling", "clusters", "season", "splitting"])) add("Rosaceae", "Ericaceae", "Fabaceae", "Sapindaceae");
+        if (hasAny(text, ["persistent", "beak", "awn"]))
+          add("Geraniaceae", "Poaceae", "Ranunculaceae", "Asteraceae");
+        if (hasAny(text, ["fruit color", "upright", "dangling", "clusters", "season", "splitting"]))
+          add("Rosaceae", "Ericaceae", "Fabaceae", "Sapindaceae");
       } else if (key === "grass_like") {
         if (hasAny(text, ["sedge", "triangular", "flat sedge"])) add("Cyperaceae");
         if (hasAny(text, ["rush", "round rush"])) add("Juncaceae");
-        if (hasAny(text, ["grass", "jointed", "ligule", "auricle", "sheath", "spikelet", "awn", "feathery", "bristly"])) add("Poaceae");
+        if (
+          hasAny(text, [
+            "grass",
+            "jointed",
+            "ligule",
+            "auricle",
+            "sheath",
+            "spikelet",
+            "awn",
+            "feathery",
+            "bristly"
+          ])
+        )
+          add("Poaceae");
         if (hasAny(text, ["wetland"])) add("Cyperaceae", "Juncaceae", "Typhaceae", "Poaceae");
         if (!families.length) add("Poaceae", "Cyperaceae", "Juncaceae");
       }
       add("Rosaceae", "Fabaceae", "Asteraceae", "Lamiaceae", "Poaceae", "Fagaceae");
     } else if (lane === "cryptogam") {
-      if (hasAny(text, ["fern", "sori", "indusium", "fiddlehead", "frond"])) add("Polypodiaceae", "Dryopteridaceae", "Pteridaceae", "Thelypteridaceae", "Osmundaceae", "Aspleniaceae");
-      if (hasAny(text, ["moss", "capsule", "hairpoint", "costa", "liverwort"])) add("Bryaceae", "Polytrichaceae", "Sphagnaceae", "Mniaceae", "Marchantiaceae", "Brachytheciaceae");
-      if (hasAny(text, ["lichen", "crustose", "foliose", "fruticose", "apothecia", "soredia"])) add("Parmeliaceae", "Physciaceae", "Cladoniaceae", "Teloschistaceae", "Lecanoraceae", "Peltigeraceae");
-      if (!families.length) add("Parmeliaceae", "Bryaceae", "Polypodiaceae", "Cladoniaceae", "Dryopteridaceae", "Sphagnaceae");
+      if (hasAny(text, ["fern", "sori", "indusium", "fiddlehead", "frond"]))
+        add(
+          "Polypodiaceae",
+          "Dryopteridaceae",
+          "Pteridaceae",
+          "Thelypteridaceae",
+          "Osmundaceae",
+          "Aspleniaceae"
+        );
+      if (hasAny(text, ["moss", "capsule", "hairpoint", "costa", "liverwort"]))
+        add(
+          "Bryaceae",
+          "Polytrichaceae",
+          "Sphagnaceae",
+          "Mniaceae",
+          "Marchantiaceae",
+          "Brachytheciaceae"
+        );
+      if (hasAny(text, ["lichen", "crustose", "foliose", "fruticose", "apothecia", "soredia"]))
+        add(
+          "Parmeliaceae",
+          "Physciaceae",
+          "Cladoniaceae",
+          "Teloschistaceae",
+          "Lecanoraceae",
+          "Peltigeraceae"
+        );
+      if (!families.length)
+        add(
+          "Parmeliaceae",
+          "Bryaceae",
+          "Polypodiaceae",
+          "Cladoniaceae",
+          "Dryopteridaceae",
+          "Sphagnaceae"
+        );
     } else if (lane === "fungus") {
-      add("Agaricaceae", "Amanitaceae", "Boletaceae", "Polyporaceae", "Russulaceae", "Cortinariaceae");
-      if (hasAny(text, ["gill", "stalk", "ring", "volva", "cap"])) add("Mycenaceae", "Amanitaceae", "Pluteaceae");
-      if (hasAny(text, ["pore", "shelf", "bracket", "wood"])) add("Fomitopsidaceae", "Ganodermataceae", "Meripilaceae");
+      add(
+        "Agaricaceae",
+        "Amanitaceae",
+        "Boletaceae",
+        "Polyporaceae",
+        "Russulaceae",
+        "Cortinariaceae"
+      );
+      if (hasAny(text, ["gill", "stalk", "ring", "volva", "cap"]))
+        add("Mycenaceae", "Amanitaceae", "Pluteaceae");
+      if (hasAny(text, ["pore", "shelf", "bracket", "wood"]))
+        add("Fomitopsidaceae", "Ganodermataceae", "Meripilaceae");
       if (hasAny(text, ["puffball"])) add("Lycoperdaceae");
       if (hasAny(text, ["jelly"])) add("Tremellaceae", "Auriculariaceae");
-      if (hasAny(text, ["coral", "teeth", "spines"])) add("Clavariaceae", "Hydnaceae", "Hericiaceae");
+      if (hasAny(text, ["coral", "teeth", "spines"]))
+        add("Clavariaceae", "Hydnaceae", "Hericiaceae");
     } else if (lane === "insect") {
       add("Apidae", "Formicidae", "Vespidae", "Coccinellidae", "Nymphalidae", "Syrphidae");
-      if (hasAny(text, ["elytra", "beetle", "hard wing"])) add("Carabidae", "Cerambycidae", "Scarabaeidae");
-      if (hasAny(text, ["hemelytra", "piercing", "beak", "true bug"])) add("Pentatomidae", "Coreidae", "Reduviidae", "Miridae");
-      if (hasAny(text, ["scaly", "butterfly", "moth", "proboscis", "caterpillar"])) add("Papilionidae", "Noctuidae", "Geometridae", "Sphingidae");
-      if (hasAny(text, ["dragonfly", "damselfly"])) add("Libellulidae", "Coenagrionidae", "Aeshnidae");
+      if (hasAny(text, ["elytra", "beetle", "hard wing"]))
+        add("Carabidae", "Cerambycidae", "Scarabaeidae");
+      if (hasAny(text, ["hemelytra", "piercing", "beak", "true bug"]))
+        add("Pentatomidae", "Coreidae", "Reduviidae", "Miridae");
+      if (hasAny(text, ["scaly", "butterfly", "moth", "proboscis", "caterpillar"]))
+        add("Papilionidae", "Noctuidae", "Geometridae", "Sphingidae");
+      if (hasAny(text, ["dragonfly", "damselfly"]))
+        add("Libellulidae", "Coenagrionidae", "Aeshnidae");
       if (hasAny(text, ["halteres", "fly", "sponge"])) add("Muscidae", "Tachinidae", "Tipulidae");
-      if (hasAny(text, ["lacewing", "caddisfly", "mayfly"])) add("Chrysopidae", "Limnephilidae", "Baetidae");
-      if (hasAny(text, ["jumping", "raptorial", "swimming", "pollen", "spiny legs", "stilt"])) add("Acrididae", "Mantidae", "Dytiscidae", "Tettigoniidae");
-      if (hasAny(text, ["leaf-mining", "gall", "case-bearing"])) add("Gracillariidae", "Cynipidae", "Psychidae");
+      if (hasAny(text, ["lacewing", "caddisfly", "mayfly"]))
+        add("Chrysopidae", "Limnephilidae", "Baetidae");
+      if (hasAny(text, ["jumping", "raptorial", "swimming", "pollen", "spiny legs", "stilt"]))
+        add("Acrididae", "Mantidae", "Dytiscidae", "Tettigoniidae");
+      if (hasAny(text, ["leaf-mining", "gall", "case-bearing"]))
+        add("Gracillariidae", "Cynipidae", "Psychidae");
     }
 
     return uniq(families).slice(0, 8);
   }
 
   function inferSayIt(label, category) {
-    const parts = definitionsForContrast(label).filter(row => row.definition);
+    const parts = definitionsForContrast(label).filter((row) => row.definition);
     if (parts.length > 1) {
-      return `Field note: choose the best state for ${lowerFirst(label)} (${parts.map(row => row.part).join(" / ")}), then note where you saw it.`;
+      return `Field note: choose the best state for ${lowerFirst(label)} (${parts.map((row) => row.part).join(" / ")}), then note where you saw it.`;
     }
     return `Field note: "${label}" on the ${fieldNoteTarget(category)}; add location, count, color, or texture if it helps.`;
   }
 
   function buildInfoSheet(mark, category) {
     const directionLabels = (mark.signals || [])
-      .map(signal => GROUPS[signal.group]?.label || signal.group)
+      .map((signal) => GROUPS[signal.group]?.label || signal.group)
       .filter(Boolean);
     const directions = [...new Set(directionLabels)].slice(0, 5);
 
@@ -1407,49 +1795,54 @@ Gall shape on plant
       groups.add("lichens");
     }
 
-    SIGNAL_RULES.forEach(rule => {
+    SIGNAL_RULES.forEach((rule) => {
       if (rule.re.test(label)) {
-        rule.groups.forEach(group => groups.add(group));
+        rule.groups.forEach((group) => groups.add(group));
       }
     });
 
-    return [...groups].map(group => ({ group, weight: group === "plants" || group === "insects" ? 1 : 2 }));
+    return [...groups].map((group) => ({
+      group,
+      weight: group === "plants" || group === "insects" ? 1 : 2
+    }));
   }
 
-  const FIELD_MARKS = CATEGORY_DEFS.flatMap(category => lines(category.raw).map((label, index) => {
-    const id = slugify(label);
-    const mark = {
-      id,
-      label,
-      category: category.key,
-      categoryLabel: category.title,
-      lane: category.lane,
-      prompt: inferPrompt(label),
-      explanation: inferExplanation(label, category),
-      aliases: inferAliases(label),
-      signals: inferSignals(label, category),
-      order: index
-    };
-    mark.infoSheet = buildInfoSheet(mark, category);
-    return mark;
-  }));
+  const FIELD_MARKS = CATEGORY_DEFS.flatMap((category) =>
+    lines(category.raw).map((label, index) => {
+      const id = slugify(label);
+      const mark = {
+        id,
+        label,
+        category: category.key,
+        categoryLabel: category.title,
+        lane: category.lane,
+        prompt: inferPrompt(label),
+        explanation: inferExplanation(label, category),
+        aliases: inferAliases(label),
+        signals: inferSignals(label, category),
+        order: index
+      };
+      mark.infoSheet = buildInfoSheet(mark, category);
+      return mark;
+    })
+  );
 
-  const MARK_BY_ID = Object.fromEntries(FIELD_MARKS.map(mark => [mark.id, mark]));
+  const MARK_BY_ID = Object.fromEntries(FIELD_MARKS.map((mark) => [mark.id, mark]));
 
   function list() {
     return FIELD_MARKS.slice();
   }
 
   function categories() {
-    return CATEGORY_DEFS.map(category => ({ ...category, raw: undefined }));
+    return CATEGORY_DEFS.map((category) => ({ ...category, raw: undefined }));
   }
 
   function grouped(marks = FIELD_MARKS) {
-    return CATEGORY_DEFS.map(category => ({
+    return CATEGORY_DEFS.map((category) => ({
       ...category,
       raw: undefined,
-      marks: marks.filter(mark => mark.category === category.key)
-    })).filter(group => group.marks.length);
+      marks: marks.filter((mark) => mark.category === category.key)
+    })).filter((group) => group.marks.length);
   }
 
   function get(id) {
@@ -1459,10 +1852,16 @@ Gall shape on plant
   function infoSheet(markOrId) {
     const mark = typeof markOrId === "string" ? get(markOrId) : markOrId;
     if (!mark) return null;
-    return mark.infoSheet || buildInfoSheet(mark, CATEGORY_BY_KEY[mark.category] || {
-      title: mark.categoryLabel || "Field marks",
-      lane: mark.lane
-    });
+    return (
+      mark.infoSheet ||
+      buildInfoSheet(
+        mark,
+        CATEGORY_BY_KEY[mark.category] || {
+          title: mark.categoryLabel || "Field marks",
+          lane: mark.lane
+        }
+      )
+    );
   }
 
   function exemplarFamilies(markOrId) {
@@ -1476,12 +1875,12 @@ Gall shape on plant
   }
 
   function infoSheets(options = {}) {
-    const source = list().filter(mark => {
+    const source = list().filter((mark) => {
       if (options.lane && mark.lane !== options.lane) return false;
       if (options.category && mark.category !== options.category) return false;
       return true;
     });
-    return source.map(mark => infoSheet(mark)).filter(Boolean);
+    return source.map((mark) => infoSheet(mark)).filter(Boolean);
   }
 
   function normalize(value) {
@@ -1497,15 +1896,17 @@ Gall shape on plant
     const source = Array.isArray(options.source) ? options.source : FIELD_MARKS;
     if (!words.length) return source.slice();
 
-    return source.filter(mark => {
-      const hay = normalize([
-        mark.label,
-        mark.categoryLabel,
-        mark.prompt,
-        mark.explanation,
-        ...(mark.aliases || [])
-      ].join(" "));
-      return words.every(word => hay.includes(word));
+    return source.filter((mark) => {
+      const hay = normalize(
+        [
+          mark.label,
+          mark.categoryLabel,
+          mark.prompt,
+          mark.explanation,
+          ...(mark.aliases || [])
+        ].join(" ")
+      );
+      return words.every((word) => hay.includes(word));
     });
   }
 
@@ -1516,7 +1917,7 @@ Gall shape on plant
       if (!mark || disposition === "unsure") return;
 
       const multiplier = disposition === "seen" ? 1 : -0.65;
-      mark.signals.forEach(signal => {
+      mark.signals.forEach((signal) => {
         const group = signal.group;
         scores[group] = (scores[group] || 0) + (signal.weight || 1) * multiplier;
       });
@@ -1529,7 +1930,7 @@ Gall shape on plant
         label: GROUPS[id]?.label || id,
         desc: GROUPS[id]?.desc || "Suggested by selected field marks."
       }))
-      .filter(row => Math.abs(row.score) > 0.1)
+      .filter((row) => Math.abs(row.score) > 0.1)
       .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
   }
 

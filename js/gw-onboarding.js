@@ -110,9 +110,9 @@
       emoji: "🎯",
       title: "Quests give direction",
       body: "Earn points by completing nature quests of different difficulty: common species, overlooked taxa, seasonal finds, and hard discoveries. Quests help achieve survey goals"
-    },
-  //    {
-  //     emoji: "🏴",
+    }
+    //    {
+    //     emoji: "🏴",
     //    title: "Claim territory",
     //    body: "Make observations in nearby squares to rise on the local leaderboard. Keep your observations fresh to defend your top spot."
     // },
@@ -363,50 +363,54 @@
       }
     }
 
-    card.addEventListener("touchstart", (e) => {
-      if (!e.touches || e.touches.length !== 1) return;
+    card.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
 
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-      touchStartTime = Date.now();
-    }, { passive: true });
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+      },
+      { passive: true }
+    );
 
-    card.addEventListener("touchend", (e) => {
-      if (!e.changedTouches || e.changedTouches.length !== 1) return;
+    card.addEventListener(
+      "touchend",
+      (e) => {
+        if (!e.changedTouches || e.changedTouches.length !== 1) return;
 
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      const dt = Date.now() - touchStartTime;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        const dt = Date.now() - touchStartTime;
 
-      const isHorizontalSwipe =
-        Math.abs(dx) > 55 &&
-        Math.abs(dx) > Math.abs(dy) * 1.4 &&
-        dt < 650;
+        const isHorizontalSwipe =
+          Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4 && dt < 650;
 
-      if (!isHorizontalSwipe) return;
+        if (!isHorizontalSwipe) return;
 
-      if (dx < 0) {
-        goNextFromSplash();   // swipe left = next
-      } else {
-        goPrevFromSplash();   // swipe right = previous
-      }
-    }, { passive: true });
+        if (dx < 0) {
+          goNextFromSplash(); // swipe left = next
+        } else {
+          goPrevFromSplash(); // swipe right = previous
+        }
+      },
+      { passive: true }
+    );
 
+    function renderCharacterCard() {
+      const c = splashCards[idx];
+      const character = window.GridWildCharacter?.load?.() || {
+        displayName: "New Wanderer",
+        archetype: "naturalist",
+        icon: "🌿",
+        color: "fern"
+      };
+      const signedIn = window.GridWildAccount?.getAccount?.();
+      const iNatConnected = window.GridWildINatAuth?.isConnected?.();
+      const iNatUsername = localStorage.getItem("gw_inat_username") || "";
 
-
-function renderCharacterCard() {
-  const c = splashCards[idx];
-  const character = window.GridWildCharacter?.load?.() || {
-    displayName: "New Wanderer",
-    archetype: "naturalist",
-    icon: "🌿",
-    color: "fern"
-  };
-  const signedIn = window.GridWildAccount?.getAccount?.();
-  const iNatConnected = window.GridWildINatAuth?.isConnected?.();
-  const iNatUsername = localStorage.getItem("gw_inat_username") || "";
-
-  card.innerHTML = `
+      card.innerHTML = `
     <div class="gw-splash-emoji">${c.emoji}</div>
     <h1 class="gw-splash-title">${c.title}</h1>
     <p class="gw-splash-body">${c.body}</p>
@@ -457,9 +461,11 @@ function renderCharacterCard() {
         </div>
 
         <div style="font-size:12px;line-height:1.35;color:rgba(255,247,223,0.76);margin-bottom:10px;">
-          ${signedIn?.username
-            ? `GridWild account: <b>@${esc(signedIn.username)}</b>`
-            : "Create or log in to keep this explorer across devices."}
+          ${
+            signedIn?.username
+              ? `GridWild account: <b>@${esc(signedIn.username)}</b>`
+              : "Create or log in to keep this explorer across devices."
+          }
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -472,9 +478,11 @@ function renderCharacterCard() {
         </div>
 
         <div style="font-size:12px;line-height:1.35;color:rgba(255,247,223,0.76);margin:12px 0 8px;">
-          ${iNatConnected
-            ? `iNaturalist linked${iNatUsername ? ` as <b>@${esc(iNatUsername)}</b>` : ""}.`
-            : "Link iNaturalist when you want observations to sync into the wider nature network."}
+          ${
+            iNatConnected
+              ? `iNaturalist linked${iNatUsername ? ` as <b>@${esc(iNatUsername)}</b>` : ""}.`
+              : "Link iNaturalist when you want observations to sync into the wider nature network."
+          }
         </div>
 
         <button class="gw-onboard-btn secondary" id="gwOnboardLinkINat" style="width:100%;min-height:40px;padding:9px 10px;font-size:13px;">
@@ -493,26 +501,26 @@ function renderCharacterCard() {
     </div>
   `;
 
-  document.getElementById("gwOnboardEditCharacter").onclick = () => {
-    window.GridWildCharacter?.openEditor?.();
-  };
+      document.getElementById("gwOnboardEditCharacter").onclick = () => {
+        window.GridWildCharacter?.openEditor?.();
+      };
 
-  document.getElementById("gwOnboardCreateAccount").onclick = () => {
-    window.GridWildAccount?.openModal?.("signup");
-  };
+      document.getElementById("gwOnboardCreateAccount").onclick = () => {
+        window.GridWildAccount?.openModal?.("signup");
+      };
 
-  document.getElementById("gwOnboardLoginAccount").onclick = () => {
-    window.GridWildAccount?.openModal?.("login");
-  };
+      document.getElementById("gwOnboardLoginAccount").onclick = () => {
+        window.GridWildAccount?.openModal?.("login");
+      };
 
-  document.getElementById("gwOnboardLinkINat").onclick = () => {
-    window.location.href = "/.netlify/functions/inat-oauth-start";
-  };
+      document.getElementById("gwOnboardLinkINat").onclick = () => {
+        window.location.href = "/.netlify/functions/inat-oauth-start";
+      };
 
-  document.getElementById("gwOnboardSkip").onclick = finishAll;
+      document.getElementById("gwOnboardSkip").onclick = finishAll;
 
-  document.getElementById("gwOnboardNext").onclick = goNextFromSplash;
-}
+      document.getElementById("gwOnboardNext").onclick = goNextFromSplash;
+    }
 
     function render() {
       const c = splashCards[idx];
@@ -692,7 +700,7 @@ function renderCharacterCard() {
 
     document.body.appendChild(toast);
 
-    document.getElementById("gwBeginQuest").onclick = async evt => {
+    document.getElementById("gwBeginQuest").onclick = async (evt) => {
       const btn = evt.currentTarget;
 
       if (!window.GridWildQuests?.startQuestFromRecipe) {
@@ -703,27 +711,30 @@ function renderCharacterCard() {
       btn.disabled = true;
       btn.textContent = "Starting...";
 
-      const quest = await window.GridWildQuests.startQuestFromRecipe({
-        range: "anywhere",
-        iconicTaxon: "Any",
-        objectiveType: "any_observation",
-        difficulty: 1,
-        timeframe: "today",
-        evidence: "photo_gps20",
-        surveyId: "none",
-        targetLocation: "anywhere",
-        target: {
-          mode: "anywhere",
-          label: "Anywhere",
-          radiusCells: null
+      const quest = await window.GridWildQuests.startQuestFromRecipe(
+        {
+          range: "anywhere",
+          iconicTaxon: "Any",
+          objectiveType: "any_observation",
+          difficulty: 1,
+          timeframe: "today",
+          evidence: "photo_gps20",
+          surveyId: "none",
+          targetLocation: "anywhere",
+          target: {
+            mode: "anywhere",
+            label: "Anywhere",
+            radiusCells: null
+          }
+        },
+        {
+          title: "Beginner Quest: Observe any living thing",
+          source: "onboarding",
+          rewardXP: 100,
+          autoEmbark: true,
+          openStatus: false
         }
-      }, {
-        title: "Beginner Quest: Observe any living thing",
-        source: "onboarding",
-        rewardXP: 100,
-        autoEmbark: true,
-        openStatus: false
-      });
+      );
 
       if (quest) {
         toast.remove();

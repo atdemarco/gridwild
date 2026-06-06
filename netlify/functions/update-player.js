@@ -1,23 +1,14 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest, httpError } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
     await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
 
-    const {
-  player_id,
-  display_name,
-  archetype,
-  icon,
-  color
-} = body;
+    const { player_id, display_name, archetype, icon, color } = body;
 
     if (!player_id) {
       throw new Error("player_id is required");
@@ -30,7 +21,10 @@ exports.handler = async function (event) {
     }
 
     if (Object.prototype.hasOwnProperty.call(body, "wildpoints")) {
-      throw httpError(403, "Wild Points can only be changed by server-authoritative economy actions.");
+      throw httpError(
+        403,
+        "Wild Points can only be changed by server-authoritative economy actions."
+      );
     }
 
     if (archetype !== undefined) {

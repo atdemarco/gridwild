@@ -14,7 +14,7 @@ function cleanNumericId(value, label = "iNaturalist ID") {
 function headerValue(event, name) {
   const headers = event?.headers || {};
   const wanted = String(name || "").toLowerCase();
-  const key = Object.keys(headers).find(candidate => candidate.toLowerCase() === wanted);
+  const key = Object.keys(headers).find((candidate) => candidate.toLowerCase() === wanted);
   return key ? String(headers[key] || "").trim() : "";
 }
 
@@ -34,14 +34,8 @@ async function responseJson(response, label) {
 
   if (!response.ok) {
     const message =
-      data?.error ||
-      data?.errors?.[0]?.message ||
-      `${label} failed with HTTP ${response.status}.`;
-    const statusCode = response.status === 401
-      ? 401
-      : response.status === 404
-        ? 404
-        : 502;
+      data?.error || data?.errors?.[0]?.message || `${label} failed with HTTP ${response.status}.`;
+    const statusCode = response.status === 401 ? 401 : response.status === 404 ? 404 : 502;
     throw httpError(statusCode, message);
   }
 
@@ -56,10 +50,7 @@ async function inatApiTokenForRequest(event) {
 
   const oauthToken = cookieValue(event, "inat_oauth");
   if (!oauthToken) {
-    throw httpError(
-      401,
-      "Connect iNaturalist before submitting reward-bearing evidence."
-    );
+    throw httpError(401, "Connect iNaturalist before submitting reward-bearing evidence.");
   }
 
   const response = await fetch(`${INAT_WEB}/users/api_token`, {
@@ -124,26 +115,22 @@ async function requireLinkedINatUser(supabase, event, playerId) {
   const now = new Date().toISOString();
   const linkMutation = playerLink
     ? supabase
-      .from("gridwild_player_inat_accounts")
-      .update({
-        inat_login: String(user?.login || ""),
-        verified_at: now,
-        updated_at: now
-      })
-      .eq("player_id", playerId)
-      .eq("inat_user_id", inatUserId)
-    : supabase
-      .from("gridwild_player_inat_accounts")
-      .insert({
+        .from("gridwild_player_inat_accounts")
+        .update({
+          inat_login: String(user?.login || ""),
+          verified_at: now,
+          updated_at: now
+        })
+        .eq("player_id", playerId)
+        .eq("inat_user_id", inatUserId)
+    : supabase.from("gridwild_player_inat_accounts").insert({
         player_id: playerId,
         inat_user_id: inatUserId,
         inat_login: String(user?.login || ""),
         verified_at: now,
         updated_at: now
       });
-  const { data: link, error: linkError } = await linkMutation
-    .select("*")
-    .single();
+  const { data: link, error: linkError } = await linkMutation.select("*").single();
 
   if (linkError) throw linkError;
   return { apiToken, user, link };
@@ -192,11 +179,7 @@ function observationDate(observation) {
 }
 
 function observationLocalHour(observation) {
-  const raw = String(
-    observation?.time_observed_at ||
-    observation?.observed_on_string ||
-    ""
-  );
+  const raw = String(observation?.time_observed_at || observation?.observed_on_string || "");
   const match = raw.match(/T([0-2][0-9]):/);
   return match ? Number(match[1]) : null;
 }
@@ -212,12 +195,15 @@ function taxonomyText(observation, taxonContext = null) {
     taxon?.name,
     taxon?.preferred_common_name,
     taxon?.iconic_taxon_name,
-    ...ancestors.flatMap(ancestor => [
+    ...ancestors.flatMap((ancestor) => [
       ancestor?.name,
       ancestor?.preferred_common_name,
       ancestor?.rank
     ])
-  ].filter(Boolean).join(" ").slice(0, 4000);
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 4000);
 }
 
 function assertOwnedObservation(observation, inatUser) {
@@ -231,17 +217,15 @@ function assertOwnedObservation(observation, inatUser) {
 
 function verifyINatIdentification(observation, inatUser, externalId, requestedTaxonId) {
   const identificationId = cleanNumericId(externalId, "external_identification_id");
-  const identification = (observation?.identifications || []).find(row =>
-    String(row?.id) === identificationId &&
-    Number(row?.user?.id) === Number(inatUser?.id) &&
-    row?.current !== false
+  const identification = (observation?.identifications || []).find(
+    (row) =>
+      String(row?.id) === identificationId &&
+      Number(row?.user?.id) === Number(inatUser?.id) &&
+      row?.current !== false
   );
 
   if (!identification) {
-    throw httpError(
-      422,
-      "The linked iNaturalist account has not submitted that identification."
-    );
+    throw httpError(422, "The linked iNaturalist account has not submitted that identification.");
   }
 
   if (

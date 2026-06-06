@@ -52,57 +52,58 @@ function syncGpsAccuracyCircle(latlng, accuracyMeters) {
 }
 
 function setUserLocation(lat, lng, accuracyMeters) {
-      window.__gwLastUserLocation = {
-        lat: Number(lat),
-        lng: Number(lng),
-        accuracyMeters: Number(accuracyMeters),
-        updatedAt: new Date().toISOString()
-      };
+  window.__gwLastUserLocation = {
+    lat: Number(lat),
+    lng: Number(lng),
+    accuracyMeters: Number(accuracyMeters),
+    updatedAt: new Date().toISOString()
+  };
 
-      updateGpsHealthBadge(accuracyMeters);
-      const latlng = [lat, lng];
+  updateGpsHealthBadge(accuracyMeters);
+  const latlng = [lat, lng];
 
-      if (!userMarker) {
-        userMarker = L.marker(latlng, {
-          icon: makeUserHeadingIcon(lastHeading ?? 0)
-        }).addTo(map).bindPopup("You are here");
-      } else {
-        userMarker.setLatLng(latlng);
-        updateUserMarkerHeading(lastHeading ?? 0);
-      }
+  if (!userMarker) {
+    userMarker = L.marker(latlng, {
+      icon: makeUserHeadingIcon(lastHeading ?? 0)
+    })
+      .addTo(map)
+      .bindPopup("You are here");
+  } else {
+    userMarker.setLatLng(latlng);
+    updateUserMarkerHeading(lastHeading ?? 0);
+  }
 
-      syncGpsAccuracyCircle(latlng, accuracyMeters);
+  syncGpsAccuracyCircle(latlng, accuracyMeters);
 
-      const zoom = map.getZoom();
-      const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
+  const zoom = map.getZoom();
+  const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
 
-      const metersPerPixel = getMapResolution();
-      const cellMeters = 20 * 0.3048; // same constant used in grid code
-      const cellPixels = (cellMeters / metersPerPixel).toFixed(0);
-      const accuracyLabel = window.GridWildUnits?.formatDistance?.(accuracyMeters) ||
-        `${Math.round(accuracyMeters)} m`;
-      const resolutionLabel = window.GridWildUnits?.formatDistance?.(metersPerPixel) ||
-        `${metersPerPixel.toFixed(2)} m`;
+  const metersPerPixel = getMapResolution();
+  const cellMeters = 20 * 0.3048; // same constant used in grid code
+  const cellPixels = (cellMeters / metersPerPixel).toFixed(0);
+  const accuracyLabel =
+    window.GridWildUnits?.formatDistance?.(accuracyMeters) || `${Math.round(accuracyMeters)} m`;
+  const resolutionLabel =
+    window.GridWildUnits?.formatDistance?.(metersPerPixel) || `${metersPerPixel.toFixed(2)} m`;
 
-      hud.innerHTML =
-        `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (&plusmn;${accuracyLabel})
+  hud.innerHTML = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (&plusmn;${accuracyLabel})
         <span style="opacity:.65"> <br>Zoom x${zoomMultiplier}
         &bull; ${resolutionLabel}/px
         &bull; cell approx ${cellPixels}px
         </span>`;
 
-        if (window.GridWildOverviewMap) {
-          window.GridWildOverviewMap.updateUserLocation(lat, lng, accuracyMeters);
-        }
+  if (window.GridWildOverviewMap) {
+    window.GridWildOverviewMap.updateUserLocation(lat, lng, accuracyMeters);
+  }
 
-        if (window.GridWildParty?.recordPartyPosition) {
-          window.GridWildParty.recordPartyPosition(lat, lng, accuracyMeters);
-        }
-    }
+  if (window.GridWildParty?.recordPartyPosition) {
+    window.GridWildParty.recordPartyPosition(lat, lng, accuracyMeters);
+  }
+}
 
 // Geolocation
 let lastFix = null;
-let lastHeading = null;   // degrees, 0 = north
+let lastHeading = null; // degrees, 0 = north
 let compassListenersAttached = false;
 let compassPermissionState = "unknown";
 let compassDeniedToastShown = false;
@@ -135,23 +136,21 @@ function zoomForLockMode(mode) {
 
 function setProgrammaticLockMoveGuard() {
   window.__gwState = window.__gwState || {};
-  window.__gwState.programmaticAutoCenterUntil =
-    Date.now() + LOCK_PROGRAMMATIC_MOVE_GRACE_MS;
+  window.__gwState.programmaticAutoCenterUntil = Date.now() + LOCK_PROGRAMMATIC_MOVE_GRACE_MS;
 }
 
 function setProgrammaticLockMoveGuardFor(seconds = LOCK_VIEW_ANIMATION_SECONDS) {
   window.__gwState = window.__gwState || {};
-  const durationMs = Math.max(LOCK_PROGRAMMATIC_MOVE_GRACE_MS, Math.ceil(Number(seconds) * 1000) + 150);
+  const durationMs = Math.max(
+    LOCK_PROGRAMMATIC_MOVE_GRACE_MS,
+    Math.ceil(Number(seconds) * 1000) + 150
+  );
   window.__gwState.programmaticAutoCenterUntil = Date.now() + durationMs;
   window.__gwState.lockViewAnimationUntil = Date.now() + durationMs;
 }
 
 function animateLockedUserView(latlng, zoom, options = {}) {
-  const {
-    animate = true,
-    duration = LOCK_VIEW_ANIMATION_SECONDS,
-    forceFly = false
-  } = options;
+  const { animate = true, duration = LOCK_VIEW_ANIMATION_SECONDS, forceFly = false } = options;
 
   if (!map || !latlng) return;
 
@@ -214,11 +213,7 @@ function updateGpsHealthBadge(accuracyMeters) {
 }
 
 function requestLocationOnce(options = {}) {
-  const {
-    toastOnSuccess = false,
-    zoom = 19,
-    force = true
-  } = options;
+  const { toastOnSuccess = false, zoom = 19, force = true } = options;
 
   if (!("geolocation" in navigator)) {
     hud.textContent = "Geolocation not supported in this browser.";
@@ -228,38 +223,39 @@ function requestLocationOnce(options = {}) {
 
   hud.textContent = "Requesting location permission…";
 
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude, accuracy } = pos.coords;
 
-navigator.geolocation.getCurrentPosition(
-  (pos) => {
-    const { latitude, longitude, accuracy } = pos.coords;
+      lastFix = { latitude, longitude, accuracy };
+      setUserLocation(latitude, longitude, accuracy);
+      setLockButtonVisual();
+      window.dispatchEvent(
+        new CustomEvent("gwUserLocationUpdated", {
+          detail: { latitude, longitude, accuracy, force }
+        })
+      );
 
-    lastFix = { latitude, longitude, accuracy };
-    setUserLocation(latitude, longitude, accuracy);
-    setLockButtonVisual();
-    window.dispatchEvent(new CustomEvent("gwUserLocationUpdated", {
-      detail: { latitude, longitude, accuracy, force }
-    }));
-
-    // Let the central logic decide whether auto-centering is allowed
-    if (typeof window.handleUserPositionUpdate === "function") {
-      window.handleUserPositionUpdate(latitude, longitude, force);
-    }
-
-        if (toastOnSuccess && window.__gwState?.lockToLocation) {
-      showGridWildToast("Follow lock enabled");
-      animateLockedUserView([latitude, longitude], zoom, { forceFly: true });
-    }
-
-    map.once("moveend", () => {
-      if (typeof window.scheduleOSMVectorOverlayUpdate === "function") {
-        window.scheduleOSMVectorOverlayUpdate();
+      // Let the central logic decide whether auto-centering is allowed
+      if (typeof window.handleUserPositionUpdate === "function") {
+        window.handleUserPositionUpdate(latitude, longitude, force);
       }
-    });
-  },
+
+      if (toastOnSuccess && window.__gwState?.lockToLocation) {
+        showGridWildToast("Follow lock enabled");
+        animateLockedUserView([latitude, longitude], zoom, { forceFly: true });
+      }
+
+      map.once("moveend", () => {
+        if (typeof window.scheduleOSMVectorOverlayUpdate === "function") {
+          window.scheduleOSMVectorOverlayUpdate();
+        }
+      });
+    },
     (err) => {
       // Common causes: permission denied, not https, no GPS, timeout
       hud.textContent = `Location error: ${err.message}`;
-     showGridWildToast("Could not find location");
+      showGridWildToast("Could not find location");
     },
     {
       enableHighAccuracy: true,
@@ -278,9 +274,7 @@ function setLockButtonVisual() {
   btn.classList.toggle("is-locked", locked);
   btn.classList.toggle("is-locked-wide", locked && mode === "wide");
   btn.setAttribute("aria-pressed", locked ? "true" : "false");
-  btn.title = locked
-    ? (mode === "wide" ? "Tracking on: wide" : "Tracking on: close")
-    : "Find me";
+  btn.title = locked ? (mode === "wide" ? "Tracking on: wide" : "Tracking on: close") : "Find me";
 
   if (typeof syncCompassTracking === "function") {
     syncCompassTracking({ requestPermission: false });
@@ -288,12 +282,7 @@ function setLockButtonVisual() {
 }
 
 function enableLocationLock(options = {}) {
-  const {
-    zoom = null,
-    mode = null,
-    recenterNow = true,
-    force = true
-  } = options;
+  const { zoom = null, mode = null, recenterNow = true, force = true } = options;
 
   window.__gwState = window.__gwState || {};
   const state = window.__gwState;
@@ -344,9 +333,7 @@ function cycleLocationLock(options = {}) {
   window.__gwState = window.__gwState || {};
   const state = window.__gwState;
   const currentMode = normalizeLockZoomMode(state.lockZoomMode);
-  const nextMode = state.lockToLocation
-    ? (currentMode === "close" ? "wide" : "close")
-    : "close";
+  const nextMode = state.lockToLocation ? (currentMode === "close" ? "wide" : "close") : "close";
 
   return enableLocationLock({
     ...options,
@@ -434,10 +421,7 @@ let gwLockBrokenThisTouch = false;
 let gwLockDragStartPoint = null;
 
 function isTouchLikeOriginalEvent(evt) {
-  return !!(
-    evt?.type?.startsWith?.("touch") ||
-    evt?.pointerType === "touch"
-  );
+  return !!(evt?.type?.startsWith?.("touch") || evt?.pointerType === "touch");
 }
 
 function pointDistance(a, b) {
@@ -456,40 +440,52 @@ function maybeDisableLockForPanDistance(distancePx) {
   return true;
 }
 
-map.getContainer().addEventListener("touchstart", (e) => {
-  const t = e.touches?.[0];
-  if (!t) return;
+map.getContainer().addEventListener(
+  "touchstart",
+  (e) => {
+    const t = e.touches?.[0];
+    if (!t) return;
 
-  gwLockTouchStart = {
-    x: t.clientX,
-    y: t.clientY
-  };
+    gwLockTouchStart = {
+      x: t.clientX,
+      y: t.clientY
+    };
 
-  gwLockBrokenThisTouch = false;
-}, { passive: true });
+    gwLockBrokenThisTouch = false;
+  },
+  { passive: true }
+);
 
-map.getContainer().addEventListener("touchmove", (e) => {
-  if (!window.__gwState?.lockToLocation) return;
-  if (!gwLockTouchStart) return;
-  if (gwLockBrokenThisTouch) return;
+map.getContainer().addEventListener(
+  "touchmove",
+  (e) => {
+    if (!window.__gwState?.lockToLocation) return;
+    if (!gwLockTouchStart) return;
+    if (gwLockBrokenThisTouch) return;
 
-  const t = e.touches?.[0];
-  if (!t) return;
+    const t = e.touches?.[0];
+    if (!t) return;
 
-  const dx = t.clientX - gwLockTouchStart.x;
-  const dy = t.clientY - gwLockTouchStart.y;
+    const dx = t.clientX - gwLockTouchStart.x;
+    const dy = t.clientY - gwLockTouchStart.y;
 
-  const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = Math.sqrt(dx * dx + dy * dy);
 
-  if (maybeDisableLockForPanDistance(dist)) {
-    gwLockBrokenThisTouch = true;
-  }
-}, { passive: true });
+    if (maybeDisableLockForPanDistance(dist)) {
+      gwLockBrokenThisTouch = true;
+    }
+  },
+  { passive: true }
+);
 
-map.getContainer().addEventListener("touchend", () => {
-  gwLockTouchStart = null;
-  gwLockBrokenThisTouch = false;
-}, { passive: true });
+map.getContainer().addEventListener(
+  "touchend",
+  () => {
+    gwLockTouchStart = null;
+    gwLockBrokenThisTouch = false;
+  },
+  { passive: true }
+);
 
 // Manual pan unlock. Tiny drags/taps should not break follow lock.
 map.on("dragstart", (e) => {
@@ -521,9 +517,6 @@ map.on("dragend", (e) => {
 
 map.on("zoomstart", disableAutoCenterFromUserGesture);
 
-
-
-
 // Live tracking (optional but usually what you want on a phone)
 function startWatchingLocation() {
   if (!("geolocation" in navigator)) return null;
@@ -535,9 +528,11 @@ function startWatchingLocation() {
       updateHeadingFromGps(heading, speed);
       setUserLocation(latitude, longitude, accuracy);
       setLockButtonVisual();
-      window.dispatchEvent(new CustomEvent("gwUserLocationUpdated", {
-        detail: { latitude, longitude, accuracy }
-      }));
+      window.dispatchEvent(
+        new CustomEvent("gwUserLocationUpdated", {
+          detail: { latitude, longitude, accuracy }
+        })
+      );
 
       if (typeof window.handleUserPositionUpdate === "function") {
         window.handleUserPositionUpdate(latitude, longitude, false);
@@ -752,11 +747,9 @@ function setMapPaneHeadingTransform() {
 
   const pos = getMapPanePosition(mapPane);
   const size = map.getSize();
-  const originX = (size.x / 2) - pos.x;
-  const originY = (size.y / 2) - pos.y;
-  const rotationDeg = window.__gwState?.lockToLocation
-    ? -mapHeadingDeg
-    : 0;
+  const originX = size.x / 2 - pos.x;
+  const originY = size.y / 2 - pos.y;
+  const rotationDeg = window.__gwState?.lockToLocation ? -mapHeadingDeg : 0;
 
   // Leaflet owns the pane translation; GridWild appends heading rotation only.
   mapPane.style.transformOrigin = `${originX}px ${originY}px`;
@@ -816,8 +809,7 @@ function getMapResolution() {
   const lat = map.getCenter().lat;
   const zoom = map.getZoom();
 
-  const metersPerPixel =
-    (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, zoom);
+  const metersPerPixel = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom);
 
   return metersPerPixel;
 }
@@ -847,20 +839,18 @@ function scaleDistanceCandidates() {
 
 function chooseScaleDistance(metersPerPixel) {
   const candidates = scaleDistanceCandidates()
-    .map(meters => ({ meters, px: meters / metersPerPixel }))
-    .filter(entry => entry.px >= GW_SCALE_MIN_PX && entry.px <= GW_SCALE_MAX_PX);
+    .map((meters) => ({ meters, px: meters / metersPerPixel }))
+    .filter((entry) => entry.px >= GW_SCALE_MIN_PX && entry.px <= GW_SCALE_MAX_PX);
 
   if (candidates.length) {
-    return candidates.sort((a, b) =>
-      Math.abs(a.px - GW_SCALE_TARGET_PX) - Math.abs(b.px - GW_SCALE_TARGET_PX)
+    return candidates.sort(
+      (a, b) => Math.abs(a.px - GW_SCALE_TARGET_PX) - Math.abs(b.px - GW_SCALE_TARGET_PX)
     )[0];
   }
 
   return scaleDistanceCandidates()
-    .map(meters => ({ meters, px: meters / metersPerPixel }))
-    .sort((a, b) =>
-      Math.abs(a.px - GW_SCALE_TARGET_PX) - Math.abs(b.px - GW_SCALE_TARGET_PX)
-    )[0];
+    .map((meters) => ({ meters, px: meters / metersPerPixel }))
+    .sort((a, b) => Math.abs(a.px - GW_SCALE_TARGET_PX) - Math.abs(b.px - GW_SCALE_TARGET_PX))[0];
 }
 
 function formatZoomMultiplier() {
@@ -883,8 +873,8 @@ function updateMapScaleHatch() {
   if (!scale) return;
 
   hatch.style.width = `${Math.round(scale.px)}px`;
-  const distanceLabel = window.GridWildUnits?.formatDistance?.(scale.meters) ||
-    `${Math.round(scale.meters)} m`;
+  const distanceLabel =
+    window.GridWildUnits?.formatDistance?.(scale.meters) || `${Math.round(scale.meters)} m`;
   label.textContent = `${distanceLabel} ${formatZoomMultiplier()}`;
 }
 

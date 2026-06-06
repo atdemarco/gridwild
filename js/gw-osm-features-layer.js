@@ -1,12 +1,12 @@
 // js/gw-osm-features-layer.js
 // OSM contextual features split into two canvas layers:
 //
-// 405: parks / water / trails     below HeatMap
+// 405: habitat polygons / water / trails     below HeatMap
 // 450: buildings / roofs          above HeatMap, below Fog
 //
 // Intended stack:
 // Base map
-// OSM parks / water / trails
+// OSM habitat polygons / water / trails
 // HeatMap
 // OSM buildings
 // Fog canvas
@@ -144,10 +144,12 @@
 
   function boundsContain(outer, inner) {
     if (!outer || !inner) return false;
-    return outer.getSouth() <= inner.getSouth() &&
+    return (
+      outer.getSouth() <= inner.getSouth() &&
       outer.getWest() <= inner.getWest() &&
       outer.getNorth() >= inner.getNorth() &&
-      outer.getEast() >= inner.getEast();
+      outer.getEast() >= inner.getEast()
+    );
   }
 
   function hasCachedCoverage() {
@@ -170,12 +172,25 @@
         relation["leisure"~"park|garden|nature_reserve"](${bbox});
         node["leisure"~"park|garden|nature_reserve"]["name"](${bbox});
 
-        way["natural"="wood"](${bbox});
-        relation["natural"="wood"](${bbox});
-        node["natural"="wood"]["name"](${bbox});
+        way["boundary"~"protected_area|national_park"](${bbox});
+        relation["boundary"~"protected_area|national_park"](${bbox});
+        node["boundary"~"protected_area|national_park"]["name"](${bbox});
 
-        way["landuse"~"forest|grass|meadow|recreation_ground"](${bbox});
-        relation["landuse"~"forest|grass|meadow|recreation_ground"](${bbox});
+        way["natural"~"wood|wetland|scrub|heath|grassland"](${bbox});
+        relation["natural"~"wood|wetland|scrub|heath|grassland"](${bbox});
+        node["natural"~"wood|wetland|scrub|heath|grassland"]["name"](${bbox});
+
+        way["landuse"~"forest|grass|meadow|recreation_ground|allotments|orchard|cemetery"](${bbox});
+        relation["landuse"~"forest|grass|meadow|recreation_ground|allotments|orchard|cemetery"](${bbox});
+        node["landuse"~"forest|grass|meadow|recreation_ground|allotments|orchard|cemetery"]["name"](${bbox});
+
+        way["amenity"="grave_yard"](${bbox});
+        relation["amenity"="grave_yard"](${bbox});
+        node["amenity"="grave_yard"]["name"](${bbox});
+
+        way["historic"="cemetery"](${bbox});
+        relation["historic"="cemetery"](${bbox});
+        node["historic"="cemetery"]["name"](${bbox});
 
         way["natural"="water"](${bbox});
         relation["natural"="water"](${bbox});
@@ -201,8 +216,8 @@
     if (!Array.isArray(el.geometry)) return [];
 
     return el.geometry
-      .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
-      .map(p => L.latLng(p.lat, p.lon));
+      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+      .map((p) => L.latLng(p.lat, p.lon));
   }
 
   function isClosedGeometry(points) {
@@ -211,20 +226,36 @@
     const a = points[0];
     const b = points[points.length - 1];
 
-    return Math.abs(a.lat - b.lat) < 1e-7 &&
-           Math.abs(a.lng - b.lng) < 1e-7;
+    return Math.abs(a.lat - b.lat) < 1e-7 && Math.abs(a.lng - b.lng) < 1e-7;
   }
 
   function classifyFeature(el) {
     const tags = el.tags || {};
 
     if (tags.place && tags.name) return "places";
-    if (el.type === "node" && tags.name && (
-      tags.leisure === "park" ||
-      tags.leisure === "garden" ||
-      tags.leisure === "nature_reserve" ||
-      tags.natural === "wood"
-    )) {
+    if (
+      el.type === "node" &&
+      tags.name &&
+      (tags.leisure === "park" ||
+        tags.leisure === "garden" ||
+        tags.leisure === "nature_reserve" ||
+        tags.boundary === "protected_area" ||
+        tags.boundary === "national_park" ||
+        tags.natural === "wood" ||
+        tags.natural === "wetland" ||
+        tags.natural === "scrub" ||
+        tags.natural === "heath" ||
+        tags.natural === "grassland" ||
+        tags.landuse === "forest" ||
+        tags.landuse === "grass" ||
+        tags.landuse === "meadow" ||
+        tags.landuse === "recreation_ground" ||
+        tags.landuse === "allotments" ||
+        tags.landuse === "orchard" ||
+        tags.landuse === "cemetery" ||
+        tags.amenity === "grave_yard" ||
+        tags.historic === "cemetery")
+    ) {
       return "places";
     }
 
@@ -246,11 +277,22 @@
       tags.leisure === "park" ||
       tags.leisure === "garden" ||
       tags.leisure === "nature_reserve" ||
+      tags.boundary === "protected_area" ||
+      tags.boundary === "national_park" ||
       tags.natural === "wood" ||
+      tags.natural === "wetland" ||
+      tags.natural === "scrub" ||
+      tags.natural === "heath" ||
+      tags.natural === "grassland" ||
       tags.landuse === "forest" ||
       tags.landuse === "grass" ||
       tags.landuse === "meadow" ||
-      tags.landuse === "recreation_ground"
+      tags.landuse === "recreation_ground" ||
+      tags.landuse === "allotments" ||
+      tags.landuse === "orchard" ||
+      tags.landuse === "cemetery" ||
+      tags.amenity === "grave_yard" ||
+      tags.historic === "cemetery"
     ) {
       return "parks";
     }
@@ -328,19 +370,21 @@
 
   function publishFeaturesUpdated() {
     featuresVersion++;
-    window.dispatchEvent(new CustomEvent("gwOsmFeaturesUpdated", {
-      detail: {
-        version: featuresVersion,
-        counts: {
-          trails: features.trails.length,
-          parks: features.parks.length,
-          buildings: features.buildings.length,
-          water: features.water.length,
-          roads: features.roads.length,
-          places: features.places.length
+    window.dispatchEvent(
+      new CustomEvent("gwOsmFeaturesUpdated", {
+        detail: {
+          version: featuresVersion,
+          counts: {
+            trails: features.trails.length,
+            parks: features.parks.length,
+            buildings: features.buildings.length,
+            water: features.water.length,
+            roads: features.roads.length,
+            places: features.places.length
+          }
         }
-      }
-    }));
+      })
+    );
   }
 
   function showFetchToast() {
@@ -444,7 +488,11 @@
   function drawPolygon(ctxLocal, feature, style) {
     if (!feature.points || feature.points.length < 3) return;
 
-    beginPath(ctxLocal, feature.points, ctxLocal === buildingCtx ? buildingTopLeft : contextTopLeft);
+    beginPath(
+      ctxLocal,
+      feature.points,
+      ctxLocal === buildingCtx ? buildingTopLeft : contextTopLeft
+    );
     ctxLocal.closePath();
 
     ctxLocal.fillStyle = style.fill;
@@ -458,7 +506,11 @@
   function drawLine(ctxLocal, feature, style) {
     if (!feature.points || feature.points.length < 2) return;
 
-    beginPath(ctxLocal, feature.points, ctxLocal === buildingCtx ? buildingTopLeft : contextTopLeft);
+    beginPath(
+      ctxLocal,
+      feature.points,
+      ctxLocal === buildingCtx ? buildingTopLeft : contextTopLeft
+    );
 
     ctxLocal.strokeStyle = style.stroke;
     ctxLocal.lineWidth = style.lineWidth;
@@ -483,18 +535,18 @@
     const showWater = window.__gwState?.showOsmWater ?? true;
     const showTrails = window.__gwState?.showOsmTrails ?? true;
 
-    // Parks / woods
+    // Habitat polygons: parks, woods, wetlands, gardens, orchards, cemeteries, etc.
     if (showParks) {
       for (const f of features.parks) {
         drawPolygon(contextCtx, f, {
-//          fill: "rgba(72, 132, 82, 0.28)",
- //         stroke: "rgba(42, 94, 52, 0.45)",
-   //       lineWidth: 1.2
+          //          fill: "rgba(72, 132, 82, 0.28)",
+          //         stroke: "rgba(42, 94, 52, 0.45)",
+          //       lineWidth: 1.2
 
-            // Don't want to compete with heatmap...
-            fill: "rgba(78, 92, 74, 0.22)",      // muted olive-gray
-            stroke: "rgba(52, 62, 48, 0.34)",   // darker subtle outline
-            lineWidth: 1.0
+          // Don't want to compete with heatmap...
+          fill: "rgba(78, 92, 74, 0.22)", // muted olive-gray
+          stroke: "rgba(52, 62, 48, 0.34)", // darker subtle outline
+          lineWidth: 1.0
         });
       }
     }
@@ -503,20 +555,21 @@
     if (showWater) {
       for (const f of features.water) {
         const style = {
-        //  fill: "rgba(60, 140, 190, 0.34)",
-      //    stroke: "rgba(45, 105, 155, 0.58)",
-    //      lineWidth: 1.2
+          //  fill: "rgba(60, 140, 190, 0.34)",
+          //    stroke: "rgba(45, 105, 155, 0.58)",
+          //      lineWidth: 1.2
 
-          fill: "rgba(72, 108, 138, 0.26)",     // cooler muted blue
+          fill: "rgba(72, 108, 138, 0.26)", // cooler muted blue
           stroke: "rgba(52, 78, 102, 0.42)",
           lineWidth: 1.1
         };
 
         if (f.closed) drawPolygon(contextCtx, f, style);
-        else drawLine(contextCtx, f, {
-          stroke: "rgba(52, 94, 132, 0.52)",
-          lineWidth: 1.4
-        });
+        else
+          drawLine(contextCtx, f, {
+            stroke: "rgba(52, 94, 132, 0.52)",
+            lineWidth: 1.4
+          });
       }
     }
 
@@ -534,16 +587,16 @@
       for (const f of features.trails) {
         drawLine(contextCtx, f, {
           //stroke: "rgba(255, 248, 214, 0.88)",
-        // lineWidth: 2.8
-          stroke: "rgba(170, 154, 122, 0.58)",   // warm dust base
+          // lineWidth: 2.8
+          stroke: "rgba(170, 154, 122, 0.58)", // warm dust base
           lineWidth: 2.4
         });
 
         drawLine(contextCtx, f, {
           //stroke: "rgba(108, 78, 36, 0.82)",
           //lineWidth: 1.2
-          stroke: "rgba(110, 92, 66, 0.46)",     // subtle center line
-        lineWidth: 1.0
+          stroke: "rgba(110, 92, 66, 0.46)", // subtle center line
+          lineWidth: 1.0
         });
       }
     }
@@ -556,11 +609,11 @@
 
     for (const f of features.buildings) {
       drawPolygon(buildingCtx, f, {
-    //    fill: "rgba(92, 82, 68, 0.58)",
-  //      stroke: "rgba(255, 235, 190, 0.72)",
-//        lineWidth: 1.4
+        //    fill: "rgba(92, 82, 68, 0.58)",
+        //      stroke: "rgba(255, 235, 190, 0.72)",
+        //        lineWidth: 1.4
 
-      //  fill: "rgba(92, 82, 68, 0.56)",
+        //  fill: "rgba(92, 82, 68, 0.56)",
         //stroke: "rgba(182, 168, 142, 0.42)",
         //lineWidth: 1.1
 
@@ -587,10 +640,7 @@
   }
 
   function scheduleRender(evt) {
-    if (
-      evt?.type === "move" &&
-      window.GridWildCanvasPerf?.canvasCoversViewport?.(contextLayout)
-    ) {
+    if (evt?.type === "move" && window.GridWildCanvasPerf?.canvasCoversViewport?.(contextLayout)) {
       return;
     }
 
@@ -610,25 +660,25 @@
     scheduleFetch,
 
     setVisible(show) {
-        window.__gwState = window.__gwState || {};
-        window.__gwState.showOsmFeatures = !!show;
-        window.__gwState.showOsmBuildings = !!show;
+      window.__gwState = window.__gwState || {};
+      window.__gwState.showOsmFeatures = !!show;
+      window.__gwState.showOsmBuildings = !!show;
 
-        clearTimeout(fetchTimer);
+      clearTimeout(fetchTimer);
 
-        if (!show) {
-            if (contextCanvas) contextCanvas.style.display = "none";
-            if (buildingCanvas) buildingCanvas.style.display = "none";
+      if (!show) {
+        if (contextCanvas) contextCanvas.style.display = "none";
+        if (buildingCanvas) buildingCanvas.style.display = "none";
 
-            scheduleRender();
-            return;
-        }
-
-        if (contextCanvas) contextCanvas.style.display = "block";
-        if (buildingCanvas) buildingCanvas.style.display = "block";
-
-        scheduleFetch();
         scheduleRender();
+        return;
+      }
+
+      if (contextCanvas) contextCanvas.style.display = "block";
+      if (buildingCanvas) buildingCanvas.style.display = "block";
+
+      scheduleFetch();
+      scheduleRender();
     },
 
     setFeatureVisible(kind, show) {
@@ -672,11 +722,11 @@
         overpassCooldownMs: Math.max(0, overpassDisabledUntil - Date.now()),
         bounds: bounds
           ? {
-            south: bounds.getSouth(),
-            west: bounds.getWest(),
-            north: bounds.getNorth(),
-            east: bounds.getEast()
-          }
+              south: bounds.getSouth(),
+              west: bounds.getWest(),
+              north: bounds.getNorth(),
+              east: bounds.getEast()
+            }
           : null,
         counts: {
           trails: features.trails.length,

@@ -40,8 +40,10 @@
     isConnected,
     testToken,
     getUsername: () => localStorage.getItem(USER_KEY) || window.__gwUser?.username || "",
-    setUsername: username => {
-      const clean = String(username || "").trim().replace(/^@+/, "");
+    setUsername: (username) => {
+      const clean = String(username || "")
+        .trim()
+        .replace(/^@+/, "");
       localStorage.setItem(USER_KEY, clean);
       window.__gwUser = window.__gwUser || {};
       window.__gwUser.username = clean;

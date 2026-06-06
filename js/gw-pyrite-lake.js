@@ -27,7 +27,7 @@
   let readyPromise = loadPersisted();
 
   function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   function emptySummary() {
@@ -66,7 +66,8 @@
 
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error || new Error("Could not open pyrite lake cache."));
-      req.onblocked = () => reject(new Error("Pyrite lake cache upgrade is blocked by another tab."));
+      req.onblocked = () =>
+        reject(new Error("Pyrite lake cache upgrade is blocked by another tab."));
     });
 
     return dbPromise;
@@ -137,11 +138,11 @@
     if (taxonomyPromise) return taxonomyPromise;
 
     taxonomyPromise = fetch(TAXONOMY_URL)
-      .then(resp => {
+      .then((resp) => {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         return resp.json();
       })
-      .then(data => {
+      .then((data) => {
         taxonomyByName = new Map();
         for (const rec of Object.values(data || {})) {
           const name = rec?.name || rec?.genus_name;
@@ -149,7 +150,7 @@
         }
         return taxonomyByName;
       })
-      .catch(err => {
+      .catch((err) => {
         console.warn("Pyrite lake taxonomy lookup unavailable.", err);
         taxonomyByName = new Map();
         return taxonomyByName;
@@ -159,12 +160,14 @@
   }
 
   function normalizeLatLngBounds(bounds) {
-    const sw = typeof bounds?.getSouthWest === "function"
-      ? bounds.getSouthWest()
-      : bounds?.sw || bounds?.southWest || bounds;
-    const ne = typeof bounds?.getNorthEast === "function"
-      ? bounds.getNorthEast()
-      : bounds?.ne || bounds?.northEast || bounds;
+    const sw =
+      typeof bounds?.getSouthWest === "function"
+        ? bounds.getSouthWest()
+        : bounds?.sw || bounds?.southWest || bounds;
+    const ne =
+      typeof bounds?.getNorthEast === "function"
+        ? bounds.getNorthEast()
+        : bounds?.ne || bounds?.northEast || bounds;
 
     const swlat = Number(bounds?.swlat ?? bounds?.south ?? sw?.lat);
     const swlng = Number(bounds?.swlng ?? bounds?.west ?? sw?.lng ?? sw?.lon);
@@ -242,7 +245,9 @@
       observer_id: Number(obs.observer_id) || null,
       observer_login: String(obs.observer_login || ""),
       observer_name: String(obs.observer_name || ""),
-      uri: obs.uri || (id ? `https://www.inaturalist.org/observations/${encodeURIComponent(id)}` : null)
+      uri:
+        obs.uri ||
+        (id ? `https://www.inaturalist.org/observations/${encodeURIComponent(id)}` : null)
     };
   }
 
@@ -273,7 +278,9 @@
       observer_id: Number(user.id) || null,
       observer_login: user.login || "",
       observer_name: user.name || "",
-      uri: obs?.uri || (id ? `https://www.inaturalist.org/observations/${encodeURIComponent(id)}` : null)
+      uri:
+        obs?.uri ||
+        (id ? `https://www.inaturalist.org/observations/${encodeURIComponent(id)}` : null)
     });
   }
 
@@ -296,14 +303,21 @@
   }
 
   function median(values) {
-    const nums = values.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+    const nums = values
+      .map(Number)
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
     if (!nums.length) return 0;
     const mid = Math.floor(nums.length / 2);
     return nums.length % 2 ? nums[mid] : (nums[mid - 1] + nums[mid]) / 2;
   }
 
   function medianLastTenDate(values) {
-    const newest = values.map(Number).filter(v => Number.isFinite(v) && v > 0).sort((a, b) => b - a).slice(0, 10);
+    const newest = values
+      .map(Number)
+      .filter((v) => Number.isFinite(v) && v > 0)
+      .sort((a, b) => b - a)
+      .slice(0, 10);
     return dateIsoFromMs(median(newest));
   }
 
@@ -343,7 +357,7 @@
     }
 
     const observers = Array.isArray(record?.top_observers)
-      ? record.top_observers.filter(row => Number(row?.count) > 0).length
+      ? record.top_observers.filter((row) => Number(row?.count) > 0).length
       : 0;
     const peak = Math.max(...monthTotals);
     const total = monthTotals.reduce((sum, value) => sum + value, 0);
@@ -377,21 +391,24 @@
     if (!record || !taxa.length) return record;
 
     const selected = new Set(taxa);
-    const genera = (Array.isArray(record.genera) ? record.genera : [])
-      .filter(row => selected.has(row?.iconic_taxon_name || "Unknown"));
+    const genera = (Array.isArray(record.genera) ? record.genera : []).filter((row) =>
+      selected.has(row?.iconic_taxon_name || "Unknown")
+    );
     if (!genera.length) return null;
 
-    const totalCount = (Array.isArray(record.genera) ? record.genera : [])
-      .reduce((sum, row) => sum + (Number(row?.count) || 0), 0);
+    const totalCount = (Array.isArray(record.genera) ? record.genera : []).reduce(
+      (sum, row) => sum + (Number(row?.count) || 0),
+      0
+    );
     const filteredCount = genera.reduce((sum, row) => sum + (Number(row?.count) || 0), 0);
     const ratio = totalCount > 0 ? Math.max(0, Math.min(1, filteredCount / totalCount)) : 1;
     const topObservers = (Array.isArray(record.top_observers) ? record.top_observers : [])
-      .map(row => ({
+      .map((row) => ({
         ...row,
         count: Math.round((Number(row?.count) || 0) * ratio),
         species: Math.max(1, Math.round((Number(row?.species) || 0) * ratio))
       }))
-      .filter(row => row.count > 0);
+      .filter((row) => row.count > 0);
 
     return {
       ...record,
@@ -476,7 +493,9 @@
         if (month >= 0 && month < MONTH_COUNT) genusRow.month_counts[month]++;
       }
 
-      const observerKey = obs.observer_id ? String(obs.observer_id) : obs.observer_login || "unknown";
+      const observerKey = obs.observer_id
+        ? String(obs.observer_id)
+        : obs.observer_login || "unknown";
       if (!acc.observers.has(observerKey)) {
         acc.observers.set(observerKey, {
           observer_id: obs.observer_id || null,
@@ -502,7 +521,7 @@
       const lastObserved = dateIsoFromMs(Math.max(0, ...acc.dates));
       const medianLastTen = medianLastTenDate(acc.dates);
       const genera = Array.from(acc.genera.values())
-        .map(row => {
+        .map((row) => {
           const dates = row.dates || [];
           const out = {
             iconic_taxon_name: row.iconic_taxon_name,
@@ -519,7 +538,7 @@
         .sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
 
       const topObservers = Array.from(acc.observers.values())
-        .map(row => ({
+        .map((row) => ({
           observer_id: row.observer_id,
           observer_login: row.observer_login,
           observer_name: row.observer_name,
@@ -527,10 +546,13 @@
           count: row.count,
           species: row.genera.size
         }))
-        .sort((a, b) =>
-          (Number(b.count) - Number(a.count)) ||
-          (Number(b.species) - Number(a.species)) ||
-          String(a.observer_login || a.observer_id || "").localeCompare(String(b.observer_login || b.observer_id || ""))
+        .sort(
+          (a, b) =>
+            Number(b.count) - Number(a.count) ||
+            Number(b.species) - Number(a.species) ||
+            String(a.observer_login || a.observer_id || "").localeCompare(
+              String(b.observer_login || b.observer_id || "")
+            )
         )
         .slice(0, 20);
 
@@ -578,9 +600,7 @@
   }
 
   function selectedTaxaFromOptions(options = {}) {
-    return Array.isArray(options.iconicTaxa)
-      ? options.iconicTaxa.filter(Boolean)
-      : [];
+    return Array.isArray(options.iconicTaxa) ? options.iconicTaxa.filter(Boolean) : [];
   }
 
   function getMetricsForCell(ix, iy, options = {}) {
@@ -619,9 +639,11 @@
 
   function emitUpdated(detail = {}) {
     const state = getState();
-    window.dispatchEvent(new CustomEvent("gwPyriteLakeUpdated", {
-      detail: { ...detail, ...state }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwPyriteLakeUpdated", {
+        detail: { ...detail, ...state }
+      })
+    );
 
     window.GridWildCoarseHeatCache?.invalidate?.();
     if (typeof window.updateGrid === "function") window.updateGrid();
@@ -702,9 +724,21 @@
     const box = normalizeLatLngBounds(bounds);
     if (!box) throw new Error("Selection bounds are not available.");
 
-    const maxPages = Math.max(1, Math.min(MAX_PAGES, Math.round(Number(options.maxPages) || MAX_PAGES)));
-    const maxObservations = Math.max(1, Math.min(MAX_OBSERVATIONS_PER_SEED, Math.round(Number(options.maxObservations) || MAX_OBSERVATIONS_PER_SEED)));
-    const maxAccuracyM = Math.max(1, Math.min(1000, Number(options.maxAccuracyM) || MAX_ACCURACY_M));
+    const maxPages = Math.max(
+      1,
+      Math.min(MAX_PAGES, Math.round(Number(options.maxPages) || MAX_PAGES))
+    );
+    const maxObservations = Math.max(
+      1,
+      Math.min(
+        MAX_OBSERVATIONS_PER_SEED,
+        Math.round(Number(options.maxObservations) || MAX_OBSERVATIONS_PER_SEED)
+      )
+    );
+    const maxAccuracyM = Math.max(
+      1,
+      Math.min(1000, Number(options.maxAccuracyM) || MAX_ACCURACY_M)
+    );
     const existingIds = new Set(observationsById.keys());
     const additions = [];
     let fetched = 0;
@@ -767,7 +801,9 @@
           duplicates,
           totalResults,
           message: `Stopped at page ${page}: ${stoppedEarly.message}`,
-          pct: totalResults ? Math.min(98, (fetched / totalResults) * 100) : Math.min(98, (additions.length / maxObservations) * 100)
+          pct: totalResults
+            ? Math.min(98, (fetched / totalResults) * 100)
+            : Math.min(98, (additions.length / maxObservations) * 100)
         });
         break;
       }
@@ -818,7 +854,9 @@
         rejected,
         duplicates,
         totalResults,
-        pct: totalResults ? Math.min(98, (fetched / totalResults) * 100) : Math.min(98, (additions.length / maxObservations) * 100)
+        pct: totalResults
+          ? Math.min(98, (fetched / totalResults) * 100)
+          : Math.min(98, (additions.length / maxObservations) * 100)
       });
 
       if (additions.length >= maxObservations) break;

@@ -19,7 +19,7 @@
   const FOG_ROW_COMBINE_CELLS_DEFAULT = 4; // try 1, 2, 3, 4
 
   // begin fog smoothing
-  const FOG_EDGE_BLEND_RADIUS_CELLS = 2; 
+  const FOG_EDGE_BLEND_RADIUS_CELLS = 2;
 
   function cellKey(ix, iy) {
     return `${ix},${iy}`;
@@ -99,10 +99,7 @@
         if (neighborReveal <= 0) continue;
 
         // Adjacent cells get stronger thinning; 2 cells away get weaker thinning.
-        const distanceWeight =
-          dist === 1 ? 0.55 :
-          dist === 2 ? 0.28 :
-          0;
+        const distanceWeight = dist === 1 ? 0.55 : dist === 2 ? 0.28 : 0;
 
         best = Math.max(best, neighborReveal * distanceWeight);
       }
@@ -116,14 +113,13 @@
     if (nearbyReveal <= 0) return opacity;
 
     // Reduce opacity near revealed territory, but do not make unknown fog fully clear.
-    const minEdgeOpacity = 0.10;
+    const minEdgeOpacity = 0.1;
     const softened = opacity * (1 - nearbyReveal);
 
     return Math.max(minEdgeOpacity, softened);
   }
 
-// end fog smoothing 
-
+  // end fog smoothing
 
   function ensureCanvas() {
     if (canvas) return canvas;
@@ -169,25 +165,27 @@
     const transform = crs?.transformation;
     const scale = crs?.scale?.(map.getZoom());
     const pixelOrigin = map.getPixelOrigin?.();
-    const values = transform && Number.isFinite(scale) && pixelOrigin
-      ? {
-        a: Number(transform._a),
-        b: Number(transform._b),
-        c: Number(transform._c),
-        d: Number(transform._d),
-        scale,
-        originX: pixelOrigin.x + canvasTopLeft.x,
-        originY: pixelOrigin.y + canvasTopLeft.y
-      }
-      : null;
+    const values =
+      transform && Number.isFinite(scale) && pixelOrigin
+        ? {
+            a: Number(transform._a),
+            b: Number(transform._b),
+            c: Number(transform._c),
+            d: Number(transform._d),
+            scale,
+            originX: pixelOrigin.x + canvasTopLeft.x,
+            originY: pixelOrigin.y + canvasTopLeft.y
+          }
+        : null;
 
-    meterTransform = values &&
+    meterTransform =
+      values &&
       Number.isFinite(values.a) &&
       Number.isFinite(values.b) &&
       Number.isFinite(values.c) &&
       Number.isFinite(values.d)
-      ? values
-      : null;
+        ? values
+        : null;
   }
 
   function pointForMeters(x, y) {
@@ -209,252 +207,106 @@
     updateMeterTransform();
   }
 
-
-function quantizeOpacity(opacity) {
-  // 0.02 buckets: visually smooth, but allows merging.
-  return Math.round(opacity / 0.02) * 0.02;
-}
-
-function opacityKey(opacity) {
-   return Math.round(quantizeOpacity(opacity) * 1000);
-}
-
-function getCellFogOpacity(ix, iy, now, smoothingOn, renderCache) {
-  const key = `${ix},${iy}`;
-
-  const transientStrength = window.getGridWildTransientRevealStrength?.(key, now);
-  if (transientStrength >= 0.98 || window.isGridWildTransientVisibleCell?.(key)) return null;
-
-  const fogState = getCachedFogState(key, now, renderCache);
-  if (fogState.state === "documented") return null;
-
-  let opacity = FOG_UNKNOWN_OPACITY;
-
-  if (fogState.state === "surveyed") {
-    opacity = fogState.fogOpacity;
-    if (opacity <= 0.02) return null;
+  function quantizeOpacity(opacity) {
+    // 0.02 buckets: visually smooth, but allows merging.
+    return Math.round(opacity / 0.02) * 0.02;
   }
 
-  if (
-    smoothingOn &&
-    (fogState.state === "unknown" || fogState.state === "expired")
-  ) {
-    opacity = applyFogEdgeSoftening(opacity, ix, iy, now, renderCache);
+  function opacityKey(opacity) {
+    return Math.round(quantizeOpacity(opacity) * 1000);
   }
 
-  if (transientStrength > 0) {
-    opacity *= 1 - Math.max(0, Math.min(1, transientStrength)) * 0.94;
-    if (opacity <= 0.02) return null;
-  }
+  function getCellFogOpacity(ix, iy, now, smoothingOn, renderCache) {
+    const key = `${ix},${iy}`;
 
-  return quantizeOpacity(opacity);
-}
+    const transientStrength = window.getGridWildTransientRevealStrength?.(key, now);
+    if (transientStrength >= 0.98 || window.isGridWildTransientVisibleCell?.(key)) return null;
 
+    const fogState = getCachedFogState(key, now, renderCache);
+    if (fogState.state === "documented") return null;
 
-function render() {
-  raf = null;
+    let opacity = FOG_UNKNOWN_OPACITY;
 
-  ensureCanvas();
-  resizeCanvas();
-
-  ctx.clearRect(0, 0, canvasLayout.width, canvasLayout.height);
-
-  const fogOn = window.__gwState?.showFog ?? false;
-
-  if (
-    !fogOn ||
-    !window.GridWildFog ||
-    typeof getPaddedBoundsMeters !== "function" ||
-    typeof GRID_SIZE_M === "undefined"
-  ) {
-    return;
-  }
-
-  const { startX, endX, startY, endY } = getPaddedBoundsMeters();
-  const now = Date.now();
-
-  const smoothingOn =
-    (window.__gwState?.fogSmoothingEnabled ?? true) &&
-    !map._animatingZoom &&
-    !map._panAnim?._inProgress;
-
-  const rowCombineCells = Math.max(
-    1,
-    Math.floor(
-      window.__gwState?.fogRowCombineCells ??
-      FOG_ROW_COMBINE_CELLS_DEFAULT
-    )
-  );
-  const renderCache = makeFogRenderCache();
-
-  function drawFogRect(x0, y0, x1, y1, opacity) {
-    const t = meterTransform;
-    let aX;
-    let aY;
-    let bX;
-    let bY;
-
-    if (t) {
-      aX = t.scale * (t.a * x0 + t.b) - t.originX;
-      aY = t.scale * (t.c * y1 + t.d) - t.originY;
-      bX = t.scale * (t.a * x1 + t.b) - t.originX;
-      bY = t.scale * (t.c * y0 + t.d) - t.originY;
-    } else {
-      const pA = pointForMeters(x0, y1);
-      const pB = pointForMeters(x1, y0);
-      aX = pA.x;
-      aY = pA.y;
-      bX = pB.x;
-      bY = pB.y;
+    if (fogState.state === "surveyed") {
+      opacity = fogState.fogOpacity;
+      if (opacity <= 0.02) return null;
     }
 
-    const left = Math.min(aX, bX);
-    const top = Math.min(aY, bY);
-    const right = Math.max(aX, bX);
-    const bottom = Math.max(aY, bY);
+    if (smoothingOn && (fogState.state === "unknown" || fogState.state === "expired")) {
+      opacity = applyFogEdgeSoftening(opacity, ix, iy, now, renderCache);
+    }
 
-    const bleedX = 0.03;//25;
-    const bleedY = 0.03;//25;
+    if (transientStrength > 0) {
+      opacity *= 1 - Math.max(0, Math.min(1, transientStrength)) * 0.94;
+      if (opacity <= 0.02) return null;
+    }
 
-    ctx.fillStyle = `rgba(${FOG_COLOR_RGB},${opacity})`;
-    ctx.fillRect(
-      left - bleedX,
-      top - bleedY,
-      Math.max(1, right - left + bleedX * 2),
-      Math.max(1, bottom - top + bleedY * 2)
+    return quantizeOpacity(opacity);
+  }
+
+  function render() {
+    raf = null;
+
+    ensureCanvas();
+    resizeCanvas();
+
+    ctx.clearRect(0, 0, canvasLayout.width, canvasLayout.height);
+
+    const fogOn = window.__gwState?.showFog ?? false;
+
+    if (
+      !fogOn ||
+      !window.GridWildFog ||
+      typeof getPaddedBoundsMeters !== "function" ||
+      typeof GRID_SIZE_M === "undefined"
+    ) {
+      return;
+    }
+
+    const { startX, endX, startY, endY } = getPaddedBoundsMeters();
+    const now = Date.now();
+
+    const smoothingOn =
+      (window.__gwState?.fogSmoothingEnabled ?? true) &&
+      !map._animatingZoom &&
+      !map._panAnim?._inProgress;
+
+    const rowCombineCells = Math.max(
+      1,
+      Math.floor(window.__gwState?.fogRowCombineCells ?? FOG_ROW_COMBINE_CELLS_DEFAULT)
     );
-  }
+    const renderCache = makeFogRenderCache();
 
-  function flushRun(run) {
-    if (!run) return;
-    drawFogRect(run.x0, run.y0, run.x1, run.y1, run.opacity);
-  }
+    function drawFogRect(x0, y0, x1, y1, opacity) {
+      const t = meterTransform;
+      let aX;
+      let aY;
+      let bX;
+      let bY;
 
-  for (let yBlock = startY; yBlock < endY; yBlock += GRID_SIZE_M * rowCombineCells) {
-    const yBlockEnd = Math.min(endY, yBlock + GRID_SIZE_M * rowCombineCells);
-
-    let run = null;
-
-    for (let x = startX; x < endX; x += GRID_SIZE_M) {
-      const ix = Math.floor(x / GRID_SIZE_M);
-      let blockKey = null;
-      let blockOpacity = null;
-      let wholeBlockFogged = true;
-
-      for (let y = yBlock; y < yBlockEnd; y += GRID_SIZE_M) {
-        const iy = Math.floor(y / GRID_SIZE_M);
-
-        const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
-        const key = opacity === null ? null : opacityKey(opacity);
-
-        if (key === null) {
-          wholeBlockFogged = false;
-          break;
-        }
-
-        if (blockKey === null) {
-          blockKey = key;
-          blockOpacity = opacity;
-        } else if (blockKey !== key) {
-          wholeBlockFogged = false;
-          break;
-        }
-      }
-
-      if (wholeBlockFogged && blockKey !== null) {
-        if (run && run.key === blockKey && run.x1 === x) {
-          run.x1 = x + GRID_SIZE_M;
-        } else {
-          flushRun(run);
-          run = {
-            key: blockKey,
-            opacity: blockOpacity,
-            x0: x,
-            x1: x + GRID_SIZE_M,
-            y0: yBlock,
-            y1: yBlockEnd
-          };
-        }
+      if (t) {
+        aX = t.scale * (t.a * x0 + t.b) - t.originX;
+        aY = t.scale * (t.c * y1 + t.d) - t.originY;
+        bX = t.scale * (t.a * x1 + t.b) - t.originX;
+        bY = t.scale * (t.c * y0 + t.d) - t.originY;
       } else {
-        flushRun(run);
-        run = null;
-
-        // Fallback: draw whatever individual cells in this column/block are fogged.
-        for (let y = yBlock; y < yBlockEnd; y += GRID_SIZE_M) {
-          const iy = Math.floor(y / GRID_SIZE_M);
-
-          const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
-          if (opacity === null) continue;
-
-          drawFogRect(
-            x,
-            y,
-            x + GRID_SIZE_M,
-            y + GRID_SIZE_M,
-            opacity
-          );
-        }
+        const pA = pointForMeters(x0, y1);
+        const pB = pointForMeters(x1, y0);
+        aX = pA.x;
+        aY = pA.y;
+        bX = pB.x;
+        bY = pB.y;
       }
-    }
 
-    flushRun(run);
-  }
-}
+      const left = Math.min(aX, bX);
+      const top = Math.min(aY, bY);
+      const right = Math.max(aX, bX);
+      const bottom = Math.max(aY, bY);
 
-function renderROW() {
-  raf = null;
+      const bleedX = 0.03; //25;
+      const bleedY = 0.03; //25;
 
-  ensureCanvas();
-  resizeCanvas();
-
-  ctx.clearRect(0, 0, canvasLayout.width, canvasLayout.height);
-
-  const fogOn = window.__gwState?.showFog ?? false;
-
-  if (
-    !fogOn ||
-    !window.GridWildFog ||
-    typeof getPaddedBoundsMeters !== "function" ||
-    typeof GRID_SIZE_M === "undefined"
-  ) {
-    return;
-  }
-
-  const { startX, endX, startY, endY } = getPaddedBoundsMeters();
-  const now = Date.now();
-
-  const smoothingOn =
-    (window.__gwState?.fogSmoothingEnabled ?? true) &&
-    !map._animatingZoom &&
-    !map._panAnim?._inProgress;
-  const renderCache = makeFogRenderCache();
-
-  for (let y = startY; y < endY; y += GRID_SIZE_M) {
-    const iy = Math.floor(y / GRID_SIZE_M);
-
-    let runStartX = null;
-    let runEndX = null;
-    let runOpacity = null;
-    let runKey = null;
-
-    function flushRun() {
-      if (runStartX === null || runEndX === null || runOpacity === null) return;
-
-      const llA = map.options.crs.unproject(L.point(runStartX, y));
-      const llB = map.options.crs.unproject(L.point(runEndX, y + GRID_SIZE_M));
-
-      const pA = layerPoint(llA);
-      const pB = layerPoint(llB);
-
-      const left = Math.min(pA.x, pB.x);
-      const top = Math.min(pA.y, pB.y);
-      const right = Math.max(pA.x, pB.x);
-      const bottom = Math.max(pA.y, pB.y);
-
-      const bleedX = 0.25;
-      const bleedY = 0.02;
-
-      ctx.fillStyle = `rgba(${FOG_COLOR_RGB},${runOpacity})`;
+      ctx.fillStyle = `rgba(${FOG_COLOR_RGB},${opacity})`;
       ctx.fillRect(
         left - bleedX,
         top - bleedY,
@@ -463,40 +315,169 @@ function renderROW() {
       );
     }
 
-    for (let x = startX; x < endX; x += GRID_SIZE_M) {
-      const ix = Math.floor(x / GRID_SIZE_M);
-      const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
-      const key = opacity === null ? null : opacityKey(opacity);
-
-      if (key === null) {
-        flushRun();
-        runStartX = null;
-        runEndX = null;
-        runOpacity = null;
-        runKey = null;
-        continue;
-      }
-
-      if (runKey === key && runEndX === x) {
-        runEndX = x + GRID_SIZE_M;
-      } else {
-        flushRun();
-        runStartX = x;
-        runEndX = x + GRID_SIZE_M;
-        runOpacity = opacity;
-        runKey = key;
-      }
+    function flushRun(run) {
+      if (!run) return;
+      drawFogRect(run.x0, run.y0, run.x1, run.y1, run.opacity);
     }
 
-    flushRun();
+    for (let yBlock = startY; yBlock < endY; yBlock += GRID_SIZE_M * rowCombineCells) {
+      const yBlockEnd = Math.min(endY, yBlock + GRID_SIZE_M * rowCombineCells);
+
+      let run = null;
+
+      for (let x = startX; x < endX; x += GRID_SIZE_M) {
+        const ix = Math.floor(x / GRID_SIZE_M);
+        let blockKey = null;
+        let blockOpacity = null;
+        let wholeBlockFogged = true;
+
+        for (let y = yBlock; y < yBlockEnd; y += GRID_SIZE_M) {
+          const iy = Math.floor(y / GRID_SIZE_M);
+
+          const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
+          const key = opacity === null ? null : opacityKey(opacity);
+
+          if (key === null) {
+            wholeBlockFogged = false;
+            break;
+          }
+
+          if (blockKey === null) {
+            blockKey = key;
+            blockOpacity = opacity;
+          } else if (blockKey !== key) {
+            wholeBlockFogged = false;
+            break;
+          }
+        }
+
+        if (wholeBlockFogged && blockKey !== null) {
+          if (run && run.key === blockKey && run.x1 === x) {
+            run.x1 = x + GRID_SIZE_M;
+          } else {
+            flushRun(run);
+            run = {
+              key: blockKey,
+              opacity: blockOpacity,
+              x0: x,
+              x1: x + GRID_SIZE_M,
+              y0: yBlock,
+              y1: yBlockEnd
+            };
+          }
+        } else {
+          flushRun(run);
+          run = null;
+
+          // Fallback: draw whatever individual cells in this column/block are fogged.
+          for (let y = yBlock; y < yBlockEnd; y += GRID_SIZE_M) {
+            const iy = Math.floor(y / GRID_SIZE_M);
+
+            const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
+            if (opacity === null) continue;
+
+            drawFogRect(x, y, x + GRID_SIZE_M, y + GRID_SIZE_M, opacity);
+          }
+        }
+      }
+
+      flushRun(run);
+    }
   }
-}
+
+  function renderROW() {
+    raf = null;
+
+    ensureCanvas();
+    resizeCanvas();
+
+    ctx.clearRect(0, 0, canvasLayout.width, canvasLayout.height);
+
+    const fogOn = window.__gwState?.showFog ?? false;
+
+    if (
+      !fogOn ||
+      !window.GridWildFog ||
+      typeof getPaddedBoundsMeters !== "function" ||
+      typeof GRID_SIZE_M === "undefined"
+    ) {
+      return;
+    }
+
+    const { startX, endX, startY, endY } = getPaddedBoundsMeters();
+    const now = Date.now();
+
+    const smoothingOn =
+      (window.__gwState?.fogSmoothingEnabled ?? true) &&
+      !map._animatingZoom &&
+      !map._panAnim?._inProgress;
+    const renderCache = makeFogRenderCache();
+
+    for (let y = startY; y < endY; y += GRID_SIZE_M) {
+      const iy = Math.floor(y / GRID_SIZE_M);
+
+      let runStartX = null;
+      let runEndX = null;
+      let runOpacity = null;
+      let runKey = null;
+
+      function flushRun() {
+        if (runStartX === null || runEndX === null || runOpacity === null) return;
+
+        const llA = map.options.crs.unproject(L.point(runStartX, y));
+        const llB = map.options.crs.unproject(L.point(runEndX, y + GRID_SIZE_M));
+
+        const pA = layerPoint(llA);
+        const pB = layerPoint(llB);
+
+        const left = Math.min(pA.x, pB.x);
+        const top = Math.min(pA.y, pB.y);
+        const right = Math.max(pA.x, pB.x);
+        const bottom = Math.max(pA.y, pB.y);
+
+        const bleedX = 0.25;
+        const bleedY = 0.02;
+
+        ctx.fillStyle = `rgba(${FOG_COLOR_RGB},${runOpacity})`;
+        ctx.fillRect(
+          left - bleedX,
+          top - bleedY,
+          Math.max(1, right - left + bleedX * 2),
+          Math.max(1, bottom - top + bleedY * 2)
+        );
+      }
+
+      for (let x = startX; x < endX; x += GRID_SIZE_M) {
+        const ix = Math.floor(x / GRID_SIZE_M);
+        const opacity = getCellFogOpacity(ix, iy, now, smoothingOn, renderCache);
+        const key = opacity === null ? null : opacityKey(opacity);
+
+        if (key === null) {
+          flushRun();
+          runStartX = null;
+          runEndX = null;
+          runOpacity = null;
+          runKey = null;
+          continue;
+        }
+
+        if (runKey === key && runEndX === x) {
+          runEndX = x + GRID_SIZE_M;
+        } else {
+          flushRun();
+          runStartX = x;
+          runEndX = x + GRID_SIZE_M;
+          runOpacity = opacity;
+          runKey = key;
+        }
+      }
+
+      flushRun();
+    }
+  }
 
   function scheduleRender(evt) {
-    if (
-      evt?.type === "move" &&
-      window.GridWildCanvasPerf?.canvasCoversViewport?.(canvasLayout)
-    ) {
+    if (evt?.type === "move" && window.GridWildCanvasPerf?.canvasCoversViewport?.(canvasLayout)) {
       return;
     }
 

@@ -241,9 +241,10 @@
   function markerHtml(presence) {
     const name = presence?.player?.display_name || "Explorer";
     const status = presence?.status === "offline" ? "offline" : "online";
-    const avatarHtml = window.GridWildAvatarRenderer?.renderHtml?.({
-      state: avatarStateForPresence(presence)
-    }) || `<div class="gw-avatar"><div class="gw-avatar-stage"></div></div>`;
+    const avatarHtml =
+      window.GridWildAvatarRenderer?.renderHtml?.({
+        state: avatarStateForPresence(presence)
+      }) || `<div class="gw-avatar"><div class="gw-avatar-stage"></div></div>`;
 
     return `
       <div class="gw-presence-marker-wrap">
@@ -280,16 +281,20 @@
   }
 
   function bindPresenceMarkerDoubleClick(marker, presence) {
-    marker.on("dblclick", event => {
+    marker.on("dblclick", (event) => {
       stopPresenceDoubleClick(event);
       openPresencePlayer(presence);
     });
 
     const markerElement = marker.getElement?.();
-    markerElement?.addEventListener("dblclick", event => {
-      stopPresenceDoubleClick(event);
-      openPresencePlayer(presence);
-    }, { capture: true });
+    markerElement?.addEventListener(
+      "dblclick",
+      (event) => {
+        stopPresenceDoubleClick(event);
+        openPresencePlayer(presence);
+      },
+      { capture: true }
+    );
   }
 
   function renderLayer(presences = []) {
@@ -364,7 +369,9 @@
     clearLayer();
 
     if (firstFailure) {
-      console.warn("HUD presence paused because the GridWild account session is no longer valid. Log in again to resume.");
+      console.warn(
+        "HUD presence paused because the GridWild account session is no longer valid. Log in again to resume."
+      );
     }
 
     refreshSettingsStatus("GridWild session expired. Log in again to use HUD presence.");
@@ -420,12 +427,15 @@
     if (authBlocked || !isSignedIn()) return null;
 
     try {
-      const result = await window.GridWildAPI.upsertPlayerPresence({
-        visibility: publishVisibility === "visible" ? "visible" : "hidden",
-        status: "offline"
-      }, {
-        keepalive: !!options.keepalive
-      });
+      const result = await window.GridWildAPI.upsertPlayerPresence(
+        {
+          visibility: publishVisibility === "visible" ? "visible" : "hidden",
+          status: "offline"
+        },
+        {
+          keepalive: !!options.keepalive
+        }
+      );
 
       window.__gwState = window.__gwState || {};
       window.__gwState.playerPresence = result.presence || null;
@@ -457,11 +467,9 @@
     pollInFlight = true;
 
     try {
-      const data = await window.GridWildAPI.getNearbyPlayerPresence(
-        center.lat,
-        center.lng,
-        { radius_m: mapRadiusMeters() }
-      );
+      const data = await window.GridWildAPI.getNearbyPlayerPresence(center.lat, center.lng, {
+        radius_m: mapRadiusMeters()
+      });
 
       renderLayer(data.presences || []);
       lastPollAt = Date.now();

@@ -44,7 +44,7 @@
 
   function waterPenalty(osmA = {}, osmB = {}) {
     if (osmA.insideWater !== osmB.insideWater) return 0.42;
-    if (osmA.isWetEdge !== osmB.isWetEdge) return 0.10;
+    if (osmA.isWetEdge !== osmB.isWetEdge) return 0.1;
     return 0;
   }
 
@@ -82,7 +82,11 @@
       osmA.nearestPathSide === osmB.nearestPathSide;
     if (reasons.sameTrailSide) score += 0.12;
 
-    if (opts.trailMode === "divider" && reasons.bothPathAdjacent && oppositePathSides(cellA, cellB)) {
+    if (
+      opts.trailMode === "divider" &&
+      reasons.bothPathAdjacent &&
+      oppositePathSides(cellA, cellB)
+    ) {
       reasons.oppositeTrailSidePenalty = 0.32;
       score -= reasons.oppositeTrailSidePenalty;
     }
@@ -105,16 +109,15 @@
     reasons.insideBuildingPenalty = buildingPenalty(osmA, osmB);
     reasons.roadBarrierPenalty = roadPenalty(osmA, osmB);
     reasons.waterBarrierPenalty = waterPenalty(osmA, osmB);
-    score -= reasons.insideBuildingPenalty + reasons.roadBarrierPenalty + reasons.waterBarrierPenalty;
+    score -=
+      reasons.insideBuildingPenalty + reasons.roadBarrierPenalty + reasons.waterBarrierPenalty;
 
     reasons.contextSimilarity = clamp01(score);
     return { weight: clamp01(score), reasons };
   }
 
-  function metricRange(items, key, transform = value => value) {
-    const values = items
-      .map(item => transform(finiteOr(item?.[key], 0)))
-      .filter(Number.isFinite);
+  function metricRange(items, key, transform = (value) => value) {
+    const values = items.map((item) => transform(finiteOr(item?.[key], 0))).filter(Number.isFinite);
     if (!values.length) return { min: 0, max: 1 };
     return { min: Math.min(...values), max: Math.max(...values) };
   }
@@ -216,14 +219,14 @@
   }
 
   function neighborhoodSupport(metrics = {}, options = {}) {
-    const minActive = Math.max(1, finiteOr(
-      options.pass2NeighborhoodMinActiveCells,
-      DEFAULTS.pass2NeighborhoodMinActiveCells
-    ));
-    const minObservations = Math.max(1, finiteOr(
-      options.pass2NeighborhoodMinObservations,
-      DEFAULTS.pass2NeighborhoodMinObservations
-    ));
+    const minActive = Math.max(
+      1,
+      finiteOr(options.pass2NeighborhoodMinActiveCells, DEFAULTS.pass2NeighborhoodMinActiveCells)
+    );
+    const minObservations = Math.max(
+      1,
+      finiteOr(options.pass2NeighborhoodMinObservations, DEFAULTS.pass2NeighborhoodMinObservations)
+    );
     const activeSupport = clamp01(finiteOr(metrics.activeCells, 0) / minActive);
     const observationSupport = clamp01(finiteOr(metrics.observations, 0) / minObservations);
     return clamp01(activeSupport * 0.72 + observationSupport * 0.28);
@@ -234,7 +237,7 @@
   }
 
   function buildRawSignalNormalizer(cells) {
-    const metricRows = cells.map(cell => cell.metrics || {});
+    const metricRows = cells.map((cell) => cell.metrics || {});
     const ranges = {
       observations: metricRange(metricRows, "observations", Math.log1p),
       richness: metricRange(metricRows, "richness", Math.log1p),
@@ -244,7 +247,7 @@
       cultivatedRatio: metricRange(metricRows, "cultivatedRatio")
     };
 
-    function norm(metrics, key, transform = value => value) {
+    function norm(metrics, key, transform = (value) => value) {
       const range = ranges[key] || { min: 0, max: 1 };
       const value = transform(finiteOr(metrics?.[key], 0));
       const span = range.max - range.min;
@@ -270,10 +273,9 @@
   }
 
   function buildPooledSignalNormalizer(cells, byKey, options = {}) {
-    const pooledById = new Map(cells.map(cell => [
-      cell.id,
-      poolNeighborhoodMetrics(cell, byKey, options)
-    ]));
+    const pooledById = new Map(
+      cells.map((cell) => [cell.id, poolNeighborhoodMetrics(cell, byKey, options)])
+    );
     const pooledRows = Array.from(pooledById.values());
     const ranges = {
       observations: metricRange(pooledRows, "observations", Math.log1p),
@@ -284,7 +286,7 @@
       cultivatedRatio: metricRange(pooledRows, "cultivatedRatio")
     };
 
-    function norm(metrics, key, transform = value => value) {
+    function norm(metrics, key, transform = (value) => value) {
       const range = ranges[key] || { min: 0, max: 1 };
       const value = transform(finiteOr(metrics?.[key], 0));
       const span = range.max - range.min;
@@ -315,7 +317,14 @@
     const signalKey = options.signalKey || "_signal";
     const signalA = cellA[signalKey] || {};
     const signalB = cellB[signalKey] || {};
-    const numericKeys = ["observations", "richness", "genusRichness", "observerCount", "recency", "cultivatedRatio"];
+    const numericKeys = [
+      "observations",
+      "richness",
+      "genusRichness",
+      "observerCount",
+      "recency",
+      "cultivatedRatio"
+    ];
     let distance = 0;
 
     for (const key of numericKeys) {
@@ -323,12 +332,20 @@
     }
 
     const meanDistance = distance / numericKeys.length;
-    const supportA = Number.isFinite(Number(signalA.signalSupport)) ? clamp01(signalA.signalSupport) : 1;
-    const supportB = Number.isFinite(Number(signalB.signalSupport)) ? clamp01(signalB.signalSupport) : 1;
+    const supportA = Number.isFinite(Number(signalA.signalSupport))
+      ? clamp01(signalA.signalSupport)
+      : 1;
+    const supportB = Number.isFinite(Number(signalB.signalSupport))
+      ? clamp01(signalB.signalSupport)
+      : 1;
     const support = Math.min(supportA, supportB);
     let score = 1 - meanDistance;
     score = 0.5 + (score - 0.5) * support;
-    if (signalA.dominantTaxon && signalA.dominantTaxon === signalB.dominantTaxon && signalA.dominantTaxon !== "Unknown") {
+    if (
+      signalA.dominantTaxon &&
+      signalA.dominantTaxon === signalB.dominantTaxon &&
+      signalA.dominantTaxon !== "Unknown"
+    ) {
       score += 0.08 * support;
     } else if (signalA.dominantTaxon !== signalB.dominantTaxon) {
       score -= 0.06 * support;
@@ -355,15 +372,25 @@
   function computeBarrierGradientEdgeWeight(cellA, cellB, options = {}) {
     const context = computeContextEdgeWeight(cellA, cellB, options);
     const signal = computeSignalEdgeWeight(cellA, cellB, options);
-    const richnessGradient = Math.abs((cellA._signal?.richness ?? 0.5) - (cellB._signal?.richness ?? 0.5));
-    const obsGradient = Math.abs((cellA._signal?.observations ?? 0.5) - (cellB._signal?.observations ?? 0.5));
-    const gradientPenalty = Math.max(richnessGradient, obsGradient) * 0.30;
+    const richnessGradient = Math.abs(
+      (cellA._signal?.richness ?? 0.5) - (cellB._signal?.richness ?? 0.5)
+    );
+    const obsGradient = Math.abs(
+      (cellA._signal?.observations ?? 0.5) - (cellB._signal?.observations ?? 0.5)
+    );
+    const gradientPenalty = Math.max(richnessGradient, obsGradient) * 0.3;
     const landusePenalty = context.reasons.sameLanduse ? 0 : 0.12;
     const hardPenalty =
       context.reasons.roadBarrierPenalty +
       context.reasons.waterBarrierPenalty +
       context.reasons.insideBuildingPenalty;
-    const score = (context.weight * 0.46) + (signal.weight * 0.36) + 0.18 - hardPenalty * 0.45 - gradientPenalty - landusePenalty;
+    const score =
+      context.weight * 0.46 +
+      signal.weight * 0.36 +
+      0.18 -
+      hardPenalty * 0.45 -
+      gradientPenalty -
+      landusePenalty;
 
     return {
       weight: clamp01(score),
@@ -383,13 +410,22 @@
 
   function buildCellAdjacencyGraph(cells, options = {}) {
     const opts = { ...DEFAULTS, ...options };
-    const byKey = new Map(cells.map(cell => [cell.id, cell]));
+    const byKey = new Map(cells.map((cell) => [cell.id, cell]));
     const rawSignalForCell = buildRawSignalNormalizer(cells);
     const pass2SignalForCell = buildPooledSignalNormalizer(cells, byKey, opts);
-    const offsets = opts.neighborMode === 8
-      ? [[1, 0], [0, 1], [1, 1], [1, -1]]
-      : [[1, 0], [0, 1]];
-    const nodes = cells.map(cell => {
+    const offsets =
+      opts.neighborMode === 8
+        ? [
+            [1, 0],
+            [0, 1],
+            [1, 1],
+            [1, -1]
+          ]
+        : [
+            [1, 0],
+            [0, 1]
+          ];
+    const nodes = cells.map((cell) => {
       cell._signal = rawSignalForCell(cell);
       cell._pass2Signal = pass2SignalForCell(cell);
       return { id: cell.id, cell };
@@ -412,7 +448,7 @@
           weight: barrier.weight,
           passWeights: {
             pass1Context: context.weight,
-            pass2Signal: clamp01((context.weight * 0.58) + (signal.weight * 0.42)),
+            pass2Signal: clamp01(context.weight * 0.58 + signal.weight * 0.42),
             pass3BarrierGradient: barrier.weight
           },
           reasons: {

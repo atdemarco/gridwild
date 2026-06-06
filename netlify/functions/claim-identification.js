@@ -6,17 +6,19 @@ const {
   requireLinkedINatUser,
   verifyINatIdentification
 } = require("./_inat-authority");
-const { isIdentificationQuest } = require("./_quest-authority");
+const {
+  assertIdentificationObservationQualifiesForQuest,
+  isIdentificationQuest
+} = require("./_quest-authority");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const CONFIDENCE = new Set(["coarse", "likely", "careful", "expert"]);
 
 function cleanString(value, max = 500) {
-  return String(value || "").trim().slice(0, max);
+  return String(value || "")
+    .trim()
+    .slice(0, max);
 }
 
 function cleanConfidence(value) {
@@ -70,29 +72,32 @@ async function upsertQuestEvidence(claim, payload) {
 
   const { data, error } = await supabase
     .from("quest_evidence")
-    .upsert({
-      player_id: claim.player_id,
-      quest_id: claim.quest_id,
-      obs_id: claim.observation_id,
-      source: "identification",
-      status: "verified",
-      claimed_at: claim.claimed_at,
-      evidence_type: "identification",
-      target_type: "observation",
-      target_id: claim.observation_id,
-      external_id: claim.external_identification_id,
-      confidence: claim.confidence,
-      verification_status: "verified",
-      payload: {
-        ...payload,
-        identification_claim_id: claim.id,
-        taxon_id: claim.taxon_id,
-        taxon_name: claim.taxon_name,
-        taxon_common_name: claim.taxon_common_name
+    .upsert(
+      {
+        player_id: claim.player_id,
+        quest_id: claim.quest_id,
+        obs_id: claim.observation_id,
+        source: "identification",
+        status: "verified",
+        claimed_at: claim.claimed_at,
+        evidence_type: "identification",
+        target_type: "observation",
+        target_id: claim.observation_id,
+        external_id: claim.external_identification_id,
+        confidence: claim.confidence,
+        verification_status: "verified",
+        payload: {
+          ...payload,
+          identification_claim_id: claim.id,
+          taxon_id: claim.taxon_id,
+          taxon_name: claim.taxon_name,
+          taxon_common_name: claim.taxon_common_name
+        }
+      },
+      {
+        onConflict: "player_id,quest_id,obs_id"
       }
-    }, {
-      onConflict: "player_id,quest_id,obs_id"
-    })
+    )
     .select("*")
     .single();
 
@@ -130,6 +135,9 @@ exports.handler = async function (event) {
 
     const inat = await requireLinkedINatUser(supabase, event, playerId);
     const observation = await fetchINatObservation(inat.apiToken, observationId);
+    if (quest) {
+      assertIdentificationObservationQualifiesForQuest(observation, quest);
+    }
     const identification = verifyINatIdentification(
       observation,
       inat.user,

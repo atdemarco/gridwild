@@ -15,10 +15,7 @@ const {
 
 const REQUEST_TTL_MS = 10 * 60 * 1000;
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function tableHint(err) {
   return interactionTableHint({ message: accountTableHint(err) });
@@ -41,7 +38,7 @@ async function requirePlayerExists(playerId) {
 }
 
 async function findExistingInteraction(type, playerId, targetPlayerId, options = {}) {
-  const ids = [playerId, targetPlayerId].map(value => String(value));
+  const ids = [playerId, targetPlayerId].map((value) => String(value));
   const statuses = options.statuses || ["pending", "accepted"];
 
   const query = supabase
@@ -57,14 +54,17 @@ async function findExistingInteraction(type, playerId, targetPlayerId, options =
   const { data, error } = await query;
   if (error) throw error;
 
-  return (data || []).find(row => {
-    const pairMatches =
-      ids.includes(String(row.sender_player_id)) &&
-      ids.includes(String(row.recipient_player_id)) &&
-      String(row.sender_player_id) !== String(row.recipient_player_id);
-    const partyMatches = !options.partyId || String(row.party_id || "") === String(options.partyId);
-    return pairMatches && partyMatches;
-  }) || null;
+  return (
+    (data || []).find((row) => {
+      const pairMatches =
+        ids.includes(String(row.sender_player_id)) &&
+        ids.includes(String(row.recipient_player_id)) &&
+        String(row.sender_player_id) !== String(row.recipient_player_id);
+      const partyMatches =
+        !options.partyId || String(row.party_id || "") === String(options.partyId);
+      return pairMatches && partyMatches;
+    }) || null
+  );
 }
 
 async function decorate(row, viewerPlayerId) {
@@ -191,10 +191,15 @@ async function createPartyJoinRequest(playerId, targetPlayerId, body = {}) {
   if (!party) throw httpError(404, "Party not found.");
   if (party.status === "ended") throw httpError(409, "This party has ended.");
 
-  const existingPending = await findExistingInteraction("party_join_request", playerId, targetPlayerId, {
-    statuses: ["pending"],
-    partyId
-  });
+  const existingPending = await findExistingInteraction(
+    "party_join_request",
+    playerId,
+    targetPlayerId,
+    {
+      statuses: ["pending"],
+      partyId
+    }
+  );
   if (existingPending) return existingPending;
 
   const { data, error } = await supabase
@@ -220,12 +225,15 @@ async function createPartyJoinRequest(playerId, targetPlayerId, body = {}) {
 async function blockPlayer(playerId, targetPlayerId) {
   const { data, error } = await supabase
     .from(BLOCKS_TABLE)
-    .upsert({
-      blocker_player_id: playerId,
-      blocked_player_id: targetPlayerId
-    }, {
-      onConflict: "blocker_player_id,blocked_player_id"
-    })
+    .upsert(
+      {
+        blocker_player_id: playerId,
+        blocked_player_id: targetPlayerId
+      },
+      {
+        onConflict: "blocker_player_id,blocked_player_id"
+      }
+    )
     .select("*")
     .single();
 

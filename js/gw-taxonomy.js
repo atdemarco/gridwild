@@ -103,21 +103,25 @@
       .replace(/[_-]+/g, " ")
       .replace(/\s+/g, " ")
       .trim()
-      .replace(/\b\w/g, c => c.toUpperCase());
+      .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   function genusCodexCommonName(name) {
     const rec = window.GridWildGenusCodex?.genera?.[name];
     if (!rec) return "";
     if (rec.common) return titleCaseTaxonLabel(rec.common);
-    const fact = (rec.facts || []).find(item => /iNaturalist lists "/.test(String(item)));
+    const fact = (rec.facts || []).find((item) => /iNaturalist lists "/.test(String(item)));
     const match = String(fact || "").match(/iNaturalist lists "([^"]+)"/);
     return match?.[1] ? titleCaseTaxonLabel(match[1]) : "";
   }
 
   function displayName(rank, scientific) {
     const clean = String(scientific || "Unknown").trim() || "Unknown";
-    return firstCommonName(rank, clean) || (normalizeRank(rank) === "genus" ? genusCodexCommonName(clean) : "") || clean;
+    return (
+      firstCommonName(rank, clean) ||
+      (normalizeRank(rank) === "genus" ? genusCodexCommonName(clean) : "") ||
+      clean
+    );
   }
 
   function displayEntry(entry, rank) {
@@ -132,7 +136,10 @@
   }
 
   function normalizeSearchText(value) {
-    return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
   }
 
   function containsTaxonTerm(haystack, term) {
@@ -142,7 +149,7 @@
   }
 
   function matchesTaxonLine(line, haystack) {
-    return (line?.terms || []).some(term => containsTaxonTerm(haystack, term));
+    return (line?.terms || []).some((term) => containsTaxonTerm(haystack, term));
   }
 
   window.GridWildTaxonomy = {

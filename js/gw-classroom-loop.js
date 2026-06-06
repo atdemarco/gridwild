@@ -9,7 +9,8 @@
       id: "flies_bees",
       title: "Fly or Bee?",
       focus: "Insects",
-      summary: "Learn halteres, wing pairs, eyes, and pollen-carrying clues before trying live unknowns.",
+      summary:
+        "Learn halteres, wing pairs, eyes, and pollen-carrying clues before trying live unknowns.",
       marks: [
         "one_pair_of_wings_versus_two_pairs",
         "fly_halteres",
@@ -19,7 +20,10 @@
       ],
       contrast: [
         { label: "True flies", clue: "One wing pair, halteres, often large eyes." },
-        { label: "Bees and wasps", clue: "Two wing pairs, no halteres, often hairy bodies or pollen baskets." }
+        {
+          label: "Bees and wasps",
+          clue: "Two wing pairs, no halteres, often hairy bodies or pollen baskets."
+        }
       ],
       examples: [
         {
@@ -53,7 +57,10 @@
         "winged_seed_samara"
       ],
       contrast: [
-        { label: "Mint-family direction", clue: "Opposite leaves, square stems, aromatic crushed leaves." },
+        {
+          label: "Mint-family direction",
+          clue: "Opposite leaves, square stems, aromatic crushed leaves."
+        },
         { label: "Oak direction", clue: "Alternate leaves, lobes, acorns." },
         { label: "Maple direction", clue: "Opposite leaves and winged samaras." }
       ],
@@ -78,7 +85,8 @@
       id: "mushroom_surfaces",
       title: "Gills, Pores, Teeth",
       focus: "Fungi",
-      summary: "Practice broad mushroom underside clues before trying to name a fungus too specifically.",
+      summary:
+        "Practice broad mushroom underside clues before trying to name a fungus too specifically.",
       marks: [
         "gills_present",
         "pores_instead_of_gills",
@@ -158,7 +166,7 @@
   }
 
   function currentPack() {
-    return PACKS.find(pack => pack.id === state.packId) || PACKS[0];
+    return PACKS.find((pack) => pack.id === state.packId) || PACKS[0];
   }
 
   function currentExample() {
@@ -167,12 +175,14 @@
   }
 
   function fieldMark(id) {
-    return window.GridWildFieldMarks?.get?.(id) || {
-      id,
-      label: id.replace(/_/g, " "),
-      prompt: "Can you see this field mark?",
-      explanation: "This mark is part of the practice pack."
-    };
+    return (
+      window.GridWildFieldMarks?.get?.(id) || {
+        id,
+        label: id.replace(/_/g, " "),
+        prompt: "Can you see this field mark?",
+        explanation: "This mark is part of the practice pack."
+      }
+    );
   }
 
   function markState(id) {
@@ -485,7 +495,7 @@
     activeRoot = document.createElement("div");
     activeRoot.className = "gw-classloop-backdrop";
     document.body.appendChild(activeRoot);
-    activeRoot.addEventListener("click", evt => {
+    activeRoot.addEventListener("click", (evt) => {
       if (evt.target === activeRoot) close();
     });
     render();
@@ -527,12 +537,14 @@
         <div class="gw-classloop-section-title">Lesson packs</div>
         <div class="gw-classloop-small">Small loops built from field marks, contrast cases, known examples, and a live-ID bridge.</div>
         <div class="gw-classloop-pack-list">
-          ${PACKS.map(item => `
+          ${PACKS.map(
+            (item) => `
             <button class="gw-classloop-pack ${item.id === pack.id ? "is-active" : ""}" type="button" data-gw-classloop-pack="${esc(item.id)}">
               <b>${esc(item.title)}</b>
               <span class="gw-classloop-small">${esc(item.summary)}</span>
             </button>
-          `).join("")}
+          `
+          ).join("")}
         </div>
       </aside>
     `;
@@ -542,11 +554,13 @@
     return `
       <main class="gw-classloop-main">
         <div class="gw-classloop-rail">
-          ${STAGES.map(stage => `
+          ${STAGES.map(
+            (stage) => `
             <button class="gw-classloop-stage ${state.stage === stage.key ? "is-active" : ""}" type="button" data-gw-classloop-stage="${esc(stage.key)}">
               ${esc(stage.label)}
             </button>
-          `).join("")}
+          `
+          ).join("")}
         </div>
         <div class="gw-classloop-content">
           ${renderStage(pack)}
@@ -567,15 +581,19 @@
       <div class="gw-classloop-section-title">${esc(pack.title)}: marks first</div>
       <p class="gw-classloop-small">${esc(pack.summary)}</p>
       <div class="gw-classloop-card-list">
-        ${pack.contrast.map(item => `
+        ${pack.contrast
+          .map(
+            (item) => `
           <div class="gw-classloop-card">
             <b>${esc(item.label)}</b>
             <span class="gw-classloop-small">${esc(item.clue)}</span>
           </div>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
       <div class="gw-classloop-mark-list">
-        ${pack.marks.map(id => renderMarkCard(id)).join("")}
+        ${pack.marks.map((id) => renderMarkCard(id)).join("")}
       </div>
       <div class="gw-classloop-actions">
         <button class="gw-classloop-btn primary" type="button" data-gw-classloop-stage="practice">Practice known examples</button>
@@ -598,17 +616,21 @@
         </div>
         <p class="gw-classloop-small">${esc(example.prompt)}</p>
         <div class="gw-classloop-mark-list">
-          ${pack.marks.map(id => renderMarkCard(id, example.marks.includes(id))).join("")}
+          ${pack.marks.map((id) => renderMarkCard(id, example.marks.includes(id))).join("")}
         </div>
         <div class="gw-classloop-actions">
           <button class="gw-classloop-btn primary" type="button" data-gw-classloop-reveal>${state.revealed ? "Hide answer" : "Reveal ground truth"}</button>
           <button class="gw-classloop-btn" type="button" data-gw-classloop-stage="apply">Try live unknown</button>
         </div>
-        ${state.revealed ? `
+        ${
+          state.revealed
+            ? `
           <div class="gw-classloop-answer">
-            Ground truth: ${esc(example.answer)} (${esc(example.rank)}). Strong marks: ${example.marks.map(id => esc(fieldMark(id).label)).join(", ")}.
+            Ground truth: ${esc(example.answer)} (${esc(example.rank)}). Strong marks: ${example.marks.map((id) => esc(fieldMark(id).label)).join(", ")}.
           </div>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     `;
   }
@@ -623,12 +645,17 @@
           <div class="gw-classloop-card">
             <b>Evidence you have warmed up</b>
             <span class="gw-classloop-small">
-              ${evidence.length ? evidence.map(row => `${row.value}: ${row.mark.label}`).join("; ") : "No marks selected yet. Practice can require 1-3 before live submission."}
+              ${evidence.length ? evidence.map((row) => `${row.value}: ${row.mark.label}`).join("; ") : "No marks selected yet. Practice can require 1-3 before live submission."}
             </span>
           </div>
           <div class="gw-classloop-card">
             <b>Suggested directions</b>
-            <span class="gw-classloop-small">${suggestions().slice(0, 3).map(row => row.label).join(", ") || "Select marks to create suggestions."}</span>
+            <span class="gw-classloop-small">${
+              suggestions()
+                .slice(0, 3)
+                .map((row) => row.label)
+                .join(", ") || "Select marks to create suggestions."
+            }</span>
           </div>
         </div>
         <div class="gw-classloop-actions">
@@ -686,11 +713,12 @@
 
   function renderMarkButton(id, value, current) {
     const label = value === "seen" ? "Seen" : value === "out" ? "Rule out" : "Unsure";
-    const cls = value === "seen" && current === "seen"
-      ? "is-seen"
-      : value === "out" && current === "out"
-        ? "is-out"
-        : "";
+    const cls =
+      value === "seen" && current === "seen"
+        ? "is-seen"
+        : value === "out" && current === "out"
+          ? "is-out"
+          : "";
     return `<button class="gw-classloop-mark-btn ${cls}" type="button" data-gw-classloop-mark="${esc(id)}" data-gw-classloop-mark-value="${esc(value)}">${esc(label)}</button>`;
   }
 
@@ -700,11 +728,14 @@
         <div class="gw-classloop-section-title">Design prompts</div>
         <div class="gw-classloop-small">These are intentionally unresolved choices for you to react to.</div>
         <div class="gw-classloop-prompt-list">
-          ${DESIGN_PROMPTS.map(prompt => `
+          ${DESIGN_PROMPTS.map(
+            (prompt) => `
             <div class="gw-classloop-prompt">
               <b>${esc(prompt.question)}</b>
               <div class="gw-classloop-actions">
-                ${prompt.options.map(option => `
+                ${prompt.options
+                  .map(
+                    (option) => `
                   <button
                     class="gw-classloop-choice ${state.promptChoices[prompt.id] === option ? "is-active" : ""}"
                     type="button"
@@ -713,10 +744,13 @@
                   >
                     ${esc(option)}
                   </button>
-                `).join("")}
+                `
+                  )
+                  .join("")}
               </div>
             </div>
-          `).join("")}
+          `
+          ).join("")}
         </div>
         <div class="gw-classloop-card-list">
           <div class="gw-classloop-card">
@@ -731,7 +765,7 @@
   function bind(root) {
     root.querySelector("[data-gw-classloop-close]")?.addEventListener("click", close);
 
-    root.querySelectorAll("[data-gw-classloop-pack]").forEach(btn => {
+    root.querySelectorAll("[data-gw-classloop-pack]").forEach((btn) => {
       btn.addEventListener("click", () => {
         state.packId = btn.dataset.gwClassloopPack || state.packId;
         state.exampleIndex = 0;
@@ -741,7 +775,7 @@
       });
     });
 
-    root.querySelectorAll("[data-gw-classloop-stage]").forEach(btn => {
+    root.querySelectorAll("[data-gw-classloop-stage]").forEach((btn) => {
       btn.addEventListener("click", () => {
         state.stage = btn.dataset.gwClassloopStage || "learn";
         state.revealed = false;
@@ -749,7 +783,7 @@
       });
     });
 
-    root.querySelectorAll("[data-gw-classloop-mark]").forEach(btn => {
+    root.querySelectorAll("[data-gw-classloop-mark]").forEach((btn) => {
       btn.addEventListener("click", () => {
         setMark(btn.dataset.gwClassloopMark, btn.dataset.gwClassloopMarkValue || "unset");
       });
@@ -773,7 +807,7 @@
       window.GridWildIdentify?.openIdentifyDialog?.();
     });
 
-    root.querySelectorAll("[data-gw-classloop-prompt]").forEach(btn => {
+    root.querySelectorAll("[data-gw-classloop-prompt]").forEach((btn) => {
       btn.addEventListener("click", () => {
         state.promptChoices[btn.dataset.gwClassloopPrompt] = btn.dataset.gwClassloopChoice || "";
         render();
@@ -781,7 +815,7 @@
     });
   }
 
-  document.addEventListener("click", evt => {
+  document.addEventListener("click", (evt) => {
     const btn = evt.target.closest("[data-gw-classloop-open]");
     if (!btn) return;
     evt.preventDefault();
@@ -789,13 +823,17 @@
     open();
   });
 
-  document.addEventListener("keydown", evt => {
+  document.addEventListener("keydown", (evt) => {
     if (evt.key === "Escape" && activeRoot?.isConnected) close();
   });
 
   window.GridWildClassroomLoop = {
     open,
     close,
-    getState: () => ({ ...state, marked: { ...state.marked }, promptChoices: { ...state.promptChoices } })
+    getState: () => ({
+      ...state,
+      marked: { ...state.marked },
+      promptChoices: { ...state.promptChoices }
+    })
   };
 })();

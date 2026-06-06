@@ -950,22 +950,29 @@
     const userCell = api.currentUserCell?.();
     const centerCell = api.centerCell?.();
 
-    const rects = cells.map(item => {
-      const x = (item.ix - bounds.minIx) * cell;
-      const y = (bounds.maxIy - item.iy) * cell;
-      const style = hereHeatStyleForCell(item, heatStats);
-      const fill = style.fillColor || "rgba(239,230,211,0.12)";
-      const alpha = Math.max(style.heatVisible ? 0.16 : 0.04, Math.min(0.9, Number(style.fillOpacity || 0.18)));
-      return `<rect x="${x + gap / 2}" y="${y + gap / 2}" width="${cell - gap}" height="${cell - gap}" rx="1.2" fill="${fill}" opacity="${alpha}"></rect>`;
-    }).join("");
+    const rects = cells
+      .map((item) => {
+        const x = (item.ix - bounds.minIx) * cell;
+        const y = (bounds.maxIy - item.iy) * cell;
+        const style = hereHeatStyleForCell(item, heatStats);
+        const fill = style.fillColor || "rgba(239,230,211,0.12)";
+        const alpha = Math.max(
+          style.heatVisible ? 0.16 : 0.04,
+          Math.min(0.9, Number(style.fillOpacity || 0.18))
+        );
+        return `<rect x="${x + gap / 2}" y="${y + gap / 2}" width="${cell - gap}" height="${cell - gap}" rx="1.2" fill="${fill}" opacity="${alpha}"></rect>`;
+      })
+      .join("");
 
-    const selectionRect = selected ? (() => {
-      const x = (selected.minIx - bounds.minIx) * cell;
-      const y = (bounds.maxIy - selected.maxIy) * cell;
-      const rw = (selected.maxIx - selected.minIx + 1) * cell;
-      const rh = (selected.maxIy - selected.minIy + 1) * cell;
-      return `<rect class="gw-selection-rect" x="${x + 1.2}" y="${y + 1.2}" width="${Math.max(0, rw - 2.4)}" height="${Math.max(0, rh - 2.4)}" rx="2.2"></rect>`;
-    })() : "";
+    const selectionRect = selected
+      ? (() => {
+          const x = (selected.minIx - bounds.minIx) * cell;
+          const y = (bounds.maxIy - selected.maxIy) * cell;
+          const rw = (selected.maxIx - selected.minIx + 1) * cell;
+          const rh = (selected.maxIy - selected.minIy + 1) * cell;
+          return `<rect class="gw-selection-rect" x="${x + 1.2}" y="${y + 1.2}" width="${Math.max(0, rw - 2.4)}" height="${Math.max(0, rh - 2.4)}" rx="2.2"></rect>`;
+        })()
+      : "";
 
     function markerFor(cellInfo, cls, label, color) {
       if (!cellInfo) return "";
@@ -974,7 +981,8 @@
         cellInfo.ix > bounds.maxIx ||
         cellInfo.iy < bounds.minIy ||
         cellInfo.iy > bounds.maxIy
-      ) return "";
+      )
+        return "";
 
       const x = (cellInfo.ix - bounds.minIx + 0.5) * cell;
       const y = (bounds.maxIy - cellInfo.iy + 0.5) * cell;
@@ -1001,9 +1009,14 @@
     const raw = String(color || "").trim();
     const a = Math.max(0, Math.min(1, Number(alpha) || 0));
     if (raw.startsWith("#") && (raw.length === 7 || raw.length === 4)) {
-      const hex = raw.length === 4
-        ? raw.slice(1).split("").map(ch => ch + ch).join("")
-        : raw.slice(1);
+      const hex =
+        raw.length === 4
+          ? raw
+              .slice(1)
+              .split("")
+              .map((ch) => ch + ch)
+              .join("")
+          : raw.slice(1);
       const value = parseInt(hex, 16);
       if (Number.isFinite(value)) {
         const r = (value >> 16) & 255;
@@ -1016,12 +1029,13 @@
       return raw.replace("hsl(", "hsla(").replace(/\)$/, `,${a})`);
     }
     if (raw.startsWith("rgba(")) {
-      const parts = raw.slice(5, -1).split(",").map(part => part.trim());
+      const parts = raw
+        .slice(5, -1)
+        .split(",")
+        .map((part) => part.trim());
       if (parts.length >= 3) return `rgba(${parts[0]},${parts[1]},${parts[2]},${a})`;
     }
-    return raw.startsWith("rgb(")
-      ? raw.replace("rgb(", "rgba(").replace(")", `,${a})`)
-      : raw;
+    return raw.startsWith("rgb(") ? raw.replace("rgb(", "rgba(").replace(")", `,${a})`) : raw;
   }
 
   function stableHash(value) {
@@ -1040,21 +1054,23 @@
   function overlappingNiches(bounds) {
     const niches = window.GridWildLocalNiches?.getNiches?.() || [];
     return niches
-      .map(niche => ({
+      .map((niche) => ({
         niche,
         cells: (Array.isArray(niche?.grid_cell_ids) ? niche.grid_cell_ids : [])
-          .map(key => {
+          .map((key) => {
             const [ix, iy] = String(key).split(",").map(Number);
             return Number.isFinite(ix) && Number.isFinite(iy) ? { ix, iy } : null;
           })
-          .filter(cell => cell &&
-            cell.ix >= bounds.minIx &&
-            cell.ix <= bounds.maxIx &&
-            cell.iy >= bounds.minIy &&
-            cell.iy <= bounds.maxIy
+          .filter(
+            (cell) =>
+              cell &&
+              cell.ix >= bounds.minIx &&
+              cell.ix <= bounds.maxIx &&
+              cell.iy >= bounds.minIy &&
+              cell.iy <= bounds.maxIy
           )
       }))
-      .filter(entry => entry.cells.length);
+      .filter((entry) => entry.cells.length);
   }
 
   function fogInfoForCell(key) {
@@ -1073,16 +1089,17 @@
     if (window.__gwState?.heatZThresholdEnabled !== true) return null;
 
     const values = cells
-      .map(item => hereHeatValue(item?.metrics || {}))
-      .filter(value => value > 0);
+      .map((item) => hereHeatValue(item?.metrics || {}))
+      .filter((value) => value > 0);
 
     if (!values.length) return null;
 
     const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-    const variance = values.reduce((sum, value) => {
-      const d = value - mean;
-      return sum + d * d;
-    }, 0) / values.length;
+    const variance =
+      values.reduce((sum, value) => {
+        const d = value - mean;
+        return sum + d * d;
+      }, 0) / values.length;
 
     return {
       mean,
@@ -1103,7 +1120,7 @@
   function hereHeatStyleForCell(item, stats) {
     const neutral = {
       fillColor: "rgb(239,230,211)",
-      fillOpacity: 0.10,
+      fillOpacity: 0.1,
       heatVisible: false
     };
 
@@ -1128,13 +1145,16 @@
   function latLngToGridPoint(latlng, gridSizeM) {
     const leafletMap = typeof map !== "undefined" ? map : window.map;
     const leaflet = typeof L !== "undefined" ? L : window.L;
-    if (!leafletMap?.options?.crs?.project || !Number.isFinite(gridSizeM) || gridSizeM <= 0) return null;
+    if (!leafletMap?.options?.crs?.project || !Number.isFinite(gridSizeM) || gridSizeM <= 0)
+      return null;
 
     const lat = Number(latlng?.lat ?? latlng?.[0]);
     const lng = Number(latlng?.lng ?? latlng?.lon ?? latlng?.[1]);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
 
-    const projected = leafletMap.options.crs.project(leaflet?.latLng ? leaflet.latLng(lat, lng) : { lat, lng });
+    const projected = leafletMap.options.crs.project(
+      leaflet?.latLng ? leaflet.latLng(lat, lng) : { lat, lng }
+    );
     if (!projected || !Number.isFinite(projected.x) || !Number.isFinite(projected.y)) return null;
     return {
       ix: projected.x / gridSizeM,
@@ -1183,7 +1203,8 @@
   function highwayClass(tags = {}) {
     const highway = String(tags.highway || "").toLowerCase();
     if (["motorway", "trunk", "primary", "secondary"].includes(highway)) return "major";
-    if (["tertiary", "residential", "unclassified", "living_street", "road"].includes(highway)) return "street";
+    if (["tertiary", "residential", "unclassified", "living_street", "road"].includes(highway))
+      return "street";
     if (["path", "footway", "cycleway", "bridleway", "track"].includes(highway)) return "trail";
     return "service";
   }
@@ -1223,7 +1244,10 @@
 
     try {
       const entries = Array.from(hereElevationCache.entries())
-        .sort((a, b) => (b[1].lastUsedAt || b[1].fetchedAt || 0) - (a[1].lastUsedAt || a[1].fetchedAt || 0))
+        .sort(
+          (a, b) =>
+            (b[1].lastUsedAt || b[1].fetchedAt || 0) - (a[1].lastUsedAt || a[1].fetchedAt || 0)
+        )
         .slice(0, HERE_ELEVATION_MAX_CACHE_ENTRIES)
         .map(([key, entry]) => ({
           key,
@@ -1231,10 +1255,13 @@
           fetched_at: entry.fetchedAt
         }));
 
-      localStorage.setItem(HERE_ELEVATION_STORAGE_KEY, JSON.stringify({
-        version: 1,
-        entries
-      }));
+      localStorage.setItem(
+        HERE_ELEVATION_STORAGE_KEY,
+        JSON.stringify({
+          version: 1,
+          entries
+        })
+      );
     } catch (err) {
       // Terrain still renders flat if localStorage is unavailable.
     }
@@ -1307,10 +1334,13 @@
   function scheduleHereElevationFlush(delayMs) {
     if (hereElevationFetchQueued) return;
     hereElevationFetchQueued = true;
-    setTimeout(() => {
-      hereElevationFetchQueued = false;
-      flushHereElevationQueue();
-    }, Math.max(0, Number(delayMs) || 0));
+    setTimeout(
+      () => {
+        hereElevationFetchQueued = false;
+        flushHereElevationQueue();
+      },
+      Math.max(0, Number(delayMs) || 0)
+    );
   }
 
   function flushHereElevationQueue() {
@@ -1339,14 +1369,14 @@
         accept: "application/json"
       },
       body: JSON.stringify({
-        points: batch.map(point => ({
+        points: batch.map((point) => ({
           key: point.key,
           lat: point.lat,
           lng: point.lng
         }))
       })
     })
-      .then(resp => {
+      .then((resp) => {
         if (!resp.ok) {
           const err = new Error(`Elevation HTTP ${resp.status}`);
           err.status = resp.status;
@@ -1355,7 +1385,7 @@
         }
         return resp.json();
       })
-      .then(data => {
+      .then((data) => {
         const now = Date.now();
         hereElevationRetryDelayMs = HERE_ELEVATION_RETRY_BASE_MS;
         for (const point of data?.points || []) {
@@ -1371,12 +1401,16 @@
         saveHereElevationCache();
         scheduleRefresh(40);
       })
-      .catch(err => {
-        const retryMs = err.status === 429
-          ? Math.max(err.retryAfterMs || 0, hereElevationRetryDelayMs)
-          : Math.min(HERE_ELEVATION_RETRY_BASE_MS, 1000 * 60 * 3);
+      .catch((err) => {
+        const retryMs =
+          err.status === 429
+            ? Math.max(err.retryAfterMs || 0, hereElevationRetryDelayMs)
+            : Math.min(HERE_ELEVATION_RETRY_BASE_MS, 1000 * 60 * 3);
         hereElevationDisabledUntil = Date.now() + retryMs;
-        hereElevationRetryDelayMs = Math.min(HERE_ELEVATION_RETRY_MAX_MS, hereElevationRetryDelayMs * 2);
+        hereElevationRetryDelayMs = Math.min(
+          HERE_ELEVATION_RETRY_MAX_MS,
+          hereElevationRetryDelayMs * 2
+        );
         if (err.status === 429) {
           console.info("GridWild elevation lookup is rate-limited; backing off.");
         } else {
@@ -1386,10 +1420,9 @@
       .finally(() => {
         hereElevationFetchInFlight = false;
         if (hereElevationPending.size) {
-          scheduleHereElevationFlush(Math.max(
-            HERE_ELEVATION_MIN_FETCH_INTERVAL_MS,
-            hereElevationDisabledUntil - Date.now()
-          ));
+          scheduleHereElevationFlush(
+            Math.max(HERE_ELEVATION_MIN_FETCH_INTERVAL_MS, hereElevationDisabledUntil - Date.now())
+          );
         }
       });
   }
@@ -1403,7 +1436,11 @@
       if (hereElevationPending.size >= HERE_ELEVATION_MAX_PENDING) break;
       if (!point?.key || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) continue;
       if (getHereElevationEntry(point.key)) continue;
-      if (now - Number(hereElevationRequestedAt.get(point.key) || 0) < HERE_ELEVATION_REQUEST_COOLDOWN_MS) continue;
+      if (
+        now - Number(hereElevationRequestedAt.get(point.key) || 0) <
+        HERE_ELEVATION_REQUEST_COOLDOWN_MS
+      )
+        continue;
       hereElevationRequestedAt.set(point.key, now);
       hereElevationPending.set(point.key, point);
     }
@@ -1433,17 +1470,13 @@
       [bounds.maxIx + 0.5, bounds.maxIy + 0.5],
       [centerIx, centerIy],
       [origin.ix + 0.5, origin.iy + 0.5]
-    ].forEach(point => addHereElevationSample(samples, point[0], point[1]));
+    ].forEach((point) => addHereElevationSample(samples, point[0], point[1]));
 
     const cos = Math.cos(headingRad);
     const sin = Math.sin(headingRad);
-    const ringDistances = hereMap3dExpanded
-      ? [90, 220, 520, 1100]
-      : [110, 300, 700];
-    const sampleCounts = hereMap3dExpanded
-      ? [9, 11, 13, 15]
-      : [7, 9, 11];
-    const fovRad = HERE_3D_CAMERA.fovDeg * Math.PI / 180;
+    const ringDistances = hereMap3dExpanded ? [90, 220, 520, 1100] : [110, 300, 700];
+    const sampleCounts = hereMap3dExpanded ? [9, 11, 13, 15] : [7, 9, 11];
+    const fovRad = (HERE_3D_CAMERA.fovDeg * Math.PI) / 180;
     const ridgeBands = [];
 
     ringDistances.forEach((forward, ringIndex) => {
@@ -1471,10 +1504,11 @@
   }
 
   function buildHereElevationModel(bounds, headingRad, cameraCell, centerCell) {
-    const origin = cameraCell || centerCell || {
-      ix: (bounds.minIx + bounds.maxIx) / 2,
-      iy: (bounds.minIy + bounds.maxIy) / 2
-    };
+    const origin = cameraCell ||
+      centerCell || {
+        ix: (bounds.minIx + bounds.maxIx) / 2,
+        iy: (bounds.minIy + bounds.maxIy) / 2
+      };
     const { samples, ridgeBands } = collectHereElevationSamples(bounds, headingRad, origin);
     queueHereElevationSamples(samples);
 
@@ -1487,7 +1521,7 @@
       [bounds.minIx + 0.5, bounds.maxIy + 0.5],
       [bounds.maxIx + 0.5, bounds.minIy + 0.5]
     ]
-      .map(point => getHereElevationMeters(point[0], point[1]))
+      .map((point) => getHereElevationMeters(point[0], point[1]))
       .filter(Number.isFinite)
       .sort((a, b) => a - b);
 
@@ -1532,19 +1566,21 @@
     const cameraCell = inBounds(userCell) ? userCell : centerCell;
     const heading = Number(window.GridWildCompass?.getState?.()?.heading);
     const headingDeg = (Number.isFinite(heading) ? heading : 0) + hereMap3dYawOffsetDeg;
-    const headingRad = headingDeg * Math.PI / 180;
-    const pitchRad = HERE_3D_CAMERA.pitchDeg * Math.PI / 180;
-    const fovRad = HERE_3D_CAMERA.fovDeg * Math.PI / 180;
+    const headingRad = (headingDeg * Math.PI) / 180;
+    const pitchRad = (HERE_3D_CAMERA.pitchDeg * Math.PI) / 180;
+    const fovRad = (HERE_3D_CAMERA.fovDeg * Math.PI) / 180;
     const avatarY = h * HERE_3D_CAMERA.avatarScreenY;
     const focal = (w * 0.5) / Math.tan(fovRad / 2);
     const cameraDepth = 5.8;
 
     function inBounds(cellInfo) {
-      return cellInfo &&
+      return (
+        cellInfo &&
         cellInfo.ix >= bounds.minIx &&
         cellInfo.ix <= bounds.maxIx &&
         cellInfo.iy >= bounds.minIy &&
-        cellInfo.iy <= bounds.maxIy;
+        cellInfo.iy <= bounds.maxIy
+      );
     }
 
     const elevationModel = buildHereElevationModel(bounds, headingRad, cameraCell, centerCell);
@@ -1607,24 +1643,27 @@
     }
 
     function pointsAttr(points) {
-      return points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+      return points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
     }
 
     function isVisiblePoly(points) {
-      return points.some(p => p.x > -30 && p.x < w + 30 && p.y > -30 && p.y < h + 40);
+      return points.some((p) => p.x > -30 && p.x < w + 30 && p.y > -30 && p.y < h + 40);
     }
 
     function isVisibleLine(points) {
-      return points.some(p => p.x > -35 && p.x < w + 35 && p.y > -35 && p.y < h + 45);
+      return points.some((p) => p.x > -35 && p.x < w + 35 && p.y > -35 && p.y < h + 45);
     }
 
-    const sorted = cells.slice().sort((a, b) =>
-      worldToCamera(a.ix + 0.5, a.iy + 0.5, terrainZAt(a.ix + 0.5, a.iy + 0.5)).forward -
-      worldToCamera(b.ix + 0.5, b.iy + 0.5, terrainZAt(b.ix + 0.5, b.iy + 0.5)).forward
-    );
+    const sorted = cells
+      .slice()
+      .sort(
+        (a, b) =>
+          worldToCamera(a.ix + 0.5, a.iy + 0.5, terrainZAt(a.ix + 0.5, a.iy + 0.5)).forward -
+          worldToCamera(b.ix + 0.5, b.iy + 0.5, terrainZAt(b.ix + 0.5, b.iy + 0.5)).forward
+      );
 
     const heatStats = buildHereHeatZStats(cells);
-    const maxCount = Math.max(...sorted.map(item => Number(item.metrics?.count) || 0), 1);
+    const maxCount = Math.max(...sorted.map((item) => Number(item.metrics?.count) || 0), 1);
     const osmByKey = new Map();
     for (const item of sorted) {
       const prior = window.GridWildOsmPriorsLayer?.getCell?.(item.ix, item.iy) || null;
@@ -1648,7 +1687,7 @@
       for (const group of groups) {
         for (const feature of group.features.slice(0, 90)) {
           const points = (feature.points || [])
-            .map(point => latLngToGridPoint(point, gridSizeM))
+            .map((point) => latLngToGridPoint(point, gridSizeM))
             .filter(Boolean);
           if (points.length < 2) continue;
 
@@ -1658,13 +1697,30 @@
             if (!clipped) continue;
 
             const lift = cls === "trail" ? 0.33 : cls === "major" ? 0.52 : 0.43;
-            const groundA = project(clipped.a.ix, clipped.a.iy, terrainZAt(clipped.a.ix, clipped.a.iy, 0.04));
-            const groundB = project(clipped.b.ix, clipped.b.iy, terrainZAt(clipped.b.ix, clipped.b.iy, 0.04));
-            const raisedA = project(clipped.a.ix, clipped.a.iy, terrainZAt(clipped.a.ix, clipped.a.iy, lift));
-            const raisedB = project(clipped.b.ix, clipped.b.iy, terrainZAt(clipped.b.ix, clipped.b.iy, lift));
+            const groundA = project(
+              clipped.a.ix,
+              clipped.a.iy,
+              terrainZAt(clipped.a.ix, clipped.a.iy, 0.04)
+            );
+            const groundB = project(
+              clipped.b.ix,
+              clipped.b.iy,
+              terrainZAt(clipped.b.ix, clipped.b.iy, 0.04)
+            );
+            const raisedA = project(
+              clipped.a.ix,
+              clipped.a.iy,
+              terrainZAt(clipped.a.ix, clipped.a.iy, lift)
+            );
+            const raisedB = project(
+              clipped.b.ix,
+              clipped.b.iy,
+              terrainZAt(clipped.b.ix, clipped.b.iy, lift)
+            );
             if (!isVisibleLine([groundA, groundB, raisedA, raisedB])) continue;
 
-            const width = cls === "major" ? 2.7 : cls === "street" ? 2.1 : cls === "trail" ? 1.35 : 1.75;
+            const width =
+              cls === "major" ? 2.7 : cls === "street" ? 2.1 : cls === "trail" ? 1.35 : 1.75;
             const stroke = cls === "trail" ? "rgba(212,177,112,0.78)" : "rgba(108,96,86,0.86)";
             const core = cls === "trail" ? "rgba(255,231,163,0.72)" : "rgba(239,222,194,0.50)";
             const dGround = `M${groundA.x.toFixed(1)} ${groundA.y.toFixed(1)} L${groundB.x.toFixed(1)} ${groundB.y.toFixed(1)}`;
@@ -1691,7 +1747,7 @@
 
       return segments
         .sort((a, b) => a.depth - b.depth)
-        .map(segment => segment.markup)
+        .map((segment) => segment.markup)
         .join("");
     }
 
@@ -1717,7 +1773,7 @@
 
           if (points.length < Math.max(5, Math.floor(band.samples.length * 0.45))) return "";
 
-          const elevations = points.map(point => point.elevationM);
+          const elevations = points.map((point) => point.elevationM);
           const minM = Math.min(...elevations);
           const maxM = Math.max(...elevations);
           const maxRelM = maxM - elevationModel.baseM;
@@ -1728,12 +1784,11 @@
           const farFactor = clamp((Number(band.ringIndex) || 0) / maxRingIndex, 0, 1);
           const baseY = h * (0.405 - farFactor * 0.075);
           const bottomY = h * (0.58 - farFactor * 0.08);
-          const topPoints = points.map(point => {
-            const x = band.samples.length <= 1
-              ? w / 2
-              : (point.index / (band.samples.length - 1)) * w;
+          const topPoints = points.map((point) => {
+            const x =
+              band.samples.length <= 1 ? w / 2 : (point.index / (band.samples.length - 1)) * w;
             const relativeM = clamp(point.elevationM - elevationModel.baseM, -500, 2400);
-            const angleDeg = Math.atan2(relativeM, distanceM) * 180 / Math.PI;
+            const angleDeg = (Math.atan2(relativeM, distanceM) * 180) / Math.PI;
             const reliefLift = clamp((point.elevationM - minM) * 0.014, 0, 18);
             const y = clamp(baseY - angleDeg * 2.35 - reliefLift, 8, h * 0.56);
             return { x, y };
@@ -1741,15 +1796,18 @@
 
           const path = [
             `M0 ${bottomY.toFixed(1)}`,
-            ...topPoints.map(point => `L${point.x.toFixed(1)} ${point.y.toFixed(1)}`),
+            ...topPoints.map((point) => `L${point.x.toFixed(1)} ${point.y.toFixed(1)}`),
             `L${w} ${bottomY.toFixed(1)}`,
             "Z"
           ].join(" ");
           const ridgeLine = topPoints
-            .map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+            .map(
+              (point, index) =>
+                `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`
+            )
             .join(" ");
           const opacity = 0.09 + (1 - farFactor) * 0.13;
-          const strokeOpacity = 0.12 + (1 - farFactor) * 0.20;
+          const strokeOpacity = 0.12 + (1 - farFactor) * 0.2;
 
           return `
             <g data-layer="elevation-ridge">
@@ -1761,43 +1819,52 @@
         .join("");
     }
 
-    const terrain = sorted.map(item => {
-      const count = Number(item.metrics?.count) || 0;
-      const style = hereHeatStyleForCell(item, heatStats);
-      const osm = osmByKey.get(item.key);
-      const fill = style.fillColor || "rgba(239,230,211,0.14)";
-      const alpha = Math.max(style.heatVisible ? 0.18 : 0.06, Math.min(0.92, Number(style.fillOpacity || 0.2)));
-      const poly = terrainCellPolygon(item.ix, item.iy);
-      if (!isVisiblePoly(poly)) return "";
-      const selected = selectedBounds &&
-        item.ix >= selectedBounds.minIx &&
-        item.ix <= selectedBounds.maxIx &&
-        item.iy >= selectedBounds.minIy &&
-        item.iy <= selectedBounds.maxIy;
-      const fog = fogInfoForCell(item.key);
-      const fogAlpha = fog && (fog.state === "unknown" || fog.state === "expired")
-        ? 0.34
-        : fog?.state === "surveyed"
-          ? 0.12
-          : 0;
-      const landTint = {
-        building: "rgba(126,92,64,0.20)",
-        wood: "rgba(71,139,83,0.24)",
-        park: "rgba(88,157,84,0.18)",
-        grass: "rgba(126,174,83,0.16)",
-        water: "rgba(60,138,178,0.28)"
-      }[osm?.landuseClass] || "";
-      const elevationM = elevationModel.metersAt(item.ix + 0.5, item.iy + 0.5);
-      const elevationDeltaM = Number.isFinite(elevationM) && Number.isFinite(elevationModel.baseM)
-        ? elevationM - elevationModel.baseM
-        : 0;
-      const elevationTint = elevationDeltaM > 25
-        ? `<polygon points="${pointsAttr(poly)}" fill="rgba(255,232,176,${clamp(elevationDeltaM / 1800, 0, 0.14).toFixed(3)})"></polygon>`
-        : elevationDeltaM < -18
-          ? `<polygon points="${pointsAttr(poly)}" fill="rgba(48,96,126,${clamp(Math.abs(elevationDeltaM) / 900, 0, 0.12).toFixed(3)})"></polygon>`
-          : "";
+    const terrain = sorted
+      .map((item) => {
+        const count = Number(item.metrics?.count) || 0;
+        const style = hereHeatStyleForCell(item, heatStats);
+        const osm = osmByKey.get(item.key);
+        const fill = style.fillColor || "rgba(239,230,211,0.14)";
+        const alpha = Math.max(
+          style.heatVisible ? 0.18 : 0.06,
+          Math.min(0.92, Number(style.fillOpacity || 0.2))
+        );
+        const poly = terrainCellPolygon(item.ix, item.iy);
+        if (!isVisiblePoly(poly)) return "";
+        const selected =
+          selectedBounds &&
+          item.ix >= selectedBounds.minIx &&
+          item.ix <= selectedBounds.maxIx &&
+          item.iy >= selectedBounds.minIy &&
+          item.iy <= selectedBounds.maxIy;
+        const fog = fogInfoForCell(item.key);
+        const fogAlpha =
+          fog && (fog.state === "unknown" || fog.state === "expired")
+            ? 0.34
+            : fog?.state === "surveyed"
+              ? 0.12
+              : 0;
+        const landTint =
+          {
+            building: "rgba(126,92,64,0.20)",
+            wood: "rgba(71,139,83,0.24)",
+            park: "rgba(88,157,84,0.18)",
+            grass: "rgba(126,174,83,0.16)",
+            water: "rgba(60,138,178,0.28)"
+          }[osm?.landuseClass] || "";
+        const elevationM = elevationModel.metersAt(item.ix + 0.5, item.iy + 0.5);
+        const elevationDeltaM =
+          Number.isFinite(elevationM) && Number.isFinite(elevationModel.baseM)
+            ? elevationM - elevationModel.baseM
+            : 0;
+        const elevationTint =
+          elevationDeltaM > 25
+            ? `<polygon points="${pointsAttr(poly)}" fill="rgba(255,232,176,${clamp(elevationDeltaM / 1800, 0, 0.14).toFixed(3)})"></polygon>`
+            : elevationDeltaM < -18
+              ? `<polygon points="${pointsAttr(poly)}" fill="rgba(48,96,126,${clamp(Math.abs(elevationDeltaM) / 900, 0, 0.12).toFixed(3)})"></polygon>`
+              : "";
 
-      return `
+        return `
         <g data-layer="terrain">
           <polygon points="${pointsAttr(poly)}" fill="${colorWithAlpha(fill, alpha)}" stroke="${selected ? "#ffe7a3" : "rgba(255,255,255,0.14)"}" stroke-width="${selected ? 1.2 : 0.35}"></polygon>
           ${elevationTint}
@@ -1806,85 +1873,105 @@
           ${fogAlpha ? `<polygon points="${pointsAttr(poly)}" fill="rgba(9,12,14,${fogAlpha})"></polygon>` : ""}
         </g>
       `;
-    }).join("");
+      })
+      .join("");
 
     const osmLines = renderRaisedOsmLines();
     const elevationRidges = renderElevationRidges();
 
-    const buildings = sorted.map(item => {
-      const osm = osmByKey.get(item.key);
-      if (!osm?.insideBuilding) return "";
-      const stories = 1 + (stableHash(item.key) % 3);
-      const top = terrainCellPolygon(item.ix, item.iy, 0.04, stories * 0.9);
-      const base = terrainCellPolygon(item.ix, item.iy);
-      if (!isVisiblePoly(top)) return "";
-      return `
+    const buildings = sorted
+      .map((item) => {
+        const osm = osmByKey.get(item.key);
+        if (!osm?.insideBuilding) return "";
+        const stories = 1 + (stableHash(item.key) % 3);
+        const top = terrainCellPolygon(item.ix, item.iy, 0.04, stories * 0.9);
+        const base = terrainCellPolygon(item.ix, item.iy);
+        if (!isVisiblePoly(top)) return "";
+        return `
         <g data-layer="buildings">
           <polygon points="${pointsAttr([top[0], top[1], base[1], base[0]])}" fill="rgba(89,67,52,0.72)"></polygon>
           <polygon points="${pointsAttr([top[1], top[2], base[2], base[1]])}" fill="rgba(119,86,62,0.58)"></polygon>
           <polygon points="${pointsAttr(top)}" fill="rgba(154,112,76,0.76)" stroke="rgba(255,226,181,0.36)" stroke-width="0.45"></polygon>
         </g>
       `;
-    }).join("");
+      })
+      .join("");
 
-    const trees = sorted.map(item => {
-      const osm = osmByKey.get(item.key);
-      if (!(osm?.landuseClass === "wood" || osm?.landuseClass === "park")) return "";
-      if (stableHash(item.key) % 3 === 0) return "";
-      const p = project(item.ix + 0.5, item.iy + 0.5, terrainZAt(item.ix + 0.5, item.iy + 0.5, 0.7));
-      if (p.x < -20 || p.x > w + 20 || p.y < -20 || p.y > h + 20) return "";
-      const r = Math.max(2.2, Math.min(5.8, p.scale * 0.19));
-      return `
+    const trees = sorted
+      .map((item) => {
+        const osm = osmByKey.get(item.key);
+        if (!(osm?.landuseClass === "wood" || osm?.landuseClass === "park")) return "";
+        if (stableHash(item.key) % 3 === 0) return "";
+        const p = project(
+          item.ix + 0.5,
+          item.iy + 0.5,
+          terrainZAt(item.ix + 0.5, item.iy + 0.5, 0.7)
+        );
+        if (p.x < -20 || p.x > w + 20 || p.y < -20 || p.y > h + 20) return "";
+        const r = Math.max(2.2, Math.min(5.8, p.scale * 0.19));
+        return `
         <g data-layer="trees">
           <line x1="${p.x}" y1="${p.y + r * 1.2}" x2="${p.x}" y2="${p.y + r * 0.15}" stroke="rgba(91,66,38,0.72)" stroke-width="${Math.max(0.7, r * 0.28)}"></line>
           <polygon points="${p.x},${p.y - r} ${p.x + r * 1.15},${p.y - r * 0.05} ${p.x + r * 0.45},${p.y + r} ${p.x - r * 0.55},${p.y + r * 0.86} ${p.x - r * 1.18},${p.y - r * 0.1}" fill="rgba(88,171,102,0.76)" stroke="rgba(199,235,167,0.20)" stroke-width="0.4"></polygon>
         </g>
       `;
-    }).join("");
+      })
+      .join("");
 
-    const niches = overlappingNiches(bounds).slice(0, 4).map((entry, index) => {
-      const polys = entry.cells.slice(0, 90).map(cell => {
-        const poly = terrainCellPolygon(cell.ix, cell.iy, 0.02, 0.72 + index * 0.12);
-        if (!isVisiblePoly(poly)) return "";
-        return `<polygon points="${pointsAttr(poly)}" fill="rgba(118,231,191,0.13)" stroke="rgba(118,231,191,0.38)" stroke-width="0.5"></polygon>`;
-      }).join("");
-      return `<g data-layer="niches">${polys}</g>`;
-    }).join("");
+    const niches = overlappingNiches(bounds)
+      .slice(0, 4)
+      .map((entry, index) => {
+        const polys = entry.cells
+          .slice(0, 90)
+          .map((cell) => {
+            const poly = terrainCellPolygon(cell.ix, cell.iy, 0.02, 0.72 + index * 0.12);
+            if (!isVisiblePoly(poly)) return "";
+            return `<polygon points="${pointsAttr(poly)}" fill="rgba(118,231,191,0.13)" stroke="rgba(118,231,191,0.38)" stroke-width="0.5"></polygon>`;
+          })
+          .join("");
+        return `<g data-layer="niches">${polys}</g>`;
+      })
+      .join("");
 
     const questTarget = activeQuestTarget();
-    const questMarker = questTarget && questTarget.mode !== "anywhere" && Number.isFinite(Number(questTarget.ix)) && Number.isFinite(Number(questTarget.iy))
-      ? (() => {
-        const qBounds = {
-          minIx: Number(questTarget.ix) - Math.max(0, Number(questTarget.radiusCells) || 0),
-          maxIx: Number(questTarget.ix) + Math.max(0, Number(questTarget.radiusCells) || 0),
-          minIy: Number(questTarget.iy) - Math.max(0, Number(questTarget.radiusCells) || 0),
-          maxIy: Number(questTarget.iy) + Math.max(0, Number(questTarget.radiusCells) || 0)
-        };
-        if (
-          qBounds.maxIx < bounds.minIx ||
-          qBounds.minIx > bounds.maxIx ||
-          qBounds.maxIy < bounds.minIy ||
-          qBounds.minIy > bounds.maxIy
-        ) {
-          return "";
-        }
-        const qx = Number(questTarget.ix) + 0.5;
-        const qy = Number(questTarget.iy) + 0.5;
-        const p = project(qx, qy, terrainZAt(qx, qy, 0.25));
-        return `
+    const questMarker =
+      questTarget &&
+      questTarget.mode !== "anywhere" &&
+      Number.isFinite(Number(questTarget.ix)) &&
+      Number.isFinite(Number(questTarget.iy))
+        ? (() => {
+            const qBounds = {
+              minIx: Number(questTarget.ix) - Math.max(0, Number(questTarget.radiusCells) || 0),
+              maxIx: Number(questTarget.ix) + Math.max(0, Number(questTarget.radiusCells) || 0),
+              minIy: Number(questTarget.iy) - Math.max(0, Number(questTarget.radiusCells) || 0),
+              maxIy: Number(questTarget.iy) + Math.max(0, Number(questTarget.radiusCells) || 0)
+            };
+            if (
+              qBounds.maxIx < bounds.minIx ||
+              qBounds.minIx > bounds.maxIx ||
+              qBounds.maxIy < bounds.minIy ||
+              qBounds.minIy > bounds.maxIy
+            ) {
+              return "";
+            }
+            const qx = Number(questTarget.ix) + 0.5;
+            const qy = Number(questTarget.iy) + 0.5;
+            const p = project(qx, qy, terrainZAt(qx, qy, 0.25));
+            return `
           <g data-layer="quest">
             <line x1="${p.x}" y1="${p.y - 62}" x2="${p.x}" y2="${p.y + 3}" stroke="url(#gwHereQuestBeam)" stroke-width="8" stroke-linecap="round"></line>
             <circle cx="${p.x}" cy="${p.y}" r="5" fill="rgba(255,224,130,0.86)" stroke="rgba(255,255,255,0.68)" stroke-width="1"></circle>
           </g>
         `;
-      })()
-      : "";
+          })()
+        : "";
 
-    const userAvatar = inBounds(userCell) ? (() => {
-      const ux = userCell.ix + 0.5;
-      const uy = userCell.iy + 0.5;
-      const p = project(ux, uy, terrainZAt(ux, uy, 1.05));
-      return `
+    const userAvatar = inBounds(userCell)
+      ? (() => {
+          const ux = userCell.ix + 0.5;
+          const uy = userCell.iy + 0.5;
+          const p = project(ux, uy, terrainZAt(ux, uy, 1.05));
+          return `
         <g aria-label="Avatar in viewport">
           <ellipse cx="${p.x}" cy="${avatarY + 10}" rx="6.4" ry="2.4" fill="rgba(0,0,0,0.34)"></ellipse>
           <path d="M${p.x - 4.1} ${avatarY + 8.5} L${p.x - 2.5} ${avatarY + 1.4} L${p.x + 2.5} ${avatarY + 1.4} L${p.x + 4.1} ${avatarY + 8.5} Z" fill="#98e6c4" stroke="rgba(20,17,15,0.9)" stroke-width="0.9"></path>
@@ -1892,14 +1979,17 @@
           <path d="M${p.x} ${avatarY - 8.5} L${p.x + Math.sin(headingRad) * 7} ${avatarY - 2.5}" stroke="#ffe7a3" stroke-width="1.2" stroke-linecap="round"></path>
         </g>
       `;
-    })() : "";
+        })()
+      : "";
 
-    const centerMarker = inBounds(centerCell) ? (() => {
-      const cx = centerCell.ix + 0.5;
-      const cy = centerCell.iy + 0.5;
-      const p = project(cx, cy, terrainZAt(cx, cy, 0.45));
-      return `<circle cx="${p.x}" cy="${p.y}" r="2.7" fill="none" stroke="#f0d18a" stroke-width="1.2"></circle>`;
-    })() : "";
+    const centerMarker = inBounds(centerCell)
+      ? (() => {
+          const cx = centerCell.ix + 0.5;
+          const cy = centerCell.iy + 0.5;
+          const p = project(cx, cy, terrainZAt(cx, cy, 0.45));
+          return `<circle cx="${p.x}" cy="${p.y}" r="2.7" fill="none" stroke="#f0d18a" stroke-width="1.2"></circle>`;
+        })()
+      : "";
 
     return `
       <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Here 3D viewport">
@@ -1916,7 +2006,7 @@
           </linearGradient>
         </defs>
         <rect x="0" y="0" width="${w}" height="${h}" fill="rgba(6,8,8,0.58)"></rect>
-        <path d="M0 ${h * 0.34} C56 ${h * 0.20} 150 ${h * 0.20} ${w} ${h * 0.34} L${w} 0 L0 0 Z" fill="rgba(149,196,184,0.08)"></path>
+        <path d="M0 ${h * 0.34} C56 ${h * 0.2} 150 ${h * 0.2} ${w} ${h * 0.34} L${w} 0 L0 0 Z" fill="rgba(149,196,184,0.08)"></path>
         ${elevationRidges}
         ${terrain}
         ${osmLines}
@@ -2029,10 +2119,9 @@
         genusCount: node.genusNames.size,
         children: Array.from(node.children.values())
           .map(finalize)
-          .sort((a, b) =>
-            (b.weight - a.weight) ||
-            (b.genusCount - a.genusCount) ||
-            a.name.localeCompare(b.name)
+          .sort(
+            (a, b) =>
+              b.weight - a.weight || b.genusCount - a.genusCount || a.name.localeCompare(b.name)
           )
       };
     }
@@ -2064,9 +2153,7 @@
 
   function renderPie() {
     const node = currentPieNode();
-    const counts = (node?.children || [])
-      .filter(child => Number(child.weight) > 0)
-      .slice(0, 10);
+    const counts = (node?.children || []).filter((child) => Number(child.weight) > 0).slice(0, 10);
 
     if (!counts.length) {
       return `
@@ -2083,37 +2170,42 @@
     const rOuter = 50;
     const rInner = 22;
     let cursor = -Math.PI / 2;
-    const slices = counts.map((item, index) => {
-      const angle = (item.weight / total) * Math.PI * 2;
-      const start = cursor;
-      const end = cursor + angle;
-      cursor = end;
-      const color = TAXON_COLORS[index % TAXON_COLORS.length];
-      const mid = (start + end) / 2;
-      const lx = cx + Math.cos(mid) * 78;
-      const ly = cy + Math.sin(mid) * 58;
-      const pct = Math.round((item.weight / total) * 100);
-      const label = taxonDisplayName(item.name);
-      const canZoom = (item.children || []).length > 0;
-      return `
+    const slices = counts
+      .map((item, index) => {
+        const angle = (item.weight / total) * Math.PI * 2;
+        const start = cursor;
+        const end = cursor + angle;
+        cursor = end;
+        const color = TAXON_COLORS[index % TAXON_COLORS.length];
+        const mid = (start + end) / 2;
+        const lx = cx + Math.cos(mid) * 78;
+        const ly = cy + Math.sin(mid) * 58;
+        const pct = Math.round((item.weight / total) * 100);
+        const label = taxonDisplayName(item.name);
+        const canZoom = (item.children || []).length > 0;
+        return `
         <g class="gw-here-pie-slice" data-pie-path="${esc(item.path)}" data-can-zoom="${canZoom ? "true" : "false"}">
           <title>${esc(label)} - ${item.weight} obs - ${item.genusCount} genera</title>
           <path d="${arcPath(cx, cy, rOuter, rInner, start, end, 3.5)}" fill="${color}" stroke="rgba(255,255,255,0.82)" stroke-width="1.2"></path>
           ${pct >= 9 ? `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="9" font-weight="850" fill="rgba(239,230,211,0.88)">${esc(label)}</text>` : ""}
         </g>
       `;
-    }).join("");
+      })
+      .join("");
 
-    const legend = counts.slice(0, 4).map((item, index) => {
-      const label = taxonDisplayName(item.name);
-      return `
+    const legend = counts
+      .slice(0, 4)
+      .map((item, index) => {
+        const label = taxonDisplayName(item.name);
+        return `
         <g transform="translate(142 ${38 + index * 22})">
           <rect x="0" y="-8" width="8" height="8" rx="2" fill="${TAXON_COLORS[index % TAXON_COLORS.length]}"></rect>
           <text x="13" y="-2" font-size="9.5" font-weight="800" fill="rgba(239,230,211,0.82)">${esc(label)}</text>
           <text x="13" y="10" font-size="8.5" fill="rgba(239,230,211,0.52)">${item.weight} obs</text>
         </g>
       `;
-    }).join("");
+      })
+      .join("");
 
     const centerLabel = node?.rank === "root" ? "Taxa" : taxonDisplayName(node.name);
     return `
@@ -2134,12 +2226,14 @@
     return raw
       .replace(/[_-]+/g, " ")
       .replace(/\s+/g, " ")
-      .replace(/\b\w/g, ch => ch.toUpperCase());
+      .replace(/\b\w/g, (ch) => ch.toUpperCase());
   }
 
   function genusCommonName(genus) {
     const rec = window.GridWildGenusCodex?.genera?.[genus];
-    return formatCommonName(rec?.common || window.GridWildTaxonomy?.displayName?.("genus", genus) || "");
+    return formatCommonName(
+      rec?.common || window.GridWildTaxonomy?.displayName?.("genus", genus) || ""
+    );
   }
 
   function taxonListLabel(row) {
@@ -2189,14 +2283,14 @@
   }
 
   function normalizeHereListView(value) {
-    return HERE_LIST_VIEWS.some(option => option.id === value) ? value : "common";
+    return HERE_LIST_VIEWS.some((option) => option.id === value) ? value : "common";
   }
 
   function renderHereListSwitcher() {
     const activeView = normalizeHereListView(hereListView);
     return `
       <div class="gw-here-list-switch" role="radiogroup" aria-label="Here detail list">
-        ${HERE_LIST_VIEWS.map(option => {
+        ${HERE_LIST_VIEWS.map((option) => {
           const checked = option.id === activeView ? "checked" : "";
           return `
             <label class="gw-here-list-option" for="gwHereListView_${esc(option.id)}">
@@ -2214,23 +2308,23 @@
     const genera = aggregateGeneraFromRows(node?.rows || []);
     const common = genera
       .slice()
-      .sort((a, b) => (b.count - a.count) || a.genus.localeCompare(b.genus))
+      .sort((a, b) => b.count - a.count || a.genus.localeCompare(b.genus))
       .slice(0, 5);
-    const commonNames = new Set(common.map(row => row.genus));
+    const commonNames = new Set(common.map((row) => row.genus));
     let rare = genera
-      .filter(row => !commonNames.has(row.genus))
-      .sort((a, b) => (a.count - b.count) || a.genus.localeCompare(b.genus))
+      .filter((row) => !commonNames.has(row.genus))
+      .sort((a, b) => a.count - b.count || a.genus.localeCompare(b.genus))
       .slice(0, 5);
 
     if (!rare.length) {
       rare = genera
         .slice()
-        .sort((a, b) => (a.count - b.count) || a.genus.localeCompare(b.genus))
+        .sort((a, b) => a.count - b.count || a.genus.localeCompare(b.genus))
         .slice(0, 5);
     }
 
     const nodeLabel = node?.rank === "root" ? "" : ` - ${taxonDisplayName(node.name)}`;
-    const taxaMaxCount = Math.max(...genera.map(row => Number(row.count) || 0), 1);
+    const taxaMaxCount = Math.max(...genera.map((row) => Number(row.count) || 0), 1);
 
     return { common, genera, nodeLabel, rare, taxaMaxCount };
   }
@@ -2240,19 +2334,19 @@
       <div class="gw-here-taxa-group">
         <div class="gw-here-taxa-heading">${title}${esc(context.nodeLabel)}</div>
         <div class="gw-here-inline-list">
-        ${rows.map((row, index) => {
-          const label = taxonListLabel(row);
-          const titleText = label.sub
-            ? `${label.main} (${label.sub})`
-            : label.main;
-          const fontSize = scaledListFontSize(row.count, context.taxaMaxCount);
-          return `
+        ${rows
+          .map((row, index) => {
+            const label = taxonListLabel(row);
+            const titleText = label.sub ? `${label.main} (${label.sub})` : label.main;
+            const fontSize = scaledListFontSize(row.count, context.taxaMaxCount);
+            return `
             <span class="gw-here-inline-item" style="font-size:${fontSize}px">
               <button class="gw-here-inline-link" type="button" data-genus="${esc(row.genus)}" title="${esc(titleText)} - ${esc(row.family || row.order || row.iconic || row.genus)}">${esc(label.main)}</button>
               <span class="gw-here-inline-count">${row.count}</span>${inlineComma(index, rows.length)}
             </span>
           `;
-        }).join("")}
+          })
+          .join("")}
         </div>
       </div>
     `;
@@ -2273,11 +2367,14 @@
 
   function renderTopObserversList(record, observerDict) {
     const rows = (Array.isArray(record?.top_observers) ? record.top_observers : [])
-      .filter(row => (Number(row?.observer_id) || row?.observer_login) && Number(row?.count) > 0)
-      .sort((a, b) =>
-        (Number(b.count) - Number(a.count)) ||
-        (Number(b.species) - Number(a.species)) ||
-        String(a.observer_login || a.observer_id || "").localeCompare(String(b.observer_login || b.observer_id || ""))
+      .filter((row) => (Number(row?.observer_id) || row?.observer_login) && Number(row?.count) > 0)
+      .sort(
+        (a, b) =>
+          Number(b.count) - Number(a.count) ||
+          Number(b.species) - Number(a.species) ||
+          String(a.observer_login || a.observer_id || "").localeCompare(
+            String(b.observer_login || b.observer_id || "")
+          )
       )
       .slice(0, 5);
 
@@ -2291,37 +2388,46 @@
     }
 
     const api = gridApi();
-    const maxCount = Math.max(...rows.map(row => Number(row.count) || 0), 1);
+    const maxCount = Math.max(...rows.map((row) => Number(row.count) || 0), 1);
 
     return `
       <div class="gw-here-taxa-group">
         <div class="gw-here-taxa-heading">Top observers</div>
         <div class="gw-here-inline-list">
-        ${rows.map((row, index) => {
-          const observerId = Number(row.observer_id);
-          const meta = Number.isFinite(observerId) && observerId > 0
-            ? api?.observerMeta?.(observerDict, observerId) || {}
-            : {};
-          const login = row.observer_login || meta.login || `user ${observerId}`;
-          const name = row.observer_name || meta.name || "";
-          const count = Number(row.count) || 0;
-          const species = Number(row.species) || 0;
-          const fontSize = scaledListFontSize(count, maxCount, 9.8, 12.8);
-          const url = row.observer_url || (login && !login.startsWith("user ")
-            ? `https://www.inaturalist.org/people/${encodeURIComponent(login)}`
-            : "");
+        ${rows
+          .map((row, index) => {
+            const observerId = Number(row.observer_id);
+            const meta =
+              Number.isFinite(observerId) && observerId > 0
+                ? api?.observerMeta?.(observerDict, observerId) || {}
+                : {};
+            const login = row.observer_login || meta.login || `user ${observerId}`;
+            const name = row.observer_name || meta.name || "";
+            const count = Number(row.count) || 0;
+            const species = Number(row.species) || 0;
+            const fontSize = scaledListFontSize(count, maxCount, 9.8, 12.8);
+            const url =
+              row.observer_url ||
+              (login && !login.startsWith("user ")
+                ? `https://www.inaturalist.org/people/${encodeURIComponent(login)}`
+                : "");
 
-          return `
+            return `
             <span class="gw-here-inline-item" style="font-size:${fontSize}px" title="${esc(name || login)}">
-              ${url ? `
+              ${
+                url
+                  ? `
                 <a class="gw-here-inline-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">@${esc(login)}</a>
-              ` : `
+              `
+                  : `
                 <span class="gw-here-inline-link">@${esc(login)}</span>
-              `}
+              `
+              }
               <span class="gw-here-inline-count">${count}${species ? `/${species} spp` : ""}</span>${inlineComma(index, rows.length)}
             </span>
           `;
-        }).join("")}
+          })
+          .join("")}
         </div>
       </div>
     `;
@@ -2349,14 +2455,17 @@
   function summarizeCells(bounds) {
     const api = gridApi();
     const cells = api?.cellsForBounds?.(bounds) || [];
-    return cells.reduce((acc, cell) => {
-      const m = cell.metrics || {};
-      const count = Number(m.count) || 0;
-      acc.obs += count;
-      acc.species += Number(m.species) || 0;
-      if (count > 0) acc.active++;
-      return acc;
-    }, { cells: cells.length, active: 0, obs: 0, species: 0 });
+    return cells.reduce(
+      (acc, cell) => {
+        const m = cell.metrics || {};
+        const count = Number(m.count) || 0;
+        acc.obs += count;
+        acc.species += Number(m.species) || 0;
+        if (count > 0) acc.active++;
+        return acc;
+      },
+      { cells: cells.length, active: 0, obs: 0, species: 0 }
+    );
   }
 
   function compactStatNumber(value) {
@@ -2368,8 +2477,9 @@
 
   function cellCountForBounds(bounds) {
     if (!bounds) return 0;
-    return Math.max(0, bounds.maxIx - bounds.minIx + 1) *
-      Math.max(0, bounds.maxIy - bounds.minIy + 1);
+    return (
+      Math.max(0, bounds.maxIx - bounds.minIx + 1) * Math.max(0, bounds.maxIy - bounds.minIy + 1)
+    );
   }
 
   function centeredTaxaBounds(bounds, maxCells) {
@@ -2482,7 +2592,9 @@
     syncHereDownloadControl();
   }
 
-  function syncHereDownloadControl(selection = window.GridWildSelectionTool?.getSelection?.() || null) {
+  function syncHereDownloadControl(
+    selection = window.GridWildSelectionTool?.getSelection?.() || null
+  ) {
     const wrap = document.getElementById("gwHereObservationDownload");
     const btn = document.getElementById("gwHereObservationDownloadBtn");
     const progress = document.getElementById("gwHereObservationDownloadProgress");
@@ -2515,14 +2627,14 @@
     const stats =
       `Page ${detail.page || 0} - accepted ${detail.accepted || 0} - rejected ${detail.rejected || 0}` +
       (detail.duplicates ? ` - cached ${detail.duplicates}` : "");
-    herePyriteSeed.progressText = detail.message
-      ? `${stats} - ${detail.message}`
-      : stats;
+    herePyriteSeed.progressText = detail.message ? `${stats} - ${detail.message}` : stats;
 
     syncHerePyriteControl();
   }
 
-  function syncHerePyriteControl(selection = window.GridWildSelectionTool?.getSelection?.() || null) {
+  function syncHerePyriteControl(
+    selection = window.GridWildSelectionTool?.getSelection?.() || null
+  ) {
     const wrap = document.getElementById("gwHerePyriteLake");
     const seedBtn = document.getElementById("gwHerePyriteSeedBtn");
     const toggleBtn = document.getElementById("gwHerePyriteToggleBtn");
@@ -2531,9 +2643,23 @@
     const progressText = document.getElementById("gwHerePyriteProgressText");
     const progressBar = document.getElementById("gwHerePyriteProgressBar");
     const summaryEl = document.getElementById("gwHerePyriteSummary");
-    if (!wrap || !seedBtn || !toggleBtn || !clearBtn || !progress || !progressText || !progressBar || !summaryEl) return;
+    if (
+      !wrap ||
+      !seedBtn ||
+      !toggleBtn ||
+      !clearBtn ||
+      !progress ||
+      !progressText ||
+      !progressBar ||
+      !summaryEl
+    )
+      return;
 
-    const state = window.GridWildPyriteLake?.getState?.() || { enabled: false, hasData: false, summary: {} };
+    const state = window.GridWildPyriteLake?.getState?.() || {
+      enabled: false,
+      hasData: false,
+      summary: {}
+    };
     const hasSelection = !!selection?.bounds;
     const hasData = state.hasData === true;
     const isEnabled = state.enabled === true && hasData;
@@ -2541,9 +2667,11 @@
 
     wrap.classList.toggle("is-hidden", !hasSelection && !herePyriteSeed.busy && !hasData);
 
-    seedBtn.disabled = !hasSelection || herePyriteSeed.busy || !window.GridWildPyriteLake?.seedFromBounds;
+    seedBtn.disabled =
+      !hasSelection || herePyriteSeed.busy || !window.GridWildPyriteLake?.seedFromBounds;
     seedBtn.textContent = herePyriteSeed.busy ? "Seeding..." : "Seed Pyrite";
-    seedBtn.title = "Add public iNaturalist observations inside this selection to the local pyrite lake";
+    seedBtn.title =
+      "Add public iNaturalist observations inside this selection to the local pyrite lake";
 
     toggleBtn.disabled = !hasData || herePyriteSeed.busy;
     toggleBtn.textContent = isEnabled ? "On" : "Off";
@@ -2646,9 +2774,11 @@
       herePyriteSeed.progressText = result?.stoppedEarly
         ? `${result?.added || 0} added - stopped at page ${result.stoppedEarly.page}`
         : `${result?.added || 0} added - ${result?.duplicates || 0} cached`;
-      toast(result?.stoppedEarly
-        ? `Pyrite lake saved partial seed: ${result?.added || 0} observations added`
-        : `Pyrite lake seeded: ${result?.added || 0} observations added`);
+      toast(
+        result?.stoppedEarly
+          ? `Pyrite lake saved partial seed: ${result?.added || 0} observations added`
+          : `Pyrite lake seeded: ${result?.added || 0} observations added`
+      );
     } catch (err) {
       console.warn("Pyrite lake seed failed:", err);
       toast(`Could not seed pyrite lake: ${err.message}`);
@@ -2707,7 +2837,7 @@
   }
 
   function setHere3dYawOffset(value) {
-    hereMap3dYawOffsetDeg = ((Number(value) || 0) % 360 + 360) % 360;
+    hereMap3dYawOffsetDeg = (((Number(value) || 0) % 360) + 360) % 360;
     if (hereMap3dYawOffsetDeg > 180) hereMap3dYawOffsetDeg -= 360;
     scheduleRefresh(10);
   }
@@ -2747,7 +2877,7 @@
     if (!panel || panel.dataset.interactionsBound === "true") return;
     panel.dataset.interactionsBound = "true";
 
-    panel.addEventListener("click", evt => {
+    panel.addEventListener("click", (evt) => {
       const downloadBtn = evt.target.closest?.("#gwHereObservationDownloadBtn");
       if (downloadBtn) {
         evt.preventDefault();
@@ -2854,7 +2984,7 @@
       }
     });
 
-    panel.addEventListener("change", evt => {
+    panel.addEventListener("change", (evt) => {
       const input = evt.target.closest?.("input[name='gwHereListView']");
       if (!input) return;
 
@@ -2932,7 +3062,10 @@
       `;
     }
     if (taxaListEl) {
-      taxaListEl.innerHTML = renderContextLists("", `<div class="gw-here-taxa-heading">Reading taxa...</div>`);
+      taxaListEl.innerHTML = renderContextLists(
+        "",
+        `<div class="gw-here-taxa-heading">Reading taxa...</div>`
+      );
     }
 
     const [record, observerDict] = await Promise.all([
@@ -3034,15 +3167,20 @@
       btn.classList.toggle("is-armed", armed);
       btn.classList.toggle("has-selection", !!selection);
       btn.setAttribute("aria-pressed", armed || selection ? "true" : "false");
-      btn.setAttribute("aria-label", selection ? "Clear selection" : armed ? "Cancel cell selection" : "Select cells");
+      btn.setAttribute(
+        "aria-label",
+        selection ? "Clear selection" : armed ? "Cancel cell selection" : "Select cells"
+      );
       btn.title = selection ? "Clear selection" : armed ? "Cancel selection" : "Select cells";
       document.body.classList.toggle("gw-selection-active", armed);
     }
 
     function fireChange() {
-      window.dispatchEvent(new CustomEvent("gridwild:selectionchange", {
-        detail: { selection }
-      }));
+      window.dispatchEvent(
+        new CustomEvent("gridwild:selectionchange", {
+          detail: { selection }
+        })
+      );
       if (selection) setHerePanelOpen(true);
       scheduleRefresh(10);
     }
@@ -3179,7 +3317,12 @@
 
     function latLngForDomEvent(evt) {
       const source = evt?.changedTouches?.[0] || evt?.touches?.[0] || evt;
-      if (!source || !Number.isFinite(Number(source.clientX)) || !Number.isFinite(Number(source.clientY))) return null;
+      if (
+        !source ||
+        !Number.isFinite(Number(source.clientX)) ||
+        !Number.isFinite(Number(source.clientY))
+      )
+        return null;
       return map.mouseEventToLatLng(source);
     }
 
@@ -3294,20 +3437,28 @@
     window.addEventListener("gridwild:heatchange", () => scheduleRefresh(10));
     window.addEventListener("gwOsmFeaturesUpdated", () => scheduleRefresh(40));
     window.addEventListener("gwRecentINatUpdated", () => scheduleRefresh(80));
-    window.addEventListener("gwRecentINatProgress", evt => setHereDownloadProgress(evt.detail || {}));
+    window.addEventListener("gwRecentINatProgress", (evt) =>
+      setHereDownloadProgress(evt.detail || {})
+    );
     window.addEventListener("gwPyriteLakeUpdated", () => scheduleRefresh(40));
-    window.addEventListener("gwPyriteLakeProgress", evt => setHerePyriteProgress(evt.detail || {}));
-    document.addEventListener("change", evt => {
-      if (evt.target?.matches?.("[data-iconic], #taxaChecklist input, #toggleHeat, #toggleHeatZThreshold, input[name='heatMetric'], #gwHeatZThresholdInput")) {
+    window.addEventListener("gwPyriteLakeProgress", (evt) =>
+      setHerePyriteProgress(evt.detail || {})
+    );
+    document.addEventListener("change", (evt) => {
+      if (
+        evt.target?.matches?.(
+          "[data-iconic], #taxaChecklist input, #toggleHeat, #toggleHeatZThreshold, input[name='heatMetric'], #gwHeatZThresholdInput"
+        )
+      ) {
         scheduleRefresh(10);
       }
     });
-    document.addEventListener("input", evt => {
+    document.addEventListener("input", (evt) => {
       if (evt.target?.matches?.("#gwHeatZThresholdSlider, #gwHeatZThresholdInput")) {
         scheduleRefresh(10);
       }
     });
-    document.addEventListener("click", evt => {
+    document.addEventListener("click", (evt) => {
       if (evt.target?.closest?.("#gwHudHighContrastToggle, #gwHeatZThresholdDirectionBtn")) {
         scheduleRefresh(10);
       }

@@ -2,10 +2,7 @@ const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { applyPartyTimingToRows } = require("./_party-duration");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
@@ -21,7 +18,7 @@ exports.handler = async function (event) {
     if (error) throw error;
 
     const timedParties = await applyPartyTimingToRows(supabase, data || []);
-    const visibleParties = timedParties.filter(p => p?.status !== "ended");
+    const visibleParties = timedParties.filter((p) => p?.status !== "ended");
 
     return {
       statusCode: 200,

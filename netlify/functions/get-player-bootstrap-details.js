@@ -1,10 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function isMissingOptionalTable(err) {
   const message = String(err?.message || "");
@@ -28,44 +25,39 @@ exports.handler = async function (event) {
 
     if (!player_id) throw new Error("player_id is required");
 
-    const [
-      inventory,
-      equipment,
-      achievements,
-      identificationClaims,
-      playerPresence,
-      homeSteward
-    ] = await Promise.all([
-      optionalQuery(
-        supabase.from("player_inventory").select("*").eq("player_id", player_id),
-        []
-      ),
-      optionalQuery(
-        supabase.from("player_equipment").select("*").eq("player_id", player_id).maybeSingle(),
-        null
-      ),
-      optionalQuery(
-        supabase.from("gridwild_verified_achievements").select("*").eq("player_id", player_id),
-        []
-      ),
-      optionalQuery(
-        supabase
-          .from("identification_claims")
-          .select("*")
-          .eq("player_id", player_id)
-          .order("claimed_at", { ascending: false })
-          .limit(200),
-        []
-      ),
-      optionalQuery(
-        supabase.from("player_presence").select("*").eq("player_id", player_id).maybeSingle(),
-        null
-      ),
-      optionalQuery(
-        supabase.from("local_niche_stewards").select("niche_id").eq("user_id", player_id).maybeSingle(),
-        null
-      )
-    ]);
+    const [inventory, equipment, achievements, identificationClaims, playerPresence, homeSteward] =
+      await Promise.all([
+        optionalQuery(supabase.from("player_inventory").select("*").eq("player_id", player_id), []),
+        optionalQuery(
+          supabase.from("player_equipment").select("*").eq("player_id", player_id).maybeSingle(),
+          null
+        ),
+        optionalQuery(
+          supabase.from("gridwild_verified_achievements").select("*").eq("player_id", player_id),
+          []
+        ),
+        optionalQuery(
+          supabase
+            .from("identification_claims")
+            .select("*")
+            .eq("player_id", player_id)
+            .order("claimed_at", { ascending: false })
+            .limit(200),
+          []
+        ),
+        optionalQuery(
+          supabase.from("player_presence").select("*").eq("player_id", player_id).maybeSingle(),
+          null
+        ),
+        optionalQuery(
+          supabase
+            .from("local_niche_stewards")
+            .select("niche_id")
+            .eq("user_id", player_id)
+            .maybeSingle(),
+          null
+        )
+      ]);
 
     const homeNicheId = homeSteward?.niche_id || null;
     let homeNiche = null;

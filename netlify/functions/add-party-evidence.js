@@ -3,24 +3,14 @@ const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { applyPartyTiming } = require("./_party-duration");
 const { requirePartyAccess } = require("./_party-access");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
     await authorizePlayerRequest(supabase, event);
-    const {
-      party_id,
-      player_id,
-      draft_id,
-      taxon,
-      iconic_taxon,
-      cell_key,
-      lat,
-      lng
-    } = JSON.parse(event.body || "{}");
+    const { party_id, player_id, draft_id, taxon, iconic_taxon, cell_key, lat, lng } = JSON.parse(
+      event.body || "{}"
+    );
 
     if (!party_id) throw new Error("party_id is required");
     if (!player_id) throw new Error("player_id is required");

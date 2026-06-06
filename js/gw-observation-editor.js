@@ -20,16 +20,13 @@
     const d = iso ? new Date(iso) : new Date();
     if (Number.isNaN(d.getTime())) return "";
 
-    const pad = n => String(n).padStart(2, "0");
+    const pad = (n) => String(n).padStart(2, "0");
 
-    return [
-      d.getFullYear(),
-      pad(d.getMonth() + 1),
-      pad(d.getDate())
-    ].join("-") + "T" + [
-      pad(d.getHours()),
-      pad(d.getMinutes())
-    ].join(":");
+    return (
+      [d.getFullYear(), pad(d.getMonth() + 1), pad(d.getDate())].join("-") +
+      "T" +
+      [pad(d.getHours()), pad(d.getMinutes())].join(":")
+    );
   }
 
   function datetimeLocalValueToISO(value) {
@@ -270,7 +267,7 @@
   }
 
   function getSelectedPhoto(draft) {
-    return draft?.photos?.find(p => p.id === selectedPhotoId) || draft?.photos?.[0] || null;
+    return draft?.photos?.find((p) => p.id === selectedPhotoId) || draft?.photos?.[0] || null;
   }
 
   function open(draftId) {
@@ -282,14 +279,14 @@
 
     selectedPhotoId = draft.primaryPhotoId || draft.photos[0]?.id || null;
 
-    document.querySelectorAll(".gw-obs-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".gw-obs-backdrop").forEach((el) => el.remove());
 
     const root = document.createElement("div");
     root.className = "gw-obs-backdrop";
     root.innerHTML = `<div class="gw-obs-editor" id="gwObsEditorCard"></div>`;
     document.body.appendChild(root);
 
-    root.addEventListener("click", evt => {
+    root.addEventListener("click", (evt) => {
       if (evt.target === root) root.remove();
     });
 
@@ -314,7 +311,8 @@
     if (!draft) return;
 
     const photo = getSelectedPhoto(draft);
-    const card = root.querySelector("#gwObsEditorCard") || document.getElementById("gwObsEditorCard");
+    const card =
+      root.querySelector("#gwObsEditorCard") || document.getElementById("gwObsEditorCard");
     if (!card) return;
 
     card.innerHTML = `
@@ -333,12 +331,16 @@
           </div>
 
           <div class="gw-obs-thumbs">
-            ${draft.photos.map(p => `
+            ${draft.photos
+              .map(
+                (p) => `
               <button class="gw-obs-thumb ${p.id === photo?.id ? "active" : ""}" data-photo-id="${esc(p.id)}">
                 <img src="${p.dataUrl}" alt="">
                 ${p.kind === "derived" ? `<span class="gw-obs-copytag">copy</span>` : ""}
               </button>
-            `).join("")}
+            `
+              )
+              .join("")}
           </div>
 
           <div class="gw-obs-panel" style="margin-top:10px;">
@@ -378,9 +380,12 @@
           <div class="gw-obs-panel">
             <label class="gw-obs-label">Suggested ID placeholder</label>
             <select id="gwObsKingdom">
-              ${["Unknown", "Plantae", "Animalia", "Fungi", "Insecta", "Aves", "Mammalia"].map(k =>
-                `<option value="${k}" ${draft.suggestedId?.kingdom === k ? "selected" : ""}>${k}</option>`
-              ).join("")}
+              ${["Unknown", "Plantae", "Animalia", "Fungi", "Insecta", "Aves", "Mammalia"]
+                .map(
+                  (k) =>
+                    `<option value="${k}" ${draft.suggestedId?.kingdom === k ? "selected" : ""}>${k}</option>`
+                )
+                .join("")}
             </select>
             <div class="gw-obs-sub" style="margin-top:8px;">
               Classifier not enabled yet. This is a placeholder for broad ID.
@@ -424,7 +429,7 @@
     bind(card);
   }
 
-    function updateEditPreview() {
+  function updateEditPreview() {
     const img = document.getElementById("gwObsMainImage");
     if (!img) return;
 
@@ -437,15 +442,14 @@
     img.style.transformOrigin = "center center";
     img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom}) rotate(${rotate}deg)`;
     img.style.filter = `brightness(${100 + exposure}%)`;
-    }
+  }
 
+  function openINaturalistHandoffModal(fieldPacket, draft) {
+    const text = JSON.stringify(fieldPacket, null, 2);
 
-function openINaturalistHandoffModal(fieldPacket, draft) {
-  const text = JSON.stringify(fieldPacket, null, 2);
-
-  const modal = document.createElement("div");
-  modal.className = "gw-obs-backdrop";
-  modal.innerHTML = `
+    const modal = document.createElement("div");
+    modal.className = "gw-obs-backdrop";
+    modal.innerHTML = `
     <div class="gw-obs-editor" style="max-width:720px;">
       <div class="gw-obs-title">Prepare for iNaturalist</div>
       <div class="gw-obs-sub">
@@ -473,39 +477,42 @@ function openINaturalistHandoffModal(fieldPacket, draft) {
     </div>
   `;
 
-  document.body.appendChild(modal);
+    document.body.appendChild(modal);
 
-  modal.querySelector("#gwINatCopyBtn").onclick = async () => {
-    await navigator.clipboard.writeText(text);
-    alert("Copied iNaturalist handoff fields.");
-  };
+    modal.querySelector("#gwINatCopyBtn").onclick = async () => {
+      await navigator.clipboard.writeText(text);
+      alert("Copied iNaturalist handoff fields.");
+    };
 
-  modal.querySelector("#gwINatOpenBtn").onclick = () => {
-    window.open("https://www.inaturalist.org/observations/upload", "_blank", "noopener,noreferrer");
-  };
+    modal.querySelector("#gwINatOpenBtn").onclick = () => {
+      window.open(
+        "https://www.inaturalist.org/observations/upload",
+        "_blank",
+        "noopener,noreferrer"
+      );
+    };
 
     modal.querySelector("#gwINatDoneBtn").onclick = () => {
-    modal.remove();
-    render();
-    window.initGridWildMobilePanels?.();
-  };
+      modal.remove();
+      render();
+      window.initGridWildMobilePanels?.();
+    };
 
-  modal.addEventListener("click", evt => {
-    if (evt.target === modal) modal.remove();
-  });
-}
+    modal.addEventListener("click", (evt) => {
+      if (evt.target === modal) modal.remove();
+    });
+  }
 
   function bind(card) {
-
-    ["gwObsCropZoom", "gwObsPanX", "gwObsPanY", "gwObsRotate", "gwObsExposure"].forEach(id => {
-    const el = card.querySelector(`#${id}`);
-    if (!el) return;
-    el.addEventListener("input", updateEditPreview);
+    ["gwObsCropZoom", "gwObsPanX", "gwObsPanY", "gwObsRotate", "gwObsExposure"].forEach((id) => {
+      const el = card.querySelector(`#${id}`);
+      if (!el) return;
+      el.addEventListener("input", updateEditPreview);
     });
 
     updateEditPreview();
 
-    card.querySelectorAll(".gw-obs-thumb").forEach(btn => {
+    card.querySelectorAll(".gw-obs-thumb").forEach((btn) => {
       btn.onclick = () => {
         selectedPhotoId = btn.dataset.photoId;
         render();
@@ -532,8 +539,8 @@ function openINaturalistHandoffModal(fieldPacket, draft) {
     };
 
     card.querySelector("#gwObsSaveCopyBtn").onclick = async () => {
-    await saveEditCopy();
-    render();
+      await saveEditCopy();
+      render();
     };
 
     card.querySelector("#gwObsCloseBtn").onclick = () => {
@@ -554,8 +561,7 @@ function openINaturalistHandoffModal(fieldPacket, draft) {
           return;
         }
 
-        const result =
-          window.GridWildDraftObservations.prepareINaturalistHandoff(currentDraftId);
+        const result = window.GridWildDraftObservations.prepareINaturalistHandoff(currentDraftId);
 
         openINaturalistHandoffModal(result.fieldPacket, result.draft);
       } catch (err) {
@@ -617,19 +623,14 @@ function openINaturalistHandoffModal(fieldPacket, draft) {
 
     const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
 
-    window.GridWildDraftObservations?.addDerivedPhoto?.(
-      currentDraftId,
-      photo.id,
-      dataUrl,
-      {
-        cropMode: "center_square",
-        zoom,
-        panX,
-        panY,
-        rotationDeg: rotate,
-        exposureDelta: exposure
-      }
-    );
+    window.GridWildDraftObservations?.addDerivedPhoto?.(currentDraftId, photo.id, dataUrl, {
+      cropMode: "center_square",
+      zoom,
+      panX,
+      panY,
+      rotationDeg: rotate,
+      exposureDelta: exposure
+    });
   }
 
   function loadImage(src) {

@@ -21,38 +21,32 @@
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      const local = raw
-  ? { ...DEFAULT_STATE, ...JSON.parse(raw) }
-  : { ...DEFAULT_STATE };
+      const local = raw ? { ...DEFAULT_STATE, ...JSON.parse(raw) } : { ...DEFAULT_STATE };
 
-const dbWildpoints =
-  window.__gwState?.player?.wildpoints;
+      const dbWildpoints = window.__gwState?.player?.wildpoints;
 
-if (dbWildpoints !== undefined && dbWildpoints !== null) {
-  local.wildPoints = Number(dbWildpoints || 0);
-}
+      if (dbWildpoints !== undefined && dbWildpoints !== null) {
+        local.wildPoints = Number(dbWildpoints || 0);
+      }
 
+      const dbInventory = window.__gwState?.playerInventory;
+      if (Array.isArray(dbInventory)) {
+        local.ownedItems = dbInventory.map((x) => x.item_id).filter(Boolean);
+      }
 
-const dbInventory = window.__gwState?.playerInventory;
-if (Array.isArray(dbInventory)) {
-  local.ownedItems = dbInventory
-    .map(x => x.item_id)
-    .filter(Boolean);
-}
+      const dbEquipment = window.__gwState?.playerEquipment;
+      if (dbEquipment) {
+        local.equipped = {
+          ...local.equipped,
+          title: dbEquipment.title || null,
+          frame: dbEquipment.frame || null,
+          trail: dbEquipment.trail || null,
+          companion: dbEquipment.companion || null,
+          hat: dbEquipment.hat || null
+        };
+      }
 
-const dbEquipment = window.__gwState?.playerEquipment;
-if (dbEquipment) {
-  local.equipped = {
-    ...local.equipped,
-    title: dbEquipment.title || null,
-    frame: dbEquipment.frame || null,
-    trail: dbEquipment.trail || null,
-    companion: dbEquipment.companion || null,
-    hat: dbEquipment.hat || null
-  };
-}
-
-return local;
+      return local;
     } catch {
       return { ...DEFAULT_STATE };
     }
@@ -87,7 +81,6 @@ return local;
 
     const state = load();
     el.textContent = Number(state.wildPoints || 0).toLocaleString();
-
   }
 
   function bindHud() {
@@ -99,13 +92,13 @@ return local;
   }
 
   function owns(itemId) {
-  const dbInventory = window.__gwState?.playerInventory;
+    const dbInventory = window.__gwState?.playerInventory;
 
-  if (Array.isArray(dbInventory)) {
-    return dbInventory.some(x => x.item_id === itemId);
-  }
+    if (Array.isArray(dbInventory)) {
+      return dbInventory.some((x) => x.item_id === itemId);
+    }
 
-  return load().ownedItems.includes(itemId);
+    return load().ownedItems.includes(itemId);
   }
 
   function hasAchievement(id) {
@@ -113,106 +106,103 @@ return local;
 
     const dbRows = window.__gwState?.playerAchievements;
     if (!Array.isArray(dbRows)) return false;
-    return dbRows.some(row =>
-      row.achievement_id === id &&
-      row.unlocked === true
-    );
+    return dbRows.some((row) => row.achievement_id === id && row.unlocked === true);
   }
 
-function getCatalogItem(itemId) {
-  return window.GridWildStore?.getCatalog?.().find(x => x.id === itemId) || null;
-}
-
-function canBuy(item) {
-  if (!item) return { ok: false, reason: "Missing item." };
-  if (owns(item.id)) return { ok: false, reason: "Already owned." };
-
-  if (item.requiresAchievement && !hasAchievement(item.requiresAchievement)) {
-    return { ok: false, reason: "Achievement locked." };
+  function getCatalogItem(itemId) {
+    return window.GridWildStore?.getCatalog?.().find((x) => x.id === itemId) || null;
   }
 
-  const state = load();
-  const currency = item.currency || "wildPoints";
+  function canBuy(item) {
+    if (!item) return { ok: false, reason: "Missing item." };
+    if (owns(item.id)) return { ok: false, reason: "Already owned." };
 
-  const balance =
-    currency === "wildPoints"
-      ? Number(window.__gwState?.player?.wildpoints || 0)
-      : Number(state[currency] || 0);
-
-  if (balance < Number(item.price || 0)) {
-    return { ok: false, reason: "Not enough currency." };
-  }
-
-  return { ok: true, reason: "OK" };
-}
-
-async function buyItem(itemId) {
-  const item = getCatalogItem(itemId);
-  const check = canBuy(item);
-
-  if (!check.ok) return { ok: false, reason: check.reason };
-
-  const state = load();
-  const currency = item.currency || "wildPoints";
-
-  try {
-    if (currency !== "wildPoints") {
-      return { ok: false, reason: "That currency is not supported yet." };
+    if (item.requiresAchievement && !hasAchievement(item.requiresAchievement)) {
+      return { ok: false, reason: "Achievement locked." };
     }
 
-    const result = await window.GridWildAPI.purchaseStoreItem(item.id);
+    const state = load();
+    const currency = item.currency || "wildPoints";
 
-    window.__gwState = window.__gwState || {};
-    window.__gwState.player = result.player || window.__gwState.player;
-    window.__gwState.playerInventory = [
-      ...(window.__gwState.playerInventory || []).filter(x => x.item_id !== item.id),
-      result.inventory_item || { item_id: item.id }
-    ];
+    const balance =
+      currency === "wildPoints"
+        ? Number(window.__gwState?.player?.wildpoints || 0)
+        : Number(state[currency] || 0);
 
-    state.wildPoints = Number(result.player?.wildpoints || 0);
-    state.ownedItems = Array.from(new Set([...(state.ownedItems || []), item.id]));
-    save(state);
-    refreshHud();
+    if (balance < Number(item.price || 0)) {
+      return { ok: false, reason: "Not enough currency." };
+    }
 
-    return { ok: true, item, state };
-  } catch (err) {
-    console.warn("Could not buy item:", err);
-    return { ok: false, reason: "Purchase failed." };
-  }
-}
-async function equipItem(itemId) {
-  const item = getCatalogItem(itemId);
-  if (!item) return { ok: false, reason: "Missing item." };
-
-  const state = load();
-
-  if (!owns(itemId)) {
-    return { ok: false, reason: "Item not owned." };
+    return { ok: true, reason: "OK" };
   }
 
-  const slot = item.slot || item.category;
-  if (!slot) return { ok: false, reason: "Item has no equipment slot." };
+  async function buyItem(itemId) {
+    const item = getCatalogItem(itemId);
+    const check = canBuy(item);
 
-  try {
-    const result = await window.GridWildAPI.setPlayerEquipment(slot, itemId);
+    if (!check.ok) return { ok: false, reason: check.reason };
 
-    window.__gwState = window.__gwState || {};
-    window.__gwState.playerEquipment = result.equipment;
-    state.equipped = {
-      ...(state.equipped || {}),
-      [slot]: itemId
-    };
-    save(state);
-    window.GridWildCharacter?.renderSummary?.();
+    const state = load();
+    const currency = item.currency || "wildPoints";
 
-    return { ok: true, item, state };
-  } catch (err) {
-    console.warn("Could not sync equipment:", err);
-    return { ok: false, reason: "Could not equip item." };
+    try {
+      if (currency !== "wildPoints") {
+        return { ok: false, reason: "That currency is not supported yet." };
+      }
+
+      const result = await window.GridWildAPI.purchaseStoreItem(item.id);
+
+      window.__gwState = window.__gwState || {};
+      window.__gwState.player = result.player || window.__gwState.player;
+      window.__gwState.playerInventory = [
+        ...(window.__gwState.playerInventory || []).filter((x) => x.item_id !== item.id),
+        result.inventory_item || { item_id: item.id }
+      ];
+
+      state.wildPoints = Number(result.player?.wildpoints || 0);
+      state.ownedItems = Array.from(new Set([...(state.ownedItems || []), item.id]));
+      save(state);
+      refreshHud();
+
+      return { ok: true, item, state };
+    } catch (err) {
+      console.warn("Could not buy item:", err);
+      return { ok: false, reason: "Purchase failed." };
+    }
   }
-}
+  async function equipItem(itemId) {
+    const item = getCatalogItem(itemId);
+    if (!item) return { ok: false, reason: "Missing item." };
 
-    function getEquippedItems() {
+    const state = load();
+
+    if (!owns(itemId)) {
+      return { ok: false, reason: "Item not owned." };
+    }
+
+    const slot = item.slot || item.category;
+    if (!slot) return { ok: false, reason: "Item has no equipment slot." };
+
+    try {
+      const result = await window.GridWildAPI.setPlayerEquipment(slot, itemId);
+
+      window.__gwState = window.__gwState || {};
+      window.__gwState.playerEquipment = result.equipment;
+      state.equipped = {
+        ...(state.equipped || {}),
+        [slot]: itemId
+      };
+      save(state);
+      window.GridWildCharacter?.renderSummary?.();
+
+      return { ok: true, item, state };
+    } catch (err) {
+      console.warn("Could not sync equipment:", err);
+      return { ok: false, reason: "Could not equip item." };
+    }
+  }
+
+  function getEquippedItems() {
     const state = load();
     const catalog = window.GridWildStore?.getCatalog?.() || [];
     const equipped = state.equipped || {};
@@ -220,20 +210,19 @@ async function equipItem(itemId) {
     const out = {};
 
     Object.entries(equipped).forEach(([slot, itemId]) => {
-        out[slot] = catalog.find(x => x.id === itemId) || null;
+      out[slot] = catalog.find((x) => x.id === itemId) || null;
     });
 
     return out;
-    }
+  }
 
-
-    function showRewardToast(amount, reason = "reward") {
+  function showRewardToast(amount, reason = "reward") {
     if (!amount) return;
 
     if (!document.getElementById("gwEconomyToastStyles")) {
-        const style = document.createElement("style");
-        style.id = "gwEconomyToastStyles";
-        style.textContent = `
+      const style = document.createElement("style");
+      style.id = "gwEconomyToastStyles";
+      style.textContent = `
         .gw-economy-toast {
             position: fixed;
             left: 14px;
@@ -254,10 +243,10 @@ async function equipItem(itemId) {
             to { transform: translateY(0); opacity: 1; }
         }
         `;
-        document.head.appendChild(style);
+      document.head.appendChild(style);
     }
 
-    document.querySelectorAll(".gw-economy-toast").forEach(el => el.remove());
+    document.querySelectorAll(".gw-economy-toast").forEach((el) => el.remove());
 
     const label =
       reason === "quest_completed"
@@ -272,8 +261,8 @@ async function equipItem(itemId) {
 
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3200);
-    }
-    window.GridWildEconomy = {
+  }
+  window.GridWildEconomy = {
     load,
     save,
     refreshHud,
@@ -285,7 +274,7 @@ async function equipItem(itemId) {
     showRewardToast,
     equipItem,
     getEquippedItems
-    };
+  };
 
   document.addEventListener("DOMContentLoaded", bindHud);
 })();

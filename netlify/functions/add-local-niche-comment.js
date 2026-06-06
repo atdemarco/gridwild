@@ -1,10 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const COMMENT_TYPES = new Set([
   "habitat_note",
@@ -43,10 +40,7 @@ exports.handler = async function (event) {
 
     if (error) throw error;
 
-    await supabase
-      .from("local_niches")
-      .update({ status: "active" })
-      .eq("id", niche_id);
+    await supabase.from("local_niches").update({ status: "active" }).eq("id", niche_id);
 
     return {
       statusCode: 200,

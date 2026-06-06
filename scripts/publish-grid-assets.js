@@ -35,7 +35,11 @@ function normalizeAssetPath(value) {
 function joinStoragePath(...parts) {
   return parts
     .filter(Boolean)
-    .map((part) => String(part).replace(/\\/g, "/").replace(/^\/+|\/+$/g, ""))
+    .map((part) =>
+      String(part)
+        .replace(/\\/g, "/")
+        .replace(/^\/+|\/+$/g, "")
+    )
     .filter(Boolean)
     .join("/");
 }
@@ -65,7 +69,7 @@ async function readStorageBody({ backend, localPath }) {
 
   return {
     body: await gzipAsync(body, { level: 9 }),
-    contentEncoding: "gzip",
+    contentEncoding: "gzip"
   };
 }
 
@@ -150,7 +154,9 @@ function requireAwsSdk() {
     return require("@aws-sdk/client-s3");
   } catch (error) {
     if (error.code === "MODULE_NOT_FOUND") {
-      throw new Error("Missing @aws-sdk/client-s3. Run `npm install @aws-sdk/client-s3` before publishing to R2.");
+      throw new Error(
+        "Missing @aws-sdk/client-s3. Run `npm install @aws-sdk/client-s3` before publishing to R2."
+      );
     }
     throw error;
   }
@@ -172,7 +178,9 @@ async function createStorageUploader({ backend, supabase, bucket }) {
   if (backend === "supabase") {
     const { error: bucketError } = await supabase.storage.getBucket(bucket);
     if (bucketError) {
-      throw new Error(`Could not access Supabase Storage bucket "${bucket}": ${bucketError.message}`);
+      throw new Error(
+        `Could not access Supabase Storage bucket "${bucket}": ${bucketError.message}`
+      );
     }
 
     return {
@@ -183,11 +191,11 @@ async function createStorageUploader({ backend, supabase, bucket }) {
         const { error } = await supabase.storage.from(bucket).upload(storagePath, body, {
           cacheControl: cacheControlForStorage(backend),
           contentType: contentTypeFor(localPath),
-          upsert: true,
+          upsert: true
         });
 
         if (error) throw error;
-      },
+      }
     };
   }
 
@@ -203,7 +211,7 @@ async function createStorageUploader({ backend, supabase, bucket }) {
       region: "auto",
       endpoint: getR2Endpoint(),
       credentials: { accessKeyId, secretAccessKey },
-      forcePathStyle: true,
+      forcePathStyle: true
     });
 
     await client.send(new HeadBucketCommand({ Bucket: bucket }));
@@ -213,15 +221,17 @@ async function createStorageUploader({ backend, supabase, bucket }) {
       bucket,
       async upload({ localPath, storagePath }) {
         const { body, contentEncoding } = await readStorageBody({ backend, localPath });
-        await client.send(new PutObjectCommand({
-          Bucket: bucket,
-          Key: storagePath,
-          Body: body,
-          CacheControl: cacheControlForStorage(backend),
-          ContentType: contentTypeFor(localPath),
-          ContentEncoding: contentEncoding || undefined,
-        }));
-      },
+        await client.send(
+          new PutObjectCommand({
+            Bucket: bucket,
+            Key: storagePath,
+            Body: body,
+            CacheControl: cacheControlForStorage(backend),
+            ContentType: contentTypeFor(localPath),
+            ContentEncoding: contentEncoding || undefined
+          })
+        );
+      }
     };
   }
 
@@ -238,9 +248,9 @@ async function uploadFile({ uploader, localPath, storagePath, label }) {
         throw new Error(`Failed to upload ${label} to ${storagePath}: ${error.message}`);
       }
 
-      const delayMs = UPLOAD_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1));
+      const delayMs = UPLOAD_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
       console.warn(
-        `Upload failed for ${label} (${error.message}). Retrying ${attempt + 1}/${UPLOAD_MAX_ATTEMPTS} in ${delayMs}ms...`,
+        `Upload failed for ${label} (${error.message}). Retrying ${attempt + 1}/${UPLOAD_MAX_ATTEMPTS} in ${delayMs}ms...`
       );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
@@ -267,7 +277,7 @@ async function uploadSuperchunks({ uploader, assetDir, superchunks, buildPrefix 
         uploader,
         localPath,
         storagePath,
-        label: `superchunk ${superchunk.superchunk_id}`,
+        label: `superchunk ${superchunk.superchunk_id}`
       });
 
       uploaded += 1;
@@ -296,15 +306,18 @@ function buildMetadataRow(manifest, buildPrefix) {
     grid_size_ft: manifest.grid_size_ft ?? null,
     superchunk_size: manifest.superchunk_size ?? null,
     asset_root: buildPrefix,
-    heat_file: joinStoragePath(buildPrefix, normalizeAssetPath(manifest.heat_file || "dc_heat.csv")),
+    heat_file: joinStoragePath(
+      buildPrefix,
+      normalizeAssetPath(manifest.heat_file || "dc_heat.csv")
+    ),
     observer_dictionary_file: joinStoragePath(
       buildPrefix,
-      normalizeAssetPath(manifest.observer_dictionary_file || "observer_dictionary.json"),
+      normalizeAssetPath(manifest.observer_dictionary_file || "observer_dictionary.json")
     ),
     square_summary_file: squareSummaryFile,
     superchunk_dir: joinStoragePath(
       buildPrefix,
-      normalizeAssetPath(manifest.superchunk_dir || "square_genera_superchunks"),
+      normalizeAssetPath(manifest.superchunk_dir || "square_genera_superchunks")
     ),
     n_observations: manifest.n_observations ?? null,
     n_squares: manifest.n_squares ?? null,
@@ -312,7 +325,7 @@ function buildMetadataRow(manifest, buildPrefix) {
     n_observers: manifest.n_observers ?? null,
     taxonomy_levels: manifest.taxonomy_levels ?? null,
     manifest,
-    is_current: false,
+    is_current: false
   };
 }
 
@@ -329,7 +342,7 @@ function buildSuperchunkRow(manifest, superchunk, buildPrefix) {
     n_squares: superchunk.n_squares ?? null,
     bbox_grid: superchunk.bbox_grid ?? null,
     cell_count: superchunk.cell_count ?? null,
-    manifest_row: superchunk,
+    manifest_row: superchunk
   };
 }
 
@@ -339,7 +352,9 @@ async function upsertRows({ supabase, table, rows, batchSize, onBatch }) {
     const { error } = await supabase.from(table).upsert(batch);
 
     if (error) {
-      throw new Error(`Failed to upsert ${table} rows ${start + 1}-${start + batch.length}: ${error.message}`);
+      throw new Error(
+        `Failed to upsert ${table} rows ${start + 1}-${start + batch.length}: ${error.message}`
+      );
     }
 
     if (onBatch) {
@@ -353,9 +368,10 @@ async function main() {
   const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
   const assetDir = requiredEnv("GRIDWILD_ASSET_DIR");
   const backend = (process.env.GRIDWILD_STORAGE_BACKEND || DEFAULT_STORAGE_BACKEND).toLowerCase();
-  const bucket = backend === "r2"
-    ? process.env.GRIDWILD_R2_BUCKET || process.env.GRIDWILD_STORAGE_BUCKET || DEFAULT_BUCKET
-    : process.env.GRIDWILD_STORAGE_BUCKET || DEFAULT_BUCKET;
+  const bucket =
+    backend === "r2"
+      ? process.env.GRIDWILD_R2_BUCKET || process.env.GRIDWILD_STORAGE_BUCKET || DEFAULT_BUCKET
+      : process.env.GRIDWILD_STORAGE_BUCKET || DEFAULT_BUCKET;
 
   const manifestPath = path.join(assetDir, "manifest.json");
   const manifest = await readJson(manifestPath);
@@ -364,15 +380,19 @@ async function main() {
   const buildPrefix = joinStoragePath("builds", manifest.build_id);
   const topLevelAssets = [
     { manifestKey: "heat_file", fallback: "dc_heat.csv", label: "heat CSV" },
-    { manifestKey: "observer_dictionary_file", fallback: "observer_dictionary.json", label: "observer dictionary" },
-    { file: "manifest.json", label: "manifest" },
+    {
+      manifestKey: "observer_dictionary_file",
+      fallback: "observer_dictionary.json",
+      label: "observer dictionary"
+    },
+    { file: "manifest.json", label: "manifest" }
   ];
 
   if (manifest.square_summary_file) {
     topLevelAssets.push({
       manifestKey: "square_summary_file",
       label: "square genus summary",
-      optional: true,
+      optional: true
     });
   }
 
@@ -385,14 +405,14 @@ async function main() {
   console.log(`Superchunks expected: ${manifest.superchunks.length}`);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
+    auth: { persistSession: false, autoRefreshToken: false }
   });
 
   const uploader = await createStorageUploader({ backend, supabase, bucket });
 
   const normalizedSuperchunks = manifest.superchunks.map((superchunk) => ({
     ...superchunk,
-    file: normalizeAssetPath(superchunk.file),
+    file: normalizeAssetPath(superchunk.file)
   }));
 
   for (const asset of topLevelAssets) {
@@ -413,7 +433,10 @@ async function main() {
   }
 
   for (const superchunk of normalizedSuperchunks) {
-    await assertFileExists(path.join(assetDir, superchunk.file), `superchunk ${superchunk.superchunk_id}`);
+    await assertFileExists(
+      path.join(assetDir, superchunk.file),
+      `superchunk ${superchunk.superchunk_id}`
+    );
   }
 
   console.log("All referenced files are present.");
@@ -441,17 +464,19 @@ async function main() {
     uploader,
     assetDir,
     superchunks: normalizedSuperchunks,
-    buildPrefix,
+    buildPrefix
   });
 
   console.log("Upserting superchunk metadata...");
-  const superchunkRows = normalizedSuperchunks.map((superchunk) => buildSuperchunkRow(manifest, superchunk, buildPrefix));
+  const superchunkRows = normalizedSuperchunks.map((superchunk) =>
+    buildSuperchunkRow(manifest, superchunk, buildPrefix)
+  );
   await upsertRows({
     supabase,
     table: "gw_superchunks",
     rows: superchunkRows,
     batchSize: SUPERCHUNK_UPSERT_BATCH_SIZE,
-    onBatch: (done, total) => console.log(`Upserted ${done}/${total} superchunk rows`),
+    onBatch: (done, total) => console.log(`Upserted ${done}/${total} superchunk rows`)
   });
 
   console.log("Promoting build to current...");

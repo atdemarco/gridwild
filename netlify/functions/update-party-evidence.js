@@ -2,10 +2,7 @@ const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { requirePartyAccess } = require("./_party-access");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
@@ -30,7 +27,7 @@ exports.handler = async function (event) {
       .update({
         status,
         updated_at: new Date().toISOString()
-        })
+      })
       .eq("party_id", party_id)
       .eq("draft_id", draft_id)
       .select("*")

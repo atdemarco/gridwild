@@ -1,10 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function loadHomeUsers(nicheId) {
   const { data: stewardRows, error: stewardError } = await supabase
@@ -69,12 +66,15 @@ exports.handler = async function (event) {
 
     const { data: stewardship, error } = await supabase
       .from("local_niche_stewards")
-      .upsert({
-        user_id: player_id,
-        niche_id,
-        stewardship_type: "home",
-        updated_at: new Date().toISOString()
-      }, { onConflict: "user_id" })
+      .upsert(
+        {
+          user_id: player_id,
+          niche_id,
+          stewardship_type: "home",
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: "user_id" }
+      )
       .select("*")
       .single();
 

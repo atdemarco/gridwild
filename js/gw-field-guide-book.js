@@ -696,8 +696,10 @@
       mark.lane,
       mark.explanation,
       ...(mark.aliases || [])
-    ].join(" ").toLowerCase();
-    return clean.split(/\s+/).every(word => hay.includes(word));
+    ]
+      .join(" ")
+      .toLowerCase();
+    return clean.split(/\s+/).every((word) => hay.includes(word));
   }
 
   function laneLabel(lane) {
@@ -709,8 +711,8 @@
       selectedLane = LANES[0]?.[0] || "";
     }
 
-    const available = categories.filter(category => category.lane === selectedLane);
-    if (!available.some(category => category.key === selectedCategory)) {
+    const available = categories.filter((category) => category.lane === selectedLane);
+    if (!available.some((category) => category.key === selectedCategory)) {
       selectedCategory = available[0]?.key || "";
     }
     return available;
@@ -719,7 +721,9 @@
   function renderRadioGrid({ name, value, options, className = "" }) {
     return `
       <div class="gw-field-book-radio-grid ${className}">
-        ${options.map(option => `
+        ${options
+          .map(
+            (option) => `
           <label class="gw-field-book-radio">
             <input type="radio" name="${esc(name)}" value="${esc(option.value)}" ${option.value === value ? "checked" : ""} />
             <span>
@@ -727,7 +731,9 @@
               <small>${esc(option.meta)}</small>
             </span>
           </label>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
     `;
   }
@@ -741,7 +747,9 @@
       `;
     }
 
-    return marks.map(mark => `
+    return marks
+      .map(
+        (mark) => `
       <tr>
         <td>
           <button class="gw-field-book-mark" type="button" data-gw-fieldmark-id="${esc(mark.id)}">
@@ -750,7 +758,9 @@
         </td>
         <td><div class="gw-field-book-cue">${esc(mark.prompt || mark.explanation || "")}</div></td>
       </tr>
-    `).join("");
+    `
+      )
+      .join("");
   }
 
   function fallbackInfoSheet(mark) {
@@ -786,9 +796,11 @@
   }
 
   function hashString(value) {
-    return String(value || "").split("").reduce((hash, char) => {
-      return ((hash << 5) - hash + char.charCodeAt(0)) | 0;
-    }, 0);
+    return String(value || "")
+      .split("")
+      .reduce((hash, char) => {
+        return ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+      }, 0);
   }
 
   async function fetchJson(url) {
@@ -817,8 +829,10 @@
         url.searchParams.set("per_page", "5");
         const data = await fetchJson(url);
         const results = Array.isArray(data?.results) ? data.results : [];
-        const exact = results.find(taxon => String(taxon?.name || "").toLowerCase() === familyName.toLowerCase());
-        const family = exact || results.find(taxon => taxon?.rank === "family");
+        const exact = results.find(
+          (taxon) => String(taxon?.name || "").toLowerCase() === familyName.toLowerCase()
+        );
+        const family = exact || results.find((taxon) => taxon?.rank === "family");
         return family?.id || null;
       } catch (error) {
         familyTaxonCache.delete(familyName);
@@ -835,7 +849,7 @@
     if (!taxonId) return [];
 
     const preferredPage = (Math.abs(hashString(`${markId}:${familyName}:${familyIndex}`)) % 3) + 1;
-    const loadPage = page => {
+    const loadPage = (page) => {
       const url = new URL("https://api.inaturalist.org/v1/observations");
       url.searchParams.set("taxon_id", String(taxonId));
       url.searchParams.set("photos", "true");
@@ -854,25 +868,33 @@
       data = await loadPage(1);
       observations = Array.isArray(data?.results) ? data.results : [];
     }
-    return observations.map(observation => {
-      const photos = Array.isArray(observation?.photos) ? observation.photos : [];
-      const photo = photos.find(item => photoUrl(item));
-      const url = photoUrl(photo);
-      if (!url) return null;
-      const taxon = observation?.taxon || {};
-      const label = taxon.preferred_common_name || taxon.name || familyName;
-      return {
-        id: String(observation?.id || `${familyName}-${url}`),
-        family: familyName,
-        href: observation?.uri || `https://www.inaturalist.org/observations/${observation?.id || ""}`,
-        label,
-        url
-      };
-    }).filter(Boolean);
+    return observations
+      .map((observation) => {
+        const photos = Array.isArray(observation?.photos) ? observation.photos : [];
+        const photo = photos.find((item) => photoUrl(item));
+        const url = photoUrl(photo);
+        if (!url) return null;
+        const taxon = observation?.taxon || {};
+        const label = taxon.preferred_common_name || taxon.name || familyName;
+        return {
+          id: String(observation?.id || `${familyName}-${url}`),
+          family: familyName,
+          href:
+            observation?.uri || `https://www.inaturalist.org/observations/${observation?.id || ""}`,
+          label,
+          url
+        };
+      })
+      .filter(Boolean);
   }
 
   function loadExemplarsForMark(markId) {
-    if (!markId || exemplarCache.get(markId)?.status === "loading" || exemplarCache.get(markId)?.status === "ready") return;
+    if (
+      !markId ||
+      exemplarCache.get(markId)?.status === "loading" ||
+      exemplarCache.get(markId)?.status === "ready"
+    )
+      return;
 
     const api = window.GridWildFieldMarks;
     const mark = api?.get?.(markId);
@@ -888,24 +910,29 @@
     const seq = ++exemplarLoadSeq;
     exemplarCache.set(markId, { status: "loading", items: [], families, seq });
 
-    Promise.allSettled(families.map((family, index) => fetchFamilyObservations(family, markId, index, 3)))
-      .then(results => {
+    Promise.allSettled(
+      families.map((family, index) => fetchFamilyObservations(family, markId, index, 3))
+    )
+      .then((results) => {
         const seen = new Set();
         const items = [];
-        results.forEach(result => {
+        results.forEach((result) => {
           if (result.status !== "fulfilled") return;
-          result.value.forEach(item => {
+          result.value.forEach((item) => {
             const key = item.id || item.url;
             if (seen.has(key)) return;
             seen.add(key);
             items.push(item);
           });
         });
-        const status = items.length || results.every(result => result.status === "fulfilled") ? "ready" : "error";
+        const status =
+          items.length || results.every((result) => result.status === "fulfilled")
+            ? "ready"
+            : "error";
         exemplarCache.set(markId, { status, items: items.slice(0, 16), families, seq });
         if (activeMarkId === markId) renderMatrix();
       })
-      .catch(error => {
+      .catch((error) => {
         exemplarCache.set(markId, { status: "error", items: [], families, error, seq });
         if (activeMarkId === markId) renderMatrix();
       });
@@ -913,18 +940,20 @@
 
   function renderThumbCells(items = [], status = "ready") {
     const cells = Array.from({ length: 16 }, (_, index) => items[index] || null);
-    return cells.map((item, index) => {
-      if (!item) {
-        const loadingClass = status === "loading" ? " is-loading" : "";
-        return `<div class="gw-field-book-thumb-cell is-empty${loadingClass}" aria-hidden="true"></div>`;
-      }
-      const label = `${item.label || "iNat observation"} (${item.family || "family exemplar"})`;
-      return `
+    return cells
+      .map((item, index) => {
+        if (!item) {
+          const loadingClass = status === "loading" ? " is-loading" : "";
+          return `<div class="gw-field-book-thumb-cell is-empty${loadingClass}" aria-hidden="true"></div>`;
+        }
+        const label = `${item.label || "iNat observation"} (${item.family || "family exemplar"})`;
+        return `
         <a class="gw-field-book-thumb-cell" href="${esc(item.href)}" target="_blank" rel="noopener noreferrer" title="${esc(label)}" aria-label="${esc(label)}">
           <img src="${esc(item.url)}" alt="${esc(label)}" loading="lazy" referrerpolicy="no-referrer" />
         </a>
       `;
-    }).join("");
+      })
+      .join("");
   }
 
   function renderExemplarFallback(sheet, note) {
@@ -946,7 +975,8 @@
 
   function renderExemplarPlate(mark, sheet) {
     const families = exemplarFamiliesForMark(mark, sheet);
-    if (!families.length) return renderExemplarFallback(sheet, "No iNat exemplar families are mapped yet.");
+    if (!families.length)
+      return renderExemplarFallback(sheet, "No iNat exemplar families are mapped yet.");
 
     const cached = exemplarCache.get(mark.id);
     if (!cached || cached.status === "loading") {
@@ -968,10 +998,16 @@
     }
 
     if (cached.status === "ready") {
-      return renderExemplarFallback(sheet, "iNat returned no photo exemplars for the mapped families.");
+      return renderExemplarFallback(
+        sheet,
+        "iNat returned no photo exemplars for the mapped families."
+      );
     }
 
-    return renderExemplarFallback(sheet, "iNat thumbnails are unavailable right now; showing the schematic fallback.");
+    return renderExemplarFallback(
+      sheet,
+      "iNat thumbnails are unavailable right now; showing the schematic fallback."
+    );
   }
 
   function renderGuideCard() {
@@ -999,14 +1035,18 @@
         ${renderInfoSection("Compare", sheet.compare)}
         ${renderInfoSection("Use It", sheet.sayIt)}
         ${renderInfoSection("Careful", sheet.caution)}
-        ${directions.length ? `
+        ${
+          directions.length
+            ? `
           <div class="gw-field-book-guide-section">
             <strong>Points Toward</strong>
             <div class="gw-field-book-guide-chiprow">
-              ${directions.map(label => `<span class="gw-field-book-guide-chip">${esc(label)}</span>`).join("")}
+              ${directions.map((label) => `<span class="gw-field-book-guide-chip">${esc(label)}</span>`).join("")}
             </div>
           </div>
-        ` : ""}
+        `
+            : ""
+        }
         <div class="gw-field-book-guide-foot">${esc(sheet.codexStatus || "Codex link pending")}</div>
       </aside>
     `;
@@ -1018,14 +1058,14 @@
 
     const { marks, categories } = markSource();
     const laneCategories = syncSelections(categories);
-    const selectedHeading = laneCategories.find(category => category.key === selectedCategory);
+    const selectedHeading = laneCategories.find((category) => category.key === selectedCategory);
     const filteredMarks = marks
-      .filter(mark => mark.lane === selectedLane)
-      .filter(mark => !selectedCategory || mark.category === selectedCategory)
+      .filter((mark) => mark.lane === selectedLane)
+      .filter((mark) => !selectedCategory || mark.category === selectedCategory)
       .filter(matchesQuery);
 
     const laneOptions = LANES.map(([lane, label]) => {
-      const count = marks.filter(mark => mark.lane === lane).length;
+      const count = marks.filter((mark) => mark.lane === lane).length;
       return {
         value: lane,
         label,
@@ -1033,8 +1073,10 @@
       };
     });
 
-    const categoryOptions = laneCategories.map(category => {
-      const count = marks.filter(mark => mark.lane === selectedLane && mark.category === category.key).length;
+    const categoryOptions = laneCategories.map((category) => {
+      const count = marks.filter(
+        (mark) => mark.lane === selectedLane && mark.category === category.key
+      ).length;
       return {
         value: category.key,
         label: category.title,
@@ -1050,14 +1092,16 @@
         </fieldset>
         <fieldset class="gw-field-book-fieldset">
           <legend>Heading</legend>
-          ${categoryOptions.length
-            ? renderRadioGrid({
-                name: "gwFieldBookCategory",
-                value: selectedCategory,
-                options: categoryOptions,
-                className: "gw-field-book-heading-grid"
-              })
-            : `<div class="gw-field-book-empty">No headings available.</div>`}
+          ${
+            categoryOptions.length
+              ? renderRadioGrid({
+                  name: "gwFieldBookCategory",
+                  value: selectedCategory,
+                  options: categoryOptions,
+                  className: "gw-field-book-heading-grid"
+                })
+              : `<div class="gw-field-book-empty">No headings available.</div>`
+          }
         </fieldset>
       </div>
       <div class="gw-field-book-list">
@@ -1104,12 +1148,12 @@
     document.body.appendChild(panel);
 
     $("gwFieldBookClose")?.addEventListener("click", () => togglePanel(false));
-    $("gwFieldBookSearch")?.addEventListener("input", evt => {
+    $("gwFieldBookSearch")?.addEventListener("input", (evt) => {
       query = evt.target.value || "";
       activeMarkId = "";
       renderMatrix();
     });
-    $("gwFieldBookMatrix")?.addEventListener("click", evt => {
+    $("gwFieldBookMatrix")?.addEventListener("click", (evt) => {
       const closeBtn = evt.target?.closest?.("[data-gw-field-card-close]");
       if (closeBtn) {
         activeMarkId = "";
@@ -1123,7 +1167,7 @@
       loadExemplarsForMark(activeMarkId);
       renderMatrix();
     });
-    $("gwFieldBookMatrix")?.addEventListener("change", evt => {
+    $("gwFieldBookMatrix")?.addEventListener("change", (evt) => {
       const input = evt.target;
       if (!(input instanceof HTMLInputElement) || input.type !== "radio") return;
       activeMarkId = "";
@@ -1136,10 +1180,10 @@
         renderMatrix();
       }
     });
-    panel.addEventListener("click", evt => {
+    panel.addEventListener("click", (evt) => {
       if (evt.target === panel) togglePanel(false);
     });
-    document.addEventListener("keydown", evt => {
+    document.addEventListener("keydown", (evt) => {
       if (evt.key === "Escape" && !panel.hidden) togglePanel(false);
     });
     renderMatrix();

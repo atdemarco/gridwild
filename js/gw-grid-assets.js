@@ -3,13 +3,13 @@
     manifest: null,
     heat: "assets/dc_heat.csv",
     observerDictionary: "assets/observer_dictionary.json",
-    superchunkBase: "assets/square_genera_superchunks",
+    superchunkBase: "assets/square_genera_superchunks"
   };
 
   const state = {
     catalogPromise: null,
     catalog: null,
-    manifestPromise: null,
+    manifestPromise: null
   };
 
   function trimTrailingSlash(value) {
@@ -18,7 +18,12 @@
 
   function getMode() {
     const queryMode = new URLSearchParams(window.location.search).get("gwAssets");
-    return queryMode || window.localStorage?.getItem("GW_GRID_ASSET_MODE") || window.GW_GRID_ASSET_MODE || "auto";
+    return (
+      queryMode ||
+      window.localStorage?.getItem("GW_GRID_ASSET_MODE") ||
+      window.GW_GRID_ASSET_MODE ||
+      "auto"
+    );
   }
 
   function localCatalog(reason) {
@@ -26,13 +31,13 @@
       source: "local",
       reason: reason || null,
       build: null,
-      urls: { ...LOCAL_URLS },
+      urls: { ...LOCAL_URLS }
     };
   }
 
   async function fetchSupabaseCatalog() {
     const resp = await fetch("/.netlify/functions/get-grid-assets-build", {
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json" }
     });
 
     if (!resp.ok) {
@@ -47,7 +52,7 @@
     return {
       source: data.publicAssetBase ? "r2" : "supabase",
       build: data.build || null,
-      urls: data.urls,
+      urls: data.urls
     };
   }
 
@@ -114,6 +119,6 @@
     assetUrl,
     loadManifest,
     superchunkUrl,
-    localCatalog,
+    localCatalog
   };
 })();

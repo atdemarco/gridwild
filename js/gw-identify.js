@@ -12,7 +12,7 @@
 
   const DEFAULT_RADIUS_KM = 25;
   const DEFAULT_PER_PAGE = 30;
-  const MUTED_CHILD_TAXON_SHARE = 0.10;
+  const MUTED_CHILD_TAXON_SHARE = 0.1;
   const CONFIDENCE_LEVELS = [
     { key: "coarse", label: "Coarse" },
     { key: "likely", label: "Likely" },
@@ -63,7 +63,7 @@
       showTopLevel: false
     }
   ];
-  const TOP_LEVEL_KINGDOMS = KINGDOMS.filter(taxon => taxon.showTopLevel !== false);
+  const TOP_LEVEL_KINGDOMS = KINGDOMS.filter((taxon) => taxon.showTopLevel !== false);
 
   const deck = {
     observations: [],
@@ -79,7 +79,8 @@
     lastFetchAt: null,
     radiusKm: DEFAULT_RADIUS_KM,
     selectedConfidence: "coarse",
-    actionCount: 0
+    actionCount: 0,
+    sourceKey: ""
   };
 
   let activeModal = null;
@@ -147,7 +148,9 @@
   }
 
   function getQuestProgress(quest) {
-    const target = Number(quest?.recipe?.quantity || quest?.recipe?.targetCount || quest?.targetCount || 1);
+    const target = Number(
+      quest?.recipe?.quantity || quest?.recipe?.targetCount || quest?.targetCount || 1
+    );
     return {
       claimed: getClaimedForQuest(quest).length,
       target: Number.isFinite(target) && target > 0 ? target : 1
@@ -162,9 +165,7 @@
     if (!isLinkedAccount()) return "Not linked";
     const token = window.GridWildINatAuth?.getToken?.() || "";
     const user = window.GridWildINatAuth?.getUsername?.() || "iNaturalist";
-    return token.startsWith("mock:")
-      ? `Mock linked: ${user}`
-      : `Linked: ${user}`;
+    return token.startsWith("mock:") ? `Mock linked: ${user}` : `Linked: ${user}`;
   }
 
   function getGpsFix() {
@@ -223,8 +224,58 @@
     };
   }
 
-  function buildUnknownsUrl(options = {}) {
+  function patchPolygonTargetForQuest(quest) {
+    const target = quest?.recipe?.target || null;
+    const mode = quest?.recipe?.targetLocation || target?.mode || "";
+    if (mode !== "patch_polygon" || !Array.isArray(target?.rings) || !target.rings.length)
+      return null;
+    return target;
+  }
+
+  function pointInRing(point, ring = []) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const pi = ring[i];
+      const pj = ring[j];
+      const intersects =
+        pi.lat > point.lat !== pj.lat > point.lat &&
+        point.lng <
+          ((pj.lng - pi.lng) * (point.lat - pi.lat)) / (pj.lat - pi.lat || 1e-12) + pi.lng;
+      if (intersects) inside = !inside;
+    }
+    return inside;
+  }
+
+  function pointInRings(point, rings = []) {
+    return rings.some((ring) => pointInRing(point, ring));
+  }
+
+  function unknownMatchesQuestSource(obs, quest) {
+    const target = patchPolygonTargetForQuest(quest);
+    if (!target) return true;
+    if (!Number.isFinite(Number(obs?.lat)) || !Number.isFinite(Number(obs?.lng))) return false;
+    return pointInRings({ lat: Number(obs.lat), lng: Number(obs.lng) }, target.rings);
+  }
+
+  function sourceKeyForQuest(quest, options = {}) {
+    const target = patchPolygonTargetForQuest(quest);
+    if (target) {
+      return `patch:${target.patchId || ""}:${target.generatedAt || ""}:${target.rings.map((ring) => ring.length).join(".")}`;
+    }
     const fix = options.fix || getGpsFix();
+    return `nearby:${Number(fix.lat).toFixed(5)},${Number(fix.lng).toFixed(5)}:${options.radiusKm || deck.radiusKm || DEFAULT_RADIUS_KM}`;
+  }
+
+  function shouldFetchForQuest(quest, options = {}) {
+    return !deck.observations.length || deck.sourceKey !== sourceKeyForQuest(quest, options);
+  }
+
+  function buildUnknownsUrl(options = {}) {
+    const target = patchPolygonTargetForQuest(options.quest || activeQuest);
+    const fix =
+      target && Number.isFinite(Number(target.lat)) && Number.isFinite(Number(target.lng))
+        ? { lat: Number(target.lat), lng: Number(target.lng), source: "patch" }
+        : options.fix || getGpsFix();
     const url = new URL("https://api.inaturalist.org/v1/observations");
 
     url.searchParams.set("identified", "false");
@@ -237,7 +288,10 @@
     url.searchParams.set("per_page", String(options.perPage || DEFAULT_PER_PAGE));
     url.searchParams.set("lat", String(fix.lat));
     url.searchParams.set("lng", String(fix.lng));
-    url.searchParams.set("radius", String(options.radiusKm || deck.radiusKm || DEFAULT_RADIUS_KM));
+    const radiusKm = target
+      ? Math.max(0.2, Math.min(200, Number(target.radiusMeters || 0) / 1000 || DEFAULT_RADIUS_KM))
+      : options.radiusKm || deck.radiusKm || DEFAULT_RADIUS_KM;
+    url.searchParams.set("radius", String(radiusKm));
     url.searchParams.set("geoprivacy", "open");
     url.searchParams.set("taxon_geoprivacy", "open");
 
@@ -245,6 +299,8 @@
   }
 
   async function fetchUnknownObservations(options = {}) {
+    const quest = options.quest || activeQuest || null;
+    const sourceKey = sourceKeyForQuest(quest, options);
     deck.loading = true;
     deck.error = "";
     deck.toast = "";
@@ -260,6 +316,7 @@
       const results = Array.isArray(data?.results) ? data.results : [];
       deck.observations = results
         .map(normalizeUnknownObservation)
+        .filter((obs) => unknownMatchesQuestSource(obs, quest))
         .filter(Boolean);
       deck.index = 0;
       deck.selectedTaxon = null;
@@ -268,9 +325,13 @@
       deck.showMutedChildTaxa = false;
       deck.lastFetchAt = nowISO();
       deck.actionCount = 0;
+      deck.sourceKey = sourceKey;
 
       if (!deck.observations.length) {
-        deck.toast = "No nearby unknowns came back for this area.";
+        const target = patchPolygonTargetForQuest(quest);
+        deck.toast = target
+          ? `No unknowns came back inside ${target.patchName || "this Patch"}.`
+          : "No nearby unknowns came back for this area.";
       }
     } catch (err) {
       console.warn("Could not load unknown observations:", err);
@@ -286,7 +347,9 @@
 
   function currentObservation() {
     if (!deck.observations.length) return null;
-    const safeIndex = ((deck.index % deck.observations.length) + deck.observations.length) % deck.observations.length;
+    const safeIndex =
+      ((deck.index % deck.observations.length) + deck.observations.length) %
+      deck.observations.length;
     return deck.observations[safeIndex] || null;
   }
 
@@ -300,7 +363,11 @@
       id: Number(taxon.id),
       label: taxon.label || taxon.preferred_common_name || taxon.name || "Selected taxon",
       scientificName: taxon.scientificName || taxon.name || taxon.label || "Selected taxon",
-      defaultPhoto: taxon.defaultPhoto || taxon.default_photo?.square_url || taxon.default_photo?.medium_url || "",
+      defaultPhoto:
+        taxon.defaultPhoto ||
+        taxon.default_photo?.square_url ||
+        taxon.default_photo?.medium_url ||
+        "",
       className: taxon.className || ""
     };
     deck.toast = "";
@@ -367,7 +434,7 @@
       const data = await resp.json();
       const rows = Array.isArray(data?.results) ? data.results : [];
       deck.childTaxa = rows
-        .map(t => ({
+        .map((t) => ({
           key: String(t.id || t.name || ""),
           id: Number(t.id),
           label: t.preferred_common_name || t.name || "Unnamed taxon",
@@ -376,7 +443,7 @@
           observationsCount: Number(t.observations_count || 0),
           defaultPhoto: t.default_photo?.square_url || t.default_photo?.medium_url || ""
         }))
-        .filter(t => Number.isFinite(t.id) && t.id > 0);
+        .filter((t) => Number.isFinite(t.id) && t.id > 0);
       deck.childParentId = parent.id;
       deck.showMutedChildTaxa = false;
 
@@ -395,12 +462,15 @@
   }
 
   function claimExists(claims, quest, obs) {
-    return window.GridWildIdentificationEvidence?.hasClaimForObservation?.(quest, obs) ||
-      claims.some(claim =>
-        String(claim.questId || "") === questKey(quest) &&
-        String(claim.observationId || "") === String(obs?.id || "") &&
-        isClaimedStatus(claim.status)
-      );
+    return (
+      window.GridWildIdentificationEvidence?.hasClaimForObservation?.(quest, obs) ||
+      claims.some(
+        (claim) =>
+          String(claim.questId || "") === questKey(quest) &&
+          String(claim.observationId || "") === String(obs?.id || "") &&
+          isClaimedStatus(claim.status)
+      )
+    );
   }
 
   function addOptimisticQuestEvidence(quest, claim) {
@@ -409,11 +479,12 @@
 
     window.__gwState = window.__gwState || {};
     const evidence = window.__gwState.questEvidence || [];
-    const already = evidence.some(e =>
-      String(e.quest_id) === qid &&
-      String(e.obs_id) === String(claim.observationId) &&
-      e.source === "identification" &&
-      isClaimedStatus(e.status)
+    const already = evidence.some(
+      (e) =>
+        String(e.quest_id) === qid &&
+        String(e.obs_id) === String(claim.observationId) &&
+        e.source === "identification" &&
+        isClaimedStatus(e.status)
     );
 
     if (already) return;
@@ -509,9 +580,11 @@
     const claim = claimed.claim;
     addOptimisticQuestEvidence(quest, claim);
 
-    window.dispatchEvent(new CustomEvent("gwIdentificationClaimed", {
-      detail: { claim, quest, observation: obs }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwIdentificationClaimed", {
+        detail: { claim, quest, observation: obs }
+      })
+    );
 
     const claimMessage = claimed.submission?.pendingRealSubmit
       ? `Local ID claim saved: ${claim.taxonCommonName || claim.taxonName}`
@@ -530,10 +603,10 @@
     if (!key) return null;
     const visible = window.GridWildQuests?.getVisibleQuests?.() || [];
     const local = window.GridWildQuests?.loadQuests?.() || [];
-    return [...visible, ...local].find(q =>
-      String(q.id) === key ||
-      String(q.dbId || "") === key
-    ) || null;
+    return (
+      [...visible, ...local].find((q) => String(q.id) === key || String(q.dbId || "") === key) ||
+      null
+    );
   }
 
   function observationImageHtml(obs) {
@@ -573,12 +646,15 @@
       return { common: deck.childTaxa, muted: [], total };
     }
 
-    return deck.childTaxa.reduce((groups, taxon) => {
-      const count = Math.max(0, Number(taxon.observationsCount) || 0);
-      const bucket = count / total < MUTED_CHILD_TAXON_SHARE ? groups.muted : groups.common;
-      bucket.push(taxon);
-      return groups;
-    }, { common: [], muted: [], total });
+    return deck.childTaxa.reduce(
+      (groups, taxon) => {
+        const count = Math.max(0, Number(taxon.observationsCount) || 0);
+        const bucket = count / total < MUTED_CHILD_TAXON_SHARE ? groups.muted : groups.common;
+        bucket.push(taxon);
+        return groups;
+      },
+      { common: [], muted: [], total }
+    );
   }
 
   function childTaxonButtonHtml(taxon, options = {}) {
@@ -648,8 +724,10 @@
       </div>
 
       <div class="gw-identify-child-grid">
-        ${split.common.map(taxon => childTaxonButtonHtml(taxon)).join("")}
-        ${hasMuted ? `
+        ${split.common.map((taxon) => childTaxonButtonHtml(taxon)).join("")}
+        ${
+          hasMuted
+            ? `
           <button
             class="gw-identify-child-more"
             type="button"
@@ -658,12 +736,18 @@
           >
             ${deck.showMutedChildTaxa ? "Less" : "More..."}
           </button>
-          ${deck.showMutedChildTaxa ? `
+          ${
+            deck.showMutedChildTaxa
+              ? `
             <div class="gw-identify-child-muted-list">
-              ${split.muted.map(taxon => childTaxonButtonHtml(taxon, { muted: true })).join("")}
+              ${split.muted.map((taxon) => childTaxonButtonHtml(taxon, { muted: true })).join("")}
             </div>
-          ` : ""}
-        ` : ""}
+          `
+              : ""
+          }
+        `
+            : ""
+        }
       </div>
     `;
   }
@@ -684,9 +768,7 @@
   function renderIdentifyBody(quest = activeQuest, options = {}) {
     const embedded = options.embedded === true;
     const obs = currentObservation();
-    const progress = quest && isIdentificationQuest(quest)
-      ? getQuestProgress(quest)
-      : null;
+    const progress = quest && isIdentificationQuest(quest) ? getQuestProgress(quest) : null;
     const skipped = obs && window.GridWildIdentificationEvidence?.hasSkippedObservation?.(obs);
 
     return `
@@ -750,14 +832,18 @@
         <button class="gw-identify-foot-btn" type="button" data-gw-identify-refresh>
           Refresh Unknowns
         </button>
-        ${embedded ? "" : `
+        ${
+          embedded
+            ? ""
+            : `
           <button class="gw-identify-foot-btn" type="button" data-gw-classloop-open onclick="event.preventDefault(); event.stopPropagation(); window.GridWildClassroomLoop && window.GridWildClassroomLoop.open(); return false;">
             Classroom
           </button>
           <button class="gw-identify-foot-btn" type="button" data-gw-classroom-open onclick="event.preventDefault(); event.stopPropagation(); window.GridWildClassroom && window.GridWildClassroom.open(); return false;">
             Old Classroom
           </button>
-        `}
+        `
+        }
         <button class="gw-identify-foot-btn" type="button" data-gw-inat-account-gate>
           Account
         </button>
@@ -768,69 +854,71 @@
   function bindIdentifyModal(root, quest, options = {}) {
     if (options.embedded !== true) {
       root.querySelector(".gw-identify-close")?.addEventListener("click", () => root.remove());
-      root.onclick = evt => {
+      root.onclick = (evt) => {
         if (evt.target === root) root.remove();
       };
     }
 
-    root.querySelectorAll("[data-gw-identify-taxon]").forEach(btn => {
-      btn.addEventListener("click", evt => {
+    root.querySelectorAll("[data-gw-identify-taxon]").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
         evt.stopPropagation();
-        const taxon = KINGDOMS.find(k => k.key === btn.dataset.gwIdentifyTaxon);
+        const taxon = KINGDOMS.find((k) => k.key === btn.dataset.gwIdentifyTaxon);
         if (taxon) selectTaxon(taxon);
       });
     });
 
-    root.querySelectorAll("[data-gw-identify-child]").forEach(btn => {
-      btn.addEventListener("click", evt => {
+    root.querySelectorAll("[data-gw-identify-child]").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
         evt.stopPropagation();
-        const taxon = deck.childTaxa.find(t => String(t.id) === String(btn.dataset.gwIdentifyChild));
+        const taxon = deck.childTaxa.find(
+          (t) => String(t.id) === String(btn.dataset.gwIdentifyChild)
+        );
         if (taxon) selectTaxon(taxon);
       });
     });
 
-    root.querySelector("[data-gw-identify-toggle-muted]")?.addEventListener("click", evt => {
+    root.querySelector("[data-gw-identify-toggle-muted]")?.addEventListener("click", (evt) => {
       evt.stopPropagation();
       deck.showMutedChildTaxa = !deck.showMutedChildTaxa;
       rerenderActiveModal();
     });
 
-    root.querySelectorAll("[data-gw-identify-confidence]").forEach(btn => {
-      btn.addEventListener("click", evt => {
+    root.querySelectorAll("[data-gw-identify-confidence]").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
         evt.stopPropagation();
         deck.selectedConfidence = btn.dataset.gwIdentifyConfidence || "coarse";
         rerenderActiveModal();
       });
     });
 
-    root.querySelector("[data-gw-identify-skip]")?.addEventListener("click", evt => {
+    root.querySelector("[data-gw-identify-skip]")?.addEventListener("click", (evt) => {
       evt.stopPropagation();
       skipCurrentObservation();
     });
 
-    root.querySelector("[data-gw-identify-submit]")?.addEventListener("click", evt => {
+    root.querySelector("[data-gw-identify-submit]")?.addEventListener("click", (evt) => {
       evt.stopPropagation();
       submitIdentificationClaim(quest);
     });
 
-    root.querySelector("[data-gw-identify-more]")?.addEventListener("click", evt => {
+    root.querySelector("[data-gw-identify-more]")?.addEventListener("click", (evt) => {
       evt.stopPropagation();
       loadChildTaxa();
     });
 
-    root.querySelector("[data-gw-identify-refresh]")?.addEventListener("click", evt => {
+    root.querySelector("[data-gw-identify-refresh]")?.addEventListener("click", (evt) => {
       evt.stopPropagation();
-      fetchUnknownObservations();
+      fetchUnknownObservations({ quest });
     });
 
-    root.querySelector("[data-gw-inat-account-gate]")?.addEventListener("click", evt => {
+    root.querySelector("[data-gw-inat-account-gate]")?.addEventListener("click", (evt) => {
       evt.stopPropagation();
       ensureLinkedAccount({ reason: "status" });
     });
   }
 
   function rerenderEmbeddedPanes() {
-    embeddedMounts.forEach(mount => {
+    embeddedMounts.forEach((mount) => {
       if (!mount?.isConnected) {
         embeddedMounts.delete(mount);
         return;
@@ -853,9 +941,7 @@
   }
 
   function mountEmbeddedPane(target, options = {}) {
-    const mount = typeof target === "string"
-      ? document.querySelector(target)
-      : target;
+    const mount = typeof target === "string" ? document.querySelector(target) : target;
     if (!mount) return null;
 
     injectStyles();
@@ -865,8 +951,8 @@
     mount.innerHTML = renderIdentifyBody(mount.__gwIdentifyQuest, { embedded: true });
     bindIdentifyModal(mount, mount.__gwIdentifyQuest, { embedded: true });
 
-    if (options.fetch !== false && !deck.observations.length && !deck.loading) {
-      fetchUnknownObservations();
+    if (options.fetch !== false && !deck.loading && shouldFetchForQuest(mount.__gwIdentifyQuest)) {
+      fetchUnknownObservations({ quest: mount.__gwIdentifyQuest });
     }
 
     return {
@@ -879,7 +965,7 @@
 
   function openIdentifyDialog(quest = null) {
     activeQuest = quest || null;
-    document.querySelectorAll(".gw-identify-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".gw-identify-backdrop").forEach((el) => el.remove());
 
     const root = document.createElement("div");
     root.className = "gw-identify-backdrop";
@@ -893,8 +979,8 @@
     document.body.appendChild(root);
     bindIdentifyModal(root, activeQuest);
 
-    if (!deck.observations.length && !deck.loading) {
-      fetchUnknownObservations();
+    if (!deck.loading && shouldFetchForQuest(activeQuest)) {
+      fetchUnknownObservations({ quest: activeQuest });
     }
   }
 
@@ -934,11 +1020,15 @@
           </span>
         </div>
 
-        ${latest ? `
+        ${
+          latest
+            ? `
           <div class="gw-identify-latest">
             Last ID: ${esc(latest.taxonCommonName || latest.taxonName || "taxon")}
           </div>
-        ` : ""}
+        `
+            : ""
+        }
 
         <div class="gw-identify-sheet-actions">
           <button class="gw-mini-btn" type="button" data-gw-identify-open>
@@ -988,13 +1078,16 @@
         </div>
 
         <div class="gw-quest-progressbar">
-          <div style="width:${Math.min(100, 100 * progress.claimed / Math.max(1, progress.target))}%;"></div>
+          <div style="width:${Math.min(100, (100 * progress.claimed) / Math.max(1, progress.target))}%;"></div>
         </div>
 
         ${
           claims.length
             ? `<div class="gw-list" style="margin-top:10px;">
-                ${claims.slice(0, 6).map(claim => `
+                ${claims
+                  .slice(0, 6)
+                  .map(
+                    (claim) => `
                   <div class="gw-rowline">
                     <span style="min-width:0;">
                       <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
@@ -1006,7 +1099,9 @@
                     </span>
                     <span class="gw-evidence-badge claimed">ID</span>
                   </div>
-                `).join("")}
+                `
+                  )
+                  .join("")}
               </div>`
             : `<div class="gw-muted" style="font-size:12px;margin-top:10px;">No identification claims yet.</div>`
         }
@@ -1015,7 +1110,7 @@
   }
 
   function openAccountGateDialog(resolve, options = {}) {
-    document.querySelectorAll(".gw-identify-account-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".gw-identify-account-backdrop").forEach((el) => el.remove());
 
     const username = window.GridWildINatAuth?.getUsername?.() || "gridwild-identifier";
     const root = document.createElement("div");
@@ -1040,7 +1135,7 @@
       </div>
     `;
 
-    const finish = value => {
+    const finish = (value) => {
       root.remove();
       accountGatePromise = null;
       resolve(value);
@@ -1050,14 +1145,19 @@
 
     root.querySelector("[data-gw-identify-mock-link]")?.addEventListener("click", () => {
       const input = root.querySelector("#gwIdentifyMockUsername");
-      const clean = String(input?.value || "gridwild-identifier").trim().replace(/^@+/, "") || "gridwild-identifier";
+      const clean =
+        String(input?.value || "gridwild-identifier")
+          .trim()
+          .replace(/^@+/, "") || "gridwild-identifier";
       window.GridWildINatAuth?.setUsername?.(clean);
       window.GridWildINatAuth?.setToken?.(`mock:${clean}:${Date.now()}`);
       finish(true);
     });
 
-    root.querySelector("[data-gw-identify-cancel-link]")?.addEventListener("click", () => finish(false));
-    root.addEventListener("click", evt => {
+    root
+      .querySelector("[data-gw-identify-cancel-link]")
+      ?.addEventListener("click", () => finish(false));
+    root.addEventListener("click", (evt) => {
       if (evt.target === root) finish(false);
     });
 
@@ -1072,7 +1172,7 @@
     if (isLinkedAccount()) return Promise.resolve(true);
     if (accountGatePromise) return accountGatePromise;
 
-    accountGatePromise = new Promise(resolve => {
+    accountGatePromise = new Promise((resolve) => {
       openAccountGateDialog(resolve, options);
     });
 
@@ -1851,7 +1951,7 @@
     document.head.appendChild(style);
   }
 
-  document.addEventListener("click", evt => {
+  document.addEventListener("click", (evt) => {
     const openBtn = evt.target.closest("[data-gw-identify-open]");
     if (openBtn) {
       evt.preventDefault();
@@ -1876,7 +1976,7 @@
     }
   });
 
-  document.addEventListener("keydown", evt => {
+  document.addEventListener("keydown", (evt) => {
     if (!activeModal?.isConnected) return;
     if (document.querySelector(".gw-identify-account-backdrop")) return;
     if (evt.target?.matches?.("input, textarea, select")) return;

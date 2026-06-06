@@ -11,10 +11,7 @@ const {
 const { assertObservationQualifiesForQuest } = require("./_quest-authority");
 const { recordVerifiedObservation } = require("./_achievement-authority");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
@@ -44,33 +41,36 @@ exports.handler = async function (event) {
 
     const { data, error } = await supabase
       .from("quest_evidence")
-      .upsert({
-        player_id,
-        quest_id,
-        obs_id: String(observation.id),
-        source: "inat_observation",
-        status: "verified",
-        claimed_at: now,
-        evidence_type: "observation",
-        target_type: "observation",
-        target_id: String(observation.id),
-        external_id: String(observation.id),
-        verification_status: "verified",
-        payload: {
-          verified_at: now,
-          inat_user_id: Number(inat.user.id),
-          observation_uri: observation.uri || null,
-          iconic_taxon: observation?.taxon?.iconic_taxon_name || null,
-          taxon_name: observation?.taxon?.name || null,
-          quality_grade: observation?.quality_grade || null,
-          positional_accuracy: Number(observation?.positional_accuracy) || null,
-          photo_count: Array.isArray(observation?.photos) ? observation.photos.length : 0,
-          lat: coordinates?.lat ?? null,
-          lng: coordinates?.lng ?? null
+      .upsert(
+        {
+          player_id,
+          quest_id,
+          obs_id: String(observation.id),
+          source: "inat_observation",
+          status: "verified",
+          claimed_at: now,
+          evidence_type: "observation",
+          target_type: "observation",
+          target_id: String(observation.id),
+          external_id: String(observation.id),
+          verification_status: "verified",
+          payload: {
+            verified_at: now,
+            inat_user_id: Number(inat.user.id),
+            observation_uri: observation.uri || null,
+            iconic_taxon: observation?.taxon?.iconic_taxon_name || null,
+            taxon_name: observation?.taxon?.name || null,
+            quality_grade: observation?.quality_grade || null,
+            positional_accuracy: Number(observation?.positional_accuracy) || null,
+            photo_count: Array.isArray(observation?.photos) ? observation.photos.length : 0,
+            lat: coordinates?.lat ?? null,
+            lng: coordinates?.lng ?? null
+          }
+        },
+        {
+          onConflict: "player_id,quest_id,obs_id"
         }
-      }, {
-        onConflict: "player_id,quest_id,obs_id"
-      })
+      )
       .select("*")
       .single();
 

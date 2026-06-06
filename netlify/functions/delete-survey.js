@@ -1,12 +1,9 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest, httpError } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-exports.handler = async function(event) {
+exports.handler = async function (event) {
   try {
     await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
@@ -28,10 +25,7 @@ exports.handler = async function(event) {
       throw httpError(403, "Only the survey owner can delete this survey.");
     }
 
-    const { error } = await supabase
-      .from("surveys")
-      .delete()
-      .eq("id", survey_id);
+    const { error } = await supabase.from("surveys").delete().eq("id", survey_id);
 
     if (error) throw error;
 

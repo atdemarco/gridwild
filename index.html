@@ -1,709 +1,919 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <link rel="icon" href="favicon.ico">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-  <title>GridWild</title>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="favicon.ico" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+    />
+    <title>GridWild</title>
 
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
 
-  <script src="https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js"></script>
+    <script src="https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js"></script>
 
-  <link rel="stylesheet" href="css/gw-shell.css" />
-</head>
-<body>
-  <div id="map"></div>
+    <link rel="stylesheet" href="css/gw-shell.css" />
+  </head>
+  <body>
+    <div id="map"></div>
 
-  <!-- Hidden compatibility sidebar -->
-  <div id="sidebar" class="gw-sidebar gw-collapsed" aria-hidden="true">
-    <button id="sidebarToggle" class="gw-toggle" title="Toggle sidebar">☰</button>
-    <div class="gw-panel">
-      <label class="gw-row">
-        <input type="checkbox" id="togglePoints" />
-        <span>Show points</span>
-      </label>
+    <!-- Hidden compatibility sidebar -->
+    <div id="sidebar" class="gw-sidebar gw-collapsed" aria-hidden="true">
+      <button id="sidebarToggle" class="gw-toggle" title="Toggle sidebar">☰</button>
+      <div class="gw-panel">
+        <label class="gw-row">
+          <input type="checkbox" id="togglePoints" />
+          <span>Show points</span>
+        </label>
 
-      <label class="gw-row">
-        <input type="checkbox" id="toggleHeat" checked />
-        <span>Show heat</span>
-      </label>
+        <label class="gw-row">
+          <input type="checkbox" id="toggleHeat" checked />
+          <span>Show heat</span>
+        </label>
 
-      <label class="gw-row">
-        <input type="checkbox" id="toggleSuperchunkHeat" />
-        <span>Coarse median heat</span>
-      </label>
+        <label class="gw-row">
+          <input type="checkbox" id="toggleSuperchunkHeat" />
+          <span>Coarse median heat</span>
+        </label>
 
-      <label class="gw-row">
-      <input type="checkbox" id="toggleOsmBuildings" checked />
-      <span>Show OSM structures</span>
-      </label>
+        <label class="gw-row">
+          <input type="checkbox" id="toggleOsmBuildings" checked />
+          <span>Show OSM structures</span>
+        </label>
 
-      <label class="gw-row">
-        <input type="checkbox" id="toggleSurveyView" checked />
-        <span>Show surveys</span>
-      </label>
+        <label class="gw-row">
+          <input type="checkbox" id="toggleSurveyView" checked />
+          <span>Show surveys</span>
+        </label>
 
-      <label class="gw-row">
-        <input type="checkbox" id="togglePatchView" checked />
-        <span>Show patches</span>
-      </label>
+        <label class="gw-row">
+          <input type="checkbox" id="togglePatchView" checked />
+          <span>Show patches</span>
+        </label>
 
-      <label class="gw-row">
-        <input type="radio" name="heatMetric" value="count" checked />
-        <span>n observations</span>
-      </label>
+        <label class="gw-row">
+          <input type="radio" name="heatMetric" value="count" checked />
+          <span>n observations</span>
+        </label>
 
-      <label class="gw-row">
-        <input type="radio" name="heatMetric" value="species" />
-        <span>n species</span>
-      </label>
+        <label class="gw-row">
+          <input type="radio" name="heatMetric" value="species" />
+          <span>n species</span>
+        </label>
 
-      <label class="gw-row">
-        <input type="radio" name="heatMetric" value="observers" />
-        <span>n observers</span>
-      </label>
+        <label class="gw-row">
+          <input type="radio" name="heatMetric" value="observers" />
+          <span>n observers</span>
+        </label>
 
-      <label class="gw-row">
-        <input type="checkbox" id="toggleDynamicINat" />
-        <span>Live iNat</span>
-      </label>
+        <label class="gw-row">
+          <input type="checkbox" id="toggleDynamicINat" />
+          <span>Live iNat</span>
+        </label>
 
-      <label class="gw-row" style="display:none;">
-        <input type="checkbox" id="toggleShimmer" />
-        <span>Captive shimmer</span>
-      </label>
+        <label class="gw-row" style="display: none">
+          <input type="checkbox" id="toggleShimmer" />
+          <span>Captive shimmer</span>
+        </label>
 
-      <label class="gw-row">
-        <input type="checkbox" id="toggleFog" />
-        <span>Fog of war</span>
-      </label>
+        <label class="gw-row">
+          <input type="checkbox" id="toggleFog" />
+          <span>Fog of war</span>
+        </label>
 
-      <label class="gw-row" style="display:none;">
-      <input type="checkbox" id="toggleFogSmoothing" checked />
-      <span>Fog smoothing</span>
-      </label>
+        <label class="gw-row" style="display: none">
+          <input type="checkbox" id="toggleFogSmoothing" checked />
+          <span>Fog smoothing</span>
+        </label>
 
+        <label class="gw-row">
+          <input type="checkbox" id="toggleGodsEye" />
+          <span>God’s Eye</span>
+        </label>
 
-      <label class="gw-row">
-        <input type="checkbox" id="toggleGodsEye" />
-        <span>God’s Eye</span>
-      </label>
+        <label class="gw-row">
+          <input type="checkbox" id="toggleLockLocation" checked />
+          <span>Lock to current location</span>
+        </label>
 
-     <label class="gw-row">
-  <input type="checkbox" id="toggleLockLocation" checked />
-  <span>Lock to current location</span>
-</label>
-
-<details class="gw-details" id="taxaDetails">
-        <summary class="gw-summary">Iconic taxa</summary>
-        <div class="gw-checklist" id="taxaChecklist"></div>
-      </details>
-    </div>
-  </div>
-
-  
-
-  <!-- Hidden compatibility HUD -->
-  <div class="hud" id="hud" aria-hidden="true">
-    <div class="hud-header">
-      <b>GridWild</b>
-      <button class="hud-toggle" id="hudToggle" aria-expanded="false">▾</button>
-    </div>
-    <div class="hud-content" id="hudContent">
-      <div id="status">Requesting location…</div>
-    </div>
-  </div>
-
-  <!-- Top controls -->
-  <div class="gw-topbar">
-  <div class="gw-topbar-left gw-topbar-stack">
-    <div class="gw-hud-toolband" aria-label="Map tools">
-      <button class="gw-pill gw-hud-round-btn" id="legendPill" type="button" aria-label="Open settings" title="Settings">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M4 7h16"></path>
-          <path d="M4 17h16"></path>
-          <circle cx="9" cy="7" r="2"></circle>
-          <circle cx="15" cy="17" r="2"></circle>
-        </svg>
-      </button>
-      <button class="gw-pill gw-location-pill gw-hud-round-btn" id="gwLocationPickerBtn" type="button" aria-label="Pick or save a location" title="Location">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11z"></path>
-          <circle cx="12" cy="10" r="2.2"></circle>
-        </svg>
-      </button>
-      <button class="gw-pill gw-hud-round-btn" id="gwHudGeometryToggle" type="button" aria-label="Toggle layers pane" aria-expanded="false" aria-controls="gwHudTaxaFilter" title="Layers">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M5 6.5 12 3l7 3.5v10L12 21l-7-4.5z"></path>
-          <path d="M5 6.5 12 11l7-4.5"></path>
-          <path d="M12 11v10"></path>
-          <circle cx="5" cy="6.5" r="1.1"></circle>
-          <circle cx="19" cy="6.5" r="1.1"></circle>
-          <circle cx="12" cy="21" r="1.1"></circle>
-        </svg>
-      </button>
-    </div>
-    <div class="gw-hud-legend" id="gwHudLegend" role="button" tabindex="0" aria-label="Open lens picker">
-      <div class="gw-hud-legend-title">
-        <span id="gwHudLegendTitle">Overlay</span>
-      </div>
-      <div class="gw-hud-legend-subtitle" id="gwHudLegendSubtitle">Loading lens...</div>
-      <div class="gw-hud-legend-scale">
-        <div class="gw-hud-legend-bar" id="gwHudLegendBar"></div>
-        <div class="gw-hud-legend-labels">
-          <span>low</span>
-          <span>mid</span>
-          <span>high</span>
-        </div>
-        <div class="gw-hud-legend-chips">
-          <span class="gw-hud-legend-chip" id="gwHudLegendChipLow"></span>
-          <span class="gw-hud-legend-chip" id="gwHudLegendChipMid"></span>
-          <span class="gw-hud-legend-chip" id="gwHudLegendChipHigh"></span>
-        </div>
-      </div>
-      <div class="gw-hud-legend-lines" id="gwHudLegendLines"></div>
-    </div>
-    <div class="gw-hud-legend gw-hud-legend-compact" id="gwHudCompactLegend" role="button" tabindex="0" aria-label="Open lens picker">
-      <div class="gw-hud-compact-scale">
-        <div class="gw-hud-compact-bar gw-hud-compact-lens-bar" id="gwHudCompactLegendBar">
-          <span class="gw-hud-compact-bar-label" id="gwHudCompactLegendTitle">Overlay</span>
-        </div>
-        <div class="gw-hud-compact-bar gw-hud-compact-fog-bar" id="gwHudCompactFogBar" hidden>
-          <span class="gw-hud-compact-bar-label">UNEXPLORED</span>
-        </div>
+        <details class="gw-details" id="taxaDetails">
+          <summary class="gw-summary">Iconic taxa</summary>
+          <div class="gw-checklist" id="taxaChecklist"></div>
+        </details>
       </div>
     </div>
-    <div class="gw-hud-taxa" id="gwHudTaxaFilter" aria-label="Filter overlay by iconic taxon" hidden>
-      <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Insecta" aria-label="Toggle insects" title="Insects">🐛</button>
-      <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Plantae" aria-label="Toggle plants" title="Plants">🌿</button>
-      <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Fungi" aria-label="Toggle fungi" title="Fungi">🍄</button>
-      <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Mammalia" aria-label="Toggle mammals" title="Mammals">🐾</button>
-      <button class="gw-hud-taxa-btn" type="button" data-gw-hud-iconic="Aves" aria-label="Toggle birds" title="Birds">🐦</button>
-      <button class="gw-hud-taxa-btn gw-hud-me-btn" id="gwHudMeToggle" type="button" data-gw-hud-me aria-label="Filter heat to my cached observations" title="My observations">ME</button>
-      <button class="gw-hud-taxa-btn gw-hud-osm-btn" id="gwHudTaxaOsmToggle" type="button" data-gw-hud-osm aria-label="Toggle OSM structures" title="OSM structures">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M3 11.5 12 4l9 7.5"></path>
-          <path d="M5 10.5V20h14v-9.5"></path>
-          <path d="M9.5 20v-6h5v6"></path>
-        </svg>
-      </button>
-      <button class="gw-hud-taxa-btn gw-hud-fog-btn" id="gwHudFogToggle" type="button" data-gw-hud-fog aria-label="Toggle fog" title="Fog">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M4 15.5h16"></path>
-          <path d="M6 19h12"></path>
-          <path d="M9 22h6"></path>
-          <path d="M6.8 12.5A4.8 4.8 0 0 1 16 10.2a3.2 3.2 0 0 1 1.2 6.1"></path>
-        </svg>
-      </button>
-      <button class="gw-hud-taxa-btn gw-hud-contrast-btn" id="gwHudHighContrastToggle" type="button" aria-label="Toggle high contrast lens colors" title="High contrast">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <rect x="4" y="4" width="16" height="16" rx="3"></rect>
-          <path d="m8 12.5 2.7 2.7L16.5 9"></path>
-        </svg>
-      </button>
-      <button class="gw-hud-taxa-btn gw-hud-heat-btn" id="gwHudHeatToggle" type="button" data-gw-hud-heat aria-label="Toggle heat overlay" title="Heat overlay" onclick="setTimeout(function(){ window.reconcileGridWildHudHeat && window.reconcileGridWildHudHeat(); }, 0)">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M8.5 14.5a3.5 3.5 0 1 0 7 0c0-1.5-.8-2.5-1.8-3.7-.8-1-1.7-2.1-1.7-3.8-2.1 1.4-3.5 3.5-3.5 7.5z"></path>
-          <path d="M12 18a1.7 1.7 0 0 0 1.7-1.7c0-.8-.4-1.3-1-1.9-.4-.5-.7-1-.7-1.7-1 .8-1.7 1.9-1.7 3.6A1.7 1.7 0 0 0 12 18z"></path>
-        </svg>
-      </button>
-      <button class="gw-hud-taxa-btn gw-hud-survey-btn" id="gwHudSurveyLayerToggle" type="button" aria-label="Toggle survey view" title="Survey view">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M5 20V5"></path>
-          <path d="M5 6.5h9.5l-1.4 3.1 1.4 3.1H5"></path>
-          <path d="M8.5 16.5h9"></path>
-          <path d="M16.2 14.2 18 16.5l-1.8 2.3"></path>
-        </svg>
-      </button>
-      <button class="gw-hud-taxa-btn gw-hud-blast-btn is-ready" id="gwHudVisionBlastBtn" type="button" aria-label="Explosive vision" title="Explosive vision">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M2.8 12s3.4-6 9.2-6 9.2 6 9.2 6-3.4 6-9.2 6-9.2-6-9.2-6Z"></path>
-          <path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M21.5 12h-2.2M4.7 12H2.5M19.8 4.2l-1.6 1.6M5.8 18.2l-1.6 1.6"></path>
-        </svg>
-      </button>
-      <button class="gw-hud-taxa-btn gw-hud-niche-btn is-on" id="gwHudNicheLayerToggle" type="button" aria-label="Toggle niche view" aria-pressed="true" title="Niche view">N</button>
-      <button class="gw-hud-taxa-btn gw-hud-advanced-btn" id="gwHudAdvancedLayerToggle" type="button" aria-label="Toggle coarse cutoff and morphology controls" aria-pressed="false" aria-controls="gwHudGeometryFoldout" title="Coarse / Cutoff / Morphology">C</button>
-      <button class="gw-hud-taxa-btn gw-hud-sparkle-btn" id="gwHudNicheSparkleToggle" type="button" aria-label="Toggle Niche Sparkle" title="Niche Sparkle">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 3.8 13.8 9l5.4 1.2-4.1 3.7.5 5.5L12 16.6l-3.6 2.8.5-5.5-4.1-3.7L10.2 9 12 3.8z"></path>
-          <path d="M19.5 3.8v3.4M17.8 5.5h3.4M4.5 17.2v3M3 18.7h3"></path>
-        </svg>
-      </button>
-      <button class="gw-hud-taxa-btn gw-hud-daynight-btn" id="gwHudDayNightToggle" type="button" aria-label="Switch to night map" aria-pressed="false" title="Night map">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M20.2 14.8A7.6 7.6 0 0 1 9.2 3.8 8.1 8.1 0 1 0 20.2 14.8z"></path>
-          <path d="M17.8 3.8v2.8M16.4 5.2h2.8"></path>
-        </svg>
-      </button>
+
+    <!-- Hidden compatibility HUD -->
+    <div class="hud" id="hud" aria-hidden="true">
+      <div class="hud-header">
+        <b>GridWild</b>
+        <button class="hud-toggle" id="hudToggle" aria-expanded="false">▾</button>
+      </div>
+      <div class="hud-content" id="hudContent">
+        <div id="status">Requesting location…</div>
+      </div>
     </div>
-    <div class="gw-hud-geometry-foldout" id="gwHudGeometryFoldout" hidden>
-      <label class="gw-hud-coarse" title="Render the heat overlay as local median bins">
-        <input type="checkbox" id="toggleSuperchunkHeat_hud" />
-        <span>Coarse</span>
-        <button class="gw-hud-coarse-bin" id="gwCoarseHeatBinBtn" type="button" title="Set heat bin size">8</button>
-      </label>
-      <div class="gw-hud-zfilter" title="Filter heat cells by z-score cutoff">
-        <div class="gw-hud-zfilter-row">
-          <input type="checkbox" id="toggleHeatZThreshold" />
-          <label for="toggleHeatZThreshold">Cutoff</label>
-          <button class="gw-hud-zfilter-direction" id="gwHeatZThresholdDirectionBtn" type="button" aria-label="Show heat cells above cutoff" title="Show values above cutoff">&ge;</button>
+
+    <!-- Top controls -->
+    <div class="gw-topbar">
+      <div class="gw-topbar-left gw-topbar-stack">
+        <div class="gw-hud-toolband" aria-label="Map tools">
+          <button
+            class="gw-pill gw-hud-round-btn"
+            id="legendPill"
+            type="button"
+            aria-label="Open settings"
+            title="Settings"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 7h16"></path>
+              <path d="M4 17h16"></path>
+              <circle cx="9" cy="7" r="2"></circle>
+              <circle cx="15" cy="17" r="2"></circle>
+            </svg>
+          </button>
+          <button
+            class="gw-pill gw-location-pill gw-hud-round-btn"
+            id="gwLocationPickerBtn"
+            type="button"
+            aria-label="Pick or save a location"
+            title="Location"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11z"></path>
+              <circle cx="12" cy="10" r="2.2"></circle>
+            </svg>
+          </button>
+          <button
+            class="gw-pill gw-hud-round-btn"
+            id="gwHudGeometryToggle"
+            type="button"
+            aria-label="Toggle layers pane"
+            aria-expanded="false"
+            aria-controls="gwHudTaxaFilter"
+            title="Layers"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 6.5 12 3l7 3.5v10L12 21l-7-4.5z"></path>
+              <path d="M5 6.5 12 11l7-4.5"></path>
+              <path d="M12 11v10"></path>
+              <circle cx="5" cy="6.5" r="1.1"></circle>
+              <circle cx="19" cy="6.5" r="1.1"></circle>
+              <circle cx="12" cy="21" r="1.1"></circle>
+            </svg>
+          </button>
         </div>
-        <div class="gw-hud-zfilter-value-row">
-          <input class="gw-hud-zfilter-slider" id="gwHeatZThresholdSlider" type="range" min="-3" max="3" step="0.1" value="0" />
-          <input class="gw-hud-zfilter-number" id="gwHeatZThresholdInput" type="number" min="-3" max="3" step="0.1" value="0" />
+        <div
+          class="gw-hud-legend"
+          id="gwHudLegend"
+          role="button"
+          tabindex="0"
+          aria-label="Open lens picker"
+        >
+          <div class="gw-hud-legend-title">
+            <span id="gwHudLegendTitle">Overlay</span>
+          </div>
+          <div class="gw-hud-legend-subtitle" id="gwHudLegendSubtitle">Loading lens...</div>
+          <div class="gw-hud-legend-scale">
+            <div class="gw-hud-legend-bar" id="gwHudLegendBar"></div>
+            <div class="gw-hud-legend-labels">
+              <span>low</span>
+              <span>mid</span>
+              <span>high</span>
+            </div>
+            <div class="gw-hud-legend-chips">
+              <span class="gw-hud-legend-chip" id="gwHudLegendChipLow"></span>
+              <span class="gw-hud-legend-chip" id="gwHudLegendChipMid"></span>
+              <span class="gw-hud-legend-chip" id="gwHudLegendChipHigh"></span>
+            </div>
+          </div>
+          <div class="gw-hud-legend-lines" id="gwHudLegendLines"></div>
         </div>
-        <div class="gw-hud-morphology" aria-label="Heat cutoff morphology controls">
-          <div class="gw-hud-morphology-title">Morphology</div>
-          <div class="gw-hud-morphology-row" title="Drop connected heat components smaller than this size">
-            <input type="checkbox" id="toggleHeatMorphMin" />
-            <label for="toggleHeatMorphMin">Min</label>
-            <input class="gw-hud-morphology-number" id="gwHeatMorphMinSizeInput" type="number" min="1" max="999" step="1" value="10" aria-label="Minimum component size" />
-            <span class="gw-hud-morphology-size-label">Size</span>
+        <div
+          class="gw-hud-legend gw-hud-legend-compact"
+          id="gwHudCompactLegend"
+          role="button"
+          tabindex="0"
+          aria-label="Open lens picker"
+        >
+          <div class="gw-hud-compact-scale">
+            <div class="gw-hud-compact-bar gw-hud-compact-lens-bar" id="gwHudCompactLegendBar">
+              <span class="gw-hud-compact-bar-label" id="gwHudCompactLegendTitle">Overlay</span>
+            </div>
+            <div class="gw-hud-compact-bar gw-hud-compact-fog-bar" id="gwHudCompactFogBar" hidden>
+              <span class="gw-hud-compact-bar-label">UNEXPLORED</span>
+            </div>
+          </div>
+        </div>
+        <div
+          class="gw-hud-taxa"
+          id="gwHudTaxaFilter"
+          aria-label="Filter overlay by iconic taxon"
+          hidden
+        >
+          <button
+            class="gw-hud-taxa-btn"
+            type="button"
+            data-gw-hud-iconic="Insecta"
+            aria-label="Toggle insects"
+            title="Insects"
+          >
+            🐛
+          </button>
+          <button
+            class="gw-hud-taxa-btn"
+            type="button"
+            data-gw-hud-iconic="Plantae"
+            aria-label="Toggle plants"
+            title="Plants"
+          >
+            🌿
+          </button>
+          <button
+            class="gw-hud-taxa-btn"
+            type="button"
+            data-gw-hud-iconic="Fungi"
+            aria-label="Toggle fungi"
+            title="Fungi"
+          >
+            🍄
+          </button>
+          <button
+            class="gw-hud-taxa-btn"
+            type="button"
+            data-gw-hud-iconic="Mammalia"
+            aria-label="Toggle mammals"
+            title="Mammals"
+          >
+            🐾
+          </button>
+          <button
+            class="gw-hud-taxa-btn"
+            type="button"
+            data-gw-hud-iconic="Aves"
+            aria-label="Toggle birds"
+            title="Birds"
+          >
+            🐦
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-me-btn"
+            id="gwHudMeToggle"
+            type="button"
+            data-gw-hud-me
+            aria-label="Filter heat to my cached observations"
+            title="My observations"
+          >
+            ME
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-osm-btn"
+            id="gwHudTaxaOsmToggle"
+            type="button"
+            data-gw-hud-osm
+            aria-label="Toggle OSM structures"
+            title="OSM structures"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 11.5 12 4l9 7.5"></path>
+              <path d="M5 10.5V20h14v-9.5"></path>
+              <path d="M9.5 20v-6h5v6"></path>
+            </svg>
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-fog-btn"
+            id="gwHudFogToggle"
+            type="button"
+            data-gw-hud-fog
+            aria-label="Toggle fog"
+            title="Fog"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 15.5h16"></path>
+              <path d="M6 19h12"></path>
+              <path d="M9 22h6"></path>
+              <path d="M6.8 12.5A4.8 4.8 0 0 1 16 10.2a3.2 3.2 0 0 1 1.2 6.1"></path>
+            </svg>
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-contrast-btn"
+            id="gwHudHighContrastToggle"
+            type="button"
+            aria-label="Toggle high contrast lens colors"
+            title="High contrast"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="4" y="4" width="16" height="16" rx="3"></rect>
+              <path d="m8 12.5 2.7 2.7L16.5 9"></path>
+            </svg>
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-heat-btn"
+            id="gwHudHeatToggle"
+            type="button"
+            data-gw-hud-heat
+            aria-label="Toggle heat overlay"
+            title="Heat overlay"
+            onclick="
+              setTimeout(function () {
+                window.reconcileGridWildHudHeat && window.reconcileGridWildHudHeat();
+              }, 0)
+            "
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M8.5 14.5a3.5 3.5 0 1 0 7 0c0-1.5-.8-2.5-1.8-3.7-.8-1-1.7-2.1-1.7-3.8-2.1 1.4-3.5 3.5-3.5 7.5z"
+              ></path>
+              <path
+                d="M12 18a1.7 1.7 0 0 0 1.7-1.7c0-.8-.4-1.3-1-1.9-.4-.5-.7-1-.7-1.7-1 .8-1.7 1.9-1.7 3.6A1.7 1.7 0 0 0 12 18z"
+              ></path>
+            </svg>
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-survey-btn"
+            id="gwHudSurveyLayerToggle"
+            type="button"
+            aria-label="Toggle survey view"
+            title="Survey view"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 20V5"></path>
+              <path d="M5 6.5h9.5l-1.4 3.1 1.4 3.1H5"></path>
+              <path d="M8.5 16.5h9"></path>
+              <path d="M16.2 14.2 18 16.5l-1.8 2.3"></path>
+            </svg>
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-blast-btn is-ready"
+            id="gwHudVisionBlastBtn"
+            type="button"
+            aria-label="Explosive vision"
+            title="Explosive vision"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M2.8 12s3.4-6 9.2-6 9.2 6 9.2 6-3.4 6-9.2 6-9.2-6-9.2-6Z"></path>
+              <path
+                d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M21.5 12h-2.2M4.7 12H2.5M19.8 4.2l-1.6 1.6M5.8 18.2l-1.6 1.6"
+              ></path>
+            </svg>
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-niche-btn is-on"
+            id="gwHudNicheLayerToggle"
+            type="button"
+            aria-label="Toggle niche view"
+            aria-pressed="true"
+            title="Niche view"
+          >
+            N
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-advanced-btn"
+            id="gwHudAdvancedLayerToggle"
+            type="button"
+            aria-label="Toggle coarse cutoff and morphology controls"
+            aria-pressed="false"
+            aria-controls="gwHudGeometryFoldout"
+            title="Coarse / Cutoff / Morphology"
+          >
+            C
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-sparkle-btn"
+            id="gwHudNicheSparkleToggle"
+            type="button"
+            aria-label="Toggle Niche Sparkle"
+            title="Niche Sparkle"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M12 3.8 13.8 9l5.4 1.2-4.1 3.7.5 5.5L12 16.6l-3.6 2.8.5-5.5-4.1-3.7L10.2 9 12 3.8z"
+              ></path>
+              <path d="M19.5 3.8v3.4M17.8 5.5h3.4M4.5 17.2v3M3 18.7h3"></path>
+            </svg>
+          </button>
+          <button
+            class="gw-hud-taxa-btn gw-hud-daynight-btn"
+            id="gwHudDayNightToggle"
+            type="button"
+            aria-label="Switch to night map"
+            aria-pressed="false"
+            title="Night map"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M20.2 14.8A7.6 7.6 0 0 1 9.2 3.8 8.1 8.1 0 1 0 20.2 14.8z"></path>
+              <path d="M17.8 3.8v2.8M16.4 5.2h2.8"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="gw-hud-geometry-foldout" id="gwHudGeometryFoldout" hidden>
+          <label class="gw-hud-coarse" title="Render the heat overlay as local median bins">
+            <input type="checkbox" id="toggleSuperchunkHeat_hud" />
+            <span>Coarse</span>
+            <button
+              class="gw-hud-coarse-bin"
+              id="gwCoarseHeatBinBtn"
+              type="button"
+              title="Set heat bin size"
+            >
+              8
+            </button>
+          </label>
+          <div class="gw-hud-zfilter" title="Filter heat cells by z-score cutoff">
+            <div class="gw-hud-zfilter-row">
+              <input type="checkbox" id="toggleHeatZThreshold" />
+              <label for="toggleHeatZThreshold">Cutoff</label>
+              <button
+                class="gw-hud-zfilter-direction"
+                id="gwHeatZThresholdDirectionBtn"
+                type="button"
+                aria-label="Show heat cells above cutoff"
+                title="Show values above cutoff"
+              >
+                &ge;
+              </button>
+            </div>
+            <div class="gw-hud-zfilter-value-row">
+              <input
+                class="gw-hud-zfilter-slider"
+                id="gwHeatZThresholdSlider"
+                type="range"
+                min="-3"
+                max="3"
+                step="0.1"
+                value="0"
+              />
+              <input
+                class="gw-hud-zfilter-number"
+                id="gwHeatZThresholdInput"
+                type="number"
+                min="-3"
+                max="3"
+                step="0.1"
+                value="0"
+              />
+            </div>
+            <div class="gw-hud-morphology" aria-label="Heat cutoff morphology controls">
+              <div class="gw-hud-morphology-title">Morphology</div>
+              <div
+                class="gw-hud-morphology-row"
+                title="Drop connected heat components smaller than this size"
+              >
+                <input type="checkbox" id="toggleHeatMorphMin" />
+                <label for="toggleHeatMorphMin">Min</label>
+                <input
+                  class="gw-hud-morphology-number"
+                  id="gwHeatMorphMinSizeInput"
+                  type="number"
+                  min="1"
+                  max="999"
+                  step="1"
+                  value="10"
+                  aria-label="Minimum component size"
+                />
+                <span class="gw-hud-morphology-size-label">Size</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </div>
 
-    <div class="gw-topbar-right">
-      <button class="gw-pill" id="gwWildPointsPill" type="button">
-        🍃 <span id="gwWildPointsValue">0</span>
-      </button>
+      <div class="gw-topbar-right">
+        <button class="gw-pill" id="gwWildPointsPill" type="button">
+          🍃 <span id="gwWildPointsValue">0</span>
+        </button>
 
-      <button class="gw-topbtn" id="recenterFab" aria-label="Recenter">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <circle cx="12" cy="12" r="7"></circle>
-          <path d="M12 3v3M12 18v3M3 12h3M18 12h3"></path>
-          <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>
-        </svg>
-        <span id="gpsHealthIcon" class="gps-health gps-unknown">?</span>
-      </button>
-    </div>
-  </div>
-
-  <div class="gw-map-scale-hatch" id="gwMapScaleHatch" aria-hidden="true">
-    <div class="gw-map-scale-hatch-line"></div>
-    <div class="gw-map-scale-hatch-label" id="gwMapScaleHatchLabel"></div>
-  </div>
-
-  <!-- Backdrop -->
-  <div class="gw-backdrop" id="gwBackdrop"></div>
-
-  <!-- ME sheet -->
-  <section class="gw-sheet" id="sheetMe">
-    <div class="gw-sheet-card">
-      <div class="gw-sheet-handle"></div>
-      <div class="gw-sheet-header">
-        <div class="gw-sheet-title">Me</div>
-        <button class="gw-sheet-close" data-close-sheet>&times;</button>
+        <button class="gw-topbtn" id="recenterFab" aria-label="Recenter">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <circle cx="12" cy="12" r="7"></circle>
+            <path d="M12 3v3M12 18v3M3 12h3M18 12h3"></path>
+            <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>
+          </svg>
+          <span id="gpsHealthIcon" class="gps-health gps-unknown">?</span>
+        </button>
       </div>
-      <div class="gw-sheet-body" id="sheetMeBody"></div>
     </div>
-  </section>
 
-  <!-- FIELD sheet -->
-  <section class="gw-sheet" id="sheetInfo">
-    <div class="gw-sheet-card">
-      <div class="gw-sheet-handle"></div>
-      <div class="gw-sheet-header">
-        <div class="gw-sheet-title">Field</div>
-        <button class="gw-sheet-close" data-close-sheet>&times;</button>
+    <div class="gw-map-scale-hatch" id="gwMapScaleHatch" aria-hidden="true">
+      <div class="gw-map-scale-hatch-line"></div>
+      <div class="gw-map-scale-hatch-label" id="gwMapScaleHatchLabel"></div>
+    </div>
+
+    <!-- Backdrop -->
+    <div class="gw-backdrop" id="gwBackdrop"></div>
+
+    <!-- ME sheet -->
+    <section class="gw-sheet" id="sheetMe">
+      <div class="gw-sheet-card">
+        <div class="gw-sheet-handle"></div>
+        <div class="gw-sheet-header">
+          <div class="gw-sheet-title">Me</div>
+          <button class="gw-sheet-close" data-close-sheet>&times;</button>
+        </div>
+        <div class="gw-sheet-body" id="sheetMeBody"></div>
       </div>
-      <div class="gw-sheet-body" id="sheetInfoBody"></div>
-    </div>
-  </section>
+    </section>
 
-  <!-- COMMUNITY sheet -->
-  <section class="gw-sheet" id="sheetCommunity">
-    <div class="gw-sheet-card">
-      <div class="gw-sheet-handle"></div>
-      <div class="gw-sheet-header">
-        <div class="gw-sheet-title">Guild</div>
-        <button class="gw-sheet-close" data-close-sheet>&times;</button>
+    <!-- FIELD sheet -->
+    <section class="gw-sheet" id="sheetInfo">
+      <div class="gw-sheet-card">
+        <div class="gw-sheet-handle"></div>
+        <div class="gw-sheet-header">
+          <div class="gw-sheet-title">Field</div>
+          <button class="gw-sheet-close" data-close-sheet>&times;</button>
+        </div>
+        <div class="gw-sheet-body" id="sheetInfoBody"></div>
       </div>
-      <div class="gw-sheet-body" id="sheetCommunityBody"></div>
-    </div>
-  </section>
+    </section>
 
-  <!-- QUEST sheet -->
-  <section class="gw-sheet" id="sheetQuest">
-    <div class="gw-sheet-card">
-      <div class="gw-sheet-handle"></div>
-      <div class="gw-sheet-header">
-        <div class="gw-sheet-title">Quest</div>
-        <button class="gw-sheet-close" data-close-sheet>&times;</button>
+    <!-- COMMUNITY sheet -->
+    <section class="gw-sheet" id="sheetCommunity">
+      <div class="gw-sheet-card">
+        <div class="gw-sheet-handle"></div>
+        <div class="gw-sheet-header">
+          <div class="gw-sheet-title">Guild</div>
+          <button class="gw-sheet-close" data-close-sheet>&times;</button>
+        </div>
+        <div class="gw-sheet-body" id="sheetCommunityBody"></div>
       </div>
-      <div class="gw-sheet-body" id="sheetQuestBody"></div>
-    </div>
-  </section>
+    </section>
 
-  <!-- LEGEND quick sheet -->
-  <section class="gw-sheet" id="sheetLegend">
-    <div class="gw-sheet-card">
-      <div class="gw-sheet-handle"></div>
-      <div class="gw-sheet-header">
-        <div class="gw-sheet-title">Map legend</div>
-        <button class="gw-sheet-close" data-close-sheet>&times;</button>
+    <!-- QUEST sheet -->
+    <section class="gw-sheet" id="sheetQuest">
+      <div class="gw-sheet-card">
+        <div class="gw-sheet-handle"></div>
+        <div class="gw-sheet-header">
+          <div class="gw-sheet-title">Quest</div>
+          <button class="gw-sheet-close" data-close-sheet>&times;</button>
+        </div>
+        <div class="gw-sheet-body" id="sheetQuestBody"></div>
       </div>
-      <div class="gw-sheet-body" id="sheetLegendBody"></div>
-    </div>
-  </section>
+    </section>
 
-  <!-- LENS sheet -->
-<section class="gw-sheet" id="sheetLens">
-  <div class="gw-sheet-card">
-    <div class="gw-sheet-handle"></div>
+    <!-- LEGEND quick sheet -->
+    <section class="gw-sheet" id="sheetLegend">
+      <div class="gw-sheet-card">
+        <div class="gw-sheet-handle"></div>
+        <div class="gw-sheet-header">
+          <div class="gw-sheet-title">Map legend</div>
+          <button class="gw-sheet-close" data-close-sheet>&times;</button>
+        </div>
+        <div class="gw-sheet-body" id="sheetLegendBody"></div>
+      </div>
+    </section>
 
-    <div class="gw-sheet-header">
-      <div class="gw-sheet-title">Ecological Lenses</div>
-      <button class="gw-sheet-close" data-close-sheet>&times;</button>
-    </div>
+    <!-- LENS sheet -->
+    <section class="gw-sheet" id="sheetLens">
+      <div class="gw-sheet-card">
+        <div class="gw-sheet-handle"></div>
 
-<div class="gw-sheet-body" id="sheetLensBody">
+        <div class="gw-sheet-header">
+          <div class="gw-sheet-title">Ecological Lenses</div>
+          <button class="gw-sheet-close" data-close-sheet>&times;</button>
+        </div>
 
-  <!-- CORE -->
-  <div class="gw-card">
-    <div class="gw-card-title">Core Lenses</div>
+        <div class="gw-sheet-body" id="sheetLensBody">
+          <!-- CORE -->
+          <div class="gw-card">
+            <div class="gw-card-title">Core Lenses</div>
 
-    <div class="gw-card gw-lens-card" data-lens="classic">
-      <div class="gw-card-title">Explorer</div>
-      Balanced biodiversity overview.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="classic">
+              <div class="gw-card-title">Explorer</div>
+              Balanced biodiversity overview.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="richness">
-      <div class="gw-card-title">Biodiversity</div>
-      Species-rich hotspots.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="richness">
+              <div class="gw-card-title">Biodiversity</div>
+              Species-rich hotspots.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="rare">
-      <div class="gw-card-title">Rare Finds</div>
-      Unusual richness relative to traffic.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="rare">
+              <div class="gw-card-title">Rare Finds</div>
+              Unusual richness relative to traffic.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="underexplored">
-      <div class="gw-card-title">Frontier</div>
-      Neglected but promising squares.
-    </div>
-  </div>
+            <div class="gw-card gw-lens-card" data-lens="underexplored">
+              <div class="gw-card-title">Frontier</div>
+              Neglected but promising squares.
+            </div>
+          </div>
 
+          <!-- WILDTIME -->
+          <div class="gw-card">
+            <div class="gw-card-title">Wildtime</div>
 
-  <!-- WILDTIME -->
-  <div class="gw-card">
-    <div class="gw-card-title">Wildtime</div>
+            <div class="gw-card gw-lens-card" data-lens="wildtime">
+              <div class="gw-card-title">Wildtime</div>
+              Depth of recent evidence across the last observed records.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="wildtime">
-      <div class="gw-card-title">Wildtime</div>
-      Depth of recent evidence across the last observed records.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="seasonalnow">
+              <div class="gw-card-title">Season Watch</div>
+              Squares supported in this part of the year.
+            </div>
+          </div>
 
-    <div class="gw-card gw-lens-card" data-lens="seasonalnow">
-      <div class="gw-card-title">Season Watch</div>
-      Squares supported in this part of the year.
-    </div>
-  </div>
+          <!-- FRESHNESS -->
+          <div class="gw-card">
+            <div class="gw-card-title">Freshness</div>
 
+            <div class="gw-card gw-lens-card" data-lens="freshness">
+              <div class="gw-card-title">Freshness</div>
+              Latest observation recency.
+            </div>
 
-  <!-- FRESHNESS -->
-  <div class="gw-card">
-    <div class="gw-card-title">Freshness</div>
+            <div class="gw-card gw-lens-card" data-lens="timeconfidence">
+              <div class="gw-card-title">Recency Strength</div>
+              Durable freshness versus one-off recent updates.
+            </div>
+          </div>
 
-    <div class="gw-card gw-lens-card" data-lens="freshness">
-      <div class="gw-card-title">Freshness</div>
-      Latest observation recency.
-    </div>
+          <!-- FIELD PRIORITIES -->
+          <div class="gw-card">
+            <div class="gw-card-title">Field Priorities</div>
 
-    <div class="gw-card gw-lens-card" data-lens="timeconfidence">
-      <div class="gw-card-title">Recency Strength</div>
-      Durable freshness versus one-off recent updates.
-    </div>
-  </div>
+            <div class="gw-card gw-lens-card" data-lens="revisit">
+              <div class="gw-card-title">Revisit</div>
+              Rich places whose evidence is getting old.
+            </div>
 
+            <div class="gw-card gw-lens-card" data-lens="reactivated">
+              <div class="gw-card-title">Reactivated</div>
+              Recent activity after a quiet stretch.
+            </div>
+          </div>
 
-  <!-- FIELD PRIORITIES -->
-  <div class="gw-card">
-    <div class="gw-card-title">Field Priorities</div>
+          <!-- HUMAN -->
+          <div class="gw-card">
+            <div class="gw-card-title">Human Landscape</div>
 
-    <div class="gw-card gw-lens-card" data-lens="revisit">
-      <div class="gw-card-title">Revisit</div>
-      Rich places whose evidence is getting old.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="observers">
+              <div class="gw-card-title">Busy World</div>
+              Human observer activity.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="reactivated">
-      <div class="gw-card-title">Reactivated</div>
-      Recent activity after a quiet stretch.
-    </div>
-  </div>
+            <div class="gw-card gw-lens-card" data-lens="cultivated">
+              <div class="gw-card-title">Gardenworld</div>
+              Cultivated and planted life.
+            </div>
 
+            <div class="gw-card gw-lens-card" data-lens="wildbalance">
+              <div class="gw-card-title">Wild Balance</div>
+              Wild versus cultivated tension.
+            </div>
+          </div>
 
-  <!-- HUMAN -->
-  <div class="gw-card">
-    <div class="gw-card-title">Human Landscape</div>
+          <!-- STYLE -->
+          <div class="gw-card">
+            <div class="gw-card-title">Style Modes</div>
 
-    <div class="gw-card gw-lens-card" data-lens="observers">
-      <div class="gw-card-title">Busy World</div>
-      Human observer activity.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="night">
+              <div class="gw-card-title">Night Gold</div>
+              Warm nocturnal scanner.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="cultivated">
-      <div class="gw-card-title">Gardenworld</div>
-      Cultivated and planted life.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="emerald">
+              <div class="gw-card-title">Emerald</div>
+              Vivid green richness mode.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="wildbalance">
-      <div class="gw-card-title">Wild Balance</div>
-      Wild versus cultivated tension.
-    </div>
-  </div>
+            <div class="gw-card gw-lens-card" data-lens="treasure">
+              <div class="gw-card-title">Treasure</div>
+              Hidden biodiversity reward zones.
+            </div>
+          </div>
 
+          <!-- OSM PRIORS -->
+          <div class="gw-card">
+            <div class="gw-card-title">OSM Priors</div>
 
-  <!-- STYLE -->
-  <div class="gw-card">
-    <div class="gw-card-title">Style Modes</div>
+            <div class="gw-card gw-lens-card" data-lens="osm-path-adjacency">
+              <div class="gw-card-title">Path Buffer</div>
+              Path and trail-adjacent cells from shared OSM context.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="night">
-      <div class="gw-card-title">Night Gold</div>
-      Warm nocturnal scanner.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="osm-trail-side">
+              <div class="gw-card-title">Trail Side</div>
+              Left/right side classification around the nearest path.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="emerald">
-      <div class="gw-card-title">Emerald</div>
-      Vivid green richness mode.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="osm-wet-edge">
+              <div class="gw-card-title">Wet Edge</div>
+              Water and stream-edge buffers.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="treasure">
-      <div class="gw-card-title">Treasure</div>
-      Hidden biodiversity reward zones.
-    </div>
-  </div>
+            <div class="gw-card gw-lens-card" data-lens="osm-barrier-map">
+              <div class="gw-card-title">Barrier Map</div>
+              Roads and buildings interpreted as movement barriers.
+            </div>
 
+            <div class="gw-card gw-lens-card" data-lens="osm-landuse-class">
+              <div class="gw-card-title">Land Use</div>
+              Park, wood, grass, water, and building class tint.
+            </div>
 
-  <!-- OSM PRIORS -->
-  <div class="gw-card">
-    <div class="gw-card-title">OSM Priors</div>
+            <div class="gw-card gw-lens-card" data-lens="osm-accessibility">
+              <div class="gw-card-title">Accessibility</div>
+              Scored access prior from trails, barriers, and land cover.
+            </div>
+          </div>
 
-    <div class="gw-card gw-lens-card" data-lens="osm-path-adjacency">
-      <div class="gw-card-title">Path Buffer</div>
-      Path and trail-adjacent cells from shared OSM context.
-    </div>
+          <!-- ANALYTICS -->
+          <div class="gw-card">
+            <div class="gw-card-title">Analytics Lenses</div>
 
-    <div class="gw-card gw-lens-card" data-lens="osm-trail-side">
-      <div class="gw-card-title">Trail Side</div>
-      Left/right side classification around the nearest path.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="dominantlife">
+              <div class="gw-card-title">Dominant Life</div>
+              Color by leading lifeform.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="osm-wet-edge">
-      <div class="gw-card-title">Wet Edge</div>
-      Water and stream-edge buffers.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="seasonalpulse">
+              <div class="gw-card-title">Season Pulse</div>
+              Peak month and seasonal force.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="osm-barrier-map">
-      <div class="gw-card-title">Barrier Map</div>
-      Roads and buildings interpreted as movement barriers.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="stability">
+              <div class="gw-card-title">Stability</div>
+              Steady versus bursty squares.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="osm-landuse-class">
-      <div class="gw-card-title">Land Use</div>
-      Park, wood, grass, water, and building class tint.
-    </div>
+            <div class="gw-card gw-lens-card" data-lens="breadth">
+              <div class="gw-card-title">Breadth</div>
+              Multi-group biodiversity depth.
+            </div>
 
-    <div class="gw-card gw-lens-card" data-lens="osm-accessibility">
-      <div class="gw-card-title">Accessibility</div>
-      Scored access prior from trails, barriers, and land cover.
-    </div>
-  </div>
+            <div class="gw-card gw-lens-card" data-lens="treasure2">
+              <div class="gw-card-title">Hidden Treasure</div>
+              Quiet squares with strong diversity.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-  <!-- ANALYTICS -->
-  <div class="gw-card">
-    <div class="gw-card-title">Analytics Lenses</div>
-
-    <div class="gw-card gw-lens-card" data-lens="dominantlife">
-      <div class="gw-card-title">Dominant Life</div>
-      Color by leading lifeform.
-    </div>
-
-    <div class="gw-card gw-lens-card" data-lens="seasonalpulse">
-      <div class="gw-card-title">Season Pulse</div>
-      Peak month and seasonal force.
-    </div>
-
-    <div class="gw-card gw-lens-card" data-lens="stability">
-      <div class="gw-card-title">Stability</div>
-      Steady versus bursty squares.
-    </div>
-
-    <div class="gw-card gw-lens-card" data-lens="breadth">
-      <div class="gw-card-title">Breadth</div>
-      Multi-group biodiversity depth.
-    </div>
-
-    <div class="gw-card gw-lens-card" data-lens="treasure2">
-      <div class="gw-card-title">Hidden Treasure</div>
-      Quiet squares with strong diversity.
-    </div>
-
-  </div>
-
-</div>
-
-  </div>
-</section>
-
-  <!-- Bottom nav -->
-  <nav class="gw-bottomnav" aria-label="GridWild mobile navigation">
+    <!-- Bottom nav -->
+    <nav class="gw-bottomnav" aria-label="GridWild mobile navigation">
       <button class="gw-navbtn" id="btnMe" type="button">
-      <span class="gw-navicon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" role="img" focusable="false">
-          <circle cx="12" cy="8" r="3.2"></circle>
-          <path d="M6.5 19.5c.8-3.4 3-5.1 5.5-5.1s4.7 1.7 5.5 5.1"></path>
-          <path d="M4.5 19.5h15"></path>
-        </svg>
-      </span>
-      <span>ME</span>
-    </button>
+        <span class="gw-navicon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" role="img" focusable="false">
+            <circle cx="12" cy="8" r="3.2"></circle>
+            <path d="M6.5 19.5c.8-3.4 3-5.1 5.5-5.1s4.7 1.7 5.5 5.1"></path>
+            <path d="M4.5 19.5h15"></path>
+          </svg>
+        </span>
+        <span>ME</span>
+      </button>
 
-    <button class="gw-navbtn" id="btnInfo" type="button">
-      <span class="gw-navicon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" role="img" focusable="false">
-          <path d="M4.2 14.3 10 11.1l5.8 3.2-5.8 3.3-5.8-3.3z"></path>
-          <path d="M8.2 9.5 13 6.8l4.8 2.7-4.8 2.7-4.8-2.7z"></path>
-          <path d="M10 11.1v6.5"></path>
-          <path d="M15.8 14.3V9.5"></path>
-          <path d="M7 8.4c0-1.4 1.1-2.5 2.5-2.5S12 7 12 8.4c0 1.8-2.5 4.1-2.5 4.1S7 10.2 7 8.4z"></path>
-          <circle cx="9.5" cy="8.4" r=".65"></circle>
-          <path d="M15 5.1c0-1.1.9-2 2-2s2 .9 2 2c0 1.5-2 3.3-2 3.3s-2-1.8-2-3.3z"></path>
-          <circle cx="17" cy="5.1" r=".5"></circle>
-        </svg>
-      </span>
-      <span>FIELD</span>
-    </button>
+      <button class="gw-navbtn" id="btnInfo" type="button">
+        <span class="gw-navicon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" role="img" focusable="false">
+            <path d="M4.2 14.3 10 11.1l5.8 3.2-5.8 3.3-5.8-3.3z"></path>
+            <path d="M8.2 9.5 13 6.8l4.8 2.7-4.8 2.7-4.8-2.7z"></path>
+            <path d="M10 11.1v6.5"></path>
+            <path d="M15.8 14.3V9.5"></path>
+            <path
+              d="M7 8.4c0-1.4 1.1-2.5 2.5-2.5S12 7 12 8.4c0 1.8-2.5 4.1-2.5 4.1S7 10.2 7 8.4z"
+            ></path>
+            <circle cx="9.5" cy="8.4" r=".65"></circle>
+            <path d="M15 5.1c0-1.1.9-2 2-2s2 .9 2 2c0 1.5-2 3.3-2 3.3s-2-1.8-2-3.3z"></path>
+            <circle cx="17" cy="5.1" r=".5"></circle>
+          </svg>
+        </span>
+        <span>FIELD</span>
+      </button>
 
-    <div class="gw-camera-wrap">
-      <button class="gw-camera-btn" id="btnCamera" type="button" aria-label="Open camera">
-      <span class="gw-camera-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" role="img" focusable="false">
-          <path d="M8 7.5l1.2-2h5.6l1.2 2H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3z"></path>
-          <circle cx="12" cy="12.5" r="3.6"></circle>
-        </svg>
-      </span>
-    </button>
-      <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
-    </div>
+      <div class="gw-camera-wrap">
+        <button class="gw-camera-btn" id="btnCamera" type="button" aria-label="Open camera">
+          <span class="gw-camera-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img" focusable="false">
+              <path
+                d="M8 7.5l1.2-2h5.6l1.2 2H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3z"
+              ></path>
+              <circle cx="12" cy="12.5" r="3.6"></circle>
+            </svg>
+          </span>
+        </button>
+        <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
+      </div>
 
-    <button class="gw-navbtn" id="btnCommunity" type="button">
-      <span class="gw-navicon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" role="img" focusable="false">
-          <circle cx="8" cy="9" r="2.4"></circle>
-          <circle cx="16" cy="9" r="2.4"></circle>
-          <path d="M4.8 18.3c.5-2.6 2.2-4 4.4-4 1.4 0 2.6.5 3.5 1.6"></path>
-          <path d="M11.3 15.9c.9-1 2-1.6 3.5-1.6 2.2 0 3.9 1.4 4.4 4"></path>
-        </svg>
-      </span>
-      <span>PARTY</span>
-    </button>
+      <button class="gw-navbtn" id="btnCommunity" type="button">
+        <span class="gw-navicon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" role="img" focusable="false">
+            <circle cx="8" cy="9" r="2.4"></circle>
+            <circle cx="16" cy="9" r="2.4"></circle>
+            <path d="M4.8 18.3c.5-2.6 2.2-4 4.4-4 1.4 0 2.6.5 3.5 1.6"></path>
+            <path d="M11.3 15.9c.9-1 2-1.6 3.5-1.6 2.2 0 3.9 1.4 4.4 4"></path>
+          </svg>
+        </span>
+        <span>PARTY</span>
+      </button>
 
-    <button class="gw-navbtn" id="btnQuest" type="button">
-      <span class="gw-navicon gw-navicon-fill gw-navicon-badged" aria-hidden="true">
-        <svg viewBox="0 0 24 24" role="img" focusable="false">
-          <path class="gw-fill" d="M12 3.6l2.15 4.36 4.81.7-3.48 3.39.82 4.79L12 14.58 7.7 16.84l.82-4.79-3.48-3.39 4.81-.7L12 3.6z"></path>
-        </svg>
-        <span class="gw-notify-dot" id="questNotifyDot" hidden></span>
-      </span>
-      <span>QUEST</span>
-    </button>
+      <button class="gw-navbtn" id="btnQuest" type="button">
+        <span class="gw-navicon gw-navicon-fill gw-navicon-badged" aria-hidden="true">
+          <svg viewBox="0 0 24 24" role="img" focusable="false">
+            <path
+              class="gw-fill"
+              d="M12 3.6l2.15 4.36 4.81.7-3.48 3.39.82 4.79L12 14.58 7.7 16.84l.82-4.79-3.48-3.39 4.81-.7L12 3.6z"
+            ></path>
+          </svg>
+          <span class="gw-notify-dot" id="questNotifyDot" hidden></span>
+        </span>
+        <span>QUEST</span>
+      </button>
+    </nav>
 
-  </nav>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
+    <script>
+      window.GW_SHOW_MOBILE_SMALL_TEXT = false;
+    </script>
 
-  <script>
-    window.GW_SHOW_MOBILE_SMALL_TEXT = false;
-  </script>
+    <script src="js/gw-api.js"></script>
+    <script src="js/gw-taxonomy.js"></script>
+    <script src="js/gw-player-ui.js"></script>
 
-  <script src="js/gw-api.js"></script>
-  <script src="js/gw-taxonomy.js"></script>
-  <script src="js/gw-player-ui.js"></script>
+    <script src="js/mapinit.js"></script>
+    <script src="js/gw-overview-map.js"></script>
+    <script src="js/gw-grid-assets.js"></script>
+    <script src="js/initgrid.js"></script>
+    <script src="js/gw-fog.js"></script>
+    <script src="js/gw-fog-canvas.js"></script>
+    <script src="js/gw-osm-features-layer.js"></script>
+    <script src="js/gw-osm-priors-layer.js"></script>
+    <script src="js/gw-niche-osm-priors.js"></script>
+    <script src="js/gw-niche-graph.js"></script>
+    <script src="js/gw-niche-partition.js"></script>
+    <script src="js/gw-niche-engine.js"></script>
+    <script src="js/gw-niche-debug-layer.js"></script>
+    <script src="js/gw-niche-debug-ui.js"></script>
 
-  <script src="js/mapinit.js"></script>
-  <script src="js/gw-overview-map.js"></script>
-  <script src="js/gw-grid-assets.js"></script>
-  <script src="js/initgrid.js"></script>
-  <script src="js/gw-fog.js"></script>
-  <script src="js/gw-fog-canvas.js"></script>
-  <script src="js/gw-osm-features-layer.js"></script>
-  <script src="js/gw-osm-priors-layer.js"></script>
-  <script src="js/gw-niche-osm-priors.js"></script>
-  <script src="js/gw-niche-graph.js"></script>
-  <script src="js/gw-niche-partition.js"></script>
-  <script src="js/gw-niche-engine.js"></script>
-  <script src="js/gw-niche-debug-layer.js"></script>
-  <script src="js/gw-niche-debug-ui.js"></script>
+    <script src="js/gw-observation-store.js"></script>
+    <script src="js/gw-inat-recent.js"></script>
+    <script src="js/gw-observation-activity.js"></script>
+    <script src="js/gw-playlists.js"></script>
 
-  <script src="js/gw-observation-store.js"></script>
-  <script src="js/gw-inat-recent.js"></script>
-  <script src="js/gw-observation-activity.js"></script>
-  <script src="js/gw-playlists.js"></script>
+    <script src="js/gw-quest-evidence.js"></script>
 
-  <script src="js/gw-quest-evidence.js"></script>
+    <script src="js/inatscatter.js"></script>
+    <!-- <script src="js/osmoverlay.js"></script> -->
+    <script src="js/gw-metrics.js"></script>
+    <script src="js/gw-pyrite-lake.js"></script>
+    <script src="js/gw-lenses.js"></script>
+    <script src="js/location.js"></script>
+    <script src="js/gw-location-picker.js"></script>
+    <script src="js/sidebar.js"></script>
 
-  <script src="js/inatscatter.js"></script>
-  <!-- <script src="js/osmoverlay.js"></script> -->
-  <script src="js/gw-metrics.js"></script>
-  <script src="js/gw-pyrite-lake.js"></script>
-  <script src="js/gw-lenses.js"></script>
-  <script src="js/location.js"></script>
-  <script src="js/gw-location-picker.js"></script>
-  <script src="js/sidebar.js"></script>
-  
-  <script src="js/gw-inat-auth.js"></script>
-  <script src="js/gw-identify-service.js"></script>
-  <script src="js/gw-identify.js"></script>
-  <script src="js/gw-draft-observations.js"></script>
-  <script src="js/gw-observation-editor.js"></script>
+    <script src="js/gw-inat-auth.js"></script>
+    <script src="js/gw-identify-service.js"></script>
+    <script src="js/gw-identify.js"></script>
+    <script src="js/gw-draft-observations.js"></script>
+    <script src="js/gw-observation-editor.js"></script>
 
-  <script src="js/gw-achievements.js"></script>
-  <!-- <script src="js/gw-outfitter.js"></script> -->
- 
-  <script src="js/gw-character.js"></script>
-  <script src="js/gw-economy.js"></script>
-  <script src="js/gw-store-catalog.js"></script>
-  <script src="js/gw-store.js"></script>
-  <script src="js/gw-avatar-renderer.js"></script>
-  <script src="js/gw-avatar-inspection.js"></script>
-  <script src="js/gw-inventory.js"></script>
-  <script src="js/gw-profile.js"></script>
-  <script src="js/gw-account.js"></script>
-  <script src="js/gw-presence.js"></script>
+    <script src="js/gw-achievements.js"></script>
+    <!-- <script src="js/gw-outfitter.js"></script> -->
 
-  <script src="js/gw-quests.js"></script>
-  <script src="js/gw-cell-seeded-niches.js"></script>
-  
-  <script src="js/gw-campaign-designer.js"></script>
-  <script src="js/gw-campaign-layer.js"></script>
-  <script src="js/gw-info-puck.js"></script>
-  <script src="js/gw-patches.js"></script>
-  <script src="js/gw-field.js"></script>
-  <script src="js/gw-quest-layer.js"></script>
-  <script src="js/gw-onboarding.js"></script>
-  <script src="js/gw-genus-codex.js"></script>
-  <script src="js/gw-field-marks.js"></script>
-  <script src="js/gw-field-guide-book.js"></script>
-  <script src="js/gw-classroom.js"></script>
-  <script src="js/gw-classroom-loop.js"></script>
-  <script src="js/gw-chat.js"></script>
-  <script src="js/gw-party-live.js"></script>
-  <script src="js/gw-player-interactions.js"></script>
-  <script src="js/mobilepanels.js"></script>
-  <script src="js/gw-shell.js"></script>
-</body>
+    <script src="js/gw-character.js"></script>
+    <script src="js/gw-economy.js"></script>
+    <script src="js/gw-store-catalog.js"></script>
+    <script src="js/gw-store.js"></script>
+    <script src="js/gw-avatar-renderer.js"></script>
+    <script src="js/gw-avatar-inspection.js"></script>
+    <script src="js/gw-inventory.js"></script>
+    <script src="js/gw-profile.js"></script>
+    <script src="js/gw-account.js"></script>
+    <script src="js/gw-presence.js"></script>
+
+    <script src="js/gw-quests.js"></script>
+    <script src="js/gw-cell-seeded-niches.js"></script>
+
+    <script src="js/gw-campaign-designer.js"></script>
+    <script src="js/gw-campaign-layer.js"></script>
+    <script src="js/gw-info-puck.js"></script>
+    <script src="js/gw-patches.js"></script>
+    <script src="js/gw-field.js"></script>
+    <script src="js/gw-quest-layer.js"></script>
+    <script src="js/gw-onboarding.js"></script>
+    <script src="js/gw-genus-codex.js"></script>
+    <script src="js/gw-field-marks.js"></script>
+    <script src="js/gw-field-guide-book.js"></script>
+    <script src="js/gw-classroom.js"></script>
+    <script src="js/gw-classroom-loop.js"></script>
+    <script src="js/gw-chat.js"></script>
+    <script src="js/gw-party-live.js"></script>
+    <script src="js/gw-player-interactions.js"></script>
+    <script src="js/gw-hud-action-menu.js"></script>
+    <script src="js/mobilepanels.js"></script>
+    <script src="js/gw-shell.js"></script>
+  </body>
 </html>

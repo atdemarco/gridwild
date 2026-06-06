@@ -11,9 +11,7 @@ function haversineMeters(aLat, aLng, bLat, bLng) {
   const dLng = toRad(bLng - aLng);
   const lat1 = toRad(aLat);
   const lat2 = toRad(bLat);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * r * Math.asin(Math.sqrt(h));
 }
 
@@ -31,28 +29,31 @@ function normalizeNicheRow(row, origin = null, commentCount = 0) {
 }
 
 function compactLabel(value) {
-  return String(value || "")
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)[0] || "";
+  return (
+    String(value || "")
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)[0] || ""
+  );
 }
 
 function phraseForNiche(niche) {
   const type = String(niche?.niche_type || "").toLowerCase();
   const theme = String(niche?.theme || "").toLowerCase();
   const focus = niche?.taxon_focus;
-  const focusLabel = typeof focus === "string"
-    ? focus
-    : focus?.label || focus?.common || focus?.iconic || "";
+  const focusLabel =
+    typeof focus === "string" ? focus : focus?.label || focus?.common || focus?.iconic || "";
   const taxon = compactLabel(focusLabel).toLowerCase();
 
   if (type.includes("edge") || theme.includes("wet edge") || theme.includes("stream")) {
     return taxon.includes("moth") ? "Check moths" : "Sample wet-edge plants";
   }
-  if (type.includes("seasonal")) return taxon ? `Revisit seasonal ${taxon}` : "Revisit seasonal life";
+  if (type.includes("seasonal"))
+    return taxon ? `Revisit seasonal ${taxon}` : "Revisit seasonal life";
   if (type.includes("taxon")) return taxon ? `Look for ${taxon}` : "Look for focal taxa";
   if (type.includes("stale")) return taxon ? `Revisit ${taxon}` : "Revisit this hotspot";
-  if (type.includes("under")) return taxon ? `Survey under-covered ${taxon}` : "Sample under-covered life";
+  if (type.includes("under"))
+    return taxon ? `Survey under-covered ${taxon}` : "Sample under-covered life";
   if (type.includes("rich")) return taxon ? `Survey rich ${taxon}` : "Survey rich life";
 
   return taxon ? `Sample ${taxon}` : "Sample local life";
@@ -60,16 +61,9 @@ function phraseForNiche(niche) {
 
 function placeSuffix(placeContext = {}) {
   const label = compactLabel(
-    placeContext.primary_label ||
-    placeContext.primaryPlaceLabel ||
-    placeContext.name
+    placeContext.primary_label || placeContext.primaryPlaceLabel || placeContext.name
   );
-  const confidence = clampNumber(
-    placeContext.label_confidence ?? placeContext.confidence,
-    0,
-    1,
-    0
-  );
+  const confidence = clampNumber(placeContext.label_confidence ?? placeContext.confidence, 0, 1, 0);
   const type = String(placeContext.place_type || placeContext.type || "").toLowerCase();
   const relation = String(placeContext.spatial_relation || "").toLowerCase();
 
@@ -79,9 +73,12 @@ function placeSuffix(placeContext = {}) {
 
   if (confidence >= 0.78) {
     if (relation) return `${relation} ${label}`;
-    if (type.includes("trail") || type.includes("canal") || type.includes("stream")) return `along ${label}`;
-    if (type.includes("water") || type.includes("river") || type.includes("creek")) return `beside ${label}`;
-    if (type.includes("building") || type.includes("campus") || type.includes("garden")) return `near ${label}`;
+    if (type.includes("trail") || type.includes("canal") || type.includes("stream"))
+      return `along ${label}`;
+    if (type.includes("water") || type.includes("river") || type.includes("creek"))
+      return `beside ${label}`;
+    if (type.includes("building") || type.includes("campus") || type.includes("garden"))
+      return `near ${label}`;
     if (type.includes("park")) return `near ${label}`;
     return `at ${label}`;
   }
@@ -92,10 +89,12 @@ function placeSuffix(placeContext = {}) {
 
 function buildNicheDisplayTitle(niche = {}) {
   const phrase = phraseForNiche(niche);
-  const suffix = placeSuffix(niche.place_context || {
-    primary_label: niche.primary_place_label,
-    label_confidence: niche.place_label_confidence
-  });
+  const suffix = placeSuffix(
+    niche.place_context || {
+      primary_label: niche.primary_place_label,
+      label_confidence: niche.place_label_confidence
+    }
+  );
   return `${phrase} ${suffix}`.replace(/\s+/g, " ").trim();
 }
 
@@ -104,8 +103,12 @@ function sampleQuestDescription(niche = {}) {
   const human = Array.isArray(evidence.human)
     ? evidence.human.filter(Boolean).slice(0, 2).join(" ")
     : String(evidence.human || "").trim();
-  const place = niche.primary_place_label || niche.place_context?.primary_label || "this local niche";
-  const rationale = human || niche.description || "This interpreted local niche could add useful ecological signal.";
+  const place =
+    niche.primary_place_label || niche.place_context?.primary_label || "this local niche";
+  const rationale =
+    human ||
+    niche.description ||
+    "This interpreted local niche could add useful ecological signal.";
   return `${rationale} Visit the highlighted area near ${place} and make observations that validate or refine this playable ecology layer.`;
 }
 
@@ -113,9 +116,8 @@ function buildSampleNicheRecipe(niche = {}) {
   const radiusM = clampNumber(niche.radius_m, 20, 500, 90);
   const radiusCells = Math.max(1, Math.round(radiusM / 6.096));
   const focus = niche.taxon_focus || {};
-  const iconicTaxon = typeof focus === "string"
-    ? focus
-    : focus.iconic || focus.taxon || focus.life_group || "Any";
+  const iconicTaxon =
+    typeof focus === "string" ? focus : focus.iconic || focus.taxon || focus.life_group || "Any";
 
   return {
     range: "here",

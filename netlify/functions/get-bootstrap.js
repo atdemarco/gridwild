@@ -1,13 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
-const {
-  createGuestSession,
-  requirePlayerSession
-} = require("./_gridwild-player-session");
+const { createGuestSession, requirePlayerSession } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
@@ -22,11 +16,7 @@ exports.handler = async function (event) {
         sessionToken: body.session_token
       });
 
-      const result = await supabase
-        .from("players")
-        .select("*")
-        .eq("id", playerId)
-        .maybeSingle();
+      const result = await supabase.from("players").select("*").eq("id", playerId).maybeSingle();
 
       if (result.error) throw result.error;
       player = result.data;

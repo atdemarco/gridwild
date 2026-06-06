@@ -460,11 +460,14 @@ window.GridWildAPI = {
       return;
     }
 
-    localStorage.setItem("gwPlayerSession", JSON.stringify({
-      token: session.token,
-      type: session.type || "guest",
-      expiresAt: session.expires_at || session.expiresAt || ""
-    }));
+    localStorage.setItem(
+      "gwPlayerSession",
+      JSON.stringify({
+        token: session.token,
+        type: session.type || "guest",
+        expiresAt: session.expires_at || session.expiresAt || ""
+      })
+    );
   },
 
   clearPlayerSession() {

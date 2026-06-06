@@ -1,12 +1,9 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-exports.handler = async function(event) {
+exports.handler = async function (event) {
   try {
     await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
@@ -32,12 +29,13 @@ exports.handler = async function(event) {
       if (ownedError) throw ownedError;
 
       const byId = new Map();
-      [...(ownedSurveys || []), ...surveys].forEach(survey => {
+      [...(ownedSurveys || []), ...surveys].forEach((survey) => {
         byId.set(survey.id, survey);
       });
 
-      surveys = [...byId.values()]
-        .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+      surveys = [...byId.values()].sort((a, b) =>
+        String(b.updated_at || "").localeCompare(String(a.updated_at || ""))
+      );
     }
 
     let playerSurveys = [];
@@ -58,7 +56,6 @@ exports.handler = async function(event) {
         player_surveys: playerSurveys
       })
     };
-
   } catch (err) {
     return {
       statusCode: err.statusCode || 500,

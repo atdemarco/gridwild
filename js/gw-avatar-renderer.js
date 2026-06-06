@@ -241,12 +241,15 @@
   function getAvatarState() {
     const character = window.GridWildCharacter?.load?.() || {};
     const equipped = window.GridWildEconomy?.getEquippedItems?.() || {};
-    const archetypeDef = window.GridWildCharacter?.ARCHETYPES?.find?.(a => a.id === character.archetype);
+    const archetypeDef = window.GridWildCharacter?.ARCHETYPES?.find?.(
+      (a) => a.id === character.archetype
+    );
 
     return {
       character,
       equipped,
-      displayName: window.__gwState?.player?.display_name || character.displayName || "New Wanderer",
+      displayName:
+        window.__gwState?.player?.display_name || character.displayName || "New Wanderer",
       archetypeLabel: archetypeDef?.label || ARCHETYPE_LABELS[character.archetype] || "Naturalist",
       color: character.color || "fern",
       baseIcon: character.icon || archetypeDef?.icon || ""

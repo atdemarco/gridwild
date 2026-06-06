@@ -13,14 +13,62 @@
   let partyHudRaiseTab = null;
   let partyRaiseTabPositionBound = false;
 
-    const PARTY_TEMPLATES = [
-    { key: "birds", emoji: "🐦", label: "Bird Walk", title: "Bird Walk", goalType: "birds", target: 20, durationMinutes: 90 },
-    { key: "ants", emoji: "🐜", label: "Ant Hunt", title: "Ant Hunt", goalType: "ants", target: 10, durationMinutes: 60 },
-    { key: "insects", emoji: "🦋", label: "Insect Sweep", title: "Insect Sweep", goalType: "insects", target: 25, durationMinutes: 60 },
-    { key: "fungi", emoji: "🍄", label: "Fungus / Lichen", title: "Fungus Foray", goalType: "fungi", target: 12, durationMinutes: 90 },
-    { key: "plants", emoji: "🌿", label: "Plant Survey", title: "Plant Survey", goalType: "plants", target: 20, durationMinutes: 60 },
-    { key: "any", emoji: "🌎", label: "Bioblitz", title: "Mini Bioblitz", goalType: "any", target: 50, durationMinutes: 120 }
-    ];
+  const PARTY_TEMPLATES = [
+    {
+      key: "birds",
+      emoji: "🐦",
+      label: "Bird Walk",
+      title: "Bird Walk",
+      goalType: "birds",
+      target: 20,
+      durationMinutes: 90
+    },
+    {
+      key: "ants",
+      emoji: "🐜",
+      label: "Ant Hunt",
+      title: "Ant Hunt",
+      goalType: "ants",
+      target: 10,
+      durationMinutes: 60
+    },
+    {
+      key: "insects",
+      emoji: "🦋",
+      label: "Insect Sweep",
+      title: "Insect Sweep",
+      goalType: "insects",
+      target: 25,
+      durationMinutes: 60
+    },
+    {
+      key: "fungi",
+      emoji: "🍄",
+      label: "Fungus / Lichen",
+      title: "Fungus Foray",
+      goalType: "fungi",
+      target: 12,
+      durationMinutes: 90
+    },
+    {
+      key: "plants",
+      emoji: "🌿",
+      label: "Plant Survey",
+      title: "Plant Survey",
+      goalType: "plants",
+      target: 20,
+      durationMinutes: 60
+    },
+    {
+      key: "any",
+      emoji: "🌎",
+      label: "Bioblitz",
+      title: "Mini Bioblitz",
+      goalType: "any",
+      target: 50,
+      durationMinutes: 120
+    }
+  ];
 
   function $(id) {
     return document.getElementById(id);
@@ -52,108 +100,116 @@
     });
   }
 
-    function loadParties() { return getAllParties(); }
+  function loadParties() {
+    return getAllParties();
+  }
 
- function getActivePartyId() {
-  return window.GridWildPartyLive?.getActivePartyId?.() || "";
-}
+  function getActivePartyId() {
+    return window.GridWildPartyLive?.getActivePartyId?.() || "";
+  }
 
-    function setActivePartyId(id) {
+  function setActivePartyId(id) {
     window.GridWildPartyLive?.setActivePartyId?.(id || null);
 
     window.dispatchEvent(new CustomEvent("gwActivePartyChanged", { detail: { id: id || null } }));
     refreshMapBeacon();
     scheduleActivePartyHudRender();
-    }
-
-function normalizeDbPartyForLegacy(p) {
-  if (!p) return null;
-
-  const locationConfig = p.location_config || {};
-  const locationMode = p.location_mode || locationConfig.locationMode || "anywhere";
-  const isActiveParty = p.id === window.__gwState?.party?.id;
-  const activeMembers = window.__gwState?.partyMembers || [];
-  const mode = p.status === "ended"
-    ? "ended"
-    : p.status === "scheduled" || (p.starts_at && new Date(p.starts_at) > new Date())
-      ? "scheduled"
-      : "live";
-  const fallbackCenter = window.map?.getCenter?.();
-  const mapLatLng = getPartyMapLatLng({
-    ...p,
-    locationMode,
-    location: locationConfig.location
-  });
-
-  return {
-    id: p.id,
-    createdBy: p.created_by || null,
-    title: p.name || "Field Party",
-    host: "Online",
-    mode,
-    status: p.status || "active",
-    visibility: p.visibility || "public",
-    goalType: "any",
-    goalLabel: "Open field party",
-    progress: Number(p.progress ?? (isActiveParty ? window.__gwState?.partyProgress : 0) ?? 0),
-    target: Number(p.target || 10),
-    memberCount: Number(p.member_count || p.memberCount || (isActiveParty ? activeMembers.length : 1) || 1),
-    distanceLabel: "online",
-    startsAt: p.starts_at || p.created_at || new Date().toISOString(),
-    endedAt: p.ended_at || p.endedAt || null,
-    completedAt: p.ended_at || p.completedAt || null,
-    durationMinutes: Number(p.duration_minutes || 60),
-    routeDistanceMeters: Number(p.route_distance_meters || p.routeDistanceMeters || 0),
-    linkedQuestId: p.linked_quest_id || p.linkedQuestId || null,
-    linkedQuestTitle: p.linked_quest_title || p.linkedQuestTitle || "",
-    locationMode,
-    locationUserId: p.location_user_id || locationConfig.locationUserId || null,
-    location: locationConfig.location || null,
-    resolvedLocation: locationConfig.resolvedLocation || null,
-    locationLabel: p.location_label || locationConfig.location?.label || partyLocationLabel({ ...p, locationMode }),
-    lat: Number(mapLatLng?.lat || fallbackCenter?.lat || 38.911325),
-    lng: Number(mapLatLng?.lng || fallbackCenter?.lng || -77.076678),
-    createdAt: p.created_at || new Date().toISOString(),
-    dbBacked: true
-  };
-}
-
-function getAllParties() {
-  const activeParty = normalizeDbPartyForLegacy(window.__gwState?.party);
-
-  const nearbyParties = (window.__gwState?.nearbyParties || [])
-    .map(normalizeDbPartyForLegacy)
-    .filter(Boolean);
-
-  const historyParties = (window.__gwState?.partyHistory || [])
-    .map(normalizeDbPartyForLegacy)
-    .filter(Boolean);
-
-  const snapshotParties = Object.values(window.__gwState?.partySnapshotsById || {})
-    .map(snapshot => normalizeDbPartyForLegacy(snapshot?.party))
-    .filter(Boolean);
-
-  const seen = new Set();
-  const rows = [];
-
-  function addParty(p) {
-    if (!p?.id) return;
-    if (seen.has(p.id)) return;
-    seen.add(p.id);
-    rows.push(p);
   }
 
-  addParty(activeParty);
+  function normalizeDbPartyForLegacy(p) {
+    if (!p) return null;
 
-  nearbyParties.forEach(addParty);
-  historyParties.forEach(addParty);
-  snapshotParties.forEach(addParty);
+    const locationConfig = p.location_config || {};
+    const locationMode = p.location_mode || locationConfig.locationMode || "anywhere";
+    const isActiveParty = p.id === window.__gwState?.party?.id;
+    const activeMembers = window.__gwState?.partyMembers || [];
+    const mode =
+      p.status === "ended"
+        ? "ended"
+        : p.status === "scheduled" || (p.starts_at && new Date(p.starts_at) > new Date())
+          ? "scheduled"
+          : "live";
+    const fallbackCenter = window.map?.getCenter?.();
+    const mapLatLng = getPartyMapLatLng({
+      ...p,
+      locationMode,
+      location: locationConfig.location
+    });
 
-  return rows;
-}
+    return {
+      id: p.id,
+      createdBy: p.created_by || null,
+      title: p.name || "Field Party",
+      host: "Online",
+      mode,
+      status: p.status || "active",
+      visibility: p.visibility || "public",
+      goalType: "any",
+      goalLabel: "Open field party",
+      progress: Number(p.progress ?? (isActiveParty ? window.__gwState?.partyProgress : 0) ?? 0),
+      target: Number(p.target || 10),
+      memberCount: Number(
+        p.member_count || p.memberCount || (isActiveParty ? activeMembers.length : 1) || 1
+      ),
+      distanceLabel: "online",
+      startsAt: p.starts_at || p.created_at || new Date().toISOString(),
+      endedAt: p.ended_at || p.endedAt || null,
+      completedAt: p.ended_at || p.completedAt || null,
+      durationMinutes: Number(p.duration_minutes || 60),
+      routeDistanceMeters: Number(p.route_distance_meters || p.routeDistanceMeters || 0),
+      linkedQuestId: p.linked_quest_id || p.linkedQuestId || null,
+      linkedQuestTitle: p.linked_quest_title || p.linkedQuestTitle || "",
+      locationMode,
+      locationUserId: p.location_user_id || locationConfig.locationUserId || null,
+      location: locationConfig.location || null,
+      resolvedLocation: locationConfig.resolvedLocation || null,
+      locationLabel:
+        p.location_label ||
+        locationConfig.location?.label ||
+        partyLocationLabel({ ...p, locationMode }),
+      lat: Number(mapLatLng?.lat || fallbackCenter?.lat || 38.911325),
+      lng: Number(mapLatLng?.lng || fallbackCenter?.lng || -77.076678),
+      createdAt: p.created_at || new Date().toISOString(),
+      dbBacked: true
+    };
+  }
+
+  function getAllParties() {
+    const activeParty = normalizeDbPartyForLegacy(window.__gwState?.party);
+
+    const nearbyParties = (window.__gwState?.nearbyParties || [])
+      .map(normalizeDbPartyForLegacy)
+      .filter(Boolean);
+
+    const historyParties = (window.__gwState?.partyHistory || [])
+      .map(normalizeDbPartyForLegacy)
+      .filter(Boolean);
+
+    const snapshotParties = Object.values(window.__gwState?.partySnapshotsById || {})
+      .map((snapshot) => normalizeDbPartyForLegacy(snapshot?.party))
+      .filter(Boolean);
+
+    const seen = new Set();
+    const rows = [];
+
+    function addParty(p) {
+      if (!p?.id) return;
+      if (seen.has(p.id)) return;
+      seen.add(p.id);
+      rows.push(p);
+    }
+
+    addParty(activeParty);
+
+    nearbyParties.forEach(addParty);
+    historyParties.forEach(addParty);
+    snapshotParties.forEach(addParty);
+
+    return rows;
+  }
 
   function getParty(id) {
-    return getAllParties().find(p => p.id === id) || null;
+    return getAllParties().find((p) => p.id === id) || null;
   }
 
   function rememberPartySnapshot(data = {}) {
@@ -203,274 +259,283 @@ function getAllParties() {
   }
 
   function isJoined(id) {
-  const activeId = window.GridWildPartyLive?.getActivePartyId?.();
-  const dbPartyId = window.__gwState?.party?.id;
+    const activeId = window.GridWildPartyLive?.getActivePartyId?.();
+    const dbPartyId = window.__gwState?.party?.id;
 
-  if (id && (id === activeId || id === dbPartyId)) return true;
+    if (id && (id === activeId || id === dbPartyId)) return true;
 
-  return false;
-    }
+    return false;
+  }
 
   function getCurrentUserName() {
-  return window.__gwUser?.username || "You";
-}
+    return window.__gwUser?.username || "You";
+  }
 
-function getCurrentUserDisplayName() {
-  return window.__gwState?.player?.display_name ||
-    window.__gwUser?.username ||
-    "You";
-}
+  function getCurrentUserDisplayName() {
+    return window.__gwState?.player?.display_name || window.__gwUser?.username || "You";
+  }
 
-function getLatestUserLocation() {
-  const loc = window.__gwLastUserLocation;
-  const lat = Number(loc?.lat);
-  const lng = Number(loc?.lng);
+  function getLatestUserLocation() {
+    const loc = window.__gwLastUserLocation;
+    const lat = Number(loc?.lat);
+    const lng = Number(loc?.lng);
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
 
-  return {
-    lat,
-    lng,
-    accuracyMeters: Number(loc?.accuracyMeters),
-    updatedAt: loc?.updatedAt || nowISO()
-  };
-}
-
-function normalizePartyLocationInput(form = {}) {
-  const mode = ["anywhere", "user", "location"].includes(form.locationMode)
-    ? form.locationMode
-    : "anywhere";
-
-  const selected = form.location && typeof form.location === "object"
-    ? {
-      label: String(form.location.label || "Selected location"),
-      lat: Number(form.location.lat),
-      lng: Number(form.location.lng)
-    }
-    : null;
-
-  return {
-    locationMode: mode,
-    locationUserId: mode === "user" ? (form.locationUserId || "self") : null,
-    location: mode === "location" &&
-      selected &&
-      Number.isFinite(selected.lat) &&
-      Number.isFinite(selected.lng)
-        ? selected
-        : null
-  };
-}
-
-function resolvePartyLocationForStart(form = {}) {
-  const locationConfig = normalizePartyLocationInput(form);
-
-  if (locationConfig.locationMode === "anywhere") {
     return {
-      ok: true,
-      ...locationConfig,
-      resolvedLocation: null,
-      locationLabel: "Anywhere"
+      lat,
+      lng,
+      accuracyMeters: Number(loc?.accuracyMeters),
+      updatedAt: loc?.updatedAt || nowISO()
     };
   }
 
-  if (locationConfig.locationMode === "location") {
-    if (!locationConfig.location) {
+  function normalizePartyLocationInput(form = {}) {
+    const mode = ["anywhere", "user", "location"].includes(form.locationMode)
+      ? form.locationMode
+      : "anywhere";
+
+    const selected =
+      form.location && typeof form.location === "object"
+        ? {
+            label: String(form.location.label || "Selected location"),
+            lat: Number(form.location.lat),
+            lng: Number(form.location.lng)
+          }
+        : null;
+
+    return {
+      locationMode: mode,
+      locationUserId: mode === "user" ? form.locationUserId || "self" : null,
+      location:
+        mode === "location" &&
+        selected &&
+        Number.isFinite(selected.lat) &&
+        Number.isFinite(selected.lng)
+          ? selected
+          : null
+    };
+  }
+
+  function resolvePartyLocationForStart(form = {}) {
+    const locationConfig = normalizePartyLocationInput(form);
+
+    if (locationConfig.locationMode === "anywhere") {
       return {
-        ok: false,
-        reason: "Choose a location for this party."
+        ok: true,
+        ...locationConfig,
+        resolvedLocation: null,
+        locationLabel: "Anywhere"
       };
     }
+
+    if (locationConfig.locationMode === "location") {
+      if (!locationConfig.location) {
+        return {
+          ok: false,
+          reason: "Choose a location for this party."
+        };
+      }
+
+      return {
+        ok: true,
+        ...locationConfig,
+        resolvedLocation: {
+          label: locationConfig.location.label,
+          lat: locationConfig.location.lat,
+          lng: locationConfig.location.lng,
+          source: "location"
+        },
+        locationLabel: locationConfig.location.label || "Selected location"
+      };
+    }
+
+    const userLocation = getLatestUserLocation();
+    if (!userLocation) {
+      return {
+        ok: false,
+        reason: "Need your location to start this party."
+      };
+    }
+
+    const label = `${getCurrentUserDisplayName()}'s location`;
 
     return {
       ok: true,
       ...locationConfig,
       resolvedLocation: {
-        label: locationConfig.location.label,
-        lat: locationConfig.location.lat,
-        lng: locationConfig.location.lng,
-        source: "location"
+        label,
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+        accuracyMeters: userLocation.accuracyMeters,
+        source: "user",
+        resolvedAt: nowISO()
       },
-      locationLabel: locationConfig.location.label || "Selected location"
+      locationLabel: label
     };
   }
 
-  const userLocation = getLatestUserLocation();
-  if (!userLocation) {
-    return {
-      ok: false,
-      reason: "Need your location to start this party."
-    };
+  function partyLocationLabel(p) {
+    const mode = p?.locationMode || p?.location_mode || "anywhere";
+    if (mode === "user")
+      return p.locationLabel || p.location_label || `${getCurrentUserDisplayName()}'s location`;
+    if (mode === "location")
+      return p.locationLabel || p.location_label || p.location?.label || "Selected location";
+    return p?.locationLabel || p?.location_label || "Anywhere";
   }
 
-  const label = `${getCurrentUserDisplayName()}'s location`;
+  function getPartyMapLatLng(p) {
+    const mode = p?.locationMode || p?.location_mode || "anywhere";
 
-  return {
-    ok: true,
-    ...locationConfig,
-    resolvedLocation: {
-      label,
-      lat: userLocation.lat,
-      lng: userLocation.lng,
-      accuracyMeters: userLocation.accuracyMeters,
-      source: "user",
-      resolvedAt: nowISO()
-    },
-    locationLabel: label
-  };
-}
+    if (
+      mode === "user" &&
+      ((!p?.createdBy && !p?.created_by) ||
+        String(p?.createdBy || p?.created_by) === String(window.GridWildAPI?.getPlayerId?.() || ""))
+    ) {
+      const live = getLatestUserLocation();
+      if (live) return { lat: live.lat, lng: live.lng };
+    }
 
-function partyLocationLabel(p) {
-  const mode = p?.locationMode || p?.location_mode || "anywhere";
-  if (mode === "user") return p.locationLabel || p.location_label || `${getCurrentUserDisplayName()}'s location`;
-  if (mode === "location") return p.locationLabel || p.location_label || p.location?.label || "Selected location";
-  return p?.locationLabel || p?.location_label || "Anywhere";
-}
+    const lat = Number(p?.lat);
+    const lng = Number(p?.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
 
-function getPartyMapLatLng(p) {
-  const mode = p?.locationMode || p?.location_mode || "anywhere";
+    const selectedLat = Number(p?.location?.lat || p?.location_config?.location?.lat);
+    const selectedLng = Number(p?.location?.lng || p?.location_config?.location?.lng);
+    if (Number.isFinite(selectedLat) && Number.isFinite(selectedLng)) {
+      return { lat: selectedLat, lng: selectedLng };
+    }
 
-  if (
-    mode === "user" &&
-    (
-      (!p?.createdBy && !p?.created_by) ||
-      String(p?.createdBy || p?.created_by) === String(window.GridWildAPI?.getPlayerId?.() || "")
-    )
-  ) {
-    const live = getLatestUserLocation();
-    if (live) return { lat: live.lat, lng: live.lng };
+    return null;
   }
 
-  const lat = Number(p?.lat);
-  const lng = Number(p?.lng);
-  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
-
-  const selectedLat = Number(p?.location?.lat || p?.location_config?.location?.lat);
-  const selectedLng = Number(p?.location?.lng || p?.location_config?.location?.lng);
-  if (Number.isFinite(selectedLat) && Number.isFinite(selectedLng)) {
-    return { lat: selectedLat, lng: selectedLng };
+  function loadPartyMembers() {
+    const activeId = window.__gwState?.party?.id;
+    return activeId ? { [activeId]: getPartyMembers(activeId) } : {};
   }
 
-  return null;
-}
-
-function loadPartyMembers() {
-  const activeId = window.__gwState?.party?.id;
-  return activeId ? { [activeId]: getPartyMembers(activeId) } : {};
-}
-
-function savePartyMembers() {
-  return false;
-}
-
-function loadPartyActivity() {
-  const activeId = window.__gwState?.party?.id;
-  return activeId ? { [activeId]: getPartyActivity(activeId) } : {};
-}
-
-function savePartyActivity() {
-  return false;
-}
-
-function addPartyActivity(partyId, type, text, meta = {}) {
-  if (!partyId) return false;
-
-  window.dispatchEvent(new CustomEvent("gwPartyActivityRequested", {
-    detail: { partyId, type, text, meta }
-  }));
-
-  return false;
-}
-
-function getPartyActivity(partyId) {
-  const activeId = window.__gwState?.party?.id;
-
-  if (partyId && activeId === partyId) {
-    return (window.__gwState?.partyEvents || []).map(e => ({
-      id: e.id,
-      type: e.event_type,
-      text: formatDbPartyEvent(e),
-      actor: e.player_id,
-      t: e.created_at,
-      meta: e.payload || {}
-    }));
+  function savePartyMembers() {
+    return false;
   }
 
-  return [];
-}
-
-function ensurePartyMembers(party) {
-  if (!party?.id) return [];
-  return getPartyMembers(party.id);
-}
-
-function getPartyMembers(partyId) {
-  const activeId = window.__gwState?.party?.id;
-  const rows = partyId && activeId === partyId
-    ? (window.__gwState?.partyMembers || [])
-    : (window.__gwState?.partySnapshotsById?.[partyId]?.members || []);
-
-  if (partyId) {
-    return rows.map(m => ({
-      id: m.id || m.player_id,
-      playerId: m.player_id || m.players?.id || null,
-      player: m.players || null,
-      name: m.players?.display_name || m.player_id?.slice(0, 8) || "Unknown",
-      role: m.role || "member",
-      joinedAt: m.joined_at,
-      isLocal: false,
-      dbBacked: true
-    }));
+  function loadPartyActivity() {
+    const activeId = window.__gwState?.party?.id;
+    return activeId ? { [activeId]: getPartyActivity(activeId) } : {};
   }
 
-  return [];
-}
+  function savePartyActivity() {
+    return false;
+  }
 
-function memberRoleLabel(role) {
-  return {
-    leader: "Leader",
-    owner: "Leader",
-    creator: "Leader",
-    member: "Member",
-    host: "Host",
-    scout: "Scout",
-    identifier: "Identifier",
-    observer: "Observer"
-  }[role] || "Observer";
-}
+  function addPartyActivity(partyId, type, text, meta = {}) {
+    if (!partyId) return false;
 
-function bindPartyMemberInspection(root) {
-  root?.querySelectorAll?.(".gw-party-member-inspect[data-player-id]").forEach(btn => {
-    if (btn.dataset.playerInspectionBound === "true") return;
-    btn.dataset.playerInspectionBound = "true";
+    window.dispatchEvent(
+      new CustomEvent("gwPartyActivityRequested", {
+        detail: { partyId, type, text, meta }
+      })
+    );
 
-    btn.addEventListener("click", () => {
-      const playerId = btn.dataset.playerId;
-      if (!playerId) return;
+    return false;
+  }
 
-      const coverRoot = btn.closest("#gwPartyCoverRoot");
-      const partyId = coverRoot?.dataset.partyId || "";
-      const member = getPartyMembers(partyId).find(row => String(row.playerId) === String(playerId));
+  function getPartyActivity(partyId) {
+    const activeId = window.__gwState?.party?.id;
 
-      window.GridWildAvatarInspection?.openPlayer?.(playerId, {
-        player: member?.player || {
-          id: playerId,
-          display_name: member?.name || "Explorer"
-        }
+    if (partyId && activeId === partyId) {
+      return (window.__gwState?.partyEvents || []).map((e) => ({
+        id: e.id,
+        type: e.event_type,
+        text: formatDbPartyEvent(e),
+        actor: e.player_id,
+        t: e.created_at,
+        meta: e.payload || {}
+      }));
+    }
+
+    return [];
+  }
+
+  function ensurePartyMembers(party) {
+    if (!party?.id) return [];
+    return getPartyMembers(party.id);
+  }
+
+  function getPartyMembers(partyId) {
+    const activeId = window.__gwState?.party?.id;
+    const rows =
+      partyId && activeId === partyId
+        ? window.__gwState?.partyMembers || []
+        : window.__gwState?.partySnapshotsById?.[partyId]?.members || [];
+
+    if (partyId) {
+      return rows.map((m) => ({
+        id: m.id || m.player_id,
+        playerId: m.player_id || m.players?.id || null,
+        player: m.players || null,
+        name: m.players?.display_name || m.player_id?.slice(0, 8) || "Unknown",
+        role: m.role || "member",
+        joinedAt: m.joined_at,
+        isLocal: false,
+        dbBacked: true
+      }));
+    }
+
+    return [];
+  }
+
+  function memberRoleLabel(role) {
+    return (
+      {
+        leader: "Leader",
+        owner: "Leader",
+        creator: "Leader",
+        member: "Member",
+        host: "Host",
+        scout: "Scout",
+        identifier: "Identifier",
+        observer: "Observer"
+      }[role] || "Observer"
+    );
+  }
+
+  function bindPartyMemberInspection(root) {
+    root?.querySelectorAll?.(".gw-party-member-inspect[data-player-id]").forEach((btn) => {
+      if (btn.dataset.playerInspectionBound === "true") return;
+      btn.dataset.playerInspectionBound = "true";
+
+      btn.addEventListener("click", () => {
+        const playerId = btn.dataset.playerId;
+        if (!playerId) return;
+
+        const coverRoot = btn.closest("#gwPartyCoverRoot");
+        const partyId = coverRoot?.dataset.partyId || "";
+        const member = getPartyMembers(partyId).find(
+          (row) => String(row.playerId) === String(playerId)
+        );
+
+        window.GridWildAvatarInspection?.openPlayer?.(playerId, {
+          player: member?.player || {
+            id: playerId,
+            display_name: member?.name || "Explorer"
+          }
+        });
       });
     });
-  });
-}
-
-function renderPartyMembersHtml(partyId) {
-  const members = getPartyMembers(partyId);
-
-  if (!members.length) {
-    return `<div class="gw-muted">No visible participants yet.</div>`;
   }
 
-  return `
+  function renderPartyMembersHtml(partyId) {
+    const members = getPartyMembers(partyId);
+
+    if (!members.length) {
+      return `<div class="gw-muted">No visible participants yet.</div>`;
+    }
+
+    return `
     <div class="gw-party-member-grid">
-      ${members.map(m => `
+      ${members
+        .map(
+          (m) => `
         <button class="gw-party-member-pill gw-party-member-inspect" type="button" data-player-id="${esc(m.playerId || "")}">
           <span class="gw-party-member-avatar">${m.role === "host" ? "⭐" : "👤"}</span>
           <span>
@@ -478,21 +543,25 @@ function renderPartyMembersHtml(partyId) {
             <span class="gw-party-member-role">${esc(memberRoleLabel(m.role))}</span>
           </span>
         </button>
-      `).join("")}
+      `
+        )
+        .join("")}
     </div>
   `;
-}
-
-function renderPartyActivityHtml(partyId, limit = 8) {
-  const rows = getPartyActivity(partyId).slice(0, limit);
-
-  if (!rows.length) {
-    return `<div class="gw-muted">No party activity yet.</div>`;
   }
 
-  return `
+  function renderPartyActivityHtml(partyId, limit = 8) {
+    const rows = getPartyActivity(partyId).slice(0, limit);
+
+    if (!rows.length) {
+      return `<div class="gw-muted">No party activity yet.</div>`;
+    }
+
+    return `
     <div class="gw-party-activity-list">
-      ${rows.map(a => `
+      ${rows
+        .map(
+          (a) => `
         <div class="gw-party-activity-row">
           <span class="gw-party-activity-icon">${activityIcon(a.type)}</span>
           <span>
@@ -500,738 +569,721 @@ function renderPartyActivityHtml(partyId, limit = 8) {
             <span class="gw-party-activity-time">${esc(formatWhen(a.t))}</span>
           </span>
         </div>
-      `).join("")}
+      `
+        )
+        .join("")}
     </div>
   `;
-}
-
-function activityIcon(type) {
-  return {
-    joined: "👥",
-    started: "🎉",
-    counted: "✅",
-    excluded: "🚫",
-    reincluded: "↩️",
-    ended: "🏁",
-    goal: "🏆"
-  }[type] || "•";
-}
-
-function loadPartyEvidence() {
-  const loadedId = window.__gwState?.party?.id;
-
-  return (window.__gwState?.partyEvidence || []).reduce((acc, e) => {
-    if (!e.party_id || !e.draft_id) return acc;
-    if (loadedId && String(e.party_id) !== String(loadedId)) return acc;
-
-    acc[`${e.party_id}::${e.draft_id}`] = {
-      partyId: e.party_id,
-      draftId: e.draft_id,
-      status: e.status || "counted",
-      taxon: e.taxon || e.iconic_taxon || "Observation",
-      cellKey: e.cell_key || null,
-      lat: e.lat || null,
-      lng: e.lng || null,
-      countedAt: e.created_at,
-      updatedAt: e.updated_at || e.created_at
-    };
-
-    return acc;
-  }, {});
-}
-
-function savePartyEvidence() {
-  return false;
-}
-
-function setPartyEvidenceStatus(partyId, draftId, status) {
-  if (!partyId || !draftId) return false;
-  if (!["counted", "excluded"].includes(status)) return false;
-  if (!window.GridWildAPI?.updatePartyEvidenceStatus) return false;
-
-  window.GridWildAPI.updatePartyEvidenceStatus(partyId, draftId, status)
-    .then(async () => {
-      await window.GridWildPartyLive?.loadParty?.();
-      window.GridWildPartyLive?.refreshPartySheet?.();
-      refreshMapBeacon();
-      scheduleActivePartyHudRender();
-    })
-    .catch(err => {
-      console.warn("Could not update party evidence status:", err);
-    });
-
-  return true;
-}
-
-function draftHasUsableEvidence(draft) {
-  return !!draft?.id && Array.isArray(draft.photos) && draft.photos.length > 0;
-}
-
-function getDraftIconicTaxon(draft) {
-  return String(
-    draft?.suggestedId?.iconicTaxon ||
-    draft?.suggestedId?.kingdom ||
-    ""
-  );
-}
-
-function loadPartyRoutes() {
-  const loadedId = window.__gwState?.party?.id;
-  const routePartyId = window.__gwState?.partyRoutePartyId || null;
-  const route = window.__gwState?.partyRoute || [];
-  const partyId = routePartyId || loadedId;
-  const rows = {};
-
-  if (partyId && route.length && (!loadedId || !routePartyId || String(routePartyId) === String(loadedId))) {
-    rows[partyId] = route
-      .filter(p => String(p?.party_id || routePartyId || "") === String(partyId))
-      .map(p => ({
-        lat: Number(p.lat),
-        lng: Number(p.lng),
-        accuracyMeters: p.accuracy_meters,
-        t: p.created_at
-      }));
   }
 
-  for (const [id, snapshot] of Object.entries(window.__gwState?.partySnapshotsById || {})) {
-    if (rows[id]) continue;
-    const snapshotRoute = Array.isArray(snapshot?.route) ? snapshot.route : [];
-    if (!snapshotRoute.length) continue;
-
-    rows[id] = snapshotRoute
-      .filter(p => String(p?.party_id || id || "") === String(id))
-      .map(p => ({
-        lat: Number(p.lat),
-        lng: Number(p.lng),
-        accuracyMeters: p.accuracy_meters,
-        t: p.created_at
-      }));
+  function activityIcon(type) {
+    return (
+      {
+        joined: "👥",
+        started: "🎉",
+        counted: "✅",
+        excluded: "🚫",
+        reincluded: "↩️",
+        ended: "🏁",
+        goal: "🏆"
+      }[type] || "•"
+    );
   }
 
-  return rows;
-}
+  function loadPartyEvidence() {
+    const loadedId = window.__gwState?.party?.id;
 
-function getPartyRouteCellKey(lat, lng) {
-  const latNum = Number(lat);
-  const lngNum = Number(lng);
-  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return "";
+    return (window.__gwState?.partyEvidence || []).reduce((acc, e) => {
+      if (!e.party_id || !e.draft_id) return acc;
+      if (loadedId && String(e.party_id) !== String(loadedId)) return acc;
 
-  if (typeof window.getCellKeyForLatLng === "function") {
-    try {
-      return window.getCellKeyForLatLng(latNum, lngNum) || "";
-    } catch (err) {
-      console.warn("Could not calculate party route cell:", err);
-    }
-  }
-
-  const cell = window.GridWildGrid?.latLngToCell?.([latNum, lngNum]);
-  if (cell && Number.isFinite(Number(cell.ix)) && Number.isFinite(Number(cell.iy))) {
-    return window.GridWildGrid?.cellKey?.(cell.ix, cell.iy) || `${cell.ix},${cell.iy}`;
-  }
-
-  return "";
-}
-
-function rememberPartyRouteCell(partyId, cellKey) {
-  if (!partyId || !cellKey) return;
-
-  window.__gwState = window.__gwState || {};
-  window.__gwState.lastPartyRouteCellByParty = window.__gwState.lastPartyRouteCellByParty || {};
-  window.__gwState.lastPartyRouteCellByParty[partyId] = cellKey;
-  window.__gwState.lastPartyRouteCellKey = cellKey;
-}
-
-function getLastRecordedPartyRouteCell(partyId) {
-  window.__gwState = window.__gwState || {};
-  window.__gwState.lastPartyRouteCellByParty = window.__gwState.lastPartyRouteCellByParty || {};
-
-  const remembered = window.__gwState.lastPartyRouteCellByParty[partyId];
-  if (remembered) return remembered;
-
-  const route = window.__gwState.partyRoute || [];
-  for (let i = route.length - 1; i >= 0; i--) {
-    const row = route[i];
-    if (row?.party_id && row.party_id !== partyId) continue;
-    const cellKey = row?.cell_key || getPartyRouteCellKey(row?.lat, row?.lng);
-    if (cellKey) {
-      rememberPartyRouteCell(partyId, cellKey);
-      return cellKey;
-    }
-  }
-
-  return "";
-}
-
-function appendOptimisticPartyRoutePoint(partyId, lat, lng, accuracyMeters, cellKey, createdAt) {
-  window.__gwState = window.__gwState || {};
-  const route = Array.isArray(window.__gwState.partyRoute)
-    ? window.__gwState.partyRoute
-    : [];
-
-  window.__gwState.partyRoute = route;
-  window.__gwState.partyRoutePartyId = partyId;
-
-  const optimisticId = `local_route_${partyId}_${Date.now()}`;
-  route.push({
-    id: optimisticId,
-    party_id: partyId,
-    player_id: window.GridWildAPI?.getPlayerId?.() || null,
-    lat,
-    lng,
-    accuracy_meters: Number.isFinite(Number(accuracyMeters)) ? Number(accuracyMeters) : null,
-    cell_key: cellKey || null,
-    created_at: createdAt,
-    _optimistic: true
-  });
-
-  if (route.length > 5000) {
-    route.splice(0, route.length - 5000);
-  }
-
-  return optimisticId;
-}
-
-function replaceOptimisticPartyRoutePoint(optimisticId, point) {
-  if (!optimisticId || !point || !Array.isArray(window.__gwState?.partyRoute)) return;
-
-  const idx = window.__gwState.partyRoute.findIndex(row => row?.id === optimisticId);
-  if (idx >= 0) {
-    window.__gwState.partyRoute[idx] = point;
-  }
-}
-
-function recordPartyPosition(lat, lng, accuracyMeters) {
-  const partyId = getActivePartyId();
-  if (!partyId) return;
-
-  const latNum = Number(lat);
-  const lngNum = Number(lng);
-  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return;
-
-  const acc = Number(accuracyMeters);
-  if (Number.isFinite(acc) && acc > PARTY_ROUTE_MAX_ACCURACY_M) return;
-
-  window.__gwState = window.__gwState || {};
-  window.__gwState.lastPartyRoutePointAtByParty = window.__gwState.lastPartyRoutePointAtByParty || {};
-
-  const cellKey = getPartyRouteCellKey(latNum, lngNum);
-  const lastCellKey = getLastRecordedPartyRouteCell(partyId);
-  const enteredNewCell = Boolean(cellKey && cellKey !== lastCellKey);
-  const now = Date.now();
-  const lastTime = Number(window.__gwState.lastPartyRoutePointAtByParty[partyId] || 0);
-
-  if (!enteredNewCell && now - lastTime < PARTY_ROUTE_THROTTLE_MS) return;
-
-  window.__gwState.lastPartyRoutePointAtByParty[partyId] = now;
-  window.__gwState.lastPartyRoutePointAt = now;
-  rememberPartyRouteCell(partyId, cellKey);
-
-  const createdAt = new Date(now).toISOString();
-  const optimisticId = appendOptimisticPartyRoutePoint(
-    partyId,
-    latNum,
-    lngNum,
-    Number.isFinite(acc) ? acc : null,
-    cellKey,
-    createdAt
-  );
-
-  scheduleActivePartyHudRender();
-  refreshMapBeacon();
-
-  window.GridWildAPI?.addPartyRoutePoint?.(
-    partyId,
-    latNum,
-    lngNum,
-    Number.isFinite(acc) ? acc : null
-  )
-    .then(result => {
-      replaceOptimisticPartyRoutePoint(optimisticId, result?.point);
-    })
-    .catch(err => {
-      console.warn("Could not sync party route point:", err);
-    });
-}
-
-function getPartyEvidenceRows(partyId) {
-  const loadedId = window.__gwState?.party?.id;
-  const sourceEvidence =
-    partyId && String(loadedId || "") === String(partyId)
-      ? (window.__gwState?.partyEvidence || [])
-      : (window.__gwState?.partySnapshotsById?.[partyId]?.evidence || []);
-
-  if (partyId) {
-    return sourceEvidence
-      .filter(e =>
-        String(e.party_id || "") === String(partyId) &&
-        e.status === "counted"
-      )
-      .map(e => ({
+      acc[`${e.party_id}::${e.draft_id}`] = {
         partyId: e.party_id,
         draftId: e.draft_id,
-        taxon: e.taxon || e.iconic_taxon || "Observation",
-        cellKey: e.cell_key || null,
-        lat: e.lat || null,
-        lng: e.lng || null,
-        countedAt: e.created_at
-      }))
-      .sort((a, b) => new Date(a.countedAt || 0) - new Date(b.countedAt || 0));
-  }
-
-  return [];
-}
-
-function getExcludedPartyEvidenceRows(partyId) {
-  const loadedId = window.__gwState?.party?.id;
-  const sourceEvidence =
-    partyId && String(loadedId || "") === String(partyId)
-      ? (window.__gwState?.partyEvidence || [])
-      : (window.__gwState?.partySnapshotsById?.[partyId]?.evidence || []);
-
-  if (partyId) {
-    return sourceEvidence
-      .filter(e =>
-        String(e.party_id || "") === String(partyId) &&
-        e.status === "excluded"
-      )
-      .map(e => ({
-        partyId: e.party_id,
-        draftId: e.draft_id,
+        status: e.status || "counted",
         taxon: e.taxon || e.iconic_taxon || "Observation",
         cellKey: e.cell_key || null,
         lat: e.lat || null,
         lng: e.lng || null,
         countedAt: e.created_at,
-        excludedAt: e.updated_at || e.created_at
-      }))
-      .sort((a, b) =>
-        new Date(a.excludedAt || a.countedAt || 0) -
-        new Date(b.excludedAt || b.countedAt || 0)
-      );
+        updatedAt: e.updated_at || e.created_at
+      };
+
+      return acc;
+    }, {});
   }
 
-  return [];
-}
-
-async function excludePartyEvidence(partyId, draftId) {
-  try {
-    await window.GridWildAPI.updatePartyEvidenceStatus(
-      partyId,
-      draftId,
-      "excluded"
-    );
-
-    await window.GridWildPartyLive?.loadParty?.();
-    window.GridWildPartyLive?.refreshPartySheet?.();
-
-    toast("Removed from party score");
-    refreshMapBeacon();
-    scheduleActivePartyHudRender();
-
-    return true;
-  } catch (err) {
-    console.error("Could not exclude party evidence:", err);
-    toast("Could not remove from party score");
+  function savePartyEvidence() {
     return false;
   }
-}
 
-async function reincludePartyEvidence(partyId, draftId) {
-  try {
-    await window.GridWildAPI.updatePartyEvidenceStatus(
-      partyId,
-      draftId,
-      "counted"
-    );
+  function setPartyEvidenceStatus(partyId, draftId, status) {
+    if (!partyId || !draftId) return false;
+    if (!["counted", "excluded"].includes(status)) return false;
+    if (!window.GridWildAPI?.updatePartyEvidenceStatus) return false;
 
-    await window.GridWildPartyLive?.loadParty?.();
-    window.GridWildPartyLive?.refreshPartySheet?.();
-
-    toast("Re-included in party score");
-    refreshMapBeacon();
-    scheduleActivePartyHudRender();
+    window.GridWildAPI.updatePartyEvidenceStatus(partyId, draftId, status)
+      .then(async () => {
+        await window.GridWildPartyLive?.loadParty?.();
+        window.GridWildPartyLive?.refreshPartySheet?.();
+        refreshMapBeacon();
+        scheduleActivePartyHudRender();
+      })
+      .catch((err) => {
+        console.warn("Could not update party evidence status:", err);
+      });
 
     return true;
-  } catch (err) {
-    console.error("Could not re-include party evidence:", err);
-    toast("Could not re-include in party score");
-    return false;
-  }
-}
-
-function getPartyDurationLabel(party) {
-  const start = new Date(party?.startsAt || party?.createdAt || Date.now());
-  const end = party?.endedAt || party?.completedAt
-    ? new Date(party.endedAt || party.completedAt)
-    : new Date();
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "—";
-
-  const mins = Math.max(1, Math.round((end - start) / 60000));
-  if (mins < 60) return `${mins} min`;
-
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${h} hr${h === 1 ? "" : "s"}${m ? ` ${m} min` : ""}`;
-}
-
-function haversineMeters(a, b) {
-  const R = 6371000;
-  const toRad = d => d * Math.PI / 180;
-
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-
-  return 2 * R * Math.asin(Math.sqrt(x));
-}
-
-function getRouteDistanceMeters(points) {
-  if (!Array.isArray(points) || points.length < 2) {
-    const fallback = Number(points?.routeDistanceMeters);
-    return Number.isFinite(fallback) ? fallback : 0;
   }
 
-  let total = 0;
-
-  for (let i = 1; i < points.length; i++) {
-    const d = haversineMeters(points[i - 1], points[i]);
-    if (Number.isFinite(d) && d < 500) total += d;
+  function draftHasUsableEvidence(draft) {
+    return !!draft?.id && Array.isArray(draft.photos) && draft.photos.length > 0;
   }
 
-  return total;
-}
-
-function formatDistance(meters) {
-  const value = Number(meters);
-  const metric = window.GridWildUnits?.metricEnabled?.() === true;
-
-  if (!Number.isFinite(value) || value <= 0) {
-    return metric ? "0 m" : "0 ft";
+  function getDraftIconicTaxon(draft) {
+    return String(draft?.suggestedId?.iconicTaxon || draft?.suggestedId?.kingdom || "");
   }
 
-  if (metric) {
-    if (value < 1) return `${value.toFixed(1)} m`;
-    if (value < 1000) return `${Math.round(value)} m`;
-    return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} km`;
+  function loadPartyRoutes() {
+    const loadedId = window.__gwState?.party?.id;
+    const routePartyId = window.__gwState?.partyRoutePartyId || null;
+    const route = window.__gwState?.partyRoute || [];
+    const partyId = routePartyId || loadedId;
+    const rows = {};
+
+    if (
+      partyId &&
+      route.length &&
+      (!loadedId || !routePartyId || String(routePartyId) === String(loadedId))
+    ) {
+      rows[partyId] = route
+        .filter((p) => String(p?.party_id || routePartyId || "") === String(partyId))
+        .map((p) => ({
+          lat: Number(p.lat),
+          lng: Number(p.lng),
+          accuracyMeters: p.accuracy_meters,
+          t: p.created_at
+        }));
+    }
+
+    for (const [id, snapshot] of Object.entries(window.__gwState?.partySnapshotsById || {})) {
+      if (rows[id]) continue;
+      const snapshotRoute = Array.isArray(snapshot?.route) ? snapshot.route : [];
+      if (!snapshotRoute.length) continue;
+
+      rows[id] = snapshotRoute
+        .filter((p) => String(p?.party_id || id || "") === String(id))
+        .map((p) => ({
+          lat: Number(p.lat),
+          lng: Number(p.lng),
+          accuracyMeters: p.accuracy_meters,
+          t: p.created_at
+        }));
+    }
+
+    return rows;
   }
 
-  const feet = value * 3.280839895;
-  if (feet < 5280) return `${feet < 10 ? feet.toFixed(1) : Math.round(feet)} ft`;
+  function getPartyRouteCellKey(lat, lng) {
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return "";
 
-  const miles = feet / 5280;
-  return `${miles.toFixed(miles < 10 ? 1 : 0)} mi`;
-}
+    if (typeof window.getCellKeyForLatLng === "function") {
+      try {
+        return window.getCellKeyForLatLng(latNum, lngNum) || "";
+      } catch (err) {
+        console.warn("Could not calculate party route cell:", err);
+      }
+    }
 
-function endParty(id) {
-  if (!id) return;
+    const cell = window.GridWildGrid?.latLngToCell?.([latNum, lngNum]);
+    if (cell && Number.isFinite(Number(cell.ix)) && Number.isFinite(Number(cell.iy))) {
+      return window.GridWildGrid?.cellKey?.(cell.ix, cell.iy) || `${cell.ix},${cell.iy}`;
+    }
 
-  if (!window.GridWildAPI?.endParty) {
-    toast("Party service unavailable");
+    return "";
+  }
+
+  function rememberPartyRouteCell(partyId, cellKey) {
+    if (!partyId || !cellKey) return;
+
+    window.__gwState = window.__gwState || {};
+    window.__gwState.lastPartyRouteCellByParty = window.__gwState.lastPartyRouteCellByParty || {};
+    window.__gwState.lastPartyRouteCellByParty[partyId] = cellKey;
+    window.__gwState.lastPartyRouteCellKey = cellKey;
+  }
+
+  function getLastRecordedPartyRouteCell(partyId) {
+    window.__gwState = window.__gwState || {};
+    window.__gwState.lastPartyRouteCellByParty = window.__gwState.lastPartyRouteCellByParty || {};
+
+    const remembered = window.__gwState.lastPartyRouteCellByParty[partyId];
+    if (remembered) return remembered;
+
+    const route = window.__gwState.partyRoute || [];
+    for (let i = route.length - 1; i >= 0; i--) {
+      const row = route[i];
+      if (row?.party_id && row.party_id !== partyId) continue;
+      const cellKey = row?.cell_key || getPartyRouteCellKey(row?.lat, row?.lng);
+      if (cellKey) {
+        rememberPartyRouteCell(partyId, cellKey);
+        return cellKey;
+      }
+    }
+
+    return "";
+  }
+
+  function appendOptimisticPartyRoutePoint(partyId, lat, lng, accuracyMeters, cellKey, createdAt) {
+    window.__gwState = window.__gwState || {};
+    const route = Array.isArray(window.__gwState.partyRoute) ? window.__gwState.partyRoute : [];
+
+    window.__gwState.partyRoute = route;
+    window.__gwState.partyRoutePartyId = partyId;
+
+    const optimisticId = `local_route_${partyId}_${Date.now()}`;
+    route.push({
+      id: optimisticId,
+      party_id: partyId,
+      player_id: window.GridWildAPI?.getPlayerId?.() || null,
+      lat,
+      lng,
+      accuracy_meters: Number.isFinite(Number(accuracyMeters)) ? Number(accuracyMeters) : null,
+      cell_key: cellKey || null,
+      created_at: createdAt,
+      _optimistic: true
+    });
+
+    if (route.length > 5000) {
+      route.splice(0, route.length - 5000);
+    }
+
+    return optimisticId;
+  }
+
+  function replaceOptimisticPartyRoutePoint(optimisticId, point) {
+    if (!optimisticId || !point || !Array.isArray(window.__gwState?.partyRoute)) return;
+
+    const idx = window.__gwState.partyRoute.findIndex((row) => row?.id === optimisticId);
+    if (idx >= 0) {
+      window.__gwState.partyRoute[idx] = point;
+    }
+  }
+
+  function recordPartyPosition(lat, lng, accuracyMeters) {
+    const partyId = getActivePartyId();
+    if (!partyId) return;
+
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return;
+
+    const acc = Number(accuracyMeters);
+    if (Number.isFinite(acc) && acc > PARTY_ROUTE_MAX_ACCURACY_M) return;
+
+    window.__gwState = window.__gwState || {};
+    window.__gwState.lastPartyRoutePointAtByParty =
+      window.__gwState.lastPartyRoutePointAtByParty || {};
+
+    const cellKey = getPartyRouteCellKey(latNum, lngNum);
+    const lastCellKey = getLastRecordedPartyRouteCell(partyId);
+    const enteredNewCell = Boolean(cellKey && cellKey !== lastCellKey);
+    const now = Date.now();
+    const lastTime = Number(window.__gwState.lastPartyRoutePointAtByParty[partyId] || 0);
+
+    if (!enteredNewCell && now - lastTime < PARTY_ROUTE_THROTTLE_MS) return;
+
+    window.__gwState.lastPartyRoutePointAtByParty[partyId] = now;
+    window.__gwState.lastPartyRoutePointAt = now;
+    rememberPartyRouteCell(partyId, cellKey);
+
+    const createdAt = new Date(now).toISOString();
+    const optimisticId = appendOptimisticPartyRoutePoint(
+      partyId,
+      latNum,
+      lngNum,
+      Number.isFinite(acc) ? acc : null,
+      cellKey,
+      createdAt
+    );
+
+    scheduleActivePartyHudRender();
+    refreshMapBeacon();
+
+    window.GridWildAPI?.addPartyRoutePoint?.(
+      partyId,
+      latNum,
+      lngNum,
+      Number.isFinite(acc) ? acc : null
+    )
+      .then((result) => {
+        replaceOptimisticPartyRoutePoint(optimisticId, result?.point);
+      })
+      .catch((err) => {
+        console.warn("Could not sync party route point:", err);
+      });
+  }
+
+  function getPartyEvidenceRows(partyId) {
+    const loadedId = window.__gwState?.party?.id;
+    const sourceEvidence =
+      partyId && String(loadedId || "") === String(partyId)
+        ? window.__gwState?.partyEvidence || []
+        : window.__gwState?.partySnapshotsById?.[partyId]?.evidence || [];
+
+    if (partyId) {
+      return sourceEvidence
+        .filter((e) => String(e.party_id || "") === String(partyId) && e.status === "counted")
+        .map((e) => ({
+          partyId: e.party_id,
+          draftId: e.draft_id,
+          taxon: e.taxon || e.iconic_taxon || "Observation",
+          cellKey: e.cell_key || null,
+          lat: e.lat || null,
+          lng: e.lng || null,
+          countedAt: e.created_at
+        }))
+        .sort((a, b) => new Date(a.countedAt || 0) - new Date(b.countedAt || 0));
+    }
+
+    return [];
+  }
+
+  function getExcludedPartyEvidenceRows(partyId) {
+    const loadedId = window.__gwState?.party?.id;
+    const sourceEvidence =
+      partyId && String(loadedId || "") === String(partyId)
+        ? window.__gwState?.partyEvidence || []
+        : window.__gwState?.partySnapshotsById?.[partyId]?.evidence || [];
+
+    if (partyId) {
+      return sourceEvidence
+        .filter((e) => String(e.party_id || "") === String(partyId) && e.status === "excluded")
+        .map((e) => ({
+          partyId: e.party_id,
+          draftId: e.draft_id,
+          taxon: e.taxon || e.iconic_taxon || "Observation",
+          cellKey: e.cell_key || null,
+          lat: e.lat || null,
+          lng: e.lng || null,
+          countedAt: e.created_at,
+          excludedAt: e.updated_at || e.created_at
+        }))
+        .sort(
+          (a, b) =>
+            new Date(a.excludedAt || a.countedAt || 0) - new Date(b.excludedAt || b.countedAt || 0)
+        );
+    }
+
+    return [];
+  }
+
+  async function excludePartyEvidence(partyId, draftId) {
+    try {
+      await window.GridWildAPI.updatePartyEvidenceStatus(partyId, draftId, "excluded");
+
+      await window.GridWildPartyLive?.loadParty?.();
+      window.GridWildPartyLive?.refreshPartySheet?.();
+
+      toast("Removed from party score");
+      refreshMapBeacon();
+      scheduleActivePartyHudRender();
+
+      return true;
+    } catch (err) {
+      console.error("Could not exclude party evidence:", err);
+      toast("Could not remove from party score");
+      return false;
+    }
+  }
+
+  async function reincludePartyEvidence(partyId, draftId) {
+    try {
+      await window.GridWildAPI.updatePartyEvidenceStatus(partyId, draftId, "counted");
+
+      await window.GridWildPartyLive?.loadParty?.();
+      window.GridWildPartyLive?.refreshPartySheet?.();
+
+      toast("Re-included in party score");
+      refreshMapBeacon();
+      scheduleActivePartyHudRender();
+
+      return true;
+    } catch (err) {
+      console.error("Could not re-include party evidence:", err);
+      toast("Could not re-include in party score");
+      return false;
+    }
+  }
+
+  function getPartyDurationLabel(party) {
+    const start = new Date(party?.startsAt || party?.createdAt || Date.now());
+    const end =
+      party?.endedAt || party?.completedAt
+        ? new Date(party.endedAt || party.completedAt)
+        : new Date();
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "—";
+
+    const mins = Math.max(1, Math.round((end - start) / 60000));
+    if (mins < 60) return `${mins} min`;
+
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h} hr${h === 1 ? "" : "s"}${m ? ` ${m} min` : ""}`;
+  }
+
+  function haversineMeters(a, b) {
+    const R = 6371000;
+    const toRad = (d) => (d * Math.PI) / 180;
+
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }
+
+  function getRouteDistanceMeters(points) {
+    if (!Array.isArray(points) || points.length < 2) {
+      const fallback = Number(points?.routeDistanceMeters);
+      return Number.isFinite(fallback) ? fallback : 0;
+    }
+
+    let total = 0;
+
+    for (let i = 1; i < points.length; i++) {
+      const d = haversineMeters(points[i - 1], points[i]);
+      if (Number.isFinite(d) && d < 500) total += d;
+    }
+
+    return total;
+  }
+
+  function formatDistance(meters) {
+    const value = Number(meters);
+    const metric = window.GridWildUnits?.metricEnabled?.() === true;
+
+    if (!Number.isFinite(value) || value <= 0) {
+      return metric ? "0 m" : "0 ft";
+    }
+
+    if (metric) {
+      if (value < 1) return `${value.toFixed(1)} m`;
+      if (value < 1000) return `${Math.round(value)} m`;
+      return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} km`;
+    }
+
+    const feet = value * 3.280839895;
+    if (feet < 5280) return `${feet < 10 ? feet.toFixed(1) : Math.round(feet)} ft`;
+
+    const miles = feet / 5280;
+    return `${miles.toFixed(miles < 10 ? 1 : 0)} mi`;
+  }
+
+  function endParty(id) {
+    if (!id) return;
+
+    if (!window.GridWildAPI?.endParty) {
+      toast("Party service unavailable");
+      return;
+    }
+
+    window.GridWildAPI.endParty(id)
+      .then(async () => {
+        window.GridWildPartyLive?.setActivePartyId?.(null);
+        await window.GridWildPartyLive?.loadParty?.();
+        window.GridWildPartyLive?.refreshPartySheet?.();
+        refreshMapBeacon();
+        scheduleActivePartyHudRender();
+        toast("Online party ended");
+      })
+      .catch((err) => {
+        console.error("DB end failed:", err);
+        toast("Could not end online party");
+      });
+
     return;
   }
 
-  window.GridWildAPI.endParty(id)
-    .then(async () => {
-      window.GridWildPartyLive?.setActivePartyId?.(null);
-      await window.GridWildPartyLive?.loadParty?.();
-      window.GridWildPartyLive?.refreshPartySheet?.();
-      refreshMapBeacon();
-      scheduleActivePartyHudRender();
-      toast("Online party ended");
+  function shareParty(id) {
+    const p = getParty(id);
+    if (!p) return;
+
+    const url = partyReportUrl(id);
+
+    const text = [
+      `GridWild Party Report: ${p.title}`,
+      `Counted observations: ${countEvidenceForParty(id)}`,
+      `Duration: ${getPartyDurationLabel(p)}`,
+      `Open static report: ${url}`
+    ].join("\n");
+
+    if (navigator.share) {
+      navigator
+        .share({
+          title: `GridWild Party Report: ${p.title}`,
+          text,
+          url
+        })
+        .catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(url);
+      toast("🔗 Static report link copied");
+    }
+  }
+
+  function partyGoalMatchesDraft(party, draft) {
+    const goal = String(party?.goalType || "any").toLowerCase();
+    const iconic = getDraftIconicTaxon(draft);
+    const taxonName = String(draft?.suggestedId?.taxonName || "").toLowerCase();
+    const notes = String(draft?.notes || "").toLowerCase();
+    const haystack = `${iconic} ${taxonName} ${notes}`.toLowerCase();
+
+    if (goal === "any") return true;
+    if (goal === "ants") return haystack.includes("ant") || haystack.includes("formicidae");
+    if (goal === "birds") return iconic === "Aves";
+    if (goal === "insects") return iconic === "Insecta" || haystack.includes("insect");
+    if (goal === "plants") return iconic === "Plantae";
+    if (goal === "fungi")
+      return iconic === "Fungi" || haystack.includes("lichen") || haystack.includes("fung");
+
+    return true;
+  }
+
+  function getSharedPartyProgress(partyId) {
+    const activeDbPartyId = window.__gwState?.party?.id;
+    const dbProgress = Number(window.__gwState?.partyProgress || 0);
+
+    if (partyId && activeDbPartyId === partyId) {
+      return dbProgress;
+    }
+
+    return countEvidenceForParty(partyId);
+  }
+
+  function countEvidenceForParty(partyId) {
+    return getPartyEvidenceRows(partyId).length;
+  }
+
+  function getQuestById(questId) {
+    try {
+      const quests = JSON.parse(localStorage.getItem("gw_quests_v1") || "[]");
+      return Array.isArray(quests) ? quests.find((q) => q.id === questId) || null : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeDraftForQuestEvidence(draft) {
+    return {
+      id: draft.id,
+      source: "draft",
+      taxon: draft?.suggestedId?.taxonName || "Draft observation",
+      common_name: "",
+      scientific_name: draft?.suggestedId?.taxonName || "",
+      iconic_taxon_name: draft?.suggestedId?.iconicTaxon || "Unknown",
+      observed_on: draft?.observedAt || draft?.createdAt || draft?.updatedAt,
+      accuracy: draft?.location?.accuracyMeters,
+      lat: draft?.location?.lat,
+      lng: draft?.location?.lng,
+      _draft: draft
+    };
+  }
+
+  function autoClaimDraftForLinkedQuest(party, draft) {
+    if (!party?.linkedQuestId) return { ok: false, reason: "No linked quest." };
+    if (!window.GridWildQuestEvidence?.claimObservationForQuest) {
+      return { ok: false, reason: "Quest evidence system not loaded." };
+    }
+
+    const quest = getQuestById(party.linkedQuestId);
+    if (!quest) return { ok: false, reason: "Linked quest not found." };
+
+    const obs = normalizeDraftForQuestEvidence(draft);
+    const result = window.GridWildQuestEvidence.claimObservationForQuest(obs, quest);
+
+    if (result.ok) {
+      window.dispatchEvent(
+        new CustomEvent("gwPartyAutoClaimedQuestEvidence", {
+          detail: { party, quest, draft, result }
+        })
+      );
+    }
+
+    return result;
+  }
+
+  function attachDraftToActiveParty(draft) {
+    const partyId = getActivePartyId();
+    if (!partyId || !draftHasUsableEvidence(draft)) return false;
+
+    const party = getParty(partyId);
+    if (!party) return false;
+    if (!partyGoalMatchesDraft(party, draft)) return false;
+
+    const alreadyCounted = (window.__gwState?.partyEvidence || []).some(
+      (e) => e.party_id === partyId && e.draft_id === draft.id && e.status === "counted"
+    );
+
+    if (alreadyCounted) return false;
+
+    const taxon =
+      draft?.suggestedId?.taxonName || draft?.suggestedId?.iconicTaxon || "Draft observation";
+
+    window.GridWildAPI?.addPartyEvidence?.({
+      party_id: partyId,
+      draft_id: draft.id,
+      taxon,
+      iconic_taxon: draft?.suggestedId?.iconicTaxon || null,
+      cell_key: draft?.location?.cellKey || null,
+      lat: draft?.location?.lat || null,
+      lng: draft?.location?.lng || null
     })
-    .catch(err => {
-      console.error("DB end failed:", err);
-      toast("Could not end online party");
-    });
-
-  return;
-}
-
-function shareParty(id) {
-  const p = getParty(id);
-  if (!p) return;
-
-  const url = partyReportUrl(id);
-
-  const text = [
-    `GridWild Party Report: ${p.title}`,
-    `Counted observations: ${countEvidenceForParty(id)}`,
-    `Duration: ${getPartyDurationLabel(p)}`,
-    `Open static report: ${url}`
-  ].join("\n");
-
-  if (navigator.share) {
-    navigator.share({
-      title: `GridWild Party Report: ${p.title}`,
-      text,
-      url
-    }).catch(() => {});
-  } else {
-    navigator.clipboard?.writeText(url);
-    toast("🔗 Static report link copied");
-  }
-}
-
-
-
-function partyGoalMatchesDraft(party, draft) {
-  const goal = String(party?.goalType || "any").toLowerCase();
-  const iconic = getDraftIconicTaxon(draft);
-  const taxonName = String(draft?.suggestedId?.taxonName || "").toLowerCase();
-  const notes = String(draft?.notes || "").toLowerCase();
-  const haystack = `${iconic} ${taxonName} ${notes}`.toLowerCase();
-
-  if (goal === "any") return true;
-  if (goal === "ants") return haystack.includes("ant") || haystack.includes("formicidae");
-  if (goal === "birds") return iconic === "Aves";
-  if (goal === "insects") return iconic === "Insecta" || haystack.includes("insect");
-  if (goal === "plants") return iconic === "Plantae";
-  if (goal === "fungi") return iconic === "Fungi" || haystack.includes("lichen") || haystack.includes("fung");
-
-  return true;
-}
-
-
-function getSharedPartyProgress(partyId) {
-  const activeDbPartyId = window.__gwState?.party?.id;
-  const dbProgress = Number(window.__gwState?.partyProgress || 0);
-
-  if (partyId && activeDbPartyId === partyId) {
-    return dbProgress;
-  }
-
-  return countEvidenceForParty(partyId);
-}
-
-function countEvidenceForParty(partyId) {
-  return getPartyEvidenceRows(partyId).length;
-}
-
-function getQuestById(questId) {
-  try {
-    const quests = JSON.parse(localStorage.getItem("gw_quests_v1") || "[]");
-    return Array.isArray(quests)
-      ? quests.find(q => q.id === questId) || null
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeDraftForQuestEvidence(draft) {
-  return {
-    id: draft.id,
-    source: "draft",
-    taxon: draft?.suggestedId?.taxonName || "Draft observation",
-    common_name: "",
-    scientific_name: draft?.suggestedId?.taxonName || "",
-    iconic_taxon_name: draft?.suggestedId?.iconicTaxon || "Unknown",
-    observed_on: draft?.observedAt || draft?.createdAt || draft?.updatedAt,
-    accuracy: draft?.location?.accuracyMeters,
-    lat: draft?.location?.lat,
-    lng: draft?.location?.lng,
-    _draft: draft
-  };
-}
-
-function autoClaimDraftForLinkedQuest(party, draft) {
-  if (!party?.linkedQuestId) return { ok: false, reason: "No linked quest." };
-  if (!window.GridWildQuestEvidence?.claimObservationForQuest) {
-    return { ok: false, reason: "Quest evidence system not loaded." };
-  }
-
-  const quest = getQuestById(party.linkedQuestId);
-  if (!quest) return { ok: false, reason: "Linked quest not found." };
-
-  const obs = normalizeDraftForQuestEvidence(draft);
-  const result = window.GridWildQuestEvidence.claimObservationForQuest(obs, quest);
-
-  if (result.ok) {
-    window.dispatchEvent(new CustomEvent("gwPartyAutoClaimedQuestEvidence", {
-      detail: { party, quest, draft, result }
-    }));
-  }
-
-  return result;
-}
-
-function attachDraftToActiveParty(draft) {
-  const partyId = getActivePartyId();
-  if (!partyId || !draftHasUsableEvidence(draft)) return false;
-
-  const party = getParty(partyId);
-  if (!party) return false;
-  if (!partyGoalMatchesDraft(party, draft)) return false;
-
-const alreadyCounted = (window.__gwState?.partyEvidence || [])
-  .some(e =>
-    e.party_id === partyId &&
-    e.draft_id === draft.id &&
-    e.status === "counted"
-  );
-
-if (alreadyCounted) return false;
-
-const taxon =
-  draft?.suggestedId?.taxonName ||
-  draft?.suggestedId?.iconicTaxon ||
-  "Draft observation";
-
-window.GridWildAPI?.addPartyEvidence?.({
-  party_id: partyId,
-  draft_id: draft.id,
-  taxon,
-  iconic_taxon: draft?.suggestedId?.iconicTaxon || null,
-  cell_key: draft?.location?.cellKey || null,
-  lat: draft?.location?.lat || null,
-  lng: draft?.location?.lng || null
-})
-  .then(async () => {
-    await window.GridWildPartyLive?.loadParty?.();
-    window.GridWildPartyLive?.refreshPartySheet?.();
-    refreshMapBeacon();
-    scheduleActivePartyHudRender();
-  })
-  .catch(err => {
-    console.warn("Could not sync party evidence:", err);
-  });
+      .then(async () => {
+        await window.GridWildPartyLive?.loadParty?.();
+        window.GridWildPartyLive?.refreshPartySheet?.();
+        refreshMapBeacon();
+        scheduleActivePartyHudRender();
+      })
+      .catch((err) => {
+        console.warn("Could not sync party evidence:", err);
+      });
 
     refreshMapBeacon();
 
     const questClaim = autoClaimDraftForLinkedQuest(party, draft);
 
     if (questClaim.ok) {
-    toast(`🎉 Counted for party + quest`);
+      toast(`🎉 Counted for party + quest`);
     } else {
-    toast(`🎉 Counted for ${party.title}`);
+      toast(`🎉 Counted for ${party.title}`);
     }
 
-    window.dispatchEvent(new CustomEvent("gwPartyEvidenceCounted", {
-    detail: { party, draft, questClaim }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwPartyEvidenceCounted", {
+        detail: { party, draft, questClaim }
+      })
+    );
 
     return true;
-}
-
-function scanDraftsForActiveParty() {
-  const partyId = getActivePartyId();
-  if (!partyId) return;
-
-  const drafts = window.GridWildDraftObservations?.loadDrafts?.() || [];
-  let changed = false;
-
-  for (const d of drafts) {
-    if (attachDraftToActiveParty(d)) changed = true;
   }
 
-  if (changed) {
-    rerenderPartySheet();
-    refreshMapBeacon();
-  }
-}
+  function scanDraftsForActiveParty() {
+    const partyId = getActivePartyId();
+    if (!partyId) return;
 
-function refreshStoredPartyProgress() {}
+    const drafts = window.GridWildDraftObservations?.loadDrafts?.() || [];
+    let changed = false;
 
-function joinParty(id) {
-  if (!id) return;
+    for (const d of drafts) {
+      if (attachDraftToActiveParty(d)) changed = true;
+    }
 
-  if (!window.GridWildAPI?.joinParty) {
-    toast("Party service unavailable");
-    return;
-  }
-
-  window.GridWildAPI.joinParty(id)
-    .then(async () => {
-      setActivePartyId(id);
-
-      await window.GridWildPartyLive?.loadParty?.();
-      window.GridWildPartyLive?.refreshPartySheet?.();
-
-      toast("Joined online party");
+    if (changed) {
       rerenderPartySheet();
-      openPartyCover(id);
-    })
-    .catch(err => {
-      console.error("DB join failed:", err);
-      toast("Could not join online party");
-    });
-
-  return;
-}
-
-function leaveParty(id) {
-  if (!id) return;
-
-  if (!window.GridWildAPI?.leaveParty) {
-    toast("Party service unavailable");
-    return;
-  }
-
-  window.GridWildAPI.leaveParty(id)
-    .then(async () => {
-      if (getActivePartyId() === id) {
-        window.GridWildPartyLive?.setActivePartyId?.(null);
-      }
-
-      await window.GridWildPartyLive?.loadParty?.();
-      window.GridWildPartyLive?.refreshPartySheet?.();
       refreshMapBeacon();
-      scheduleActivePartyHudRender();
-      toast("Left online party");
-      rerenderPartySheet();
-    })
-    .catch(err => {
+    }
+  }
+
+  function refreshStoredPartyProgress() {}
+
+  function joinParty(id) {
+    if (!id) return;
+
+    if (!window.GridWildAPI?.joinParty) {
+      toast("Party service unavailable");
+      return;
+    }
+
+    window.GridWildAPI.joinParty(id)
+      .then(async () => {
+        setActivePartyId(id);
+
+        await window.GridWildPartyLive?.loadParty?.();
+        window.GridWildPartyLive?.refreshPartySheet?.();
+
+        toast("Joined online party");
+        rerenderPartySheet();
+        openPartyCover(id);
+      })
+      .catch((err) => {
+        console.error("DB join failed:", err);
+        toast("Could not join online party");
+      });
+
+    return;
+  }
+
+  function leaveParty(id) {
+    if (!id) return;
+
+    if (!window.GridWildAPI?.leaveParty) {
+      toast("Party service unavailable");
+      return;
+    }
+
+    window.GridWildAPI.leaveParty(id)
+      .then(async () => {
+        if (getActivePartyId() === id) {
+          window.GridWildPartyLive?.setActivePartyId?.(null);
+        }
+
+        await window.GridWildPartyLive?.loadParty?.();
+        window.GridWildPartyLive?.refreshPartySheet?.();
+        refreshMapBeacon();
+        scheduleActivePartyHudRender();
+        toast("Left online party");
+        rerenderPartySheet();
+      })
+      .catch((err) => {
         console.error("DB leave failed:", err);
         toast("Could not leave online party");
-    });
+      });
 
-  return;
-}
+    return;
+  }
 
   function goalTypeFromQuestRecipe(recipe = {}) {
-  const tax = String(recipe.iconicTaxon || "Any");
+    const tax = String(recipe.iconicTaxon || "Any");
 
-  if (tax === "Aves") return "birds";
-  if (tax === "Insecta") return "insects";
-  if (tax === "Plantae") return "plants";
-  if (tax === "Fungi") return "fungi";
+    if (tax === "Aves") return "birds";
+    if (tax === "Insecta") return "insects";
+    if (tax === "Plantae") return "plants";
+    if (tax === "Fungi") return "fungi";
 
-  return "any";
-}
+    return "any";
+  }
 
-function createPartyFromQuest(quest) {
-  if (!quest) return null;
+  function createPartyFromQuest(quest) {
+    if (!quest) return null;
 
-  const recipe = quest.recipe || {};
-  const goalType = goalTypeFromQuestRecipe(recipe);
+    const recipe = quest.recipe || {};
+    const goalType = goalTypeFromQuestRecipe(recipe);
 
-  const target =
-    Number(recipe.quantity || quest.targetCount || 5) ||
-    5;
+    const target = Number(recipe.quantity || quest.targetCount || 5) || 5;
 
-  const party = createParty({
-    mode: "live",
-    title: `Party: ${quest.title || "Quest Party"}`,
-    goalType,
-    target,
-    visibility: "public",
-    durationMinutes: 60,
-    locationLabel: recipe.target?.placeName || recipe.target?.label || "Quest area",
+    const party = createParty({
+      mode: "live",
+      title: `Party: ${quest.title || "Quest Party"}`,
+      goalType,
+      target,
+      visibility: "public",
+      durationMinutes: 60,
+      locationLabel: recipe.target?.placeName || recipe.target?.label || "Quest area",
 
-    linkedQuestId: quest.id,
-    linkedQuestTitle: quest.title || "",
-    linkedQuestRecipe: recipe
-  });
+      linkedQuestId: quest.id,
+      linkedQuestTitle: quest.title || "",
+      linkedQuestRecipe: recipe
+    });
 
-  return party;
-}
+    return party;
+  }
 
   function createParty(form) {
     const locationResolution = resolvePartyLocationForStart(form);
@@ -1259,7 +1311,7 @@ function createPartyFromQuest(quest) {
         toast("Online party started");
         rerenderPartySheet();
       })
-      .catch(err => {
+      .catch((err) => {
         console.error("DB party create failed:", err);
         toast("Could not start online party");
       });
@@ -1267,56 +1319,55 @@ function createPartyFromQuest(quest) {
     return null;
   }
 
-
   function makePartyReportPayload(id) {
-  const p = getParty(id);
-  if (!p) return null;
+    const p = getParty(id);
+    if (!p) return null;
 
-  const route = loadPartyRoutes()[id] || [];
-  const counted = getPartyEvidenceRows(id);
-  const excluded = getExcludedPartyEvidenceRows?.(id) || [];
+    const route = loadPartyRoutes()[id] || [];
+    const counted = getPartyEvidenceRows(id);
+    const excluded = getExcludedPartyEvidenceRows?.(id) || [];
 
-  return {
-    kind: "gridwild_party_report",
-    version: 1,
-    exportedAt: nowISO(),
-    party: {
-      id: p.id,
-      title: p.title,
-      host: p.host,
-      goalLabel: p.goalLabel,
-      linkedQuestTitle: p.linkedQuestTitle || "",
-      locationLabel: p.locationLabel,
-      startsAt: p.startsAt,
-      endedAt: p.endedAt || p.completedAt || null,
-      durationLabel: getPartyDurationLabel(p),
-      routeDistanceMeters: Math.round(getRouteDistanceMeters(route)),
-      countedCount: counted.length,
-      excludedCount: excluded.length
-    },
-    route,
-    evidence: counted,
-    excludedEvidence: excluded
-  };
-}
+    return {
+      kind: "gridwild_party_report",
+      version: 1,
+      exportedAt: nowISO(),
+      party: {
+        id: p.id,
+        title: p.title,
+        host: p.host,
+        goalLabel: p.goalLabel,
+        linkedQuestTitle: p.linkedQuestTitle || "",
+        locationLabel: p.locationLabel,
+        startsAt: p.startsAt,
+        endedAt: p.endedAt || p.completedAt || null,
+        durationLabel: getPartyDurationLabel(p),
+        routeDistanceMeters: Math.round(getRouteDistanceMeters(route)),
+        countedCount: counted.length,
+        excludedCount: excluded.length
+      },
+      route,
+      evidence: counted,
+      excludedEvidence: excluded
+    };
+  }
 
-function encodePartyReport(payload) {
-  const json = JSON.stringify(payload);
-  return btoa(unescape(encodeURIComponent(json)));
-}
+  function encodePartyReport(payload) {
+    const json = JSON.stringify(payload);
+    return btoa(unescape(encodeURIComponent(json)));
+  }
 
-function decodePartyReport(encoded) {
-  const json = decodeURIComponent(escape(atob(encoded)));
-  return JSON.parse(json);
-}
+  function decodePartyReport(encoded) {
+    const json = decodeURIComponent(escape(atob(encoded)));
+    return JSON.parse(json);
+  }
 
-function partyReportUrl(id) {
-  const payload = makePartyReportPayload(id);
-  if (!payload) return "";
+  function partyReportUrl(id) {
+    const payload = makePartyReportPayload(id);
+    if (!payload) return "";
 
-  const base = `${window.location.origin}${window.location.pathname}`;
-  return `${base}?party_report=${encodeURIComponent(encodePartyReport(payload))}`;
-}
+    const base = `${window.location.origin}${window.location.pathname}`;
+    return `${base}?party_report=${encodeURIComponent(encodePartyReport(payload))}`;
+  }
 
   function partyUrl(id) {
     const base = `${window.location.origin}${window.location.pathname}`;
@@ -1376,12 +1427,12 @@ function partyReportUrl(id) {
   function renderPartyRow(p) {
     const joined = isJoined(p.id);
     const active = getActivePartyId() === p.id;
-    
-    const evidenceCount = Math.max(
-    Number(p.progress || 0),
-    getSharedPartyProgress(p.id)
+
+    const evidenceCount = Math.max(Number(p.progress || 0), getSharedPartyProgress(p.id));
+    const pct = Math.max(
+      0,
+      Math.min(100, (evidenceCount / Math.max(1, Number(p.target || 1))) * 100)
     );
-    const pct = Math.max(0, Math.min(100, (evidenceCount / Math.max(1, Number(p.target || 1))) * 100));
 
     return `
       <div class="gw-party-row" data-party-id="${esc(p.id)}">
@@ -1419,15 +1470,11 @@ function partyReportUrl(id) {
 
   function renderSheetHtml() {
     const all = getAllParties();
-    const live = all.filter(p =>
-    p.mode === "live" &&
-    p.status !== "ended" &&
-    !p.endedAt
-    );
-    const upcoming = all.filter(p => p.mode === "upcoming" || p.mode === "scheduled");
+    const live = all.filter((p) => p.mode === "live" && p.status !== "ended" && !p.endedAt);
+    const upcoming = all.filter((p) => p.mode === "upcoming" || p.mode === "scheduled");
     const activeId = getActivePartyId();
-    const mine = all.filter(p => p.id === activeId);
-    
+    const mine = all.filter((p) => p.id === activeId);
+
     return `
       <div class="gw-card gw-party-hero-card">
         <div class="gw-card-title">Party</div>
@@ -1510,30 +1557,24 @@ function partyReportUrl(id) {
     const all = getAllParties();
 
     const rows = all
-    .filter(p =>
-      p.mode === "ended" ||
-      p.status === "ended" ||
-      p.endedAt ||
-      p.completedAt
-    )
-    .sort((a, b) =>
-      new Date(b.endedAt || b.completedAt || b.startsAt || b.createdAt || 0) -
-      new Date(a.endedAt || a.completedAt || a.startsAt || a.createdAt || 0)
-    );
+      .filter((p) => p.mode === "ended" || p.status === "ended" || p.endedAt || p.completedAt)
+      .sort(
+        (a, b) =>
+          new Date(b.endedAt || b.completedAt || b.startsAt || b.createdAt || 0) -
+          new Date(a.endedAt || a.completedAt || a.startsAt || a.createdAt || 0)
+      );
 
     if (!rows.length) {
-        return `<div class="gw-muted">No party history yet. Start a party and count observations to create a trip report.</div>`;
+      return `<div class="gw-muted">No party history yet. Start a party and count observations to create a trip report.</div>`;
     }
 
-  return rows.map(p => {
-    const evidenceCount = Math.max(
-      Number(p.progress || 0),
-      countEvidenceForParty(p.id)
-    );
-    const route = loadPartyRoutes()[p.id] || [];
-    route.routeDistanceMeters = Number(p.routeDistanceMeters || 0);
+    return rows
+      .map((p) => {
+        const evidenceCount = Math.max(Number(p.progress || 0), countEvidenceForParty(p.id));
+        const route = loadPartyRoutes()[p.id] || [];
+        route.routeDistanceMeters = Number(p.routeDistanceMeters || 0);
 
-    return `
+        return `
       <div class="gw-party-row">
         <div class="gw-party-main">
           <div class="gw-party-title">📜 ${esc(p.title)}</div>
@@ -1551,19 +1592,19 @@ function partyReportUrl(id) {
         </div>
       </div>
     `;
-  }).join("");
-}
-
+      })
+      .join("");
+  }
 
   function bindSheetControls(root = document) {
     injectStyles();
 
-    root.querySelectorAll(".gw-party-tab").forEach(btn => {
+    root.querySelectorAll(".gw-party-tab").forEach((btn) => {
       btn.onclick = () => {
         const tab = btn.dataset.partyTab;
 
-        root.querySelectorAll(".gw-party-tab").forEach(x => x.classList.remove("is-active"));
-        root.querySelectorAll(".gw-party-panel").forEach(x => x.classList.remove("is-active"));
+        root.querySelectorAll(".gw-party-tab").forEach((x) => x.classList.remove("is-active"));
+        root.querySelectorAll(".gw-party-panel").forEach((x) => x.classList.remove("is-active"));
 
         btn.classList.add("is-active");
         root.querySelector(`[data-party-panel="${tab}"]`)?.classList.add("is-active");
@@ -1587,7 +1628,7 @@ function partyReportUrl(id) {
     };
 
     joinBtn?.addEventListener("click", joinById);
-    joinInput?.addEventListener("keydown", evt => {
+    joinInput?.addEventListener("keydown", (evt) => {
       if (evt.key === "Enter") joinById();
     });
 
@@ -1604,50 +1645,50 @@ function partyReportUrl(id) {
       qrInput.value = "";
     });
 
-    root.querySelectorAll(".gw-party-join-btn").forEach(btn => {
+    root.querySelectorAll(".gw-party-join-btn").forEach((btn) => {
       btn.onclick = () => joinParty(btn.dataset.partyId);
     });
 
-    root.querySelectorAll(".gw-party-leave-btn").forEach(btn => {
+    root.querySelectorAll(".gw-party-leave-btn").forEach((btn) => {
       btn.onclick = () => leaveParty(btn.dataset.partyId);
     });
 
-    root.querySelectorAll(".gw-party-view-btn").forEach(btn => {
+    root.querySelectorAll(".gw-party-view-btn").forEach((btn) => {
       btn.onclick = () => openPartyCover(btn.dataset.partyId);
     });
 
-    root.querySelectorAll(".gw-party-recap-btn").forEach(btn => {
-    btn.onclick = async () => {
-      const id = btn.dataset.partyId;
-      await hydratePartySnapshot(id);
-      openPartyRecap(id);
-    };
+    root.querySelectorAll(".gw-party-recap-btn").forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.dataset.partyId;
+        await hydratePartySnapshot(id);
+        openPartyRecap(id);
+      };
     });
 
-    root.querySelectorAll(".gw-party-share-btn").forEach(btn => {
-    btn.onclick = async () => {
-      const id = btn.dataset.partyId;
-      await hydratePartySnapshot(id);
-      shareParty(id);
-    };
+    root.querySelectorAll(".gw-party-share-btn").forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.dataset.partyId;
+        await hydratePartySnapshot(id);
+        shareParty(id);
+      };
     });
   }
 
   function openPartyRecap(id) {
-  injectStyles();
+    injectStyles();
 
-  const p = getParty(id);
-  if (!p) return;
+    const p = getParty(id);
+    if (!p) return;
 
-  const evidence = getPartyEvidenceRows(id);
-  const excludedEvidence = getExcludedPartyEvidenceRows(id);
-  const route = loadPartyRoutes()[id] || [];
-  const distance = getRouteDistanceMeters(route);
+    const evidence = getPartyEvidenceRows(id);
+    const excludedEvidence = getExcludedPartyEvidenceRows(id);
+    const route = loadPartyRoutes()[id] || [];
+    const distance = getRouteDistanceMeters(route);
 
-  const root = document.createElement("div");
-  root.className = "gw-party-backdrop";
-  
-  root.innerHTML = `
+    const root = document.createElement("div");
+    root.className = "gw-party-backdrop";
+
+    root.innerHTML = `
     <div class="gw-party-cover gw-party-recap">
       <div class="gw-party-cover-art">
         <div class="gw-party-rune">📜</div>
@@ -1691,9 +1732,11 @@ function partyReportUrl(id) {
     <div class="gw-party-qr-wrap">
     <div class="gw-party-stat-k" style="margin-bottom:8px;">Counted observations</div>
     ${
-        evidence.length
+      evidence.length
         ? `<div class="gw-list">
-            ${evidence.map(e => `
+            ${evidence
+              .map(
+                (e) => `
                 <div class="gw-rowline gw-party-evidence-row">
                 <span style="min-width:0;">
                     <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
@@ -1712,17 +1755,21 @@ function partyReportUrl(id) {
                     Exclude
                 </button>
                 </div>
-            `).join("")}
+            `
+              )
+              .join("")}
             </div>`
         : `<div class="gw-muted">No counted observations yet.</div>`
     }
 
     ${
-        excludedEvidence.length
+      excludedEvidence.length
         ? `
             <div class="gw-party-stat-k" style="margin:14px 0 8px 0;">Excluded</div>
             <div class="gw-list">
-            ${excludedEvidence.map(e => `
+            ${excludedEvidence
+              .map(
+                (e) => `
                 <div class="gw-rowline gw-party-evidence-row excluded">
                 <span style="min-width:0;">
                     <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
@@ -1741,7 +1788,9 @@ function partyReportUrl(id) {
                     Re-include
                 </button>
                 </div>
-            `).join("")}
+            `
+              )
+              .join("")}
             </div>
         `
         : ""
@@ -1756,208 +1805,207 @@ function partyReportUrl(id) {
       <div class="gw-party-modal-actions">
         <button class="gw-mini-btn" data-party-close>Close</button>
         <button class="gw-mini-btn" id="gwPartyShareRecapBtn">Share</button>
-        ${getActivePartyId() === id
-        ? `<button class="gw-mini-btn" id="gwPartyEndRecapBtn">End Party</button>`
-        : ""
+        ${
+          getActivePartyId() === id
+            ? `<button class="gw-mini-btn" id="gwPartyEndRecapBtn">End Party</button>`
+            : ""
         }
       </div>
     </div>
   `;
 
-  document.body.appendChild(root);
+    document.body.appendChild(root);
 
-  const closeRecap = () => {
-    destroyPartyRecapMaps(root);
-    root.remove();
-  };
+    const closeRecap = () => {
+      destroyPartyRecapMaps(root);
+      root.remove();
+    };
 
-  root.querySelectorAll("[data-party-close]").forEach(btn => {
-    btn.onclick = closeRecap;
-  });
+    root.querySelectorAll("[data-party-close]").forEach((btn) => {
+      btn.onclick = closeRecap;
+    });
 
-  root.addEventListener("click", e => {
-    if (e.target === root) closeRecap();
-  });
+    root.addEventListener("click", (e) => {
+      if (e.target === root) closeRecap();
+    });
 
-  root.querySelector("#gwPartyShareRecapBtn")?.addEventListener("click", () => {
-    shareParty(id);
-  });
+    root.querySelector("#gwPartyShareRecapBtn")?.addEventListener("click", () => {
+      shareParty(id);
+    });
 
-  root.querySelector("#gwPartyEndRecapBtn")?.addEventListener("click", () => {
-    endParty(id);
-    closeRecap();
-  });
+    root.querySelector("#gwPartyEndRecapBtn")?.addEventListener("click", () => {
+      endParty(id);
+      closeRecap();
+    });
 
-    root.querySelectorAll(".gw-party-evidence-exclude-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-        excludePartyEvidence(btn.dataset.partyId, btn.dataset.draftId)
-        .then(() => {
-            closeRecap();
-            openPartyRecap(id);
+    root.querySelectorAll(".gw-party-evidence-exclude-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        excludePartyEvidence(btn.dataset.partyId, btn.dataset.draftId).then(() => {
+          closeRecap();
+          openPartyRecap(id);
         });
-    });
+      });
     });
 
-    root.querySelectorAll(".gw-party-evidence-reinclude-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-        reincludePartyEvidence(btn.dataset.partyId, btn.dataset.draftId)
-        .then(() => {
-            closeRecap();
-            openPartyRecap(id);
+    root.querySelectorAll(".gw-party-evidence-reinclude-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        reincludePartyEvidence(btn.dataset.partyId, btn.dataset.draftId).then(() => {
+          closeRecap();
+          openPartyRecap(id);
         });
+      });
     });
-    });
 
-  setTimeout(() => drawPartyRecapMap(id), 50);
-}
-
-function createPartyRecapBaseLayer() {
-  const choice = window.GridWildBaseMaps?.getBaseMap?.() || window.__gwState?.baseMap || "street";
-
-  if (choice === "terrain" && typeof window.createTerrainBaseLayer === "function") {
-    return window.createTerrainBaseLayer();
-  }
-  if (typeof window.createStreetBaseLayer === "function") {
-    return window.createStreetBaseLayer();
+    setTimeout(() => drawPartyRecapMap(id), 50);
   }
 
-  return L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-    maxZoom: 20,
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
-  });
-}
+  function createPartyRecapBaseLayer() {
+    const choice = window.GridWildBaseMaps?.getBaseMap?.() || window.__gwState?.baseMap || "street";
 
-function destroyPartyRecapMaps(root = document) {
-  root?.querySelectorAll?.(".gw-party-recap-map").forEach(host => {
-    if (!host._gwPartyRecapMap) return;
-    host._gwPartyRecapMap.remove();
-    host._gwPartyRecapMap = null;
-  });
-}
+    if (choice === "terrain" && typeof window.createTerrainBaseLayer === "function") {
+      return window.createTerrainBaseLayer();
+    }
+    if (typeof window.createStreetBaseLayer === "function") {
+      return window.createStreetBaseLayer();
+    }
 
-function renderPartyRecapMap(host, route = [], evidence = [], label = "Party route map") {
-  if (!host) return;
-
-  if (host._gwPartyRecapMap) {
-    host._gwPartyRecapMap.remove();
-    host._gwPartyRecapMap = null;
-  }
-
-  const routePoints = route
-    .map(point => [Number(point.lat), Number(point.lng)])
-    .filter(point => Number.isFinite(point[0]) && Number.isFinite(point[1]));
-  const observations = evidence
-    .filter(row => Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lng)))
-    .map(row => ({
-      latlng: [Number(row.lat), Number(row.lng)],
-      label: row.taxon || "Observation"
-    }));
-
-  if (!window.L || (!routePoints.length && !observations.length)) {
-    host.classList.add("is-empty");
-    host.innerHTML = `<div class="gw-muted">No mappable points recorded.</div>`;
-    return;
-  }
-
-  host.classList.remove("is-empty");
-  host.innerHTML = "";
-  host.setAttribute("role", "img");
-  host.setAttribute("aria-label", label);
-
-  const recapMap = L.map(host, {
-    zoomControl: false,
-    attributionControl: true,
-    dragging: false,
-    scrollWheelZoom: false,
-    doubleClickZoom: false,
-    boxZoom: false,
-    keyboard: false,
-    tap: false,
-    touchZoom: false
-  });
-  host._gwPartyRecapMap = recapMap;
-
-  createPartyRecapBaseLayer().addTo(recapMap);
-
-  const features = L.featureGroup().addTo(recapMap);
-  if (routePoints.length) {
-    L.polyline(routePoints, {
-      color: "rgba(20,17,15,0.72)",
-      weight: 8,
-      opacity: 0.88,
-      lineCap: "round",
-      lineJoin: "round",
-      interactive: false
-    }).addTo(features);
-
-    L.polyline(routePoints, {
-      color: "#f0b85a",
-      weight: 4,
-      opacity: 1,
-      lineCap: "round",
-      lineJoin: "round",
-      interactive: false
-    }).addTo(features);
-
-    L.circleMarker(routePoints[0], {
-      radius: 7,
-      color: "#201711",
-      weight: 2,
-      fillColor: "#72d89b",
-      fillOpacity: 1,
-      interactive: false
-    }).addTo(features);
-
-    L.circleMarker(routePoints[routePoints.length - 1], {
-      radius: 7,
-      color: "#201711",
-      weight: 2,
-      fillColor: "#ffe082",
-      fillOpacity: 1,
-      interactive: false
-    }).addTo(features);
-  }
-
-  observations.forEach(observation => {
-    L.circleMarker(observation.latlng, {
-      radius: 6,
-      color: "#201711",
-      weight: 2,
-      fillColor: "#f4e8cf",
-      fillOpacity: 1
-    })
-      .bindTooltip(esc(observation.label), { direction: "top" })
-      .addTo(features);
-  });
-
-  const bounds = features.getBounds();
-  if (bounds.isValid()) {
-    recapMap.fitBounds(bounds.pad(0.18), {
-      animate: false,
-      maxZoom: 18
+    return L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      maxZoom: 20,
+      attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
     });
   }
 
-  window.setTimeout(() => {
-    if (!host.isConnected || host._gwPartyRecapMap !== recapMap) return;
-    recapMap.invalidateSize({ animate: false });
+  function destroyPartyRecapMaps(root = document) {
+    root?.querySelectorAll?.(".gw-party-recap-map").forEach((host) => {
+      if (!host._gwPartyRecapMap) return;
+      host._gwPartyRecapMap.remove();
+      host._gwPartyRecapMap = null;
+    });
+  }
+
+  function renderPartyRecapMap(host, route = [], evidence = [], label = "Party route map") {
+    if (!host) return;
+
+    if (host._gwPartyRecapMap) {
+      host._gwPartyRecapMap.remove();
+      host._gwPartyRecapMap = null;
+    }
+
+    const routePoints = route
+      .map((point) => [Number(point.lat), Number(point.lng)])
+      .filter((point) => Number.isFinite(point[0]) && Number.isFinite(point[1]));
+    const observations = evidence
+      .filter((row) => Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lng)))
+      .map((row) => ({
+        latlng: [Number(row.lat), Number(row.lng)],
+        label: row.taxon || "Observation"
+      }));
+
+    if (!window.L || (!routePoints.length && !observations.length)) {
+      host.classList.add("is-empty");
+      host.innerHTML = `<div class="gw-muted">No mappable points recorded.</div>`;
+      return;
+    }
+
+    host.classList.remove("is-empty");
+    host.innerHTML = "";
+    host.setAttribute("role", "img");
+    host.setAttribute("aria-label", label);
+
+    const recapMap = L.map(host, {
+      zoomControl: false,
+      attributionControl: true,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      tap: false,
+      touchZoom: false
+    });
+    host._gwPartyRecapMap = recapMap;
+
+    createPartyRecapBaseLayer().addTo(recapMap);
+
+    const features = L.featureGroup().addTo(recapMap);
+    if (routePoints.length) {
+      L.polyline(routePoints, {
+        color: "rgba(20,17,15,0.72)",
+        weight: 8,
+        opacity: 0.88,
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: false
+      }).addTo(features);
+
+      L.polyline(routePoints, {
+        color: "#f0b85a",
+        weight: 4,
+        opacity: 1,
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: false
+      }).addTo(features);
+
+      L.circleMarker(routePoints[0], {
+        radius: 7,
+        color: "#201711",
+        weight: 2,
+        fillColor: "#72d89b",
+        fillOpacity: 1,
+        interactive: false
+      }).addTo(features);
+
+      L.circleMarker(routePoints[routePoints.length - 1], {
+        radius: 7,
+        color: "#201711",
+        weight: 2,
+        fillColor: "#ffe082",
+        fillOpacity: 1,
+        interactive: false
+      }).addTo(features);
+    }
+
+    observations.forEach((observation) => {
+      L.circleMarker(observation.latlng, {
+        radius: 6,
+        color: "#201711",
+        weight: 2,
+        fillColor: "#f4e8cf",
+        fillOpacity: 1
+      })
+        .bindTooltip(esc(observation.label), { direction: "top" })
+        .addTo(features);
+    });
+
+    const bounds = features.getBounds();
     if (bounds.isValid()) {
       recapMap.fitBounds(bounds.pad(0.18), {
         animate: false,
         maxZoom: 18
       });
     }
-  }, 120);
-}
 
-function drawPartyRecapMap(id) {
-  renderPartyRecapMap(
-    document.getElementById(`gwPartyRecapMap_${id}`),
-    loadPartyRoutes()[id] || [],
-    getPartyEvidenceRows(id),
-    "Party trip report route map"
-  );
-}
+    window.setTimeout(() => {
+      if (!host.isConnected || host._gwPartyRecapMap !== recapMap) return;
+      recapMap.invalidateSize({ animate: false });
+      if (bounds.isValid()) {
+        recapMap.fitBounds(bounds.pad(0.18), {
+          animate: false,
+          maxZoom: 18
+        });
+      }
+    }, 120);
+  }
+
+  function drawPartyRecapMap(id) {
+    renderPartyRecapMap(
+      document.getElementById(`gwPartyRecapMap_${id}`),
+      loadPartyRoutes()[id] || [],
+      getPartyEvidenceRows(id),
+      "Party trip report route map"
+    );
+  }
 
   function rerenderPartySheet() {
     const legacyBody = $("gwLegacyPartyUI");
@@ -1999,9 +2047,11 @@ function drawPartyRecapMap(id) {
         <label class="gw-party-label">Template</label>
         <select class="gw-party-input" id="gwPartyTemplateInput">
           <option value="">Choose a template</option>
-          ${PARTY_TEMPLATES.map(t => `
+          ${PARTY_TEMPLATES.map(
+            (t) => `
             <option value="${esc(t.key)}">${esc(t.emoji)} ${esc(t.label)}</option>
-          `).join("")}
+          `
+          ).join("")}
         </select>
 
         <div class="gw-party-setup-row">
@@ -2100,14 +2150,14 @@ function drawPartyRecapMap(id) {
     document.body.appendChild(root);
 
     function setLocationMode(modeName) {
-      root.querySelectorAll(".gw-party-location-option").forEach(label => {
+      root.querySelectorAll(".gw-party-location-option").forEach((label) => {
         const input = label.querySelector("input");
         const active = input?.value === modeName;
         label.classList.toggle("is-active", active);
         if (input) input.checked = active;
       });
 
-      root.querySelectorAll(".gw-party-location-panel").forEach(panel => {
+      root.querySelectorAll(".gw-party-location-panel").forEach((panel) => {
         panel.classList.toggle("is-active", panel.dataset.locationPanel === modeName);
       });
     }
@@ -2118,13 +2168,14 @@ function drawPartyRecapMap(id) {
       const coordEl = root.querySelector("#gwPartyLocationCoords");
       if (titleEl) titleEl.textContent = location?.label || "Selected location";
       if (coordEl) {
-        coordEl.textContent = Number.isFinite(Number(location?.lat)) && Number.isFinite(Number(location?.lng))
-          ? `${Number(location.lat).toFixed(6)}, ${Number(location.lng).toFixed(6)}`
-          : "Pick a saved location or choose a new coordinate.";
+        coordEl.textContent =
+          Number.isFinite(Number(location?.lat)) && Number.isFinite(Number(location?.lng))
+            ? `${Number(location.lat).toFixed(6)}, ${Number(location.lng).toFixed(6)}`
+            : "Pick a saved location or choose a new coordinate.";
       }
     }
 
-    root.querySelectorAll("input[name='gwPartyLocationMode']").forEach(input => {
+    root.querySelectorAll("input[name='gwPartyLocationMode']").forEach((input) => {
       input.addEventListener("change", () => setLocationMode(input.value));
     });
 
@@ -2144,21 +2195,21 @@ function drawPartyRecapMap(id) {
       });
     });
 
-    root.querySelector("#gwPartyTemplateInput")?.addEventListener("change", e => {
-        const t = PARTY_TEMPLATES.find(x => x.key === e.target.value);
-        if (!t) return;
+    root.querySelector("#gwPartyTemplateInput")?.addEventListener("change", (e) => {
+      const t = PARTY_TEMPLATES.find((x) => x.key === e.target.value);
+      if (!t) return;
 
-        root.querySelector("#gwPartyTitleInput").value = t.title;
-        root.querySelector("#gwPartyGoalInput").value = t.goalType;
-        root.querySelector("#gwPartyTargetInput").value = t.target;
-        root.querySelector("#gwPartyDurationInput").value = String(t.durationMinutes);
+      root.querySelector("#gwPartyTitleInput").value = t.title;
+      root.querySelector("#gwPartyGoalInput").value = t.goalType;
+      root.querySelector("#gwPartyTargetInput").value = t.target;
+      root.querySelector("#gwPartyDurationInput").value = String(t.durationMinutes);
     });
 
-    root.querySelectorAll("[data-party-close]").forEach(btn => {
+    root.querySelectorAll("[data-party-close]").forEach((btn) => {
       btn.onclick = () => root.remove();
     });
 
-    root.addEventListener("click", e => {
+    root.addEventListener("click", (e) => {
       if (e.target === root) root.remove();
     });
 
@@ -2169,53 +2220,54 @@ function drawPartyRecapMap(id) {
       const visibility = root.querySelector("#gwPartyVisibilityInput").value;
       const durationMinutes = root.querySelector("#gwPartyDurationInput").value;
       const startsAt = root.querySelector("#gwPartyStartInput")?.value;
-      const locationMode = root.querySelector("input[name='gwPartyLocationMode']:checked")?.value || "anywhere";
+      const locationMode =
+        root.querySelector("input[name='gwPartyLocationMode']:checked")?.value || "anywhere";
 
-    const form = {
-    mode,
-    title,
-    goalType,
-    target,
-    visibility,
-    durationMinutes,
-    startsAt,
-    locationMode,
-    locationUserId: locationMode === "user" ? "self" : null,
-    location: locationMode === "location" ? selectedPartyLocation : null
-    };
+      const form = {
+        mode,
+        title,
+        goalType,
+        target,
+        visibility,
+        durationMinutes,
+        startsAt,
+        locationMode,
+        locationUserId: locationMode === "user" ? "self" : null,
+        location: locationMode === "location" ? selectedPartyLocation : null
+      };
 
-    const locationCheck = resolvePartyLocationForStart(form);
-    if (!locationCheck.ok) {
-      toast(locationCheck.reason || "Choose a party location.");
-      return;
-    }
+      const locationCheck = resolvePartyLocationForStart(form);
+      if (!locationCheck.ok) {
+        toast(locationCheck.reason || "Choose a party location.");
+        return;
+      }
 
-    const p = createParty(form);
+      const p = createParty(form);
 
-    root.remove();
+      root.remove();
 
-    if (p?.id) {
-    openPartyCover(p.id);
-    }
+      if (p?.id) {
+        openPartyCover(p.id);
+      }
     };
   }
 
   function toDatetimeLocal(d) {
-    const pad = n => String(n).padStart(2, "0");
+    const pad = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   function formatDbPartyEvent(e) {
-  const type = e.event_type || "party event";
+    const type = e.event_type || "party event";
 
-  if (type === "party_created") return "Party created";
-  if (type === "player_joined") return "Player joined";
-  if (type === "player_left") return "Player left";
-  if (type === "party_ended") return "Party ended";
-  if (type === "evidence_counted") return "Observation counted";
+    if (type === "party_created") return "Party created";
+    if (type === "player_joined") return "Player joined";
+    if (type === "player_left") return "Player left";
+    if (type === "party_ended") return "Party ended";
+    if (type === "evidence_counted") return "Observation counted";
 
-  return type.replaceAll("_", " ");
-}
+    return type.replaceAll("_", " ");
+  }
 
   function clampPartyMeterPercent(value) {
     return Math.max(0, Math.min(100, Number(value) || 0));
@@ -2243,7 +2295,9 @@ function drawPartyRecapMap(id) {
   }
 
   function getPartyTimeMeter(party, nowMs = Date.now()) {
-    const startMs = Date.parse(party?.startsAt || party?.starts_at || party?.createdAt || party?.created_at || "");
+    const startMs = Date.parse(
+      party?.startsAt || party?.starts_at || party?.createdAt || party?.created_at || ""
+    );
     const durationMinutes = Number(party?.durationMinutes ?? party?.duration_minutes);
     const durationMs = durationMinutes * 60000;
 
@@ -2256,7 +2310,8 @@ function drawPartyRecapMap(id) {
     }
 
     const endedAtMs = Date.parse(party?.endedAt || party?.ended_at || party?.completedAt || "");
-    const isEnded = party?.mode === "ended" || party?.status === "ended" || Number.isFinite(endedAtMs);
+    const isEnded =
+      party?.mode === "ended" || party?.status === "ended" || Number.isFinite(endedAtMs);
     const plannedEndMs = startMs + durationMs;
 
     if (isEnded) {
@@ -2278,7 +2333,7 @@ function drawPartyRecapMap(id) {
 
     const elapsedMs = Math.max(0, nowMs - startMs);
     const remainingMs = Math.max(0, plannedEndMs - nowMs);
-    const percent = clampPartyMeterPercent(elapsedMs / durationMs * 100);
+    const percent = clampPartyMeterPercent((elapsedMs / durationMs) * 100);
 
     return {
       percent,
@@ -2288,14 +2343,9 @@ function drawPartyRecapMap(id) {
   }
 
   function getPartyGoalMeter(party) {
-    const progress = Math.max(
-      Number(party?.progress || 0),
-      getSharedPartyProgress(party?.id)
-    );
+    const progress = Math.max(Number(party?.progress || 0), getSharedPartyProgress(party?.id));
     const target = Math.max(0, Number(party?.target || 0));
-    const percent = target > 0
-      ? clampPartyMeterPercent(progress / target * 100)
-      : 0;
+    const percent = target > 0 ? clampPartyMeterPercent((progress / target) * 100) : 0;
 
     return {
       percent,
@@ -2392,13 +2442,12 @@ function drawPartyRecapMap(id) {
 
     const members = window.__gwState?.partyMembers || [];
     const events = window.__gwState?.partyEvents || [];
-    if (countEl) { countEl.textContent = `${members.length || 1} joined`; }
+    if (countEl) {
+      countEl.textContent = `${members.length || 1} joined`;
+    }
     if (progressEl) {
       const party = getParty(id);
-      progressEl.textContent = Math.max(
-        Number(party?.progress || 0),
-        getSharedPartyProgress(id)
-      );
+      progressEl.textContent = Math.max(Number(party?.progress || 0), getSharedPartyProgress(id));
     }
     refreshPartyCoverMeters(id);
 
@@ -2407,11 +2456,14 @@ function drawPartyRecapMap(id) {
       bindPartyMemberInspection(membersEl);
     }
 
-  if (activityEl) {
-    activityEl.innerHTML = events.length
-      ? `
+    if (activityEl) {
+      activityEl.innerHTML = events.length
+        ? `
         <div class="gw-party-activity-list">
-          ${events.slice(0, 8).map(e => `
+          ${events
+            .slice(0, 8)
+            .map(
+              (e) => `
             <div class="gw-party-activity-row">
               <span class="gw-party-activity-icon">
                 ${e.event_type === "player_joined" ? "👥" : e.event_type === "party_created" ? "🎉" : "•"}
@@ -2423,13 +2475,14 @@ function drawPartyRecapMap(id) {
                 <span class="gw-party-activity-time">${esc(formatWhen(e.created_at))}</span>
               </span>
             </div>
-          `).join("")}
+          `
+            )
+            .join("")}
         </div>
       `
-      : renderPartyActivityHtml(id, 6);
+        : renderPartyActivityHtml(id, 6);
+    }
   }
-}
-
 
   function openPartyCover(id) {
     injectStyles();
@@ -2446,18 +2499,22 @@ function drawPartyRecapMap(id) {
 
     const myPlayerId = window.GridWildAPI?.getPlayerId?.();
 
-    const myDbMember = (window.__gwState?.partyMembers || [])
-    .find(m => m.player_id === myPlayerId);
-    const isParticipant = joined || getPartyMembers(id)
-      .some(member => String(member.playerId || "") === String(myPlayerId || ""));
+    const myDbMember = (window.__gwState?.partyMembers || []).find(
+      (m) => m.player_id === myPlayerId
+    );
+    const isParticipant =
+      joined ||
+      getPartyMembers(id).some(
+        (member) => String(member.playerId || "") === String(myPlayerId || "")
+      );
     const chatCanSend = isParticipant && p.mode !== "ended" && p.status !== "ended";
 
     const canEndParty =
-    p.created_by === myPlayerId ||
-    myDbMember?.role === "leader" ||
-    myDbMember?.role === "owner" ||
-    myDbMember?.role === "creator";
-    
+      p.created_by === myPlayerId ||
+      myDbMember?.role === "leader" ||
+      myDbMember?.role === "owner" ||
+      myDbMember?.role === "creator";
+
     const root = document.createElement("div");
     root.className = "gw-party-backdrop";
     root.id = "gwPartyCoverRoot";
@@ -2567,58 +2624,57 @@ function drawPartyRecapMap(id) {
       onAttachmentOpen: closeCover
     });
 
-    root.querySelectorAll("[data-party-close]").forEach(btn => {
+    root.querySelectorAll("[data-party-close]").forEach((btn) => {
       btn.onclick = closeCover;
     });
 
-    root.addEventListener("click", e => {
+    root.addEventListener("click", (e) => {
       if (e.target === root) closeCover();
     });
 
     root.querySelector("#gwPartyJoinCoverBtn")?.addEventListener("click", () => {
-    closeCover();
-    joinParty(id);
+      closeCover();
+      joinParty(id);
     });
 
     root.querySelector("#gwPartyLeaveCoverBtn")?.addEventListener("click", () => {
-    closeCover();
-    leaveParty(id);
+      closeCover();
+      leaveParty(id);
     });
 
     root.querySelector("#gwPartySetActiveBtn")?.addEventListener("click", () => {
-    closeCover();
-    setActivePartyId(id);
-    toast("🟢 Party active");
+      closeCover();
+      setActivePartyId(id);
+      toast("🟢 Party active");
     });
-
   }
 
   function handlePartyReportFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const encoded = params.get("party_report");
+    const params = new URLSearchParams(window.location.search);
+    const encoded = params.get("party_report");
 
-  if (!encoded || window.__gwHandledPartyReportUrl) return;
-  window.__gwHandledPartyReportUrl = true;
+    if (!encoded || window.__gwHandledPartyReportUrl) return;
+    window.__gwHandledPartyReportUrl = true;
 
-  try {
-    const report = decodePartyReport(encoded);
-    openStaticPartyReport(report);
-  } catch (err) {
-    console.warn("Could not decode party report:", err);
-    alert("Could not open this GridWild party report.");
+    try {
+      const report = decodePartyReport(encoded);
+      openStaticPartyReport(report);
+    } catch (err) {
+      console.warn("Could not decode party report:", err);
+      alert("Could not open this GridWild party report.");
+    }
   }
-}
 
-function openStaticPartyReport(report) {
-  injectStyles();
+  function openStaticPartyReport(report) {
+    injectStyles();
 
-  const p = report.party || {};
-  const evidence = report.evidence || [];
+    const p = report.party || {};
+    const evidence = report.evidence || [];
 
-  const root = document.createElement("div");
-  root.className = "gw-party-backdrop";
+    const root = document.createElement("div");
+    root.className = "gw-party-backdrop";
 
-  root.innerHTML = `
+    root.innerHTML = `
     <div class="gw-party-cover gw-party-recap">
       <div class="gw-party-cover-art">
         <div class="gw-party-rune">📜</div>
@@ -2662,12 +2718,16 @@ function openStaticPartyReport(report) {
         ${
           evidence.length
             ? `<div class="gw-list">
-                ${evidence.map(e => `
+                ${evidence
+                  .map(
+                    (e) => `
                   <div class="gw-rowline">
                     <span>${esc(e.taxon || "Observation")}</span>
                     <span class="gw-muted">${esc(e.cellKey || "no cell")}</span>
                   </div>
-                `).join("")}
+                `
+                  )
+                  .join("")}
               </div>`
             : `<div class="gw-muted">No counted observations included.</div>`
         }
@@ -2679,28 +2739,28 @@ function openStaticPartyReport(report) {
     </div>
   `;
 
-  document.body.appendChild(root);
+    document.body.appendChild(root);
 
-  const closeReport = () => {
-    destroyPartyRecapMaps(root);
-    root.remove();
-  };
+    const closeReport = () => {
+      destroyPartyRecapMaps(root);
+      root.remove();
+    };
 
-  root.querySelectorAll("[data-party-close]").forEach(btn => {
-    btn.onclick = closeReport;
-  });
+    root.querySelectorAll("[data-party-close]").forEach((btn) => {
+      btn.onclick = closeReport;
+    });
 
-  setTimeout(() => drawStaticPartyReportMap(report), 50);
-}
+    setTimeout(() => drawStaticPartyReportMap(report), 50);
+  }
 
-function drawStaticPartyReportMap(report) {
-  renderPartyRecapMap(
-    document.getElementById("gwStaticPartyReportMap"),
-    report.route || [],
-    report.evidence || [],
-    "Shared party trip report route map"
-  );
-}
+  function drawStaticPartyReportMap(report) {
+    renderPartyRecapMap(
+      document.getElementById("gwStaticPartyReportMap"),
+      report.route || [],
+      report.evidence || [],
+      "Shared party trip report route map"
+    );
+  }
 
   function handleJoinFromUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -2730,200 +2790,200 @@ function drawStaticPartyReportMap(report) {
     return partyLayer;
   }
 
-function isPublicPartyVisibleOnMap(p) {
-  if (!p) return false;
-  if (p.visibility !== "public") return false;
-  if ((p.locationMode || p.location_mode || "anywhere") === "anywhere") return false;
-  const mapLatLng = getPartyMapLatLng(p);
-  if (!mapLatLng) return false;
-  if (p.status === "ended") return false;
+  function isPublicPartyVisibleOnMap(p) {
+    if (!p) return false;
+    if (p.visibility !== "public") return false;
+    if ((p.locationMode || p.location_mode || "anywhere") === "anywhere") return false;
+    const mapLatLng = getPartyMapLatLng(p);
+    if (!mapLatLng) return false;
+    if (p.status === "ended") return false;
 
-  return p.mode === "live" || p.mode === "upcoming" || p.mode === "scheduled";
-}
+    return p.mode === "live" || p.mode === "upcoming" || p.mode === "scheduled";
+  }
 
-function partyMapEmoji(p) {
-  if (p.mode === "upcoming" || p.mode === "scheduled") return "📅";
-  if (isJoined(p.id)) return "👥";
-  return "•";
-}
+  function partyMapEmoji(p) {
+    if (p.mode === "upcoming" || p.mode === "scheduled") return "📅";
+    if (isJoined(p.id)) return "👥";
+    return "•";
+  }
 
-function addPublicPartyMarker(layer, p) {
-  const activeId = getActivePartyId();
-  if (!isPublicPartyVisibleOnMap(p)) return;
-  if (p.id === activeId) return;
+  function addPublicPartyMarker(layer, p) {
+    const activeId = getActivePartyId();
+    if (!isPublicPartyVisibleOnMap(p)) return;
+    if (p.id === activeId) return;
 
-  const joined = isJoined(p.id);
-  const upcoming = p.mode === "upcoming" || p.mode === "scheduled";
+    const joined = isJoined(p.id);
+    const upcoming = p.mode === "upcoming" || p.mode === "scheduled";
 
-  const icon = L.divIcon({
-    className: [
-      "gw-party-public-marker",
-      joined ? "is-joined" : "",
-      upcoming ? "is-upcoming" : "is-live"
-    ].join(" "),
-    html: `
+    const icon = L.divIcon({
+      className: [
+        "gw-party-public-marker",
+        joined ? "is-joined" : "",
+        upcoming ? "is-upcoming" : "is-live"
+      ].join(" "),
+      html: `
       <div class="gw-party-public-marker-core">
         ${partyMapEmoji(p)}
       </div>
     `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16]
-  });
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
 
-  const mapLatLng = getPartyMapLatLng(p);
-  if (!mapLatLng) return;
+    const mapLatLng = getPartyMapLatLng(p);
+    if (!mapLatLng) return;
 
-  const marker = L.marker([mapLatLng.lat, mapLatLng.lng], {
-    icon,
-    pane: PANE,
-    interactive: true
-  });
-
-  marker.bindTooltip(
-    `${esc(p.title || "Party")}<br>${upcoming ? esc(formatWhen(p.startsAt)) : "Live now"} · ${Number(p.memberCount || 1)} joined`,
-    {
-      direction: "top",
-      offset: [0, -8],
-      opacity: 0.96
-    }
-  );
-
-  marker.on("click", () => openPartyCover(p.id));
-  marker.addTo(layer);
-}
-
-function addNearbyPublicPartyMarkers(layer) {
-  getAllParties()
-    .filter(isPublicPartyVisibleOnMap)
-    .forEach(p => addPublicPartyMarker(layer, p));
-}
-
-  function refreshMapBeacon() {
-  const layer = ensurePartyLayer();
-  if (!layer) return;
-
-  layer.clearLayers();
-
-  const activeId = getActivePartyId();
- addNearbyPublicPartyMarkers(layer);
- const p = activeId ? getParty(activeId) : null;
-  if (!p) return;
-
-  const route = loadPartyRoutes()[p.id] || [];
-  const routeLatLngs = route
-    .filter(pt => Number.isFinite(Number(pt.lat)) && Number.isFinite(Number(pt.lng)))
-    .map(pt => [Number(pt.lat), Number(pt.lng)]);
-
-  // ---------------------------------------------------------------------------
-  // Live route line
-  // ---------------------------------------------------------------------------
-  if (routeLatLngs.length >= 2) {
-    L.polyline(routeLatLngs, {
+    const marker = L.marker([mapLatLng.lat, mapLatLng.lng], {
+      icon,
       pane: PANE,
-      color: "#f0d18a",
-      weight: 5,
-      opacity: 0.92,
-      lineCap: "round",
-      lineJoin: "round",
-      interactive: false
-    }).addTo(layer);
-
-    L.polyline(routeLatLngs, {
-      pane: PANE,
-      color: "#1a1209",
-      weight: 9,
-      opacity: 0.35,
-      lineCap: "round",
-      lineJoin: "round",
-      interactive: false
-    }).addTo(layer);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Start / latest route points
-  // ---------------------------------------------------------------------------
-  if (routeLatLngs.length) {
-    L.circleMarker(routeLatLngs[0], {
-      pane: PANE,
-      radius: 6,
-      color: "#14110f",
-      weight: 2,
-      fillColor: "#9ee6bd",
-      fillOpacity: 0.95,
-      interactive: false
-    }).addTo(layer);
-
-    L.circleMarker(routeLatLngs[routeLatLngs.length - 1], {
-      pane: PANE,
-      radius: 7,
-      color: "#14110f",
-      weight: 2,
-      fillColor: "#ffe082",
-      fillOpacity: 0.95,
-      interactive: false
-    }).addTo(layer);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Counted observation dots
-  // ---------------------------------------------------------------------------
-  const evidence = getPartyEvidenceRows(p.id);
-
-  evidence.forEach(e => {
-    const lat = Number(e.lat);
-    const lng = Number(e.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-
-    const dot = L.circleMarker([lat, lng], {
-      pane: PANE,
-      radius: 7,
-      color: "#14110f",
-      weight: 2,
-      fillColor: "#f4e8cf",
-      fillOpacity: 0.98,
       interactive: true
     });
 
-    dot.bindTooltip(esc(e.taxon || "Party observation"), {
-      direction: "top",
-      offset: [0, -6],
-      opacity: 0.95
-    });
+    marker.bindTooltip(
+      `${esc(p.title || "Party")}<br>${upcoming ? esc(formatWhen(p.startsAt)) : "Live now"} · ${Number(p.memberCount || 1)} joined`,
+      {
+        direction: "top",
+        offset: [0, -8],
+        opacity: 0.96
+      }
+    );
 
-    dot.addTo(layer);
-  });
-
-  // ---------------------------------------------------------------------------
-  // Main active-party beacon
-  // Prefer latest GPS route point; fall back to party start/center.
-  // ---------------------------------------------------------------------------
-  let beaconLatLng = null;
-
-  if (routeLatLngs.length) {
-    beaconLatLng = routeLatLngs[routeLatLngs.length - 1];
-  } else if ((p.locationMode || p.location_mode || "anywhere") !== "anywhere") {
-    const mapLatLng = getPartyMapLatLng(p);
-    if (mapLatLng) beaconLatLng = [mapLatLng.lat, mapLatLng.lng];
+    marker.on("click", () => openPartyCover(p.id));
+    marker.addTo(layer);
   }
 
-  if (!beaconLatLng) return;
+  function addNearbyPublicPartyMarkers(layer) {
+    getAllParties()
+      .filter(isPublicPartyVisibleOnMap)
+      .forEach((p) => addPublicPartyMarker(layer, p));
+  }
 
-  const icon = L.divIcon({
-    className: "gw-party-marker",
-    html: `<div class="gw-party-marker-core">🎉</div>`,
-    iconSize: [42, 42],
-    iconAnchor: [21, 21]
-  });
+  function refreshMapBeacon() {
+    const layer = ensurePartyLayer();
+    if (!layer) return;
 
-  const marker = L.marker(beaconLatLng, {
-    icon,
-    pane: PANE,
-    interactive: true
-  });
+    layer.clearLayers();
 
-  marker.on("click", () => openPartyCover(p.id));
-  marker.addTo(layer);
-}
+    const activeId = getActivePartyId();
+    addNearbyPublicPartyMarkers(layer);
+    const p = activeId ? getParty(activeId) : null;
+    if (!p) return;
+
+    const route = loadPartyRoutes()[p.id] || [];
+    const routeLatLngs = route
+      .filter((pt) => Number.isFinite(Number(pt.lat)) && Number.isFinite(Number(pt.lng)))
+      .map((pt) => [Number(pt.lat), Number(pt.lng)]);
+
+    // ---------------------------------------------------------------------------
+    // Live route line
+    // ---------------------------------------------------------------------------
+    if (routeLatLngs.length >= 2) {
+      L.polyline(routeLatLngs, {
+        pane: PANE,
+        color: "#f0d18a",
+        weight: 5,
+        opacity: 0.92,
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: false
+      }).addTo(layer);
+
+      L.polyline(routeLatLngs, {
+        pane: PANE,
+        color: "#1a1209",
+        weight: 9,
+        opacity: 0.35,
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: false
+      }).addTo(layer);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Start / latest route points
+    // ---------------------------------------------------------------------------
+    if (routeLatLngs.length) {
+      L.circleMarker(routeLatLngs[0], {
+        pane: PANE,
+        radius: 6,
+        color: "#14110f",
+        weight: 2,
+        fillColor: "#9ee6bd",
+        fillOpacity: 0.95,
+        interactive: false
+      }).addTo(layer);
+
+      L.circleMarker(routeLatLngs[routeLatLngs.length - 1], {
+        pane: PANE,
+        radius: 7,
+        color: "#14110f",
+        weight: 2,
+        fillColor: "#ffe082",
+        fillOpacity: 0.95,
+        interactive: false
+      }).addTo(layer);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Counted observation dots
+    // ---------------------------------------------------------------------------
+    const evidence = getPartyEvidenceRows(p.id);
+
+    evidence.forEach((e) => {
+      const lat = Number(e.lat);
+      const lng = Number(e.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+      const dot = L.circleMarker([lat, lng], {
+        pane: PANE,
+        radius: 7,
+        color: "#14110f",
+        weight: 2,
+        fillColor: "#f4e8cf",
+        fillOpacity: 0.98,
+        interactive: true
+      });
+
+      dot.bindTooltip(esc(e.taxon || "Party observation"), {
+        direction: "top",
+        offset: [0, -6],
+        opacity: 0.95
+      });
+
+      dot.addTo(layer);
+    });
+
+    // ---------------------------------------------------------------------------
+    // Main active-party beacon
+    // Prefer latest GPS route point; fall back to party start/center.
+    // ---------------------------------------------------------------------------
+    let beaconLatLng = null;
+
+    if (routeLatLngs.length) {
+      beaconLatLng = routeLatLngs[routeLatLngs.length - 1];
+    } else if ((p.locationMode || p.location_mode || "anywhere") !== "anywhere") {
+      const mapLatLng = getPartyMapLatLng(p);
+      if (mapLatLng) beaconLatLng = [mapLatLng.lat, mapLatLng.lng];
+    }
+
+    if (!beaconLatLng) return;
+
+    const icon = L.divIcon({
+      className: "gw-party-marker",
+      html: `<div class="gw-party-marker-core">🎉</div>`,
+      iconSize: [42, 42],
+      iconAnchor: [21, 21]
+    });
+
+    const marker = L.marker(beaconLatLng, {
+      icon,
+      pane: PANE,
+      interactive: true
+    });
+
+    marker.on("click", () => openPartyCover(p.id));
+    marker.addTo(layer);
+  }
 
   function toast(message) {
     injectStyles();
@@ -2945,111 +3005,114 @@ function addNearbyPublicPartyMarkers(layer) {
   }
 
   function getActiveParty() {
-  const id = getActivePartyId();
-  return id ? getParty(id) : null;
-}
+    const id = getActivePartyId();
+    return id ? getParty(id) : null;
+  }
 
-function isPartyHudCollapsed() {
-  return localStorage.getItem(PARTY_HUD_COLLAPSED_KEY) === "1";
-}
+  function isPartyHudCollapsed() {
+    return localStorage.getItem(PARTY_HUD_COLLAPSED_KEY) === "1";
+  }
 
-function setPartyHudCollapsed(value) {
-  localStorage.setItem(PARTY_HUD_COLLAPSED_KEY, value ? "1" : "0");
-  renderActivePartyHud();
-}
+  function setPartyHudCollapsed(value) {
+    localStorage.setItem(PARTY_HUD_COLLAPSED_KEY, value ? "1" : "0");
+    renderActivePartyHud();
+  }
 
-function partyRaiseChevronSvg() {
-  return `
+  function partyRaiseChevronSvg() {
+    return `
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="m6.5 15.5 5.5-5.5 5.5 5.5"></path>
       <path d="m7.5 10.5 4.5-4.5 4.5 4.5"></path>
     </svg>
   `;
-}
-
-function positionPartyHudRaiseTab() {
-  if (!partyHudRaiseTab) return;
-  const navBtn = document.getElementById("btnCommunity");
-  const nav = document.querySelector(".gw-bottomnav");
-  if (!navBtn || !nav) return;
-
-  const btnRect = navBtn.getBoundingClientRect();
-  const navRect = nav.getBoundingClientRect();
-  partyHudRaiseTab.style.setProperty("--gw-raise-tab-left", `${btnRect.left + btnRect.width / 2}px`);
-  partyHudRaiseTab.style.setProperty("--gw-raise-tab-bottom", `${Math.max(0, window.innerHeight - navRect.top - 10)}px`);
-}
-
-function bindPartyRaiseTabPositioning() {
-  if (partyRaiseTabPositionBound) return;
-  partyRaiseTabPositionBound = true;
-  window.addEventListener("resize", positionPartyHudRaiseTab);
-  window.addEventListener("orientationchange", () => setTimeout(positionPartyHudRaiseTab, 150));
-}
-
-function renderPartyHudRaiseTab(show) {
-  if (!show) {
-    removePartyHudRaiseTab();
-    return;
   }
 
-  if (!partyHudRaiseTab) {
-    partyHudRaiseTab = document.createElement("button");
-    partyHudRaiseTab.className = "gw-hud-raise-tab gw-hud-raise-tab-party";
-    partyHudRaiseTab.type = "button";
-    partyHudRaiseTab.setAttribute("aria-label", "Expand party banner");
-    partyHudRaiseTab.title = "Expand party banner";
-    partyHudRaiseTab.innerHTML = partyRaiseChevronSvg();
-    partyHudRaiseTab.addEventListener("click", () => setPartyHudCollapsed(false));
-    document.body.appendChild(partyHudRaiseTab);
-    bindPartyRaiseTabPositioning();
-  }
+  function positionPartyHudRaiseTab() {
+    if (!partyHudRaiseTab) return;
+    const navBtn = document.getElementById("btnCommunity");
+    const nav = document.querySelector(".gw-bottomnav");
+    if (!navBtn || !nav) return;
 
-  positionPartyHudRaiseTab();
-}
-
-function removePartyHudRaiseTab() {
-  if (!partyHudRaiseTab) return;
-  partyHudRaiseTab.remove();
-  partyHudRaiseTab = null;
-}
-
-function renderActivePartyHud() {
-  injectStyles();
-
-  const existing = document.getElementById("gwActivePartyHud");
-  const party = getActiveParty();
-
-  if (!party) {
-    existing?.remove();
-    removePartyHudRaiseTab();
-    return;
-  }
-
-  if (isPartyHudCollapsed()) {
-    existing?.remove();
-    renderPartyHudRaiseTab(true);
-    return;
-  }
-
-  renderPartyHudRaiseTab(false);
-
-  const route = loadPartyRoutes()[party.id] || [];
-  const evidenceCount = Math.max(
-  Number(party.progress || 0),
-  getSharedPartyProgress(party.id)
+    const btnRect = navBtn.getBoundingClientRect();
+    const navRect = nav.getBoundingClientRect();
+    partyHudRaiseTab.style.setProperty(
+      "--gw-raise-tab-left",
+      `${btnRect.left + btnRect.width / 2}px`
     );
-  const target = Math.max(1, Number(party.target || 1));
-  const pct = Math.max(0, Math.min(100, evidenceCount / target * 100));
-
-  let hud = existing;
-  if (!hud) {
-    hud = document.createElement("div");
-    hud.id = "gwActivePartyHud";
-    hud.className = "gw-active-party-hud";
-    document.body.appendChild(hud);
+    partyHudRaiseTab.style.setProperty(
+      "--gw-raise-tab-bottom",
+      `${Math.max(0, window.innerHeight - navRect.top - 10)}px`
+    );
   }
 
-  hud.innerHTML = `
+  function bindPartyRaiseTabPositioning() {
+    if (partyRaiseTabPositionBound) return;
+    partyRaiseTabPositionBound = true;
+    window.addEventListener("resize", positionPartyHudRaiseTab);
+    window.addEventListener("orientationchange", () => setTimeout(positionPartyHudRaiseTab, 150));
+  }
+
+  function renderPartyHudRaiseTab(show) {
+    if (!show) {
+      removePartyHudRaiseTab();
+      return;
+    }
+
+    if (!partyHudRaiseTab) {
+      partyHudRaiseTab = document.createElement("button");
+      partyHudRaiseTab.className = "gw-hud-raise-tab gw-hud-raise-tab-party";
+      partyHudRaiseTab.type = "button";
+      partyHudRaiseTab.setAttribute("aria-label", "Expand party banner");
+      partyHudRaiseTab.title = "Expand party banner";
+      partyHudRaiseTab.innerHTML = partyRaiseChevronSvg();
+      partyHudRaiseTab.addEventListener("click", () => setPartyHudCollapsed(false));
+      document.body.appendChild(partyHudRaiseTab);
+      bindPartyRaiseTabPositioning();
+    }
+
+    positionPartyHudRaiseTab();
+  }
+
+  function removePartyHudRaiseTab() {
+    if (!partyHudRaiseTab) return;
+    partyHudRaiseTab.remove();
+    partyHudRaiseTab = null;
+  }
+
+  function renderActivePartyHud() {
+    injectStyles();
+
+    const existing = document.getElementById("gwActivePartyHud");
+    const party = getActiveParty();
+
+    if (!party) {
+      existing?.remove();
+      removePartyHudRaiseTab();
+      return;
+    }
+
+    if (isPartyHudCollapsed()) {
+      existing?.remove();
+      renderPartyHudRaiseTab(true);
+      return;
+    }
+
+    renderPartyHudRaiseTab(false);
+
+    const route = loadPartyRoutes()[party.id] || [];
+    const evidenceCount = Math.max(Number(party.progress || 0), getSharedPartyProgress(party.id));
+    const target = Math.max(1, Number(party.target || 1));
+    const pct = Math.max(0, Math.min(100, (evidenceCount / target) * 100));
+
+    let hud = existing;
+    if (!hud) {
+      hud = document.createElement("div");
+      hud.id = "gwActivePartyHud";
+      hud.className = "gw-active-party-hud";
+      document.body.appendChild(hud);
+    }
+
+    hud.innerHTML = `
     <button class="gw-active-party-main" id="gwActivePartyOpenBtn" type="button">
       <div class="gw-active-party-topline">
         <span class="gw-active-party-dot">🎉</span>
@@ -3072,27 +3135,27 @@ function renderActivePartyHud() {
     </div>
   `;
 
-  hud.querySelector("#gwActivePartyOpenBtn")?.addEventListener("click", () => {
-    openPartyCover(party.id);
-  });
+    hud.querySelector("#gwActivePartyOpenBtn")?.addEventListener("click", () => {
+      openPartyCover(party.id);
+    });
 
-  hud.querySelector("#gwActivePartyCollapseBtn")?.addEventListener("click", () => {
-    setPartyHudCollapsed(true);
-  });
+    hud.querySelector("#gwActivePartyCollapseBtn")?.addEventListener("click", () => {
+      setPartyHudCollapsed(true);
+    });
 
-  hud.querySelector("#gwActivePartyRecapBtn")?.addEventListener("click", () => {
-    openPartyRecap(party.id);
-  });
+    hud.querySelector("#gwActivePartyRecapBtn")?.addEventListener("click", () => {
+      openPartyRecap(party.id);
+    });
 
-  hud.querySelector("#gwActivePartyEndBtn")?.addEventListener("click", () => {
-    endParty(party.id);
-  });
-}
+    hud.querySelector("#gwActivePartyEndBtn")?.addEventListener("click", () => {
+      endParty(party.id);
+    });
+  }
 
-function scheduleActivePartyHudRender() {
-  window.clearTimeout(window.__gwActivePartyHudTimer);
-  window.__gwActivePartyHudTimer = window.setTimeout(renderActivePartyHud, 40);
-}
+  function scheduleActivePartyHudRender() {
+    window.clearTimeout(window.__gwActivePartyHudTimer);
+    window.__gwActivePartyHudTimer = window.setTimeout(renderActivePartyHud, 40);
+  }
 
   function injectStyles() {
     if ($("gwPartyStyles")) return;
@@ -4008,14 +4071,13 @@ function scheduleActivePartyHudRender() {
     document.head.appendChild(style);
   }
 
-
   window.addEventListener("gwDraftObservationsChanged", () => {
-  scanDraftsForActiveParty();
-    });
+    scanDraftsForActiveParty();
+  });
 
-    window.addEventListener("gwPartyEvidenceChanged", () => {
+  window.addEventListener("gwPartyEvidenceChanged", () => {
     refreshMapBeacon();
-    });
+  });
 
   window.addEventListener("gwPartiesChanged", () => {
     refreshMapBeacon();
@@ -4031,9 +4093,9 @@ function scheduleActivePartyHudRender() {
     scheduleActivePartyHudRender();
   });
 
-    window.addEventListener("gwPartiesChanged", scheduleActivePartyHudRender);
-    window.addEventListener("gwPartyEvidenceChanged", scheduleActivePartyHudRender);
-    window.addEventListener("gwActivePartyChanged", scheduleActivePartyHudRender);
+  window.addEventListener("gwPartiesChanged", scheduleActivePartyHudRender);
+  window.addEventListener("gwPartyEvidenceChanged", scheduleActivePartyHudRender);
+  window.addEventListener("gwActivePartyChanged", scheduleActivePartyHudRender);
 
   function initPartyAfterPageLoad() {
     setTimeout(() => {
@@ -4050,69 +4112,68 @@ function scheduleActivePartyHudRender() {
     window.addEventListener("load", initPartyAfterPageLoad, { once: true });
   }
 
+  function getDraftPartyMatchStatus(draft) {
+    const party = getActiveParty();
 
-function getDraftPartyMatchStatus(draft) {
-  const party = getActiveParty();
+    if (!party) {
+      return {
+        hasActiveParty: false,
+        status: "none",
+        label: "No active party",
+        reason: "Start or join a party to score this observation."
+      };
+    }
 
-  if (!party) {
-    return {
-      hasActiveParty: false,
-      status: "none",
-      label: "No active party",
-      reason: "Start or join a party to score this observation."
-    };
-  }
+    const evidenceKey = `${party.id}::${draft?.id}`;
+    const evidence = loadPartyEvidence();
+    const alreadyCounted = evidence[evidenceKey]?.status === "counted";
 
-  const evidenceKey = `${party.id}::${draft?.id}`;
-  const evidence = loadPartyEvidence();
-  const alreadyCounted = evidence[evidenceKey]?.status === "counted";
+    if (alreadyCounted) {
+      return {
+        hasActiveParty: true,
+        party,
+        status: "counted",
+        label: `Counted for ${party.title}`,
+        reason: "This draft has already been counted for the active party."
+      };
+    }
 
-  if (alreadyCounted) {
+    if (!draftHasUsableEvidence(draft)) {
+      return {
+        hasActiveParty: true,
+        party,
+        status: "blocked",
+        label: `Active party: ${party.title}`,
+        reason: "Needs at least one photo before it can count."
+      };
+    }
+
+    if (!partyGoalMatchesDraft(party, draft)) {
+      return {
+        hasActiveParty: true,
+        party,
+        status: "blocked",
+        label: `Active party: ${party.title}`,
+        reason: `Taxon does not match party goal: ${party.goalLabel || "party objective"}.`
+      };
+    }
+
     return {
       hasActiveParty: true,
       party,
-      status: "counted",
-      label: `Counted for ${party.title}`,
-      reason: "This draft has already been counted for the active party."
+      status: "will_count",
+      label: `Will count for ${party.title}`,
+      reason: party.linkedQuestTitle
+        ? `Also linked to quest: ${party.linkedQuestTitle}.`
+        : "This draft matches the active party objective."
     };
   }
 
-  if (!draftHasUsableEvidence(draft)) {
-    return {
-      hasActiveParty: true,
-      party,
-      status: "blocked",
-      label: `Active party: ${party.title}`,
-      reason: "Needs at least one photo before it can count."
-    };
-  }
-
-  if (!partyGoalMatchesDraft(party, draft)) {
-    return {
-      hasActiveParty: true,
-      party,
-      status: "blocked",
-      label: `Active party: ${party.title}`,
-      reason: `Taxon does not match party goal: ${party.goalLabel || "party objective"}.`
-    };
-  }
-
-  return {
-    hasActiveParty: true,
-    party,
-    status: "will_count",
-    label: `Will count for ${party.title}`,
-    reason: party.linkedQuestTitle
-      ? `Also linked to quest: ${party.linkedQuestTitle}.`
-      : "This draft matches the active party objective."
-  };
-}
-
-    function renderDraftPartyChipHtml(draft) {
+  function renderDraftPartyChipHtml(draft) {
     const s = getDraftPartyMatchStatus(draft);
 
     if (!s.hasActiveParty) {
-        return `
+      return `
         <div class="gw-obs-party-chip muted">
             <div class="gw-obs-party-chip-title">🎉 No active party</div>
             <div class="gw-obs-party-chip-sub">${esc(s.reason)}</div>
@@ -4121,14 +4182,9 @@ function getDraftPartyMatchStatus(draft) {
     }
 
     const cls =
-        s.status === "counted" ? "counted" :
-        s.status === "will_count" ? "will-count" :
-        "blocked";
+      s.status === "counted" ? "counted" : s.status === "will_count" ? "will-count" : "blocked";
 
-    const icon =
-        s.status === "counted" ? "✅" :
-        s.status === "will_count" ? "🎉" :
-        "⚠️";
+    const icon = s.status === "counted" ? "✅" : s.status === "will_count" ? "🎉" : "⚠️";
 
     return `
         <div class="gw-obs-party-chip ${cls}">
@@ -4136,8 +4192,8 @@ function getDraftPartyMatchStatus(draft) {
         <div class="gw-obs-party-chip-sub">${esc(s.reason)}</div>
         </div>
     `;
-    }
-    window.GridWildParty = {
+  }
+  window.GridWildParty = {
     renderSheetHtml,
     bindSheetControls,
     openPartyCreateModal,
@@ -4217,6 +4273,5 @@ function getDraftPartyMatchStatus(draft) {
     renderPartyMembersHtml,
     renderPartyActivityHtml,
     refreshOpenCover
-    };
-
+  };
 })();

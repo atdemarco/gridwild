@@ -1,12 +1,9 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest, httpError } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-exports.handler = async function(event) {
+exports.handler = async function (event) {
   try {
     await authorizePlayerRequest(supabase, event);
     const body = JSON.parse(event.body || "{}");
@@ -24,9 +21,7 @@ exports.handler = async function(event) {
     if (!survey) throw httpError(404, "Survey not found.");
 
     const isOwner = !!player_id && survey.owner_player_id === player_id;
-    const isLinkVisible =
-      survey.public_mode === "public" ||
-      survey.public_mode === "unlisted";
+    const isLinkVisible = survey.public_mode === "public" || survey.public_mode === "unlisted";
 
     if (!isOwner && !isLinkVisible) {
       throw httpError(403, "This survey is private.");

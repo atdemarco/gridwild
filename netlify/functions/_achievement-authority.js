@@ -11,9 +11,8 @@ async function recordVerifiedObservation(supabase, options = {}) {
   const observedAt = observationDate(observation);
   const now = new Date().toISOString();
 
-  const { error: observationError } = await supabase
-    .from("gridwild_verified_observations")
-    .upsert({
+  const { error: observationError } = await supabase.from("gridwild_verified_observations").upsert(
+    {
       player_id: options.playerId,
       obs_id: String(observation.id),
       inat_user_id: Number(options.inatUser?.id),
@@ -32,9 +31,11 @@ async function recordVerifiedObservation(supabase, options = {}) {
       photo_count: Array.isArray(observation?.photos) ? observation.photos.length : 0,
       verified_at: now,
       updated_at: now
-    }, {
+    },
+    {
       onConflict: "player_id,obs_id"
-    });
+    }
+  );
 
   if (observationError) throw observationError;
 

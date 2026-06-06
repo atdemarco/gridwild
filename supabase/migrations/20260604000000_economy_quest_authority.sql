@@ -208,7 +208,7 @@ begin
     raise exception 'Player not found.';
   end if;
 
-  if p_source not in ('manual', 'today', 'onboarding', 'local_niche') then
+  if p_source not in ('manual', 'today', 'onboarding', 'local_niche', 'patch') then
     raise exception 'Quest source is not allowed.';
   end if;
 
@@ -256,6 +256,9 @@ begin
   if p_source = 'local_niche' and v_count >= 3 then
     raise exception 'Daily local-niche quest issuance limit reached.';
   end if;
+  if p_source = 'patch' and v_count >= 5 then
+    raise exception 'Daily patch quest issuance limit reached.';
+  end if;
   if p_source = 'manual' and v_count >= 20 then
     raise exception 'Daily manual quest issuance limit reached.';
   end if;
@@ -273,6 +276,7 @@ begin
     when 'onboarding' then 100
     when 'today' then least(250, greatest(0, coalesce(p_reward_wildpoints, 0)))
     when 'local_niche' then least(200, greatest(0, coalesce(p_reward_wildpoints, 0)))
+    when 'patch' then least(150, greatest(0, coalesce(p_reward_wildpoints, 0)))
     else 0
   end;
 
@@ -763,6 +767,8 @@ begin
       then least(100, greatest(0, coalesce(v_quest.reward_wildpoints, 0)))
     when v_quest.source = 'local_niche'
       then least(200, greatest(0, coalesce(v_quest.reward_wildpoints, 0)))
+    when v_quest.source = 'patch'
+      then least(150, greatest(0, coalesce(v_quest.reward_wildpoints, 0)))
     else 0
   end;
 

@@ -12,10 +12,7 @@ const {
   requireNotBlocked
 } = require("./_player-interactions");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function tableHint(err) {
   return interactionTableHint({ message: accountTableHint(err) });
@@ -62,27 +59,31 @@ async function grantPartyMembership(partyId, joiningPlayerId, eventPlayerId) {
 
   const { data: member, error: memberError } = await supabase
     .from("party_members")
-    .upsert({
-      party_id: partyId,
-      player_id: joiningPlayerId,
-      role: "member"
-    }, {
-      onConflict: "party_id,player_id"
-    })
+    .upsert(
+      {
+        party_id: partyId,
+        player_id: joiningPlayerId,
+        role: "member"
+      },
+      {
+        onConflict: "party_id,player_id"
+      }
+    )
     .select("*")
     .single();
 
   if (memberError) throw memberError;
 
-  const stateResult = await supabase
-    .from("player_state")
-    .upsert({
+  const stateResult = await supabase.from("player_state").upsert(
+    {
       player_id: joiningPlayerId,
       active_party_id: partyId,
       updated_at: new Date().toISOString()
-    }, {
+    },
+    {
       onConflict: "player_id"
-    });
+    }
+  );
 
   if (stateResult.error) throw stateResult.error;
 
@@ -239,11 +240,12 @@ exports.handler = async function (event) {
       }
     }
 
-    const interaction = response === "accept"
-      ? await acceptInteraction(row)
-      : response === "decline"
-        ? await declineInteraction(row)
-        : await dismissInteraction(row);
+    const interaction =
+      response === "accept"
+        ? await acceptInteraction(row)
+        : response === "decline"
+          ? await declineInteraction(row)
+          : await dismissInteraction(row);
 
     return {
       statusCode: 200,

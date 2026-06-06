@@ -8,7 +8,7 @@
     trailMode: "corridor",
     neighborMode: 4,
     pass1Threshold: 0.45,
-    pass2Threshold: 0.50,
+    pass2Threshold: 0.5,
     pass3Threshold: 0.55,
     minCellCount: 3,
     pass2NeighborhoodSize: 5,
@@ -57,7 +57,11 @@
     t = nowMs();
     const partitions = window.GridWildNichePartition.runThreePassPartitions(graph, opts);
     markTiming(timings, "partitionMs", t);
-    warnings.push(...partitions.pass1.warnings, ...partitions.pass2.warnings, ...partitions.pass3.warnings);
+    warnings.push(
+      ...partitions.pass1.warnings,
+      ...partitions.pass2.warnings,
+      ...partitions.pass3.warnings
+    );
 
     const result = {
       cells,

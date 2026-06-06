@@ -8,10 +8,7 @@ const OFFLINE_GRACE_MS = 5 * 60 * 1000;
 const DEFAULT_RADIUS_M = 5000;
 const MAX_RADIUS_M = 50000;
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function tableHint(err) {
   const message = accountTableHint(err);
@@ -31,15 +28,13 @@ function clampRadius(value) {
 }
 
 function haversineMeters(aLat, aLng, bLat, bLng) {
-  const toRad = (deg) => Number(deg) * Math.PI / 180;
+  const toRad = (deg) => (Number(deg) * Math.PI) / 180;
   const r = 6371000;
   const dLat = toRad(bLat - aLat);
   const dLng = toRad(bLng - aLng);
   const lat1 = toRad(aLat);
   const lat2 = toRad(bLat);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * r * Math.asin(Math.sqrt(h));
 }
 
@@ -60,7 +55,7 @@ exports.handler = async function (event) {
 
     const radiusM = clampRadius(body.radius_m);
     const latDelta = radiusM / 111320;
-    const lngDelta = radiusM / Math.max(1, 111320 * Math.cos(lat * Math.PI / 180));
+    const lngDelta = radiusM / Math.max(1, 111320 * Math.cos((lat * Math.PI) / 180));
     const nowMs = Date.now();
     const onlineSince = new Date(nowMs - ONLINE_TIMEOUT_MS).toISOString();
     const offlineSince = new Date(nowMs - OFFLINE_GRACE_MS).toISOString();
@@ -87,21 +82,22 @@ exports.handler = async function (event) {
 
         const lastSeenMs = Date.parse(row.last_seen_at || "");
         const lastLogoutMs = Date.parse(row.last_logout_at || "");
-        const isOnline = row.status === "online" &&
+        const isOnline =
+          row.status === "online" &&
           Number.isFinite(lastSeenMs) &&
           nowMs - lastSeenMs <= ONLINE_TIMEOUT_MS;
-        const isOffline = row.status === "offline" &&
+        const isOffline =
+          row.status === "offline" &&
           Number.isFinite(lastLogoutMs) &&
           nowMs - lastLogoutMs <= OFFLINE_GRACE_MS;
 
-        return (isOnline || isOffline) &&
-          haversineMeters(lat, lng, rowLat, rowLng) <= radiusM;
+        return (isOnline || isOffline) && haversineMeters(lat, lng, rowLat, rowLng) <= radiusM;
       })
       .slice(0, 50);
 
     const candidatePlayerIds = rows.map((row) => row.player_id);
     if (candidatePlayerIds.length) {
-      const blockIds = [playerId, ...candidatePlayerIds].map(id => String(id));
+      const blockIds = [playerId, ...candidatePlayerIds].map((id) => String(id));
       const blocksResult = await supabase
         .from("player_blocks")
         .select("blocker_player_id, blocked_player_id")
@@ -118,7 +114,7 @@ exports.handler = async function (event) {
         if (blocked === String(playerId)) blockedPresenceIds.add(blocker);
       });
 
-      rows = rows.filter(row => !blockedPresenceIds.has(String(row.player_id)));
+      rows = rows.filter((row) => !blockedPresenceIds.has(String(row.player_id)));
     }
 
     const playerIds = rows.map((row) => row.player_id);
@@ -141,7 +137,9 @@ exports.handler = async function (event) {
         .in("player_id", playerIds);
 
       if (equipmentResult.error) throw equipmentResult.error;
-      equipmentByPlayerId = new Map((equipmentResult.data || []).map((row) => [row.player_id, row]));
+      equipmentByPlayerId = new Map(
+        (equipmentResult.data || []).map((row) => [row.player_id, row])
+      );
 
       const stateResult = await supabase
         .from("player_state")
@@ -150,8 +148,8 @@ exports.handler = async function (event) {
 
       if (stateResult.error) throw stateResult.error;
 
-      const stateRows = (stateResult.data || []).filter(row => row.active_party_id);
-      const partyIds = [...new Set(stateRows.map(row => row.active_party_id).filter(Boolean))];
+      const stateRows = (stateResult.data || []).filter((row) => row.active_party_id);
+      const partyIds = [...new Set(stateRows.map((row) => row.active_party_id).filter(Boolean))];
 
       if (partyIds.length) {
         const partiesResult = await supabase

@@ -1,14 +1,8 @@
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
-const {
-  requirePlayerSession,
-  revokeGuestSessions
-} = require("./_gridwild-player-session");
+const { requirePlayerSession, revokeGuestSessions } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const ACCOUNT_TABLE = "gridwild_accounts";
 const ITERATIONS = 210000;
@@ -62,7 +56,8 @@ exports.handler = async function (event) {
       return {
         statusCode: 400,
         body: JSON.stringify({
-          error: "Choose a username 3-24 characters long using letters, numbers, underscores, or hyphens."
+          error:
+            "Choose a username 3-24 characters long using letters, numbers, underscores, or hyphens."
         })
       };
     }
@@ -106,7 +101,9 @@ exports.handler = async function (event) {
       if (linked.data) {
         return {
           statusCode: 409,
-          body: JSON.stringify({ error: "This explorer is already attached to a GridWild account." })
+          body: JSON.stringify({
+            error: "This explorer is already attached to a GridWild account."
+          })
         };
       }
     }

@@ -3,10 +3,7 @@ const { authorizePlayerRequest } = require("./_gridwild-player-session");
 const { applyPartyTiming } = require("./_party-duration");
 const { requirePartyAccess } = require("./_party-access");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
@@ -45,9 +42,7 @@ exports.handler = async function (event) {
         party_id,
         lat: latNum,
         lng: lngNum,
-        accuracy_meters: Number.isFinite(Number(accuracy_meters))
-          ? Number(accuracy_meters)
-          : null
+        accuracy_meters: Number.isFinite(Number(accuracy_meters)) ? Number(accuracy_meters) : null
       })
       .select("*")
       .single();

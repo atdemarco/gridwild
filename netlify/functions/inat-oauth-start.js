@@ -3,7 +3,7 @@ exports.handler = async () => {
     client_id: process.env.INAT_CLIENT_ID,
     redirect_uri: process.env.INAT_REDIRECT_URI,
     response_type: "code",
-    scope: "write",
+    scope: "write"
   });
 
   return {

@@ -20,11 +20,13 @@ function interactionTableHint(err) {
 }
 
 function cleanText(value, maxLength = 240) {
-  return String(value || "").trim().slice(0, maxLength);
+  return String(value || "")
+    .trim()
+    .slice(0, maxLength);
 }
 
 function uniq(values = []) {
-  return [...new Set(values.filter(Boolean).map(value => String(value)))];
+  return [...new Set(values.filter(Boolean).map((value) => String(value)))];
 }
 
 async function fetchPlayersById(supabase, ids = []) {
@@ -37,7 +39,7 @@ async function fetchPlayersById(supabase, ids = []) {
     .in("id", playerIds);
 
   if (error) throw error;
-  return new Map((data || []).map(player => [String(player.id), player]));
+  return new Map((data || []).map((player) => [String(player.id), player]));
 }
 
 async function fetchPartiesById(supabase, ids = []) {
@@ -50,12 +52,12 @@ async function fetchPartiesById(supabase, ids = []) {
     .in("id", partyIds);
 
   if (error) throw error;
-  return new Map((data || []).map(party => [String(party.id), party]));
+  return new Map((data || []).map((party) => [String(party.id), party]));
 }
 
 async function findBlocksBetween(supabase, leftPlayerId, rightPlayerId) {
   if (!leftPlayerId || !rightPlayerId) return [];
-  const ids = [leftPlayerId, rightPlayerId].map(value => String(value));
+  const ids = [leftPlayerId, rightPlayerId].map((value) => String(value));
 
   const { data, error } = await supabase
     .from(BLOCKS_TABLE)
@@ -65,8 +67,8 @@ async function findBlocksBetween(supabase, leftPlayerId, rightPlayerId) {
     .limit(2);
 
   if (error) throw error;
-  return (data || []).filter(row =>
-    String(row.blocker_player_id) !== String(row.blocked_player_id)
+  return (data || []).filter(
+    (row) => String(row.blocker_player_id) !== String(row.blocked_player_id)
   );
 }
 
@@ -74,8 +76,8 @@ async function requireNotBlocked(supabase, senderPlayerId, recipientPlayerId) {
   const blocks = await findBlocksBetween(supabase, senderPlayerId, recipientPlayerId);
   if (!blocks.length) return;
 
-  const senderBlockedTarget = blocks.some(row =>
-    String(row.blocker_player_id) === String(senderPlayerId)
+  const senderBlockedTarget = blocks.some(
+    (row) => String(row.blocker_player_id) === String(senderPlayerId)
   );
 
   throw httpError(
@@ -122,12 +124,11 @@ function decorateInteraction(row, maps = {}, viewerPlayerId = null) {
 
   const sender = maps.playersById?.get?.(String(row.sender_player_id)) || null;
   const recipient = maps.playersById?.get?.(String(row.recipient_player_id)) || null;
-  const party = row.party_id
-    ? maps.partiesById?.get?.(String(row.party_id)) || null
-    : null;
-  const otherPlayerId = String(row.sender_player_id) === String(viewerPlayerId)
-    ? row.recipient_player_id
-    : row.sender_player_id;
+  const party = row.party_id ? maps.partiesById?.get?.(String(row.party_id)) || null : null;
+  const otherPlayerId =
+    String(row.sender_player_id) === String(viewerPlayerId)
+      ? row.recipient_player_id
+      : row.sender_player_id;
 
   return {
     ...row,

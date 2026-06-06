@@ -4,7 +4,7 @@
 (function () {
   const DEFAULTS = {
     pass1Threshold: 0.45,
-    pass2Threshold: 0.50,
+    pass2Threshold: 0.5,
     pass3Threshold: 0.55,
     minCellCount: 3
   };
@@ -49,14 +49,18 @@
     const nCells = cells.length;
     return {
       nCells,
-      meanObservations: mean(cells.map(cell => cell.metrics?.observations)),
-      meanRichness: mean(cells.map(cell => cell.metrics?.richness)),
-      meanDistanceToPathM: mean(cells.map(cell => cell.osm?.nearestPathDistanceM).filter(Number.isFinite)),
-      dominantLanduse: dominant(cells.map(cell => cell.osm?.landuseClass)),
-      percentPathAdjacent: nCells ? cells.filter(cell => cell.osm?.isPathAdjacent).length / nCells : 0,
-      percentWetEdge: nCells ? cells.filter(cell => cell.osm?.isWetEdge).length / nCells : 0,
-      percentInsideWood: nCells ? cells.filter(cell => cell.osm?.insideWood).length / nCells : 0,
-      percentInsideGrass: nCells ? cells.filter(cell => cell.osm?.insideGrass).length / nCells : 0
+      meanObservations: mean(cells.map((cell) => cell.metrics?.observations)),
+      meanRichness: mean(cells.map((cell) => cell.metrics?.richness)),
+      meanDistanceToPathM: mean(
+        cells.map((cell) => cell.osm?.nearestPathDistanceM).filter(Number.isFinite)
+      ),
+      dominantLanduse: dominant(cells.map((cell) => cell.osm?.landuseClass)),
+      percentPathAdjacent: nCells
+        ? cells.filter((cell) => cell.osm?.isPathAdjacent).length / nCells
+        : 0,
+      percentWetEdge: nCells ? cells.filter((cell) => cell.osm?.isWetEdge).length / nCells : 0,
+      percentInsideWood: nCells ? cells.filter((cell) => cell.osm?.insideWood).length / nCells : 0,
+      percentInsideGrass: nCells ? cells.filter((cell) => cell.osm?.insideGrass).length / nCells : 0
     };
   }
 
@@ -75,28 +79,32 @@
       east = Math.max(east, e);
     }
 
-    return [[south, west], [north, east]];
+    return [
+      [south, west],
+      [north, east]
+    ];
   }
 
   function centroidForCells(cells) {
     return {
-      lat: mean(cells.map(cell => cell.center?.lat)),
-      lng: mean(cells.map(cell => cell.center?.lng))
+      lat: mean(cells.map((cell) => cell.center?.lat)),
+      lng: mean(cells.map((cell) => cell.center?.lng))
     };
   }
 
   function evidenceForRegion(cells, boundaryEdges) {
     const stats = regionStats(cells);
     const evidence = [];
-    if (stats.dominantLanduse !== "unclassified") evidence.push(`dominant land-use: ${stats.dominantLanduse}`);
+    if (stats.dominantLanduse !== "unclassified")
+      evidence.push(`dominant land-use: ${stats.dominantLanduse}`);
     if (stats.percentPathAdjacent >= 0.45) evidence.push("path-adjacent corridor");
-    if (stats.percentWetEdge >= 0.30) evidence.push("wet-edge cluster");
-    if (stats.percentInsideWood >= 0.30) evidence.push("wood/forest context");
-    if (stats.percentInsideGrass >= 0.30) evidence.push("grass/meadow context");
+    if (stats.percentWetEdge >= 0.3) evidence.push("wet-edge cluster");
+    if (stats.percentInsideWood >= 0.3) evidence.push("wood/forest context");
+    if (stats.percentInsideGrass >= 0.3) evidence.push("grass/meadow context");
 
     const cutReasons = boundaryEdges
-      .filter(edge => edge.cut)
-      .map(edge => {
+      .filter((edge) => edge.cut)
+      .map((edge) => {
         if ((edge.reasons?.roadBarrierPenalty || 0) > 0.2) return "split by road barrier";
         if ((edge.reasons?.waterBarrierPenalty || 0) > 0.2) return "split by water barrier";
         if ((edge.reasons?.gradientPenalty || 0) > 0.14) return "split by signal gradient";
@@ -114,16 +122,18 @@
   }
 
   function buildRegions(graph, componentIds, pass, cutEdges) {
-    const cellById = new Map(graph.nodes.map(node => [node.id, node.cell]));
+    const cellById = new Map(graph.nodes.map((node) => [node.id, node.cell]));
     const regions = [];
     let index = 1;
 
     for (const ids of componentIds) {
-      const cells = ids.map(id => cellById.get(id)).filter(Boolean);
+      const cells = ids.map((id) => cellById.get(id)).filter(Boolean);
       if (!cells.length) continue;
 
       const cellIdSet = new Set(ids);
-      const boundaryEdges = cutEdges.filter(edge => cellIdSet.has(edge.a) || cellIdSet.has(edge.b));
+      const boundaryEdges = cutEdges.filter(
+        (edge) => cellIdSet.has(edge.a) || cellIdSet.has(edge.b)
+      );
       const stats = regionStats(cells);
 
       regions.push({
@@ -146,7 +156,7 @@
     const opts = { ...DEFAULTS, ...options };
     const weightKey = passWeightKey(pass);
     const threshold = thresholdForPass(pass, opts);
-    const adjacency = new Map(graph.nodes.map(node => [node.id, []]));
+    const adjacency = new Map(graph.nodes.map((node) => [node.id, []]));
     const cutEdges = [];
 
     for (const edge of graph.edges) {
@@ -186,9 +196,12 @@
       components.push(ids);
     }
 
-    const minCellCount = Math.max(1, Math.floor(Number(opts.minCellCount) || DEFAULTS.minCellCount));
-    const large = components.filter(ids => ids.length >= minCellCount);
-    const tiny = components.filter(ids => ids.length < minCellCount);
+    const minCellCount = Math.max(
+      1,
+      Math.floor(Number(opts.minCellCount) || DEFAULTS.minCellCount)
+    );
+    const large = components.filter((ids) => ids.length >= minCellCount);
+    const tiny = components.filter((ids) => ids.length < minCellCount);
     const mergedComponents = large.length ? large : components;
 
     if (large.length && tiny.length) {

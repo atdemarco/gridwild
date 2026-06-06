@@ -97,18 +97,13 @@
   function markObserved(key, options = {}) {
     if (!key) return null;
 
-    const {
-      timestamp = nowMs(),
-      obsCountIncrement = 1,
-      speciesCountIncrement = 0
-    } = options;
+    const { timestamp = nowMs(), obsCountIncrement = 1, speciesCountIncrement = 0 } = options;
 
     const cell = ensureCell(key);
 
     cell.observed_at = Math.max(Number(cell.observed_at) || 0, timestamp);
     cell.obs_count = Math.max(0, Number(cell.obs_count) || 0) + obsCountIncrement;
-    cell.species_count =
-      Math.max(0, Number(cell.species_count) || 0) + speciesCountIncrement;
+    cell.species_count = Math.max(0, Number(cell.species_count) || 0) + speciesCountIncrement;
 
     saveStore();
     return cell;
@@ -129,12 +124,12 @@
     // correct location???
     const recentINatObservedAt = Number(cell.recent_inat_observed_at) || 0;
     if (recentINatObservedAt > 0) {
-    return {
+      return {
         state: "documented",
         reveal: 1,
         fogOpacity: 0,
         cell
-    };
+      };
     }
 
     const observedAt = Number(cell.observed_at) || 0;
@@ -178,9 +173,7 @@
     }
 
     // Fade from mostly clear to foggy between 24h and 7d
-    const fadeT =
-      (age - SURVEY_FULL_STRENGTH_MS) /
-      (SURVEY_TTL_MS - SURVEY_FULL_STRENGTH_MS);
+    const fadeT = (age - SURVEY_FULL_STRENGTH_MS) / (SURVEY_TTL_MS - SURVEY_FULL_STRENGTH_MS);
 
     const reveal = Math.max(0, Math.min(1, 1 - fadeT));
     const fogOpacity = 0.08 + 0.28 * fadeT;
@@ -222,52 +215,44 @@
   }
 
   function clearMovementExploration() {
-  for (const [key, cell] of Object.entries(cellStore)) {
-    delete cell.visited_at;
+    for (const [key, cell] of Object.entries(cellStore)) {
+      delete cell.visited_at;
 
-    const hasObserved =
-      Number(cell.observed_at) > 0 ||
-      Number(cell.recent_inat_observed_at) > 0;
+      const hasObserved = Number(cell.observed_at) > 0 || Number(cell.recent_inat_observed_at) > 0;
 
-    if (!hasObserved) {
-      delete cellStore[key];
+      if (!hasObserved) {
+        delete cellStore[key];
+      }
     }
-  }
 
-  saveStore();
-}
+    saveStore();
+  }
 
   function clearRecentINatObserved() {
-  for (const cell of Object.values(cellStore)) {
-    delete cell.recent_inat_observed_at;
-    delete cell.recent_inat_obs_count;
+    for (const cell of Object.values(cellStore)) {
+      delete cell.recent_inat_observed_at;
+      delete cell.recent_inat_obs_count;
+    }
+    saveStore();
   }
-  saveStore();
-}
 
-function markRecentINatObserved(key, options = {}) {
-  if (!key) return null;
+  function markRecentINatObserved(key, options = {}) {
+    if (!key) return null;
 
-  const {
-    timestamp = nowMs(),
-    obsCountIncrement = 1
-  } = options;
+    const { timestamp = nowMs(), obsCountIncrement = 1 } = options;
 
-  const cell = ensureCell(key);
+    const cell = ensureCell(key);
 
-  cell.recent_inat_observed_at = Math.max(
-    Number(cell.recent_inat_observed_at) || 0,
-    timestamp
-  );
+    cell.recent_inat_observed_at = Math.max(Number(cell.recent_inat_observed_at) || 0, timestamp);
 
-  cell.recent_inat_obs_count =
-    Math.max(0, Number(cell.recent_inat_obs_count) || 0) + obsCountIncrement;
+    cell.recent_inat_obs_count =
+      Math.max(0, Number(cell.recent_inat_obs_count) || 0) + obsCountIncrement;
 
-  saveStore();
-  return cell;
-}
+    saveStore();
+    return cell;
+  }
 
-    window.GridWildFog = {
+  window.GridWildFog = {
     markVisited,
     markObserved,
     markRecentINatObserved,
@@ -279,9 +264,8 @@ function markRecentINatObserved(key, options = {}) {
     getStats,
     clearAllFogProgress,
     constants: {
-        SURVEY_TTL_MS,
-        SURVEY_FULL_STRENGTH_MS
+      SURVEY_TTL_MS,
+      SURVEY_FULL_STRENGTH_MS
     }
-    };
-
+  };
 })();

@@ -4,10 +4,7 @@ const { requireChatRoomAccess } = require("./_chat-room-access");
 const { interactionTableHint } = require("./_player-interactions");
 
 const CHAT_TABLE = "chat_messages";
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function tableHint(err) {
   const message = accountTableHint(err);
@@ -49,7 +46,7 @@ exports.handler = async function (event) {
 
     if (error) throw error;
 
-    const playerIds = [...new Set((rows || []).map(row => row.sender_player_id).filter(Boolean))];
+    const playerIds = [...new Set((rows || []).map((row) => row.sender_player_id).filter(Boolean))];
     let playersById = new Map();
 
     if (playerIds.length) {
@@ -59,15 +56,13 @@ exports.handler = async function (event) {
         .in("id", playerIds);
 
       if (playersError) throw playersError;
-      playersById = new Map((players || []).map(player => [player.id, player]));
+      playersById = new Map((players || []).map((player) => [player.id, player]));
     }
 
-    const messages = (rows || [])
-      .reverse()
-      .map(row => ({
-        ...row,
-        sender: playersById.get(row.sender_player_id) || null
-      }));
+    const messages = (rows || []).reverse().map((row) => ({
+      ...row,
+      sender: playersById.get(row.sender_player_id) || null
+    }));
 
     return {
       statusCode: 200,

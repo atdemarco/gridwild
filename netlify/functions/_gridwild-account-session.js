@@ -3,7 +3,10 @@ const crypto = require("crypto");
 const ACCOUNT_TABLE = "gridwild_accounts";
 
 function hashToken(token) {
-  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(String(token || ""))
+    .digest("hex");
 }
 
 function httpError(statusCode, message) {

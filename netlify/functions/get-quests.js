@@ -1,10 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const { authorizePlayerRequest } = require("./_gridwild-player-session");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {
@@ -16,7 +13,8 @@ exports.handler = async function (event) {
 
     const { data, error } = await supabase
       .from("quests")
-.select(`
+      .select(
+        `
   *,
   player_quests (
     id,
@@ -42,7 +40,8 @@ exports.handler = async function (event) {
     verification_status,
     payload
   )
-`)
+`
+      )
       .eq("is_active", true)
       .eq("created_by", player_id)
       .eq("player_quests.player_id", player_id)

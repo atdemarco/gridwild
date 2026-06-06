@@ -8,10 +8,7 @@ const {
 const { MAX_QUEST_REWARD } = require("./_quest-reward");
 const { issueQuest, questIssuanceKey } = require("./_quest-authority");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 exports.handler = async function (event) {
   try {

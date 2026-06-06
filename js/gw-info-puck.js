@@ -151,10 +151,13 @@
     if (!puck) return;
 
     try {
-      localStorage.setItem(POS_KEY, JSON.stringify({
-        left: Number.parseFloat(puck.style.left) || DEFAULT_POS.left,
-        top: Number.parseFloat(puck.style.top) || DEFAULT_POS.top
-      }));
+      localStorage.setItem(
+        POS_KEY,
+        JSON.stringify({
+          left: Number.parseFloat(puck.style.left) || DEFAULT_POS.left,
+          top: Number.parseFloat(puck.style.top) || DEFAULT_POS.top
+        })
+      );
     } catch {}
   }
 
@@ -179,9 +182,12 @@
     current = null;
     if (puck) puck.hidden = true;
     item.beforeRestore?.();
-    window.setTimeout(() => {
-      item.restore?.();
-    }, item.beforeRestore ? 80 : 0);
+    window.setTimeout(
+      () => {
+        item.restore?.();
+      },
+      item.beforeRestore ? 80 : 0
+    );
   }
 
   function dismiss() {
@@ -208,7 +214,7 @@
 
     let drag = null;
 
-    puck.addEventListener("pointerdown", evt => {
+    puck.addEventListener("pointerdown", (evt) => {
       if (evt.pointerType === "mouse" && evt.button !== 0) return;
       if (evt.target.closest(".gw-info-puck-close")) return;
 
@@ -227,7 +233,7 @@
       puck.setPointerCapture?.(evt.pointerId);
     });
 
-    puck.addEventListener("pointermove", evt => {
+    puck.addEventListener("pointermove", (evt) => {
       if (!drag || drag.pointerId !== evt.pointerId) return;
 
       const dx = evt.clientX - drag.startX;
@@ -243,7 +249,7 @@
       });
     });
 
-    puck.addEventListener("pointerup", evt => {
+    puck.addEventListener("pointerup", (evt) => {
       if (!drag || drag.pointerId !== evt.pointerId) return;
 
       suppressNextClick = drag.moved;
@@ -253,14 +259,14 @@
       savePosition();
     });
 
-    puck.addEventListener("pointercancel", evt => {
+    puck.addEventListener("pointercancel", (evt) => {
       if (drag?.pointerId === evt.pointerId) {
         drag = null;
         puck.classList.remove("is-dragging");
       }
     });
 
-    puck.addEventListener("click", evt => {
+    puck.addEventListener("click", (evt) => {
       if (evt.target.closest(".gw-info-puck-close")) return;
 
       if (suppressNextClick) {
@@ -271,7 +277,7 @@
       restore();
     });
 
-    puck.querySelector(".gw-info-puck-close")?.addEventListener("click", evt => {
+    puck.querySelector(".gw-info-puck-close")?.addEventListener("click", (evt) => {
       evt.preventDefault();
       evt.stopPropagation();
       dismiss();

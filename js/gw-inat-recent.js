@@ -23,7 +23,7 @@
   const photoBackfillPending = new Map();
 
   function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   function isoDateDaysAgo(daysBack) {
@@ -52,7 +52,9 @@
       if (!raw) return emptyCache();
 
       if (raw.length > LEGACY_MIGRATION_MAX_CHARS) {
-        console.warn("GridWild recent observation localStorage cache is large; skipping parse and moving to IndexedDB-only cache.");
+        console.warn(
+          "GridWild recent observation localStorage cache is large; skipping parse and moving to IndexedDB-only cache."
+        );
         localStorage.removeItem(STORAGE_KEY);
         return emptyCache();
       }
@@ -84,9 +86,9 @@
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed?.observations)
         ? {
-          meta: stripObservationsFromMetadata(parsed),
-          observations: parsed.observations
-        }
+            meta: stripObservationsFromMetadata(parsed),
+            observations: parsed.observations
+          }
         : null;
     } catch {
       return null;
@@ -114,16 +116,17 @@
 
       const cacheUser = recentObsCache.username || username;
       const rows = await window.GridWildObservationStore.getAll(cacheUser);
-      const needsCompaction = rows.some(row =>
-        row?.username ||
-        row?.uri ||
-        row?.photo_url ||
-        row?.photo_square_url ||
-        row?.photo_medium_url ||
-        row?.u ||
-        !("acc" in row) ||
-        !("d" in row) ||
-        !("t" in row)
+      const needsCompaction = rows.some(
+        (row) =>
+          row?.username ||
+          row?.uri ||
+          row?.photo_url ||
+          row?.photo_square_url ||
+          row?.photo_medium_url ||
+          row?.u ||
+          !("acc" in row) ||
+          !("d" in row) ||
+          !("t" in row)
       );
       const compactedRows = needsCompaction ? compactObservationPhotos(rows) : rows;
 
@@ -136,13 +139,18 @@
         observations: sortObservationsNewestFirst(compactedRows)
       };
 
-      window.dispatchEvent(new CustomEvent("gwRecentINatUpdated", {
-        detail: recentObsCache
-      }));
+      window.dispatchEvent(
+        new CustomEvent("gwRecentINatUpdated", {
+          detail: recentObsCache
+        })
+      );
 
       return recentObsCache;
     } catch (err) {
-      console.warn("GridWild IndexedDB observation cache unavailable; using in-memory recent observations.", err);
+      console.warn(
+        "GridWild IndexedDB observation cache unavailable; using in-memory recent observations.",
+        err
+      );
       return recentObsCache;
     }
   }
@@ -164,26 +172,26 @@
   }
 
   function isQuotaError(err) {
-    return err?.name === "QuotaExceededError" ||
+    return (
+      err?.name === "QuotaExceededError" ||
       err?.code === 22 ||
-      String(err?.message || "").includes("quota");
+      String(err?.message || "").includes("quota")
+    );
   }
 
   function asSquarePhotoUrl(url) {
     const raw = String(url || "").trim();
-    return raw
-      ? raw.replace(/\/(small|medium|large|original)\./, "/square.")
-      : null;
+    return raw ? raw.replace(/\/(small|medium|large|original)\./, "/square.") : null;
   }
 
   function getSmallObservationPhotoUrl(obs) {
     return asSquarePhotoUrl(
       obs?.ps ||
-      obs?.photo_square_url ||
-      obs?.photo_url ||
-      obs?.photo_medium_url ||
-      obs?.photos?.[0]?.url ||
-      ""
+        obs?.photo_square_url ||
+        obs?.photo_url ||
+        obs?.photo_medium_url ||
+        obs?.photos?.[0]?.url ||
+        ""
     );
   }
 
@@ -224,7 +232,10 @@
       lat: Number(unpacked.lat),
       lng: Number(unpacked.lng),
       acc: Number(unpacked.accuracy) || null,
-      d: String(unpacked.observed_on || unpacked.time_observed_at || unpacked.created_at || "").slice(0, 10) || null,
+      d:
+        String(
+          unpacked.observed_on || unpacked.time_observed_at || unpacked.created_at || ""
+        ).slice(0, 10) || null,
       t: unpacked.time_observed_at || null,
       sci: unpacked.scientific_name || "",
       com: unpacked.common_name || "",
@@ -239,18 +250,17 @@
   }
 
   function compactObservationPhotos(observations, keepCount = PHOTO_CACHE_KEEP_COUNT) {
-    return sortObservationsNewestFirst(observations)
-      .map((obs, index) => {
-        return compactObservationPayload(obs, {
-          includePhoto: index < keepCount
-        });
+    return sortObservationsNewestFirst(observations).map((obs, index) => {
+      return compactObservationPayload(obs, {
+        includePhoto: index < keepCount
       });
+    });
   }
 
   function hasOlderCachedPhotos(observations) {
     return sortObservationsNewestFirst(observations)
       .slice(PHOTO_CACHE_KEEP_COUNT)
-      .some(obs => obs?.ps || obs?.photo_url || obs?.photo_square_url || obs?.photo_medium_url);
+      .some((obs) => obs?.ps || obs?.photo_url || obs?.photo_square_url || obs?.photo_medium_url);
   }
 
   async function compactExistingPhotoCache() {
@@ -308,22 +318,21 @@
     return m ? m[1] : "";
   }
 
-function getPhotoUrls(obs) {
-  const url = obs?.photos?.[0]?.url || "";
+  function getPhotoUrls(obs) {
+    const url = obs?.photos?.[0]?.url || "";
 
-  if (!url) {
+    if (!url) {
+      return {
+        square: null,
+        medium: null
+      };
+    }
+
     return {
-      square: null,
-      medium: null
+      square: url,
+      medium: url.replace(/square\./, "medium.")
     };
   }
-
-  return {
-    square: url,
-    medium: url.replace(/square\./, "medium.")
-  };
-}
-
 
   function normalizeObs(obs, options = {}) {
     const includePhotos = options.includePhotos !== false;
@@ -335,14 +344,9 @@ function getPhotoUrls(obs) {
     const commonName = taxon.preferred_common_name || "";
     const genusName = getGenusNameFromTaxon(taxon);
 
-    const displayName =
-      commonName ||
-      scientificName ||
-      "Unknown taxon";
+    const displayName = commonName || scientificName || "Unknown taxon";
 
-    const photos = includePhotos
-      ? getPhotoUrls(obs)
-      : { square: null, medium: null };
+    const photos = includePhotos ? getPhotoUrls(obs) : { square: null, medium: null };
 
     return {
       id: obs.id,
@@ -371,7 +375,7 @@ function getPhotoUrls(obs) {
 
       // Extra display / filtering fields
       quality_grade: obs?.quality_grade || null,
-      created_at: obs?.created_at || null,
+      created_at: obs?.created_at || null
     };
   }
 
@@ -392,12 +396,14 @@ function getPhotoUrls(obs) {
   }
 
   function normalizeLatLngBounds(bounds) {
-    const sw = typeof bounds?.getSouthWest === "function"
-      ? bounds.getSouthWest()
-      : bounds?.sw || bounds?.southWest || bounds;
-    const ne = typeof bounds?.getNorthEast === "function"
-      ? bounds.getNorthEast()
-      : bounds?.ne || bounds?.northEast || bounds;
+    const sw =
+      typeof bounds?.getSouthWest === "function"
+        ? bounds.getSouthWest()
+        : bounds?.sw || bounds?.southWest || bounds;
+    const ne =
+      typeof bounds?.getNorthEast === "function"
+        ? bounds.getNorthEast()
+        : bounds?.ne || bounds?.northEast || bounds;
 
     const swlat = Number(bounds?.swlat ?? bounds?.south ?? sw?.lat);
     const swlng = Number(bounds?.swlng ?? bounds?.west ?? sw?.lng ?? sw?.lon);
@@ -416,10 +422,10 @@ function getPhotoUrls(obs) {
 
   function getOldestCachedObservedDay() {
     const dated = getRecentObservations()
-      .map(obs => obs?.observed_on || obs?.time_observed_at || obs?.created_at || "")
+      .map((obs) => obs?.observed_on || obs?.time_observed_at || obs?.created_at || "")
       .filter(Boolean)
-      .map(raw => String(raw).slice(0, 10))
-      .filter(day => /^\d{4}-\d{2}-\d{2}$/.test(day))
+      .map((raw) => String(raw).slice(0, 10))
+      .filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day))
       .sort();
 
     return dated[0] || null;
@@ -440,7 +446,7 @@ function getPhotoUrls(obs) {
   }
 
   async function fetchObservationPhotoBatch(ids) {
-    const cleaned = [...new Set((ids || []).map(id => String(id || "").trim()).filter(Boolean))];
+    const cleaned = [...new Set((ids || []).map((id) => String(id || "").trim()).filter(Boolean))];
     if (!cleaned.length) return new Map();
 
     const url = new URL("https://api.inaturalist.org/v1/observations");
@@ -473,7 +479,7 @@ function getPhotoUrls(obs) {
       : [];
 
     let changed = 0;
-    const merged = rows.map(row => {
+    const merged = rows.map((row) => {
       const id = String(row?.id || "");
       const thumb = photoById.get(id);
       if (!id || !thumb || getSmallObservationPhotoUrl(row)) return row;
@@ -495,14 +501,19 @@ function getPhotoUrls(obs) {
 
     if (options.persist !== false && window.GridWildObservationStore) {
       const username = recentObsCache.username || window.__gwUser?.username || "";
-      await window.GridWildObservationStore.replaceForUser(username, compactObservationPhotos(merged));
+      await window.GridWildObservationStore.replaceForUser(
+        username,
+        compactObservationPhotos(merged)
+      );
     }
 
     saveMetadata();
 
-    window.dispatchEvent(new CustomEvent("gwRecentINatUpdated", {
-      detail: recentObsCache
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwRecentINatUpdated", {
+        detail: recentObsCache
+      })
+    );
 
     return changed;
   }
@@ -510,11 +521,13 @@ function getPhotoUrls(obs) {
   async function ensureObservationPhotos(ids, options = {}) {
     await storeReadyPromise;
 
-    const uniqueIds = [...new Set((ids || []).map(id => String(id || "").trim()).filter(Boolean))];
+    const uniqueIds = [
+      ...new Set((ids || []).map((id) => String(id || "").trim()).filter(Boolean))
+    ];
     if (!uniqueIds.length) return { requested: 0, fetched: 0, updated: 0 };
 
-    const obsById = new Map(getRecentObservations().map(obs => [String(obs.id), obs]));
-    const missingIds = uniqueIds.filter(id => {
+    const obsById = new Map(getRecentObservations().map((obs) => [String(obs.id), obs]));
+    const missingIds = uniqueIds.filter((id) => {
       const obs = obsById.get(id);
       return obs && !getSmallObservationPhotoUrl(obs);
     });
@@ -523,10 +536,8 @@ function getPhotoUrls(obs) {
       return { requested: uniqueIds.length, fetched: 0, updated: 0 };
     }
 
-    const pending = missingIds
-      .map(id => photoBackfillPending.get(id))
-      .filter(Boolean);
-    const toFetch = missingIds.filter(id => !photoBackfillPending.has(id));
+    const pending = missingIds.map((id) => photoBackfillPending.get(id)).filter(Boolean);
+    const toFetch = missingIds.filter((id) => !photoBackfillPending.has(id));
 
     const fetchTasks = [];
     for (let i = 0; i < toFetch.length; i += PHOTO_BACKFILL_BATCH_SIZE) {
@@ -537,9 +548,12 @@ function getPhotoUrls(obs) {
       })();
 
       for (const id of batch) {
-        photoBackfillPending.set(id, task.finally(() => {
-          photoBackfillPending.delete(id);
-        }));
+        photoBackfillPending.set(
+          id,
+          task.finally(() => {
+            photoBackfillPending.delete(id);
+          })
+        );
       }
 
       fetchTasks.push(task);
@@ -550,7 +564,7 @@ function getPhotoUrls(obs) {
       return sum + (result.status === "fulfilled" ? Number(result.value) || 0 : 0);
     }, 0);
 
-    const failed = settled.find(result => result.status === "rejected");
+    const failed = settled.find((result) => result.status === "rejected");
     if (failed && options.throwOnError) throw failed.reason;
 
     return {
@@ -599,9 +613,7 @@ function getPhotoUrls(obs) {
   async function refreshRecentObservations(username) {
     await storeReadyPromise;
 
-    username = (username || window.__gwUser?.username || "andrew2285")
-      .trim()
-      .replace(/^@+/, "");
+    username = (username || window.__gwUser?.username || "andrew2285").trim().replace(/^@+/, "");
 
     const d1 = isoDateDaysAgo(DAYS_BACK);
 
@@ -712,9 +724,11 @@ function getPhotoUrls(obs) {
       pct: 100
     });
 
-    window.dispatchEvent(new CustomEvent("gwRecentINatUpdated", {
-      detail: recentObsCache
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwRecentINatUpdated", {
+        detail: recentObsCache
+      })
+    );
 
     return recentObsCache;
   }
@@ -727,7 +741,7 @@ function getPhotoUrls(obs) {
       .replace(/^@+/, "");
 
     const existing = getRecentObservations();
-    const existingIds = new Set(existing.map(obs => String(obs?.id || "")).filter(Boolean));
+    const existingIds = new Set(existing.map((obs) => String(obs?.id || "")).filter(Boolean));
     const d2 = getOldestCachedObservedDay();
 
     const baseUrl = new URL("https://api.inaturalist.org/v1/observations");
@@ -858,9 +872,11 @@ function getPhotoUrls(obs) {
       pct: 100
     });
 
-    window.dispatchEvent(new CustomEvent("gwRecentINatUpdated", {
-      detail: recentObsCache
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwRecentINatUpdated", {
+        detail: recentObsCache
+      })
+    );
 
     return {
       cache: recentObsCache,
@@ -880,12 +896,17 @@ function getPhotoUrls(obs) {
       throw new Error("Selection bounds are not available.");
     }
 
-    const username = (options.username || window.__gwUser?.username || recentObsCache?.username || "andrew2285")
+    const username = (
+      options.username ||
+      window.__gwUser?.username ||
+      recentObsCache?.username ||
+      "andrew2285"
+    )
       .trim()
       .replace(/^@+/, "");
 
     const existing = getRecentObservations();
-    const existingIds = new Set(existing.map(obs => String(obs?.id || "")).filter(Boolean));
+    const existingIds = new Set(existing.map((obs) => String(obs?.id || "")).filter(Boolean));
     const additions = [];
     let fetched = 0;
     let rejected = 0;
@@ -1025,9 +1046,11 @@ function getPhotoUrls(obs) {
       pct: 100
     });
 
-    window.dispatchEvent(new CustomEvent("gwRecentINatUpdated", {
-      detail: recentObsCache
-    }));
+    window.dispatchEvent(
+      new CustomEvent("gwRecentINatUpdated", {
+        detail: recentObsCache
+      })
+    );
 
     return {
       cache: recentObsCache,
