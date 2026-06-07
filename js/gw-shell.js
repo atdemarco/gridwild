@@ -113,6 +113,15 @@ window.ensureGridWildHerePanelLoaded = ensureGridWildHerePanelLoaded;
 window.ensureGridWildLocalNichesLoaded = ensureGridWildLocalNichesLoaded;
 window.ensureGridWildPartyLoaded = ensureGridWildPartyLoaded;
 
+function isGridWildReloginRequiredError(err) {
+  return /GridWild login expired on this device/i.test(err?.message || "");
+}
+
+function warnGridWildLoadFailure(message, err) {
+  if (isGridWildReloginRequiredError(err)) return;
+  console.warn(message, err);
+}
+
 let gwPlayerDetailsPromise = null;
 async function ensurePlayerBootstrapDetailsLoaded(options = {}) {
   window.__gwState = window.__gwState || {};
@@ -146,7 +155,7 @@ async function ensurePlayerBootstrapDetailsLoaded(options = {}) {
     return window.__gwState;
   })()
     .catch((err) => {
-      console.warn("Deferred player details failed:", err);
+      warnGridWildLoadFailure("Deferred player details failed:", err);
       window.__gwState.playerDetailsLoaded = false;
       throw err;
     })
@@ -189,7 +198,7 @@ async function ensureQuestDataLoaded(options = {}) {
     return window.__gwState.quests;
   })()
     .catch((err) => {
-      console.warn("Deferred quest load failed:", err);
+      warnGridWildLoadFailure("Deferred quest load failed:", err);
       window.__gwState.questDataLoaded = false;
       throw err;
     })
@@ -224,7 +233,7 @@ async function ensureSurveyDataLoaded(options = {}) {
     return window.__gwState.surveys;
   })()
     .catch((err) => {
-      console.warn("Deferred survey load failed:", err);
+      warnGridWildLoadFailure("Deferred survey load failed:", err);
       window.__gwState.surveyDataLoaded = false;
       throw err;
     })
@@ -254,7 +263,7 @@ function openSheet(name) {
   if (name === "info") {
     window.GridWildField?.renderIntoPage?.();
     ensureSurveyDataLoaded().catch((err) =>
-      console.warn("Could not load surveys for Field sheet.", err)
+      warnGridWildLoadFailure("Could not load surveys for Field sheet.", err)
     );
     ensureGridWildLocalNichesLoaded().catch((err) =>
       console.warn("Could not load Local Niches module for Field sheet.", err)
@@ -271,7 +280,7 @@ function openSheet(name) {
 
   if (name === "me") {
     ensurePlayerBootstrapDetailsLoaded().catch((err) =>
-      console.warn("Could not load player details for Me sheet.", err)
+      warnGridWildLoadFailure("Could not load player details for Me sheet.", err)
     );
   }
 
@@ -288,10 +297,10 @@ function openSheet(name) {
 
   if (name === "quest") {
     ensureQuestDataLoaded().catch((err) =>
-      console.warn("Could not load quests for Quest sheet.", err)
+      warnGridWildLoadFailure("Could not load quests for Quest sheet.", err)
     );
     ensureSurveyDataLoaded().catch((err) =>
-      console.warn("Could not load surveys for Quest sheet.", err)
+      warnGridWildLoadFailure("Could not load surveys for Quest sheet.", err)
     );
     ensureGridWildLocalNichesLoaded().catch((err) =>
       console.warn("Could not load Local Niches module.", err)
@@ -1868,29 +1877,33 @@ recenterFab?.addEventListener("click", () => {
 
     runGridWildIdleTask(() => {
       ensureGridWildHerePanelLoaded().catch((err) =>
-        console.warn("Idle Here panel load failed:", err)
+        warnGridWildLoadFailure("Idle Here panel load failed:", err)
       );
 
       ensureGridWildLocalNichesLoaded().catch((err) =>
-        console.warn("Idle Local Niches load failed:", err)
+        warnGridWildLoadFailure("Idle Local Niches load failed:", err)
       );
 
       if (window.__gwState.activePartyId) {
         ensureGridWildPartyLoaded().catch((err) =>
-          console.warn("Idle Party module load failed:", err)
+          warnGridWildLoadFailure("Idle Party module load failed:", err)
         );
       }
 
       ensurePlayerBootstrapDetailsLoaded().catch((err) =>
-        console.warn("Idle player details load failed:", err)
+        warnGridWildLoadFailure("Idle player details load failed:", err)
       );
 
       if (window.__gwState.activeQuestId) {
-        ensureQuestDataLoaded().catch((err) => console.warn("Idle quest load failed:", err));
+        ensureQuestDataLoaded().catch((err) =>
+          warnGridWildLoadFailure("Idle quest load failed:", err)
+        );
       }
     }, 900);
   } catch (err) {
-    console.error("Bootstrap failed:", err);
+    if (!isGridWildReloginRequiredError(err)) {
+      console.error("Bootstrap failed:", err);
+    }
   }
 
   const savedLens = localStorage.getItem("gwActiveLens");

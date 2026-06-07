@@ -7,6 +7,7 @@
   const SESSION_KEY = "gwAccountSession";
   const PLAYER_KEY = "gwPlayerId";
   const PLAYER_SESSION_KEY = "gwPlayerSession";
+  let sessionInvalidNotified = false;
 
   function esc(s) {
     return String(s ?? "")
@@ -34,8 +35,15 @@
     return readJson(SESSION_KEY);
   }
 
+  function isSessionLive(session = getSession()) {
+    if (!session?.token) return false;
+
+    const expiresAt = Date.parse(session.expiresAt || session.expires_at || "");
+    return !Number.isFinite(expiresAt) || expiresAt > Date.now();
+  }
+
   function isSignedIn() {
-    return !!(getAccount()?.username && getSession()?.token);
+    return !!(getAccount()?.username && isSessionLive());
   }
 
   function showToast(message) {
@@ -78,6 +86,8 @@
       window.__gwState = window.__gwState || {};
       window.__gwState.player = player;
     }
+    sessionInvalidNotified = false;
+    window.__gwAccountSessionInvalid = false;
 
     window.dispatchEvent(
       new CustomEvent("gwAccountChanged", {
@@ -97,11 +107,33 @@
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(PLAYER_KEY);
     localStorage.removeItem(PLAYER_SESSION_KEY);
+    sessionInvalidNotified = false;
+    window.__gwAccountSessionInvalid = false;
     window.dispatchEvent(
       new CustomEvent("gwAccountChanged", {
         detail: { account: null, player: window.__gwState?.player || null }
       })
     );
+  }
+
+  function markSessionInvalid(message = "") {
+    const alreadyNotified = sessionInvalidNotified;
+    sessionInvalidNotified = true;
+    window.__gwAccountSessionInvalid = true;
+    localStorage.removeItem(SESSION_KEY);
+
+    if (alreadyNotified) return;
+
+    window.dispatchEvent(
+      new CustomEvent("gwAccountChanged", {
+        detail: {
+          account: getAccount(),
+          player: window.__gwState?.player || null,
+          sessionInvalid: true
+        }
+      })
+    );
+    if (message) showToast(message);
   }
 
   async function post(path, body, timeoutMs = 18000) {
@@ -306,7 +338,9 @@
     injectStyles();
     document.querySelectorAll(".gw-account-backdrop").forEach((el) => el.remove());
 
-    const signedIn = getAccount();
+    const account = getAccount();
+    const signedIn = isSignedIn() ? account : null;
+    const staleAccount = account?.username && !signedIn ? account : null;
     const root = document.createElement("div");
     root.className = "gw-account-backdrop";
 
@@ -342,7 +376,11 @@
       <div class="gw-account-modal">
         <div class="gw-account-title">GridWild Account</div>
         <div class="gw-account-sub">
-          Save quests, Wildpoints, inventory, parties, and your explorer identity across devices.
+          ${
+            staleAccount
+              ? `Log in again as <b>@${esc(staleAccount.username)}</b> to reconnect this browser to that GridWild explorer.`
+              : "Save quests, Wildpoints, inventory, parties, and your explorer identity across devices."
+          }
         </div>
 
         <div class="gw-account-tabs">
@@ -357,7 +395,7 @@
 
         <div class="gw-account-field">
           <label for="gwAccountUsername">Username</label>
-          <input id="gwAccountUsername" autocapitalize="none" autocomplete="username" spellcheck="false">
+          <input id="gwAccountUsername" autocapitalize="none" autocomplete="username" spellcheck="false" value="${esc(staleAccount?.username || "")}">
         </div>
 
         <div class="gw-account-field">
@@ -385,7 +423,7 @@
     const status = root.querySelector("#gwAccountStatus");
     const submit = root.querySelector("#gwAccountSubmitBtn");
 
-    let currentMode = mode === "login" ? "login" : "signup";
+    let currentMode = mode === "login" || staleAccount ? "login" : "signup";
 
     function renderMode() {
       signupTab.classList.toggle("is-active", currentMode === "signup");
@@ -406,7 +444,17 @@
       renderMode();
     };
 
-    root.querySelector("#gwAccountCancelBtn").onclick = () => root.remove();
+    root.querySelector("#gwAccountCancelBtn").onclick = () => {
+      if (!staleAccount) {
+        root.remove();
+        return;
+      }
+
+      signOut();
+      root.remove();
+      showToast("Continuing as a guest explorer.");
+      window.setTimeout(() => window.location.reload(), 500);
+    };
 
     submit.onclick = async () => {
       const payload = {
@@ -462,7 +510,7 @@
   function renderAccountCardHtml() {
     const account = getAccount();
 
-    if (account?.username) {
+    if (account?.username && isSignedIn()) {
       return `
         <div class="gw-card">
           <div class="gw-account-strip">
@@ -471,6 +519,22 @@
               <div class="gw-muted" style="font-size:12px;margin-top:3px;">@${esc(account.username)}</div>
             </div>
             <button class="gw-mini-btn" id="gwOpenGridWildAccountBtn">Account</button>
+          </div>
+        </div>
+      `;
+    }
+
+    if (account?.username) {
+      return `
+        <div class="gw-card">
+          <div class="gw-account-strip">
+            <div>
+              <div class="gw-card-title">GridWild Account</div>
+              <div class="gw-muted" style="font-size:12px;margin-top:3px;">
+                @${esc(account.username)} needs a fresh login on this device.
+              </div>
+            </div>
+            <button class="gw-mini-btn" id="gwLoginGridWildAccountBtn">Log In</button>
           </div>
         </div>
       `;
@@ -506,6 +570,8 @@
     getAccount,
     getSession,
     isSignedIn,
+    isSessionLive,
+    markSessionInvalid,
     openModal,
     signUp,
     logIn,

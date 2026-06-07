@@ -162,7 +162,9 @@
 
       return data;
     } catch (err) {
-      console.error("Failed to load party:", err);
+      if (!/GridWild login expired on this device/i.test(err?.message || "")) {
+        console.error("Failed to load party:", err);
+      }
       return null;
     }
   }

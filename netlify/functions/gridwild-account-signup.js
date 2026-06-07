@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
+const { storeAccountSession } = require("./_gridwild-account-session");
 const { requirePlayerSession, revokeGuestSessions } = require("./_gridwild-player-session");
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -160,6 +161,11 @@ exports.handler = async function (event) {
       .single();
 
     if (accountResult.error) throw accountResult.error;
+    await storeAccountSession(supabase, {
+      accountId: accountResult.data.id,
+      tokenHash: session.tokenHash,
+      expiresAt: session.expiresAt
+    });
     await revokeGuestSessions(supabase, player.id);
 
     return {

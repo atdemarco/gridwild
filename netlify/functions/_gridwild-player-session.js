@@ -1,25 +1,13 @@
 const crypto = require("crypto");
+const { validateAccountSession } = require("./_gridwild-account-session");
 
 const ACCOUNT_TABLE = "gridwild_accounts";
 const GUEST_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 365;
-
-function hashToken(token) {
-  return crypto
-    .createHash("sha256")
-    .update(String(token || ""))
-    .digest("hex");
-}
 
 function httpError(statusCode, message) {
   const err = new Error(message);
   err.statusCode = statusCode;
   return err;
-}
-
-function timingSafeEqualHex(a, b) {
-  const left = Buffer.from(String(a || ""), "hex");
-  const right = Buffer.from(String(b || ""), "hex");
-  return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
 function timingSafeEqualText(a, b) {
@@ -81,21 +69,6 @@ function verifyGuestToken(token, playerId) {
   return payload;
 }
 
-function requireLiveToken(token, storedHash, expiresAt, label) {
-  if (!storedHash) {
-    throw httpError(401, `${label} is not active.`);
-  }
-
-  const expiresAtMs = Date.parse(expiresAt || "");
-  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
-    throw httpError(401, `${label} expired.`);
-  }
-
-  if (!timingSafeEqualHex(hashToken(token), storedHash)) {
-    throw httpError(401, `${label} is invalid.`);
-  }
-}
-
 function parseRequestBody(event) {
   try {
     return JSON.parse(event?.body || "{}");
@@ -121,12 +94,10 @@ async function requirePlayerSession(supabase, options = {}) {
   if (accountResult.error) throw accountResult.error;
 
   if (accountResult.data) {
-    requireLiveToken(
-      token,
-      accountResult.data.session_token_hash,
-      accountResult.data.session_expires_at,
-      "GridWild account session"
-    );
+    await validateAccountSession(supabase, {
+      account: accountResult.data,
+      token
+    });
 
     return {
       type: "account",

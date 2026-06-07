@@ -14,6 +14,8 @@ async function gridWildApiErrorFromResponse(response) {
   return error;
 }
 
+let gridWildBootstrapPromise = null;
+
 function gridWildApiBody(payload = {}) {
   const body = { ...(payload || {}) };
   const playerId = window.GridWildAPI?.getPlayerId?.() || null;
@@ -30,18 +32,128 @@ function gridWildApiBody(payload = {}) {
   return JSON.stringify(body);
 }
 
-async function postFunction(name, payload = {}, options = {}) {
-  const res = await fetch(`/.netlify/functions/${name}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    body: gridWildApiBody(payload),
-    ...(options.fetchOptions || {})
+function hasGridWildPlayerSession() {
+  return Boolean(
+    window.GridWildAPI?.getPlayerId?.() && window.GridWildAPI?.getPlayerSessionToken?.()
+  );
+}
+
+function hasStoredGridWildAccount() {
+  try {
+    const raw = localStorage.getItem("gwAccount");
+    const account = raw ? JSON.parse(raw) : null;
+    return Boolean(account?.username);
+  } catch {
+    return false;
+  }
+}
+
+async function ensureGridWildPlayerSession(options = {}) {
+  if (hasGridWildPlayerSession() && options.force !== true) return true;
+  if (!window.GridWildAPI?.getBootstrap) return false;
+  if (hasStoredGridWildAccount()) {
+    window.GridWildAccount?.markSessionInvalid?.("GridWild login expired on this device.");
+    throw gridWildReloginError({ status: 401 });
+  }
+
+  const data = await window.GridWildAPI.getBootstrap({
+    force: options.force === true,
+    applySession: true
   });
 
-  if (!res.ok) throw await gridWildApiErrorFromResponse(res);
+  if (data?.player?.id) window.GridWildAPI.setPlayerId(data.player.id);
+  if (data?.player_session) window.GridWildAPI.setPlayerSession(data.player_session);
+
+  return hasGridWildPlayerSession();
+}
+
+function shouldRetryMissingPlayerSession(name, error, options = {}) {
+  return (
+    name !== "get-bootstrap" &&
+    options.retryMissingSession !== false &&
+    error?.status === 401 &&
+    /GridWild player session is required/i.test(error?.message || "")
+  );
+}
+
+function isInvalidGridWildAccountSession(error) {
+  return /GridWild account session (?:is )?(?:invalid|expired|not active)/i.test(
+    error?.message || ""
+  );
+}
+
+function markGridWildAccountSessionInvalid(error) {
+  if (!isInvalidGridWildAccountSession(error)) return;
+
+  if (window.GridWildAccount?.markSessionInvalid) {
+    window.GridWildAccount.markSessionInvalid("GridWild login expired on this device.");
+    return;
+  }
+
+  localStorage.removeItem("gwAccountSession");
+  window.dispatchEvent(
+    new CustomEvent("gwAccountChanged", {
+      detail: { account: null, player: window.__gwState?.player || null, sessionInvalid: true }
+    })
+  );
+}
+
+function gridWildReloginError(error) {
+  const relogin = new Error(
+    "GridWild login expired on this device. Open Me > GridWild Account and log in again."
+  );
+  relogin.status = error?.status || 401;
+  relogin.cause = error;
+  return relogin;
+}
+
+async function postFunction(name, payload = {}, options = {}) {
+  if (name !== "get-bootstrap" && options.ensurePlayerSession !== false) {
+    await ensureGridWildPlayerSession();
+  }
+
+  const request = () =>
+    fetch(`/.netlify/functions/${name}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      },
+      body: gridWildApiBody(payload),
+      ...(options.fetchOptions || {})
+    });
+
+  let res = await request();
+  if (!res.ok) {
+    const error = await gridWildApiErrorFromResponse(res);
+    if (isInvalidGridWildAccountSession(error)) {
+      markGridWildAccountSessionInvalid(error);
+      if (
+        name === "get-bootstrap" &&
+        options.retryInvalidAccountSession !== false &&
+        !hasStoredGridWildAccount()
+      ) {
+        res = await request();
+        if (res.ok) return await res.json();
+      }
+      throw gridWildReloginError(error);
+    }
+    if (shouldRetryMissingPlayerSession(name, error, options)) {
+      await ensureGridWildPlayerSession({ force: true });
+      res = await request();
+      if (!res.ok) {
+        const retryError = await gridWildApiErrorFromResponse(res);
+        if (isInvalidGridWildAccountSession(retryError)) {
+          markGridWildAccountSessionInvalid(retryError);
+          throw gridWildReloginError(retryError);
+        }
+        throw retryError;
+      }
+    } else {
+      throw error;
+    }
+  }
+
   return await res.json();
 }
 
@@ -51,8 +163,26 @@ function gridWildINatHeaders() {
 }
 
 window.GridWildAPI = {
-  async getBootstrap() {
-    return postFunction("get-bootstrap", { player_id: this.getPlayerId() });
+  async getBootstrap(options = {}) {
+    if (gridWildBootstrapPromise && options.force !== true) return gridWildBootstrapPromise;
+
+    gridWildBootstrapPromise = postFunction(
+      "get-bootstrap",
+      { player_id: this.getPlayerId() },
+      { ensurePlayerSession: false, retryMissingSession: false }
+    )
+      .then((data) => {
+        if (options.applySession !== false) {
+          if (data?.player?.id) this.setPlayerId(data.player.id);
+          if (data?.player_session) this.setPlayerSession(data.player_session);
+        }
+        return data;
+      })
+      .finally(() => {
+        gridWildBootstrapPromise = null;
+      });
+
+    return gridWildBootstrapPromise;
   },
 
   async getPlayerBootstrapDetails() {
@@ -435,6 +565,8 @@ window.GridWildAPI = {
     try {
       const raw = localStorage.getItem("gwAccountSession");
       const session = raw ? JSON.parse(raw) : null;
+      const expiresAt = Date.parse(session?.expiresAt || session?.expires_at || "");
+      if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) return "";
       return session?.token || "";
     } catch {
       return "";
@@ -444,6 +576,7 @@ window.GridWildAPI = {
   getPlayerSessionToken() {
     const accountToken = this.getSessionToken();
     if (accountToken) return accountToken;
+    if (this.hasStoredAccount()) return "";
 
     try {
       const raw = localStorage.getItem("gwPlayerSession");
@@ -452,6 +585,10 @@ window.GridWildAPI = {
     } catch {
       return "";
     }
+  },
+
+  hasStoredAccount() {
+    return hasStoredGridWildAccount();
   },
 
   setPlayerSession(session) {

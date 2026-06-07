@@ -11,6 +11,7 @@ Loose schema files now have ordered migration coverage:
 | `netlify/schema/economy_quest_authority.sql`                 | `supabase/migrations/20260604000000_economy_quest_authority.sql`                         |
 | `supabase/sql/extend_quest_evidence_for_identifications.sql` | `supabase/migrations/20260604001000_extend_quest_evidence_and_legacy_local_issuance.sql` |
 | `netlify/schema/gridwild_accounts.sql`                       | `supabase/migrations/20260604002000_gridwild_accounts.sql`                               |
+| GridWild account multi-device sessions                       | `supabase/migrations/20260607000000_gridwild_account_sessions.sql`                       |
 | `netlify/schema/player_presence.sql`                         | `supabase/migrations/20260604003000_player_presence.sql`                                 |
 | `netlify/schema/party_locations.sql`                         | `supabase/migrations/20260604004000_party_locations.sql`                                 |
 | `netlify/schema/local_niches.sql`                            | `supabase/migrations/20260604005000_local_niches.sql`                                    |
