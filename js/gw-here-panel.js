@@ -934,7 +934,53 @@
     ].join(" ");
   }
 
-  function renderMiniMap(bounds, selectedBounds) {
+  function keyForCell(cell) {
+    if (!cell) return "";
+    return cell.key || `${Math.floor(Number(cell.ix))},${Math.floor(Number(cell.iy))}`;
+  }
+
+  function boundsForCells(cells = []) {
+    const normalized = (Array.isArray(cells) ? cells : [])
+      .map((cell) => ({
+        ix: Number(cell?.ix),
+        iy: Number(cell?.iy)
+      }))
+      .filter((cell) => Number.isFinite(cell.ix) && Number.isFinite(cell.iy));
+
+    if (!normalized.length) return null;
+
+    return {
+      minIx: Math.min(...normalized.map((cell) => Math.floor(cell.ix))),
+      maxIx: Math.max(...normalized.map((cell) => Math.floor(cell.ix))),
+      minIy: Math.min(...normalized.map((cell) => Math.floor(cell.iy))),
+      maxIy: Math.max(...normalized.map((cell) => Math.floor(cell.iy)))
+    };
+  }
+
+  function selectionKeySet(selection) {
+    const cells = Array.isArray(selection?.cells) ? selection.cells : [];
+    if (!cells.length) return null;
+    return new Set(cells.map(keyForCell).filter(Boolean));
+  }
+
+  function selectionBounds(selectionOrBounds) {
+    if (!selectionOrBounds) return null;
+    if (selectionOrBounds.bounds) return selectionOrBounds.bounds;
+    return selectionOrBounds;
+  }
+
+  function isCellSelected(item, selectedBounds, selectedKeys) {
+    if (selectedKeys) return selectedKeys.has(keyForCell(item));
+    return Boolean(
+      selectedBounds &&
+      item.ix >= selectedBounds.minIx &&
+      item.ix <= selectedBounds.maxIx &&
+      item.iy >= selectedBounds.minIy &&
+      item.iy <= selectedBounds.maxIy
+    );
+  }
+
+  function renderMiniMap(bounds, selectedContext) {
     const api = gridApi();
     if (!api) return "";
 
@@ -946,21 +992,25 @@
     const gap = 0.8;
     const w = widthCells * cell;
     const h = heightCells * cell;
-    const selected = selectedBounds || null;
+    const selected = selectionBounds(selectedContext);
+    const selectedKeys = selectionKeySet(selectedContext);
     const userCell = api.currentUserCell?.();
     const centerCell = api.centerCell?.();
 
     const rects = cells
       .map((item) => {
+        const selectedCell = isCellSelected(item, selected, selectedKeys);
         const x = (item.ix - bounds.minIx) * cell;
         const y = (bounds.maxIy - item.iy) * cell;
         const style = hereHeatStyleForCell(item, heatStats);
         const fill = style.fillColor || "rgba(239,230,211,0.12)";
-        const alpha = Math.max(
-          style.heatVisible ? 0.16 : 0.04,
-          Math.min(0.9, Number(style.fillOpacity || 0.18))
-        );
-        return `<rect x="${x + gap / 2}" y="${y + gap / 2}" width="${cell - gap}" height="${cell - gap}" rx="1.2" fill="${fill}" opacity="${alpha}"></rect>`;
+        const alpha =
+          Math.max(
+            style.heatVisible ? 0.16 : 0.04,
+            Math.min(0.9, Number(style.fillOpacity || 0.18))
+          ) * (selectedKeys && !selectedCell ? 0.38 : 1);
+        const stroke = selectedCell ? ` stroke="#ffe7a3" stroke-width="1.25"` : "";
+        return `<rect x="${x + gap / 2}" y="${y + gap / 2}" width="${cell - gap}" height="${cell - gap}" rx="1.2" fill="${fill}" opacity="${alpha}"${stroke}></rect>`;
       })
       .join("");
 
@@ -1554,11 +1604,13 @@
     };
   }
 
-  function renderHereViewport3d(bounds, selectedBounds) {
+  function renderHereViewport3d(bounds, selectedContext) {
     const api = gridApi();
     if (!api) return "";
 
     const cells = api.cellsForBounds(bounds);
+    const selectedBounds = selectionBounds(selectedContext);
+    const selectedKeys = selectionKeySet(selectedContext);
     const w = 220;
     const h = 150;
     const userCell = api.currentUserCell?.();
@@ -1831,12 +1883,7 @@
         );
         const poly = terrainCellPolygon(item.ix, item.iy);
         if (!isVisiblePoly(poly)) return "";
-        const selected =
-          selectedBounds &&
-          item.ix >= selectedBounds.minIx &&
-          item.ix <= selectedBounds.maxIx &&
-          item.iy >= selectedBounds.minIy &&
-          item.iy <= selectedBounds.maxIy;
+        const selected = isCellSelected(item, selectedBounds, selectedKeys);
         const fog = fogInfoForCell(item.key);
         const fogAlpha =
           fog && (fog.state === "unknown" || fog.state === "expired")
@@ -2047,10 +2094,10 @@
     `;
   }
 
-  function renderHereMap(bounds, selectedBounds) {
+  function renderHereMap(bounds, selectedContext) {
     const view = hereMap3dEnabled
-      ? renderHereViewport3d(bounds, selectedBounds)
-      : renderMiniMap(bounds, selectedBounds);
+      ? renderHereViewport3d(bounds, selectedContext)
+      : renderMiniMap(bounds, selectedContext);
     return `${view}${renderMapModeToggle()}${renderHere3dControls()}`;
   }
 
@@ -2452,9 +2499,14 @@
     `;
   }
 
-  function summarizeCells(bounds) {
+  function contextCells(bounds, selection = null) {
     const api = gridApi();
-    const cells = api?.cellsForBounds?.(bounds) || [];
+    const selectedCells = Array.isArray(selection?.cells) ? selection.cells : [];
+    return selectedCells.length ? selectedCells : api?.cellsForBounds?.(bounds) || [];
+  }
+
+  function summarizeCells(bounds, selection = null) {
+    const cells = contextCells(bounds, selection);
     return cells.reduce(
       (acc, cell) => {
         const m = cell.metrics || {};
@@ -2510,7 +2562,37 @@
     };
   }
 
+  function centeredCells(cells = [], maxCells = MAX_SELECTION_TAXA_CELLS) {
+    if (!Array.isArray(cells) || cells.length <= maxCells) return cells || [];
+
+    const bounds = boundsForCells(cells);
+    if (!bounds) return cells.slice(0, maxCells);
+
+    const cx = (bounds.minIx + bounds.maxIx) / 2;
+    const cy = (bounds.minIy + bounds.maxIy) / 2;
+    return cells
+      .slice()
+      .sort((a, b) => {
+        const ad = Math.hypot(Number(a.ix) - cx, Number(a.iy) - cy);
+        const bd = Math.hypot(Number(b.ix) - cx, Number(b.iy) - cy);
+        return ad - bd || keyForCell(a).localeCompare(keyForCell(b));
+      })
+      .slice(0, maxCells);
+  }
+
   function getTaxaBoundsForContext(bounds, selection) {
+    const selectedCells = Array.isArray(selection?.cells) ? selection.cells : [];
+    if (selectedCells.length) {
+      const taxaCells = centeredCells(selectedCells, MAX_SELECTION_TAXA_CELLS);
+      return {
+        bounds: boundsForCells(taxaCells) || bounds,
+        cells: taxaCells,
+        capped: selectedCells.length > MAX_SELECTION_TAXA_CELLS,
+        cellCount: selectedCells.length,
+        taxaCellCount: taxaCells.length
+      };
+    }
+
     const maxCells = selection ? MAX_SELECTION_TAXA_CELLS : MAX_TAXA_CELLS;
     const count = cellCountForBounds(bounds);
     const taxaBounds = centeredTaxaBounds(bounds, maxCells);
@@ -3019,12 +3101,12 @@
     const pieChartEl = document.getElementById("gwHerePieChart");
     const taxaListEl = document.getElementById("gwHereTaxaList");
     const statsEl = document.getElementById("gwHereStats");
-    const summary = summarizeCells(bounds);
+    const summary = summarizeCells(bounds, selection);
     const taxaContext = getTaxaBoundsForContext(bounds, selection);
     const taxaBounds = taxaContext.bounds;
     const filterSignature = api.activeFilterSignature?.() || "";
     const contextSignature = [
-      selection ? "selection" : "here",
+      selection?.signature || (selection ? "selection" : "here"),
       bounds.minIx,
       bounds.maxIx,
       bounds.minIy,
@@ -3033,16 +3115,22 @@
       taxaBounds.maxIx,
       taxaBounds.minIy,
       taxaBounds.maxIy,
+      taxaContext.cells ? taxaContext.taxaCellCount : "bounds",
       filterSignature,
       taxaContext.capped ? "preview" : "full"
     ].join(":");
 
-    if (title) title.textContent = selection ? "Selection" : "Here";
-    if (meta) meta.textContent = `${width} x ${height}`;
+    if (title) title.textContent = selection?.label || (selection ? "Selection" : "Here");
+    if (meta) {
+      meta.textContent =
+        selection?.cells?.length && selection.cells.length !== width * height
+          ? `${selection.cells.length} cells`
+          : `${width} x ${height}`;
+    }
     if (mapEl) {
       mapEl.classList.toggle("is-3d", hereMap3dEnabled);
       mapEl.classList.toggle("is-expanded", hereMap3dEnabled && hereMap3dExpanded);
-      mapEl.innerHTML = renderHereMap(bounds, selection?.bounds || null);
+      mapEl.innerHTML = renderHereMap(bounds, selection || null);
     }
     if (statsEl) {
       statsEl.innerHTML = `
@@ -3069,7 +3157,9 @@
     }
 
     const [record, observerDict] = await Promise.all([
-      api.mergedGeneraRecordForBounds(taxaBounds, { applyFilters: true }),
+      taxaContext.cells && api.mergedGeneraRecordForCells
+        ? api.mergedGeneraRecordForCells(taxaContext.cells, { applyFilters: true })
+        : api.mergedGeneraRecordForBounds(taxaBounds, { applyFilters: true }),
       api.loadObserverDictionary?.().catch(() => null)
     ]);
     if (token !== refreshToken) return;
@@ -3204,6 +3294,154 @@
       return rect;
     }
 
+    function hydrateCells(rawCells = []) {
+      const api = gridApi();
+      const seen = new Set();
+      return (Array.isArray(rawCells) ? rawCells : [])
+        .map((cell) => ({
+          ix: Math.floor(Number(cell?.ix)),
+          iy: Math.floor(Number(cell?.iy))
+        }))
+        .filter((cell) => Number.isFinite(cell.ix) && Number.isFinite(cell.iy))
+        .filter((cell) => {
+          const key = `${cell.ix},${cell.iy}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map((cell) => {
+          const key = `${cell.ix},${cell.iy}`;
+          const baseMetrics =
+            window.__richGridMetrics?.get?.(key) || window.__staticGridCounts?.get?.(key) || null;
+          const metrics =
+            typeof window.getDisplayMetricsForCell === "function"
+              ? window.getDisplayMetricsForCell(cell.ix, cell.iy, baseMetrics || null)
+              : baseMetrics;
+          return {
+            ...cell,
+            key,
+            metrics: metrics || null,
+            style: metrics ? api?.metricsToFill?.(metrics) || null : null,
+            bounds: api?.cellBounds?.(cell.ix, cell.iy) || null
+          };
+        });
+    }
+
+    function normalizedSelectionFromCells(rawCells = [], options = {}) {
+      const cells = hydrateCells(rawCells);
+      const bounds = options.bounds || boundsForCells(cells);
+      if (!cells.length || !bounds) return null;
+      const signatureParts = [
+        options.source || "cells",
+        options.label || "Selection",
+        bounds.minIx,
+        bounds.maxIx,
+        bounds.minIy,
+        bounds.maxIy,
+        cells.length,
+        cells.slice(0, 16).map(keyForCell).join("|")
+      ];
+      return {
+        bounds,
+        cells,
+        cellKeys: new Set(cells.map(keyForCell).filter(Boolean)),
+        rings: Array.isArray(options.rings) ? options.rings : [],
+        label: options.label || "Selection",
+        source: options.source || "cells",
+        signature: options.signature || signatureParts.join(":")
+      };
+    }
+
+    function drawSelectionShape(nextSelection) {
+      const layer = ensureSelectionLayer();
+      const api = gridApi();
+      if (!layer || !api || !nextSelection?.bounds) return null;
+
+      const rings = (Array.isArray(nextSelection.rings) ? nextSelection.rings : [])
+        .map((ring) =>
+          (Array.isArray(ring) ? ring : [])
+            .map((point) => ({
+              lat: Number(point?.lat ?? point?.[0]),
+              lng: Number(point?.lng ?? point?.[1])
+            }))
+            .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+        )
+        .filter((ring) => ring.length >= 3);
+
+      if (rings.length && window.L) {
+        const group = L.layerGroup([], { pane: "gwSelectionPane" }).addTo(layer);
+        rings.forEach((ring) => {
+          L.polygon(
+            ring.map((point) => [point.lat, point.lng]),
+            {
+              pane: "gwSelectionPane",
+              interactive: false,
+              className: "gw-map-selection-rect",
+              color: "#ffe7a3",
+              weight: 2.8,
+              opacity: 0.98,
+              dashArray: "8 5",
+              fillColor: "#ffe7a3",
+              fillOpacity: 0.08
+            }
+          ).addTo(group);
+        });
+        return group;
+      }
+
+      const cells = Array.isArray(nextSelection.cells) ? nextSelection.cells : [];
+      if (nextSelection.source !== "lasso" && cells.length && cells.length <= 260 && window.L) {
+        const group = L.layerGroup([], { pane: "gwSelectionPane" }).addTo(layer);
+        cells.forEach((cell) => {
+          L.rectangle(
+            api.boundsToLatLngBounds({
+              minIx: cell.ix,
+              maxIx: cell.ix,
+              minIy: cell.iy,
+              maxIy: cell.iy
+            }),
+            {
+              pane: "gwSelectionPane",
+              interactive: false,
+              className: "gw-map-selection-rect",
+              color: "#ffe7a3",
+              weight: 1.4,
+              opacity: 0.76,
+              dashArray: "4 4",
+              fillColor: "#ffe7a3",
+              fillOpacity: 0.06
+            }
+          ).addTo(group);
+        });
+        return group;
+      }
+
+      return drawRect(nextSelection.bounds, true);
+    }
+
+    function applySelection(nextSelection, options = {}) {
+      const layer = ensureSelectionLayer();
+      if (!layer || !nextSelection) return null;
+      if (draftRect) {
+        layer.removeLayer(draftRect);
+        draftRect = null;
+      }
+      if (finalRect) layer.removeLayer(finalRect);
+      finalRect = drawSelectionShape(nextSelection);
+      selection = nextSelection;
+      armed = false;
+      dragging = false;
+      startCell = null;
+      hoverCell = null;
+      activePointerId = null;
+      setMapGesturesLocked(false);
+      syncButton();
+      fireChange();
+      if (options.toast !== false)
+        toast(options.toastMessage || `${selection.cells.length} cells selected`);
+      return selection;
+    }
+
     function redrawDraft() {
       const layer = ensureSelectionLayer();
       const api = gridApi();
@@ -3213,27 +3451,15 @@
     }
 
     function setFinal(bounds) {
-      const layer = ensureSelectionLayer();
-      if (!layer) return;
-      if (draftRect) {
-        layer.removeLayer(draftRect);
-        draftRect = null;
-      }
-      if (finalRect) layer.removeLayer(finalRect);
-      finalRect = drawRect(bounds, true);
-      selection = {
-        bounds,
-        cells: gridApi()?.cellsForBounds?.(bounds) || []
-      };
-      armed = false;
-      dragging = false;
-      startCell = null;
-      hoverCell = null;
-      activePointerId = null;
-      setMapGesturesLocked(false);
-      syncButton();
-      fireChange();
-      toast(`${selection.cells.length} cells selected`);
+      const nextSelection = normalizedSelectionFromCells(
+        gridApi()?.cellsForBounds?.(bounds) || [],
+        {
+          bounds,
+          label: "Selection",
+          source: "lasso"
+        }
+      );
+      applySelection(nextSelection);
     }
 
     function clearSelection() {
@@ -3398,7 +3624,9 @@
     return {
       bind,
       clear: clearSelection,
-      getSelection: () => selection
+      getSelection: () => selection,
+      setSelectionFromCells: (cells, options = {}) =>
+        applySelection(normalizedSelectionFromCells(cells, options), options)
     };
   }
 

@@ -66,7 +66,9 @@ exports.handler = async function (event) {
       homeNiche = await optionalQuery(
         supabase
           .from("local_niches")
-          .select("id, title, short_title, theme, primary_place_label")
+          .select(
+            "id, title, short_title, theme, primary_place_label, centroid_lat, centroid_lng, radius_m, grid_cell_ids"
+          )
           .eq("id", homeNicheId)
           .maybeSingle(),
         null

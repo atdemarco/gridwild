@@ -8,7 +8,10 @@ const {
   observationCoordinates,
   requireLinkedINatUser
 } = require("./_inat-authority");
-const { assertObservationQualifiesForQuest } = require("./_quest-authority");
+const {
+  assertObservationQualifiesForQuest,
+  targetCellKeyForCoordinates
+} = require("./_quest-authority");
 const { recordVerifiedObservation } = require("./_achievement-authority");
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -37,6 +40,7 @@ exports.handler = async function (event) {
       taxonContext
     });
     const coordinates = observationCoordinates(observation);
+    const targetCellKey = coordinates ? targetCellKeyForCoordinates(coordinates) : null;
     const now = new Date().toISOString();
 
     const { data, error } = await supabase
@@ -64,7 +68,8 @@ exports.handler = async function (event) {
             positional_accuracy: Number(observation?.positional_accuracy) || null,
             photo_count: Array.isArray(observation?.photos) ? observation.photos.length : 0,
             lat: coordinates?.lat ?? null,
-            lng: coordinates?.lng ?? null
+            lng: coordinates?.lng ?? null,
+            target_cell_key: targetCellKey
           }
         },
         {

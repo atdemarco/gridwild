@@ -2,6 +2,8 @@
 // Consolidates field-context overlays, niches, patches, and surveys.
 
 (function () {
+  const FIELD_AREA_SCAN_LIMIT = 1800;
+
   function esc(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -88,6 +90,137 @@
       .gw-field-list-empty {
         padding: 10px;
         font-size: 12px;
+      }
+
+      .gw-field-home-inset {
+        display: grid;
+        grid-template-columns: minmax(86px, 0.86fr) minmax(118px, 1.14fr);
+        min-height: 78px;
+        overflow: hidden;
+        border-radius: 8px;
+        border: 1px solid rgba(215,183,116,0.18);
+        background:
+          linear-gradient(180deg, rgba(34,31,25,0.82), rgba(16,18,16,0.86));
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.05),
+          inset 0 0 0 1px rgba(255,255,255,0.018);
+      }
+
+      .gw-field-home-action {
+        appearance: none;
+        min-width: 0;
+        border: 0;
+        border-right: 1px solid rgba(215,183,116,0.14);
+        border-radius: 0;
+        padding: 9px;
+        display: grid;
+        align-content: center;
+        gap: 3px;
+        color: rgba(239,230,211,0.82);
+        background: rgba(0,0,0,0.12);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .gw-field-home-action:hover {
+        background: rgba(240,209,138,0.08);
+        color: #f4e8cf;
+      }
+
+      .gw-field-home-action-main {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        color: #f0d18a;
+        font-size: 10px;
+        font-weight: 950;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .gw-field-home-plus {
+        width: 24px;
+        height: 24px;
+        min-width: 24px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        color: #17231e;
+        background: #f0d18a;
+        font-size: 20px;
+        line-height: 1;
+        font-weight: 950;
+      }
+
+      .gw-field-home-label,
+      .gw-field-home-name,
+      .gw-field-home-sub {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .gw-field-home-name {
+        color: #f4e8cf;
+        font-size: 12px;
+        line-height: 1.15;
+        font-weight: 900;
+      }
+
+      .gw-field-home-sub {
+        color: rgba(239,230,211,0.56);
+        font-size: 10px;
+        line-height: 1.2;
+      }
+
+      .gw-field-home-map {
+        appearance: none;
+        position: relative;
+        min-width: 0;
+        border: 0;
+        border-radius: 0;
+        padding: 0;
+        overflow: hidden;
+        color: inherit;
+        background:
+          radial-gradient(circle at 48% 42%, rgba(240,209,138,0.08), transparent 54%),
+          rgba(5,8,7,0.52);
+        cursor: pointer;
+      }
+
+      .gw-field-home-map:disabled {
+        cursor: default;
+        opacity: 0.72;
+      }
+
+      .gw-field-home-map:not(:disabled):hover .gw-field-minimap svg {
+        filter: brightness(1.1) saturate(1.08);
+      }
+
+      .gw-field-minimap {
+        position: absolute;
+        inset: 0;
+      }
+
+      .gw-field-minimap svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        transition: filter 140ms ease;
+      }
+
+      .gw-field-minimap-empty {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: rgba(239,230,211,0.48);
+        font-size: 9px;
+        font-weight: 900;
+        text-transform: uppercase;
       }
 
       .gw-field-row {
@@ -229,6 +362,346 @@
     return `${count} joined${visible ? " / visible" : ""}`;
   }
 
+  function homeNiche() {
+    return window.GridWildLocalNiches?.getHomeNiche?.() || window.__gwState?.homeNiche || null;
+  }
+
+  function parseCellKey(key) {
+    const [ix, iy] = String(key || "")
+      .split(",")
+      .map(Number);
+    return Number.isFinite(ix) && Number.isFinite(iy)
+      ? { ix: Math.floor(ix), iy: Math.floor(iy), key: `${Math.floor(ix)},${Math.floor(iy)}` }
+      : null;
+  }
+
+  function keyForCell(cell) {
+    return cell?.key || `${Math.floor(Number(cell?.ix))},${Math.floor(Number(cell?.iy))}`;
+  }
+
+  function hydrateCell(cell) {
+    const ix = Math.floor(Number(cell?.ix));
+    const iy = Math.floor(Number(cell?.iy));
+    if (!Number.isFinite(ix) || !Number.isFinite(iy)) return null;
+    const key = `${ix},${iy}`;
+    const baseMetrics =
+      window.__richGridMetrics?.get?.(key) || window.__staticGridCounts?.get?.(key) || null;
+    const metrics =
+      typeof window.getDisplayMetricsForCell === "function"
+        ? window.getDisplayMetricsForCell(ix, iy, baseMetrics || null)
+        : baseMetrics;
+    return {
+      ix,
+      iy,
+      key,
+      metrics: metrics || null,
+      style: metrics ? window.GridWildGrid?.metricsToFill?.(metrics) || null : null,
+      bounds: window.GridWildGrid?.cellBounds?.(ix, iy) || null
+    };
+  }
+
+  function dedupeCells(cells = []) {
+    const seen = new Set();
+    return (Array.isArray(cells) ? cells : [])
+      .map((cell) => hydrateCell(cell))
+      .filter(Boolean)
+      .filter((cell) => {
+        if (seen.has(cell.key)) return false;
+        seen.add(cell.key);
+        return true;
+      });
+  }
+
+  function cellsFromIds(ids = []) {
+    return dedupeCells((Array.isArray(ids) ? ids : []).map(parseCellKey).filter(Boolean));
+  }
+
+  function boundsForCells(cells = []) {
+    const rows = (Array.isArray(cells) ? cells : []).filter(
+      (cell) => Number.isFinite(Number(cell?.ix)) && Number.isFinite(Number(cell?.iy))
+    );
+    if (!rows.length) return null;
+    return {
+      minIx: Math.min(...rows.map((cell) => Math.floor(Number(cell.ix)))),
+      maxIx: Math.max(...rows.map((cell) => Math.floor(Number(cell.ix)))),
+      minIy: Math.min(...rows.map((cell) => Math.floor(Number(cell.iy)))),
+      maxIy: Math.max(...rows.map((cell) => Math.floor(Number(cell.iy))))
+    };
+  }
+
+  function cellCenterLatLng(cell) {
+    const bounds = window.GridWildGrid?.cellBounds?.(cell.ix, cell.iy);
+    if (!bounds?.sw || !bounds?.ne) return null;
+    return {
+      lat: (Number(bounds.sw.lat) + Number(bounds.ne.lat)) / 2,
+      lng: (Number(bounds.sw.lng) + Number(bounds.ne.lng)) / 2
+    };
+  }
+
+  function pointInRing(point, ring = []) {
+    const lat = Number(point?.lat);
+    const lng = Number(point?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || ring.length < 3) return false;
+
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[i];
+      const b = ring[j];
+      const yi = Number(a.lat);
+      const xi = Number(a.lng);
+      const yj = Number(b.lat);
+      const xj = Number(b.lng);
+      if (![yi, xi, yj, xj].every(Number.isFinite)) continue;
+      const crosses =
+        yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi || 1e-9) + xi;
+      if (crosses) inside = !inside;
+    }
+
+    return inside;
+  }
+
+  function normalizeRing(points = []) {
+    return (Array.isArray(points) ? points : [])
+      .map((point) => ({
+        lat: Number(point?.lat ?? point?.[0]),
+        lng: Number(point?.lng ?? point?.lon ?? point?.[1])
+      }))
+      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+  }
+
+  function ringsFromGeoJson(geojson) {
+    if (!geojson) return [];
+    if (geojson.type === "Feature") return ringsFromGeoJson(geojson.geometry);
+    if (geojson.type === "FeatureCollection") {
+      return (geojson.features || []).flatMap((feature) => ringsFromGeoJson(feature));
+    }
+    if (geojson.type === "GeometryCollection") {
+      return (geojson.geometries || []).flatMap((geometry) => ringsFromGeoJson(geometry));
+    }
+    if (geojson.type === "Polygon") {
+      return (geojson.coordinates || [])
+        .map((ring) => normalizeRing((ring || []).map(([lng, lat]) => ({ lat, lng }))))
+        .filter((ring) => ring.length >= 3);
+    }
+    if (geojson.type === "MultiPolygon") {
+      return (geojson.coordinates || []).flatMap((poly) =>
+        (poly || [])
+          .map((ring) => normalizeRing((ring || []).map(([lng, lat]) => ({ lat, lng }))))
+          .filter((ring) => ring.length >= 3)
+      );
+    }
+    return [];
+  }
+
+  function ringsFromPatch(patch) {
+    const rings =
+      Array.isArray(patch?.geometry?.rings) && patch.geometry.rings.length
+        ? patch.geometry.rings
+        : patch?.survey_geometry?.boundary
+          ? [patch.survey_geometry.boundary]
+          : patch?.boundary
+            ? [patch.boundary]
+            : [];
+    return rings.map(normalizeRing).filter((ring) => ring.length >= 3);
+  }
+
+  function ringsFromSurvey(survey) {
+    const g = survey?.geometries || {};
+    const boundary = Array.isArray(g.boundary) ? g.boundary : [];
+    const rings = [];
+    if (boundary.length && boundary[0]?.lat != null) rings.push(normalizeRing(boundary));
+    boundary.forEach((item) => {
+      if (item?.geojson) rings.push(...ringsFromGeoJson(item.geojson));
+    });
+    (g.denseZones || []).forEach((poly) => rings.push(normalizeRing(poly)));
+    return rings.filter((ring) => ring.length >= 3);
+  }
+
+  function surveyGeometryPoints(survey) {
+    const g = survey?.geometries || {};
+    return [
+      ...ringsFromSurvey(survey).flat(),
+      ...(g.paths || []).flatMap((path) => normalizeRing(path)),
+      ...(g.exclusions || []).flatMap((poly) => normalizeRing(poly)),
+      ...(g.assets || []).map((asset) => ({
+        lat: Number(asset?.lat),
+        lng: Number(asset?.lng)
+      }))
+    ].filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+  }
+
+  function cellsForRings(rings = []) {
+    const api = window.GridWildGrid;
+    if (!api?.latLngToCell || !api?.cellBounds) return [];
+    const points = rings.flat();
+    if (!points.length) return [];
+
+    const vertexCells = points.map((point) => api.latLngToCell([point.lat, point.lng]));
+    const bounds = boundsForCells(vertexCells);
+    if (!bounds) return [];
+
+    const width = bounds.maxIx - bounds.minIx + 1;
+    const height = bounds.maxIy - bounds.minIy + 1;
+    const bboxCells = width * height;
+    const stride = Math.max(1, Math.ceil(Math.sqrt(bboxCells / FIELD_AREA_SCAN_LIMIT)));
+    const cells = [];
+
+    for (let iy = bounds.minIy; iy <= bounds.maxIy; iy += stride) {
+      for (let ix = bounds.minIx; ix <= bounds.maxIx; ix += stride) {
+        const center = cellCenterLatLng({ ix, iy });
+        if (!center) continue;
+        if (rings.some((ring) => pointInRing(center, ring))) cells.push({ ix, iy });
+      }
+    }
+
+    return cells.length ? dedupeCells(cells) : dedupeCells(vertexCells);
+  }
+
+  function cellsFromSurveyGeometry(survey) {
+    const rings = ringsFromSurvey(survey);
+    if (rings.length) return cellsForRings(rings);
+    const points = surveyGeometryPoints(survey);
+    return dedupeCells(
+      points.map((point) => window.GridWildGrid?.latLngToCell?.([point.lat, point.lng]))
+    );
+  }
+
+  function colorForMiniCell(cell, fallback = "#76e7bf") {
+    const style = cell?.style || null;
+    if (style?.fillColor) return style.fillColor;
+    const count = Number(cell?.metrics?.count) || 0;
+    if (count > 0) return fallback;
+    return "rgba(239,230,211,0.16)";
+  }
+
+  function renderFieldMiniMap(cells = [], options = {}) {
+    const rows = dedupeCells(cells);
+    const bounds = boundsForCells(rows);
+    if (!bounds || !rows.length) {
+      return `
+        <div class="gw-field-minimap">
+          <svg viewBox="0 0 80 52" role="img" aria-label="No area selected">
+            <rect x="0" y="0" width="80" height="52" fill="rgba(7,9,8,0.62)"></rect>
+            ${Array.from({ length: 12 })
+              .map((_, index) => {
+                const x = 9 + (index % 4) * 14;
+                const y = 8 + Math.floor(index / 4) * 13;
+                return `<rect x="${x}" y="${y}" width="10" height="9" rx="1.2" fill="rgba(239,230,211,0.10)"></rect>`;
+              })
+              .join("")}
+          </svg>
+          <span class="gw-field-minimap-empty">None</span>
+        </div>
+      `;
+    }
+
+    const widthCells = bounds.maxIx - bounds.minIx + 1;
+    const heightCells = bounds.maxIy - bounds.minIy + 1;
+    const cell = 9;
+    const w = Math.max(32, widthCells * cell);
+    const h = Math.max(28, heightCells * cell);
+    const selected = new Set(rows.map(keyForCell));
+
+    const rects = rows
+      .map((item) => {
+        const x = (item.ix - bounds.minIx) * cell;
+        const y = (bounds.maxIy - item.iy) * cell;
+        const active = selected.has(keyForCell(item));
+        const fill = colorForMiniCell(item, options.color || "#76e7bf");
+        const alpha = active
+          ? Math.max(0.26, Math.min(0.94, Number(item.style?.fillOpacity || 0.5)))
+          : 0.12;
+        return `<rect x="${x + 0.5}" y="${y + 0.5}" width="${cell - 1}" height="${cell - 1}" rx="1.3" fill="${fill}" opacity="${alpha}" stroke="rgba(255,255,255,0.14)" stroke-width="0.35"></rect>`;
+      })
+      .join("");
+
+    const outline = `<rect x="1.2" y="1.2" width="${Math.max(0, w - 2.4)}" height="${Math.max(0, h - 2.4)}" rx="2.4" fill="rgba(255,231,163,0.04)" stroke="rgba(255,231,163,0.78)" stroke-width="1.8" stroke-dasharray="5 4"></rect>`;
+
+    return `
+      <div class="gw-field-minimap">
+        <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(options.label || "Area map")}">
+          <rect x="0" y="0" width="${w}" height="${h}" fill="rgba(7,9,8,0.64)"></rect>
+          ${rects}
+          ${outline}
+        </svg>
+      </div>
+    `;
+  }
+
+  function fieldAreaContext(kind) {
+    if (kind === "niche") {
+      const niche = homeNiche();
+      const cells = cellsFromIds(niche?.grid_cell_ids || []);
+      const fallback =
+        !cells.length &&
+        Number.isFinite(Number(niche?.centroid_lat)) &&
+        Number.isFinite(Number(niche?.centroid_lng))
+          ? dedupeCells([
+              window.GridWildGrid?.latLngToCell?.([niche.centroid_lat, niche.centroid_lng])
+            ])
+          : [];
+      return {
+        kind,
+        title: "Home Niche",
+        label: niche ? displayNicheTitle(niche) : "No home niche",
+        subtitle: niche ? nicheSubtitle(niche) : "Choose a local niche",
+        item: niche,
+        cells: cells.length ? cells : fallback,
+        rings: [],
+        color: "#76e7bf"
+      };
+    }
+
+    if (kind === "patch") {
+      const patch = window.GridWildPatches?.getHomePatch?.() || null;
+      const rings = ringsFromPatch(patch);
+      return {
+        kind,
+        title: "Home Patch",
+        label: patch ? patchTitle(patch) : "No home patch",
+        subtitle: patch ? patchSubtitle(patch) : "Choose a saved patch",
+        item: patch,
+        cells: rings.length ? cellsForRings(rings) : [],
+        rings,
+        color: "#f0d18a"
+      };
+    }
+
+    const survey = currentSurvey();
+    const rings = ringsFromSurvey(survey);
+    return {
+      kind: "survey",
+      title: "Current Survey",
+      label: survey ? survey.name || "Untitled survey" : "No current survey",
+      subtitle: survey ? surveySubtitle(survey) : "Join a survey",
+      item: survey,
+      cells: survey ? cellsFromSurveyGeometry(survey) : [],
+      rings,
+      color: "#7ad3e6"
+    };
+  }
+
+  function renderFieldAreaInset(kind) {
+    const ctx = fieldAreaContext(kind);
+    const hasItem = Boolean(ctx.item);
+    const canMap = hasItem && ctx.cells.length > 0;
+    const actionLabel = hasItem
+      ? "Leave"
+      : `<span class="gw-field-home-plus" aria-hidden="true">+</span>`;
+    return `
+      <div class="gw-field-home-inset" data-gw-field-area="${esc(kind)}">
+        <button class="gw-field-home-action" type="button" data-gw-field-area-action="${esc(kind)}" title="${hasItem ? `Leave ${ctx.title}` : `Add ${ctx.title}`}">
+          <span class="gw-field-home-action-main">${actionLabel}</span>
+          <span class="gw-field-home-name">${esc(ctx.title)}</span>
+          <span class="gw-field-home-sub">${esc(ctx.label)}</span>
+        </button>
+        <button class="gw-field-home-map" type="button" data-gw-field-area-map="${esc(kind)}" ${canMap ? "" : "disabled"} aria-label="${esc(canMap ? `Open Here for ${ctx.label}` : `${ctx.title} has no mapped area yet`)}" title="${esc(canMap ? `Open Here for ${ctx.label}` : `${ctx.title} has no mapped area yet`)}">
+          ${renderFieldMiniMap(ctx.cells, { label: ctx.label, color: ctx.color })}
+        </button>
+      </div>
+    `;
+  }
+
   function renderFieldSheetHtml() {
     ensureStyles();
 
@@ -278,16 +751,14 @@
   }
 
   function renderFieldNicheList() {
-    const rows = savedNicheRows();
+    const rows = savedNicheRows().filter((niche) => !isHomeNiche(niche));
+    const inset = renderFieldAreaInset("niche");
     if (!rows.length) {
-      return `
-        <div class="gw-field-list">
-          <div class="gw-muted gw-field-list-empty">home niche / none</div>
-        </div>
-      `;
+      return inset;
     }
 
     return `
+      ${inset}
       <div class="gw-field-list">
         ${rows
           .map((niche) => {
@@ -314,16 +785,16 @@
   }
 
   function renderFieldPatchList() {
-    const rows = window.GridWildPatches?.getPatches?.() || [];
+    const rows = (window.GridWildPatches?.getPatches?.() || []).filter(
+      (patch) => !patch.is_home_patch
+    );
+    const inset = renderFieldAreaInset("patch");
     if (!rows.length) {
-      return `
-        <div class="gw-field-list">
-          <div class="gw-muted gw-field-list-empty">current patch / none</div>
-        </div>
-      `;
+      return inset;
     }
 
     return `
+      ${inset}
       <div class="gw-field-list">
         ${rows
           .map(
@@ -346,16 +817,15 @@
   }
 
   function renderFieldSurveyList() {
-    const rows = joinedSurveys();
+    const current = currentSurvey();
+    const rows = joinedSurveys().filter((survey) => String(survey.id) !== String(current?.id));
+    const inset = renderFieldAreaInset("survey");
     if (!rows.length) {
-      return `
-        <div class="gw-field-list">
-          <div class="gw-muted gw-field-list-empty">current survey / none</div>
-        </div>
-      `;
+      return inset;
     }
 
     return `
+      ${inset}
       <div class="gw-field-list">
         ${rows
           .map((survey) => {
@@ -663,6 +1133,110 @@
     }, 0);
   }
 
+  function focusFieldArea(ctx) {
+    if (!ctx || !window.map || !window.L) return;
+    const ringPoints = (ctx.rings || []).flat();
+    const bounds = boundsForCells(ctx.cells || []);
+
+    if (ringPoints.length >= 2) {
+      map.fitBounds(
+        ringPoints.map((point) => [point.lat, point.lng]),
+        { padding: [36, 36], maxZoom: 18 }
+      );
+      return;
+    }
+
+    if (bounds && window.GridWildGrid?.boundsToLatLngBounds) {
+      map.fitBounds(window.GridWildGrid.boundsToLatLngBounds(bounds), {
+        padding: [36, 36],
+        maxZoom: 18
+      });
+      return;
+    }
+
+    const cellCenter = ctx.cells?.[0] ? cellCenterLatLng(ctx.cells[0]) : null;
+    const lat = Number(ctx.item?.centroid_lat ?? ctx.item?.centroid?.lat ?? cellCenter?.lat);
+    const lng = Number(ctx.item?.centroid_lng ?? ctx.item?.centroid?.lng ?? cellCenter?.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      map.flyTo([lat, lng], Math.max(map.getZoom(), 17), { duration: 0.6 });
+    }
+  }
+
+  function minimizeFieldForHere(ctx) {
+    document
+      .querySelectorAll(
+        ".gw-quest-modal-backdrop.gw-field-selector-backdrop, .gw-quest-modal-backdrop.gw-field-center-backdrop"
+      )
+      .forEach((el) => el.remove());
+    window.GridWildSheets?.closeAll?.();
+
+    window.GridWildInfoPuck?.minimize?.({
+      kind: "field",
+      mark: "F",
+      title: ctx?.title || "Field",
+      restore: () => window.GridWildSheets?.open?.("info")
+    });
+  }
+
+  async function openFieldAreaHere(kind) {
+    const ctx = fieldAreaContext(kind);
+    if (!ctx.item || !ctx.cells.length) {
+      await handleFieldAreaAction(kind);
+      return;
+    }
+
+    focusFieldArea(ctx);
+    minimizeFieldForHere(ctx);
+
+    if (window.ensureGridWildHerePanelLoaded) {
+      await window.ensureGridWildHerePanelLoaded().catch((err) => {
+        console.warn("Could not load Here panel for Field area:", err);
+      });
+    }
+
+    const label = ctx.label || ctx.title;
+    if (window.GridWildSelectionTool?.setSelectionFromCells) {
+      window.GridWildSelectionTool.setSelectionFromCells(ctx.cells, {
+        label,
+        source: `field_${kind}`,
+        rings: ctx.rings || [],
+        toast: false
+      });
+    }
+    window.GridWildHerePanel?.open?.();
+    window.GridWildHerePanel?.scheduleRefresh?.(10);
+  }
+
+  async function handleFieldAreaAction(kind) {
+    const ctx = fieldAreaContext(kind);
+    if (kind === "niche") {
+      if (ctx.item) {
+        await window.GridWildLocalNiches?.unsetHomeNiche?.();
+        renderIntoPage();
+      } else {
+        openNicheSelector();
+      }
+      return;
+    }
+
+    if (kind === "patch") {
+      if (ctx.item) {
+        window.GridWildPatches?.unsetHomePatch?.();
+        renderIntoPage();
+      } else {
+        window.GridWildPatches?.openPatchSelector?.();
+      }
+      return;
+    }
+
+    if (ctx.item) {
+      window.GridWildSurveyLayer?.leave?.(ctx.item.id);
+      renderIntoPage();
+    } else {
+      openSurveyList();
+    }
+  }
+
   function bind(root = document) {
     const target = root || document;
     if (target.dataset?.fieldSheetBound === "true") return;
@@ -671,6 +1245,18 @@
     target.addEventListener("click", (evt) => {
       if (evt.target.closest("#gwFieldMasterToggle")) {
         setFieldContextVisible(!fieldContextEnabled());
+        return;
+      }
+
+      const areaAction = evt.target.closest("[data-gw-field-area-action]");
+      if (areaAction && target.contains(areaAction)) {
+        handleFieldAreaAction(areaAction.dataset.gwFieldAreaAction);
+        return;
+      }
+
+      const areaMap = evt.target.closest("[data-gw-field-area-map]");
+      if (areaMap && target.contains(areaMap)) {
+        openFieldAreaHere(areaMap.dataset.gwFieldAreaMap);
         return;
       }
 

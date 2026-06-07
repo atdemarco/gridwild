@@ -1923,6 +1923,17 @@
             );
             return;
           }
+        } else if (window.GridWildQuestEvidence?.getQuestProgress) {
+          const progress = window.GridWildQuestEvidence.getQuestProgress(quest);
+          if (progress.claimed < progress.target) {
+            const remaining = progress.target - progress.claimed;
+            const unit =
+              progress.mode === "target_cells"
+                ? `target square${remaining === 1 ? "" : "s"}`
+                : `evidence claim${remaining === 1 ? "" : "s"}`;
+            alert(`This quest needs ${remaining} more ${unit}.`);
+            return;
+          }
         }
 
         if (quest.source === "db" || quest.dbId) {

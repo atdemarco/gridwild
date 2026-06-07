@@ -466,6 +466,8 @@
         patchName: title,
         cells: targetInfo.cells,
         totalEligibleCells: targetInfo.totalEligibleCells,
+        targetCount: targetInfo.cells.length,
+        requiresUniqueCellProgress: true,
         generatedAt: new Date().toISOString()
       },
       quantity: 1
@@ -570,7 +572,7 @@
     const storedCount = targetInfo.cells.length;
     return window.GridWildQuests.startQuestFromRecipe(recipe, {
       title: `Help Fill Grid: ${patchTitle(patch)}`,
-      description: `Observe one organism in an unobserved GridWild square inside ${patchTitle(patch)}. ${storedCount} of ${targetCount} eligible target squares are marked for this run.`,
+      description: `Observe one organism in each marked unobserved GridWild square inside ${patchTitle(patch)}. ${storedCount} of ${targetCount} eligible target squares are marked for this run.`,
       source: "patch",
       autoEmbark: true,
       openStatus: false
@@ -1160,6 +1162,12 @@
         icon: "ID",
         label: "Identify Unknowns",
         sub: "Source unknowns inside this Patch"
+      },
+      {
+        id: "custom",
+        icon: "C",
+        label: "Custom...",
+        sub: "Build target cells from Patch filters"
       }
     ];
   }
@@ -1208,6 +1216,12 @@
           await startPatchFillQuest(patch.id);
         } else if (questType === "identify_unknowns") {
           await startPatchIdentifyQuest(patch.id);
+        } else if (questType === "custom") {
+          if (window.GridWildQuestTargetBuilder?.open) {
+            window.GridWildQuestTargetBuilder.open({ source: "patch", patch });
+          } else {
+            toast("Quest Target Builder is still loading.");
+          }
         }
       });
     });
@@ -1625,6 +1639,24 @@
     });
   }
 
+  function minimizePatchSelector(root) {
+    const restoreSheetName = window.GridWildSheets?.getOpen?.() || null;
+    root?.remove();
+    window.GridWildSheets?.closeAll?.();
+
+    if (!window.GridWildInfoPuck?.minimize) return;
+
+    window.GridWildInfoPuck.minimize({
+      kind: "patch",
+      mark: "P",
+      title: "Nearby Patches",
+      beforeRestore: restoreSheetName
+        ? () => window.GridWildSheets?.open?.(restoreSheetName)
+        : null,
+      restore: () => openPatchSelector()
+    });
+  }
+
   function openPatchDetail(id, latlng = null) {
     const patch = getPatch(id);
     if (!patch) return;
@@ -1942,8 +1974,9 @@
       if (mapBtn) {
         const id = mapBtn.dataset.gwMapPatch;
         const patch = getPatch(id) || nearbyOsmPatchCandidates(24).find((row) => row.id === id);
-        if (getPatch(id)) focusPatch(id);
-        else focusPatchObject(patch);
+        if (!patch) return;
+        focusPatchObject(patch);
+        minimizePatchSelector(root);
       }
 
       const detailBtn = evt.target.closest("[data-gw-open-patch]");

@@ -229,7 +229,7 @@
   function clampMenuPosition(x, y) {
     const width = Math.min(238, window.innerWidth - 20);
     const maxX = window.innerWidth - width - 10;
-    const maxY = window.innerHeight - 224;
+    const maxY = window.innerHeight - 284;
 
     return {
       x: Math.max(10, Math.min(maxX, x)),
@@ -265,6 +265,18 @@
     }
 
     items.push(
+      {
+        id: "start-quest",
+        icon: "Q",
+        label: "Start Quest",
+        sub: "Fill unobserved cells in a 9x9 grid"
+      },
+      {
+        id: "custom-quest",
+        icon: "C",
+        label: "Custom...",
+        sub: "Build target cells from heat filters"
+      },
       {
         id: "copy-link",
         icon: "@",
@@ -417,6 +429,169 @@
     }
   }
 
+  function staticGridReady() {
+    return (
+      window.__gwStaticHeatLoaded === true ||
+      (window.__staticGridCounts instanceof Map && window.__staticGridCounts.size > 0)
+    );
+  }
+
+  function waitForStaticGridReady(timeoutMs = 5000) {
+    if (staticGridReady()) return Promise.resolve(true);
+
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (value) => {
+        if (done) return;
+        done = true;
+        window.removeEventListener("gridwild:staticheatloaded", onLoaded);
+        window.clearTimeout(timer);
+        resolve(value);
+      };
+      const onLoaded = () => finish(true);
+      const timer = window.setTimeout(() => finish(staticGridReady()), timeoutMs);
+      window.addEventListener("gridwild:staticheatloaded", onLoaded, { once: true });
+    });
+  }
+
+  function gridCellKey(ix, iy) {
+    return window.GridWildGrid?.cellKey?.(ix, iy) || `${ix},${iy}`;
+  }
+
+  function latLngToGridCell(latlng) {
+    const lat = Number(latlng?.lat);
+    const lng = Number(latlng?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    if (window.GridWildGrid?.latLngToCell) {
+      const cell = window.GridWildGrid.latLngToCell([lat, lng]);
+      const ix = Number(cell?.ix);
+      const iy = Number(cell?.iy);
+      if (Number.isFinite(ix) && Number.isFinite(iy)) {
+        return { ix: Math.floor(ix), iy: Math.floor(iy) };
+      }
+    }
+
+    const crs = window.map?.options?.crs;
+    const leaflet = window.L;
+    if (!crs?.project || !leaflet?.latLng) return null;
+
+    const gridSizeM = Number(window.GridWildGrid?.gridSizeM) || 20 * 0.3048;
+    const point = crs.project(leaflet.latLng(lat, lng));
+    return {
+      ix: Math.floor(point.x / gridSizeM),
+      iy: Math.floor(point.y / gridSizeM)
+    };
+  }
+
+  function staticObservationCountForCell(ix, iy) {
+    const metrics =
+      window.__staticGridCounts instanceof Map
+        ? window.__staticGridCounts.get(gridCellKey(ix, iy))
+        : null;
+    return Number(metrics?.count) || 0;
+  }
+
+  function nineByNineTargetCells(latlng) {
+    const center = latLngToGridCell(latlng);
+    if (!center) return null;
+
+    const cells = [];
+    for (let iy = center.iy - 4; iy <= center.iy + 4; iy++) {
+      for (let ix = center.ix - 4; ix <= center.ix + 4; ix++) {
+        if (staticObservationCountForCell(ix, iy) > 0) continue;
+        cells.push({ ix, iy, key: gridCellKey(ix, iy) });
+      }
+    }
+
+    return {
+      center,
+      cells,
+      totalSquares: 81,
+      totalEligibleCells: cells.length
+    };
+  }
+
+  function coordinateLabel(latlng) {
+    const lat = Number(latlng?.lat);
+    const lng = Number(latlng?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "selected point";
+    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  }
+
+  async function startGridFillQuest(context) {
+    if (!window.GridWildQuests?.startQuestFromRecipe) {
+      toast("Quest tools are still loading.");
+      return;
+    }
+
+    const latlng = context?.latlng;
+    if (!latlng) {
+      toast("Choose a map point first.");
+      return;
+    }
+
+    if (!staticGridReady()) toast("Loading grid memory...");
+    const ready = await waitForStaticGridReady();
+    if (!ready) {
+      toast("Grid memory is still loading. Try Start Quest again in a moment.");
+      return;
+    }
+
+    const targetInfo = nineByNineTargetCells(latlng);
+    if (!targetInfo?.cells?.length) {
+      toast("No unobserved target squares in this 9x9 grid.");
+      return;
+    }
+
+    const label = coordinateLabel(latlng);
+    const recipe = {
+      range: "here",
+      iconicTaxon: "Any",
+      objectiveType: "any_observation",
+      difficulty: 2,
+      timeframe: "today",
+      evidence: "photo_gps20",
+      surveyId: "none",
+      targetLocation: "target_set",
+      target: {
+        mode: "target_set",
+        kind: "hud_grid_fill_9x9",
+        label: "9x9 grid fill",
+        patchName: `9x9 grid near ${label}`,
+        cells: targetInfo.cells,
+        totalEligibleCells: targetInfo.totalEligibleCells,
+        totalSquares: targetInfo.totalSquares,
+        targetCount: targetInfo.cells.length,
+        requiresUniqueCellProgress: true,
+        centerCell: targetInfo.center,
+        generatedAt: new Date().toISOString()
+      },
+      quantity: 1
+    };
+
+    const quest = await window.GridWildQuests.startQuestFromRecipe(recipe, {
+      title: "Help Fill Grid: 9x9",
+      description: `Observe one organism in each marked unobserved GridWild square within the selected 9x9 grid. ${targetInfo.cells.length} of ${targetInfo.totalSquares} squares are marked for this run.`,
+      source: "manual",
+      autoEmbark: true,
+      openStatus: false
+    });
+
+    if (quest) toast("9x9 grid quest started.");
+  }
+
+  function openCustomQuestBuilder(context) {
+    if (!window.GridWildQuestTargetBuilder?.open) {
+      toast("Quest Target Builder is still loading.");
+      return;
+    }
+    window.GridWildQuestTargetBuilder.open({
+      source: "hud",
+      latlng: context?.latlng || window.map?.getCenter?.()
+    });
+  }
+
   function draftId() {
     return `draft_note_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   }
@@ -538,6 +713,16 @@
 
     if (action === "party-one") {
       await startPartyOfOne();
+      return;
+    }
+
+    if (action === "start-quest") {
+      await startGridFillQuest(context);
+      return;
+    }
+
+    if (action === "custom-quest") {
+      openCustomQuestBuilder(context);
       return;
     }
 

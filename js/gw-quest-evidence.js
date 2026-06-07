@@ -107,6 +107,7 @@
     const dbQuestId = quest?.dbId || quest?.id;
     const id = obsId(obs);
     if (!dbQuestId || !id) return;
+    const targetCellKey = targetCellKeyForObservation(obs);
 
     window.__gwState = window.__gwState || {};
     const evidence = window.__gwState.questEvidence || [];
@@ -125,7 +126,12 @@
           obs_id: id,
           source: obs.source || "observation",
           status: "claimed",
-          claimed_at: new Date().toISOString()
+          claimed_at: new Date().toISOString(),
+          payload: {
+            lat: Number.isFinite(Number(obs?.lat)) ? Number(obs.lat) : null,
+            lng: Number.isFinite(Number(obs?.lng)) ? Number(obs.lng) : null,
+            target_cell_key: targetCellKey || null
+          }
         }
       ];
       window.dispatchEvent(new CustomEvent("gwQuestEvidenceChanged"));
@@ -204,6 +210,70 @@
     return Math.abs(ix - Number(target.ix)) <= radius && Math.abs(iy - Number(target.iy)) <= radius;
   }
 
+  function targetSetCells(quest) {
+    const target = quest?.recipe?.target || {};
+    const cells = Array.isArray(target.cells) ? target.cells : [];
+    return cells
+      .map((cell) => {
+        const ix = Number(cell?.ix);
+        const iy = Number(cell?.iy);
+        const key = String(cell?.key || `${ix},${iy}`);
+        if (!Number.isFinite(ix) || !Number.isFinite(iy) || key.includes("NaN")) return null;
+        return { ix: Math.floor(ix), iy: Math.floor(iy), key };
+      })
+      .filter(Boolean);
+  }
+
+  function isTargetSetUniqueProgressQuest(quest) {
+    const target = quest?.recipe?.target || {};
+    const mode = quest?.recipe?.targetLocation || target?.mode || "anywhere";
+    if (mode !== "target_set" || !targetSetCells(quest).length) return false;
+
+    const kind = String(target.kind || "");
+    return target.requiresUniqueCellProgress === true || kind.includes("grid_fill");
+  }
+
+  function targetSetCellKeySet(quest) {
+    return new Set(targetSetCells(quest).map((cell) => cell.key));
+  }
+
+  function cellKeyFromLatLng(lat, lng) {
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return "";
+
+    if (typeof window.getCellKeyForLatLng === "function") {
+      return window.getCellKeyForLatLng(latNum, lngNum);
+    }
+
+    const cell = window.GridWildGrid?.latLngToCell?.([latNum, lngNum]);
+    const ix = Number(cell?.ix);
+    const iy = Number(cell?.iy);
+    if (!Number.isFinite(ix) || !Number.isFinite(iy)) return "";
+    return `${Math.floor(ix)},${Math.floor(iy)}`;
+  }
+
+  function targetCellKeyForObservation(obs) {
+    const direct = String(
+      obs?.location?.cellKey || obs?.target_cell_key || obs?.targetCellKey || ""
+    );
+    if (direct) return direct;
+    return cellKeyFromLatLng(obs?.lat, obs?.lng);
+  }
+
+  function evidenceTargetCellKey(evidence, obsById = null) {
+    const payload =
+      evidence?.payload && typeof evidence.payload === "object" ? evidence.payload : {};
+    const direct = String(payload.target_cell_key || payload.targetCellKey || "");
+    if (direct) return direct;
+
+    const fromPayload = cellKeyFromLatLng(payload.lat, payload.lng);
+    if (fromPayload) return fromPayload;
+
+    const obs = obsById?.get?.(String(evidence?.obs_id));
+    return obs ? targetCellKeyForObservation(obs) : "";
+  }
+
   function qualifies(obs, quest) {
     return (
       isTaxonMatch(obs, quest) &&
@@ -257,13 +327,20 @@
         const ok = Object.values(checks).every((check) => check.ok);
         const channel = getChannelForQuest(quest);
         const lockedTo = claimedQuestForObservationChannel(obs, channel);
+        const already = isObservationClaimedForQuest(obs, quest);
+        const targetCellClaimed =
+          ok &&
+          !already &&
+          isTargetSetUniqueProgressQuest(quest) &&
+          getClaimedTargetCellKeys(quest).has(targetCellKeyForObservation(obs));
 
         return {
           obs,
           checks,
           ok,
-          already: isObservationClaimedForQuest(obs, quest),
-          blocked: !!lockedTo && lockedTo !== quest.id
+          already,
+          blocked: (!!lockedTo && lockedTo !== quest.id) || targetCellClaimed,
+          blockedLabel: targetCellClaimed ? "Cell credited" : "Used"
         };
       })
       .sort((a, b) => {
@@ -324,6 +401,16 @@
     if (!obs || !quest) return { ok: false, reason: "Missing observation or quest." };
     if (!qualifies(obs, quest)) return { ok: false, reason: "Observation does not qualify." };
 
+    if (isTargetSetUniqueProgressQuest(quest) && !isObservationClaimedForQuest(obs, quest)) {
+      const key = targetCellKeyForObservation(obs);
+      if (!key || !targetSetCellKeySet(quest).has(key)) {
+        return { ok: false, reason: "Observation is not in a target square." };
+      }
+      if (getClaimedTargetCellKeys(quest).has(key)) {
+        return { ok: false, reason: "That target square already has credit." };
+      }
+    }
+
     const channel = getChannelForQuest(quest);
     const already = claimedQuestForObservationChannel(obs, channel);
 
@@ -372,10 +459,22 @@
   function autoClaimForQuest(quest) {
     const candidates = getCandidatesForQuest(quest);
     let claimed = 0;
+    const uniqueTargetCells = isTargetSetUniqueProgressQuest(quest);
+    const pendingCellKeys = uniqueTargetCells
+      ? new Set(Array.from(getClaimedTargetCellKeys(quest)))
+      : null;
 
     for (const obs of candidates) {
+      if (uniqueTargetCells) {
+        const key = targetCellKeyForObservation(obs);
+        if (!key || pendingCellKeys.has(key)) continue;
+      }
+
       const result = claimObservationForQuest(obs, quest, { notifyError: false });
-      if (result.ok) claimed += 1;
+      if (result.ok) {
+        claimed += 1;
+        if (uniqueTargetCells) pendingCellKeys.add(targetCellKeyForObservation(obs));
+      }
     }
 
     return claimed;
@@ -403,6 +502,12 @@
     let claimed = 0;
     for (const obs of candidates) {
       if (isObservationClaimedForQuest(obs, quest)) continue;
+      if (
+        isTargetSetUniqueProgressQuest(quest) &&
+        getClaimedTargetCellKeys(quest).has(targetCellKeyForObservation(obs))
+      ) {
+        continue;
+      }
 
       const result = claimObservationForQuest(obs, quest, { notifyError: false });
       if (result.ok) claimed += 1;
@@ -423,13 +528,52 @@
       .filter(Boolean);
   }
 
+  function getClaimedTargetCellKeys(quest) {
+    if (!isTargetSetUniqueProgressQuest(quest)) return new Set();
+
+    // Grid-fill quests advance by unique credited target squares, not raw evidence count.
+    const dbQuestId = quest.dbId || quest.id;
+    const targetKeys = targetSetCellKeySet(quest);
+    const evidence = window.__gwState?.questEvidence || [];
+    const obs = getAllEvidenceObservations();
+    const byId = new Map(obs.map((o) => [obsId(o), o]));
+    const claimed = new Set();
+
+    evidence
+      .filter((e) => String(e.quest_id) === String(dbQuestId) && isClaimedStatus(e.status))
+      .forEach((e) => {
+        const key = evidenceTargetCellKey(e, byId);
+        if (targetKeys.has(key)) claimed.add(key);
+      });
+
+    return claimed;
+  }
+
   function getQuestProgress(quest) {
+    if (isTargetSetUniqueProgressQuest(quest)) {
+      const target = targetSetCells(quest).length;
+      const claimedCellKeys = getClaimedTargetCellKeys(quest);
+      return {
+        claimed: claimedCellKeys.size,
+        target: Math.max(1, target),
+        mode: "target_cells",
+        unit: "target squares",
+        claimedCellKeys: Array.from(claimedCellKeys)
+      };
+    }
+
     const claimed = getClaimedForQuest(quest).length;
     const target = Number(quest?.recipe?.quantity || quest?.targetCount || 1);
     return {
       claimed,
-      target: Number.isFinite(target) && target > 0 ? target : 1
+      target: Number.isFinite(target) && target > 0 ? target : 1,
+      mode: "evidence",
+      unit: "evidence linked"
     };
+  }
+
+  function progressUnitLabel(progress) {
+    return progress?.mode === "target_cells" ? "target squares complete" : "evidence linked";
   }
 
   function criterionCell(check) {
@@ -466,7 +610,7 @@
         <div>
           <div class="gw-evidence-selector-kicker">Quest Evidence</div>
           <div class="gw-evidence-selector-title">${esc(quest?.title || "Active Quest")}</div>
-          <div class="gw-evidence-selector-sub">${progress.claimed} / ${progress.target} evidence linked</div>
+          <div class="gw-evidence-selector-sub">${progress.claimed} / ${progress.target} ${esc(progressUnitLabel(progress))}</div>
         </div>
         <button class="gw-evidence-selector-close" type="button" aria-label="Close evidence selector">×</button>
       </div>
@@ -508,7 +652,7 @@
                       row.already
                         ? `<span class="gw-evidence-badge claimed">Linked</span>`
                         : row.blocked
-                          ? `<span class="gw-evidence-badge blocked">Used</span>`
+                          ? `<span class="gw-evidence-badge blocked">${esc(row.blockedLabel || "Used")}</span>`
                           : row.ok
                             ? `<button class="gw-mini-btn gw-evidence-selector-claim" type="button" data-evidence-key="${esc(evidenceRowKey(row))}">Claim</button>`
                             : `<span class="gw-evidence-badge blocked">Not enough</span>`
@@ -681,7 +825,7 @@
           <div>
             <div class="gw-quest-evidence-title">Evidence</div>
             <div class="gw-muted" style="font-size:11px;">
-              ${progress.claimed} / ${progress.target} claimed · ${esc(channel)} credit channel
+              ${progress.claimed} / ${progress.target} ${esc(progressUnitLabel(progress))} · ${esc(channel)} credit channel
             </div>
           </div>
 
@@ -706,7 +850,12 @@
                   .map((o) => {
                     const already = isObservationClaimedForQuest(o, quest);
                     const lockedTo = claimedQuestForObservationChannel(o, channel);
-                    const blocked = lockedTo && lockedTo !== quest.id;
+                    const targetCellClaimed =
+                      !already &&
+                      isTargetSetUniqueProgressQuest(quest) &&
+                      getClaimedTargetCellKeys(quest).has(targetCellKeyForObservation(o));
+                    const blocked = (lockedTo && lockedTo !== quest.id) || targetCellClaimed;
+                    const blockedLabel = targetCellClaimed ? "Cell credited" : "Used";
 
                     return `
                     <div class="gw-rowline gw-evidence-row" data-obs-id="${esc(obsId(o))}">
@@ -723,7 +872,7 @@
                         already
                           ? `<span class="gw-evidence-badge claimed">Linked</span>`
                           : blocked
-                            ? `<span class="gw-evidence-badge blocked">Used</span>`
+                            ? `<span class="gw-evidence-badge blocked">${esc(blockedLabel)}</span>`
                             : `<button class="gw-mini-btn gw-claim-evidence-btn" type="button" data-obs-id="${esc(obsId(o))}">Claim</button>`
                       }
                     </div>
@@ -1099,7 +1248,10 @@
     autoClaimForQuest,
     autoClaimDraftsForActiveQuest,
     getClaimedForQuest,
+    getClaimedTargetCellKeys,
     getQuestProgress,
+    isTargetSetUniqueProgressQuest,
+    targetCellKeyForObservation,
     openEvidenceSelector,
     renderRecentObservationBadge,
     renderQuestEvidencePanel,

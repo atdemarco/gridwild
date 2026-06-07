@@ -68,6 +68,7 @@ function cleanTargetSetCell(raw) {
 function cleanTargetSet(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
 
+  const kind = cleanString(raw.kind || "patch_grid_fill", 80) || "patch_grid_fill";
   const seen = new Set();
   const cells = [];
   for (const rawCell of Array.isArray(raw.cells) ? raw.cells : []) {
@@ -82,12 +83,15 @@ function cleanTargetSet(raw) {
 
   return {
     mode: "target_set",
-    kind: cleanString(raw.kind || "patch_grid_fill", 80) || "patch_grid_fill",
+    kind,
     label: cleanString(raw.label || raw.patchName || "Patch target cells", 120),
     patchId: cleanString(raw.patchId, 160),
     patchName: cleanString(raw.patchName, 180),
     cells,
     totalEligibleCells: clampInteger(raw.totalEligibleCells, cells.length, 100000, cells.length),
+    targetCount: clampInteger(raw.targetCount, 1, cells.length, cells.length),
+    requiresUniqueCellProgress:
+      raw.requiresUniqueCellProgress === true || kind.includes("grid_fill"),
     generatedAt: cleanString(raw.generatedAt, 40)
   };
 }
@@ -322,6 +326,64 @@ function gridCellForCoordinates(coordinates) {
   };
 }
 
+function targetCellKeyForCoordinates(coordinates) {
+  if (!coordinates) return "";
+  const cell = gridCellForCoordinates(coordinates);
+  return `${cell.ix},${cell.iy}`;
+}
+
+function isClaimedEvidenceStatus(status) {
+  return ["claimed", "submitted", "verified", "counted"].includes(
+    String(status || "").toLowerCase()
+  );
+}
+
+function targetSetRequiresUniqueCellProgress(questOrRecipe) {
+  const recipe = questOrRecipe?.recipe || questOrRecipe || {};
+  const target = recipe.target || null;
+  const targetLocation = recipe.targetLocation || target?.mode || "anywhere";
+  if (targetLocation !== "target_set" || !Array.isArray(target?.cells) || !target.cells.length) {
+    return false;
+  }
+
+  const kind = String(target.kind || "");
+  return target.requiresUniqueCellProgress === true || kind.includes("grid_fill");
+}
+
+function targetSetProgressForEvidence(questOrRecipe, evidenceRows = []) {
+  const recipe = questOrRecipe?.recipe || questOrRecipe || {};
+  const target = recipe.target || {};
+  const targetKeys = new Set(
+    (Array.isArray(target.cells) ? target.cells : [])
+      .map((cell) => String(cell?.key || `${Number(cell?.ix)},${Number(cell?.iy)}`))
+      .filter((key) => key && !key.includes("NaN"))
+  );
+  const claimedKeys = new Set();
+
+  for (const row of Array.isArray(evidenceRows) ? evidenceRows : []) {
+    if (!isClaimedEvidenceStatus(row?.status)) continue;
+
+    const payload = row?.payload && typeof row.payload === "object" ? row.payload : {};
+    let key = String(payload.target_cell_key || payload.targetCellKey || "");
+
+    if (!key) {
+      const lat = Number(payload.lat);
+      const lng = Number(payload.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        key = targetCellKeyForCoordinates({ lat, lng });
+      }
+    }
+
+    if (targetKeys.has(key)) claimedKeys.add(key);
+  }
+
+  return {
+    claimed: claimedKeys.size,
+    target: targetKeys.size,
+    claimedCellKeys: Array.from(claimedKeys)
+  };
+}
+
 function pointInRing(point, ring = []) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -479,9 +541,13 @@ module.exports = {
   assertIdentificationObservationQualifiesForQuest,
   assertObservationQualifiesForQuest,
   assertRewardQuestOwned,
+  gridCellForCoordinates,
   isIdentificationQuest,
   issueQuest,
   normalizeQuestRecipe,
   questIssuanceKey,
-  questReward
+  questReward,
+  targetCellKeyForCoordinates,
+  targetSetProgressForEvidence,
+  targetSetRequiresUniqueCellProgress
 };

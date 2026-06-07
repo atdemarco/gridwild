@@ -889,6 +889,40 @@ window.GridWildGrid =
       return mergeSquareGeneraRecords(records);
     }
 
+    async function mergedGeneraRecordForCells(cells = [], options = {}) {
+      const normalized = (Array.isArray(cells) ? cells : [])
+        .map((cell) => ({
+          ix: Number(cell?.ix),
+          iy: Number(cell?.iy)
+        }))
+        .filter((cell) => Number.isFinite(cell.ix) && Number.isFinite(cell.iy))
+        .map((cell) => ({
+          ix: Math.floor(cell.ix),
+          iy: Math.floor(cell.iy)
+        }));
+
+      if (!normalized.length) return { genera: [], top_observers: [], __metrics: null };
+
+      const seen = new Set();
+      const jobs = [];
+
+      normalized.forEach((cell) => {
+        const key = cellKey(cell.ix, cell.iy);
+        if (seen.has(key) || !hasStaticGoldCellForGenera(cell.ix, cell.iy)) return;
+        seen.add(key);
+        jobs.push(getSquareGeneraRecord(cell.ix, cell.iy));
+      });
+
+      let records = (await Promise.all(jobs)).filter(Boolean);
+      const taxa = options.applyFilters ? selectedIconicTaxa() : [];
+
+      if (options.applyFilters && taxa.length) {
+        records = records.map((rec) => filteredSquareGeneraRecord(rec, taxa)).filter(Boolean);
+      }
+
+      return mergeSquareGeneraRecords(records);
+    }
+
     function currentUserCell() {
       return getCurrentUserCellIndices();
     }
@@ -906,6 +940,7 @@ window.GridWildGrid =
       centerAreaBounds,
       cellsForBounds,
       mergedGeneraRecordForBounds,
+      mergedGeneraRecordForCells,
       activeFilterSignature,
       currentUserCell,
       centerCell,

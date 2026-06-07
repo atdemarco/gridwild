@@ -8,6 +8,7 @@
   const HUD_COLLAPSED_KEY = "gw_quest_hud_collapsed";
   const TARGET_SET_MIN_ZOOM = 18;
   const TARGET_SET_VISIBLE_GLYPH_CAP = 36;
+  const TARGET_SET_COARSE_VISIBLE_BIN_CAP = 72;
 
   let questLayer = null;
   let targetLayer = null;
@@ -20,6 +21,7 @@
   let raiseTabPositionBound = false;
   let targetSetMotionBound = false;
   let targetSetRenderPending = false;
+  let targetSetQualifying = false;
   let activeQuest = null;
 
   function ensurePaneAndLayers() {
@@ -71,6 +73,20 @@
         filter: drop-shadow(0 0 6px rgba(255,126,126,0.60));
       }
 
+      .gw-quest-target-glyph-cell.is-qualifying {
+        stroke: rgba(118,231,191,0.98);
+        fill: rgba(118,231,191,0.16);
+        filter: drop-shadow(0 0 8px rgba(118,231,191,0.72));
+      }
+
+      .gw-quest-target-glyph-cell.is-claimed {
+        stroke: rgba(144,238,172,0.98);
+        stroke-width: 2;
+        stroke-dasharray: none;
+        fill: rgba(100,220,145,0.22);
+        filter: drop-shadow(0 0 9px rgba(100,220,145,0.82));
+      }
+
       .gw-quest-target-glyph {
         width: 18px;
         height: 18px;
@@ -82,6 +98,21 @@
           0 0 16px rgba(255,126,126,0.70);
         position: relative;
         animation: gwQuestTargetGlyph 1.25s ease-in-out infinite;
+      }
+
+      .gw-quest-target-glyph.is-qualifying {
+        border-color: rgba(118,231,191,0.98);
+        box-shadow:
+          0 0 0 4px rgba(118,231,191,0.16),
+          0 0 17px rgba(118,231,191,0.78);
+      }
+
+      .gw-quest-target-glyph.is-claimed {
+        border-color: rgba(144,238,172,0.98);
+        background: rgba(100,220,145,0.20);
+        box-shadow:
+          0 0 0 4px rgba(100,220,145,0.17),
+          0 0 18px rgba(100,220,145,0.86);
       }
 
       .gw-quest-target-glyph::before,
@@ -102,6 +133,103 @@
       .gw-quest-target-glyph::after {
         width: 14px;
         height: 2px;
+      }
+
+      .gw-quest-target-glyph-check {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        width: 100%;
+        height: 100%;
+        color: #fff7df;
+        font-size: 13px;
+        font-weight: 950;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.68);
+      }
+
+      .gw-quest-target-coarse-cell {
+        filter: drop-shadow(0 0 8px rgba(255,126,126,0.52));
+      }
+
+      .gw-quest-target-coarse-cell.is-qualifying {
+        filter: drop-shadow(0 0 10px rgba(118,231,191,0.68));
+      }
+
+      .gw-quest-target-coarse-cell.is-claimed {
+        filter: drop-shadow(0 0 11px rgba(100,220,145,0.76));
+      }
+
+      .gw-quest-target-coarse-glyph {
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        box-sizing: border-box;
+        border: 2px solid rgba(255,126,126,0.98);
+        background:
+          radial-gradient(circle, rgba(255,247,223,0.95) 0 10%, transparent 11% 100%),
+          radial-gradient(circle, transparent 0 45%, rgba(255,126,126,0.18) 46% 100%);
+        box-shadow:
+          0 0 0 5px rgba(255,126,126,0.13),
+          0 0 18px rgba(255,126,126,0.74);
+        position: relative;
+        display: grid;
+        place-items: center;
+        color: #fff4da;
+        font-size: 9px;
+        line-height: 1;
+        font-weight: 900;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.65);
+        animation: gwQuestTargetGlyph 1.45s ease-in-out infinite;
+      }
+
+      .gw-quest-target-coarse-glyph.is-qualifying {
+        border-color: rgba(118,231,191,0.98);
+        background:
+          radial-gradient(circle, rgba(255,247,223,0.95) 0 10%, transparent 11% 100%),
+          radial-gradient(circle, transparent 0 45%, rgba(118,231,191,0.22) 46% 100%);
+        box-shadow:
+          0 0 0 5px rgba(118,231,191,0.15),
+          0 0 20px rgba(118,231,191,0.82);
+      }
+
+      .gw-quest-target-coarse-glyph.is-claimed {
+        border-color: rgba(144,238,172,0.98);
+        background:
+          radial-gradient(circle, rgba(255,247,223,0.95) 0 10%, transparent 11% 100%),
+          radial-gradient(circle, transparent 0 45%, rgba(100,220,145,0.24) 46% 100%);
+        box-shadow:
+          0 0 0 5px rgba(100,220,145,0.16),
+          0 0 21px rgba(100,220,145,0.84);
+      }
+
+      .gw-quest-target-coarse-glyph::before,
+      .gw-quest-target-coarse-glyph::after {
+        content: "";
+        position: absolute;
+        background: rgba(255,247,223,0.86);
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .gw-quest-target-coarse-glyph::before {
+        width: 2px;
+        height: 18px;
+      }
+
+      .gw-quest-target-coarse-glyph::after {
+        width: 18px;
+        height: 2px;
+      }
+
+      .gw-quest-target-coarse-count {
+        position: relative;
+        z-index: 1;
+        min-width: 12px;
+        padding: 1px 3px;
+        border-radius: 999px;
+        background: rgba(38,21,18,0.74);
       }
 
       .gw-quest-target-polygon {
@@ -135,10 +263,12 @@
       }
 
       .gw-active-quest-chip {
-        position: absolute;
-        left: 12px;
-        right: 12px;
+        position: fixed;
+        left: 50%;
+        right: auto;
         top: calc(max(12px, env(safe-area-inset-top)) + 54px);
+        width: min(520px, calc(100vw - 128px));
+        transform: translateX(-50%);
         z-index: 1410;
         pointer-events: auto;
 
@@ -157,7 +287,15 @@
         box-shadow:
           0 12px 30px rgba(0,0,0,0.34),
           inset 0 1px 0 rgba(255,255,255,0.05);
-        transition: left 180ms ease, width 180ms ease, padding 180ms ease, border-radius 180ms ease;
+        transition: width 180ms ease, padding 180ms ease, border-radius 180ms ease, transform 180ms ease;
+      }
+
+      @media (max-width: 520px) {
+        .gw-active-quest-chip {
+          width: min(360px, calc(100vw - 92px));
+          gap: 8px;
+          padding: 9px 10px;
+        }
       }
 
       .gw-active-quest-chip.is-collapsed {
@@ -409,6 +547,7 @@
     targetLayer?.clearLayers();
     questLayer?.clearLayers();
     targetSetRenderPending = false;
+    targetSetQualifying = false;
     clearTetherLine();
     if (pulseMarker) {
       pulseMarker.remove();
@@ -446,6 +585,20 @@
     const y0 = (iy - r) * GRID_SIZE_M;
     const x1 = (ix + r + 1) * GRID_SIZE_M;
     const y1 = (iy + r + 1) * GRID_SIZE_M;
+
+    const sw = map.options.crs.unproject(L.point(x0, y0));
+    const ne = map.options.crs.unproject(L.point(x1, y1));
+
+    return L.latLngBounds(sw, ne);
+  }
+
+  function cellSpanBounds(ix, iy, spanCells = 1) {
+    const span = Math.max(1, Math.round(Number(spanCells) || 1));
+
+    const x0 = ix * GRID_SIZE_M;
+    const y0 = iy * GRID_SIZE_M;
+    const x1 = (ix + span) * GRID_SIZE_M;
+    const y1 = (iy + span) * GRID_SIZE_M;
 
     const sw = map.options.crs.unproject(L.point(x0, y0));
     const ne = map.options.crs.unproject(L.point(x1, y1));
@@ -530,17 +683,144 @@
       .map((entry) => entry.cell);
   }
 
+  function targetSetCoarseBinSize() {
+    const stateBin = Number(window.getGridWildCoarseHeatState?.()?.effectiveBinSize);
+    if (Number.isFinite(stateBin)) return Math.max(2, Math.min(64, Math.round(stateBin)));
+
+    const raw = Number(window.__gwState?.coarseHeatBinSize);
+    if (Number.isFinite(raw)) return Math.max(2, Math.min(64, Math.round(raw)));
+
+    return 8;
+  }
+
+  function targetSetCoarseBinAnchor(cell, binSize) {
+    return {
+      ix: Math.floor(cell.ix / binSize) * binSize,
+      iy: Math.floor(cell.iy / binSize) * binSize
+    };
+  }
+
+  function visibleTargetSetCoarseBins(target) {
+    if (!target?.cells?.length) return [];
+
+    const binSize = targetSetCoarseBinSize();
+    const bounds = map.getBounds();
+    const origin = targetSortOrigin();
+    const bins = new Map();
+
+    target.cells.forEach((cell) => {
+      if (!bounds.contains([cell.lat, cell.lng])) return;
+
+      const anchor = targetSetCoarseBinAnchor(cell, binSize);
+      const key = targetSetCellKey(anchor.ix, anchor.iy);
+      let entry = bins.get(key);
+
+      if (!entry) {
+        const binBounds = cellSpanBounds(anchor.ix, anchor.iy, binSize);
+        const center = binBounds.getCenter();
+        entry = {
+          key,
+          ix: anchor.ix,
+          iy: anchor.iy,
+          binSize,
+          bounds: binBounds,
+          center,
+          cells: [],
+          distance: origin ? center.distanceTo(origin) : Infinity
+        };
+        bins.set(key, entry);
+      }
+
+      entry.cells.push(cell);
+    });
+
+    return Array.from(bins.values())
+      .sort((a, b) => a.distance - b.distance || a.key.localeCompare(b.key))
+      .slice(0, TARGET_SET_COARSE_VISIBLE_BIN_CAP);
+  }
+
+  function renderTargetSetCoarseGeometry(target) {
+    const bins = visibleTargetSetCoarseBins(target);
+    const claimedKeys = claimedTargetSetCellKeys();
+    const qualifyingClass = targetSetQualifying ? "is-qualifying" : "";
+    const palette = targetSetQualifying
+      ? {
+          stroke: "rgba(118,231,191,0.98)",
+          fill: "rgba(82,220,166,1)"
+        }
+      : {
+          stroke: "rgba(255,126,126,0.94)",
+          fill: "rgba(255,73,73,1)"
+        };
+
+    bins.forEach((bin) => {
+      const density = Math.min(1, Math.log1p(bin.cells.length) / Math.log1p(bin.binSize * 2));
+      const claimedCount = bin.cells.filter((cell) => claimedKeys.has(cell.key)).length;
+      const claimedClass = claimedCount > 0 ? "is-claimed" : "";
+      const binPalette =
+        claimedCount > 0 && !targetSetQualifying
+          ? {
+              stroke: "rgba(144,238,172,0.98)",
+              fill: "rgba(100,220,145,1)"
+            }
+          : palette;
+
+      L.rectangle(bin.bounds, {
+        pane: QUEST_PANE,
+        interactive: false,
+        color: binPalette.stroke,
+        weight: density > 0.55 ? 1.8 : 1.3,
+        opacity: 0.78 + density * 0.2,
+        fillColor: binPalette.fill,
+        fillOpacity: 0.11 + density * 0.26,
+        dashArray: "6 5",
+        className: ["gw-quest-target-coarse-cell", qualifyingClass, claimedClass]
+          .filter(Boolean)
+          .join(" ")
+      }).addTo(targetLayer);
+
+      const countLabel =
+        claimedCount > 0
+          ? `<span class="gw-quest-target-coarse-count">${claimedCount}/${bin.cells.length}</span>`
+          : bin.cells.length > 1
+            ? `<span class="gw-quest-target-coarse-count">${bin.cells.length}</span>`
+            : "";
+
+      L.marker(bin.center, {
+        pane: QUEST_PANE,
+        interactive: false,
+        icon: L.divIcon({
+          className: "",
+          html: `<div class="gw-quest-target-coarse-glyph ${qualifyingClass} ${claimedClass}">${countLabel}</div>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        })
+      }).addTo(targetLayer);
+    });
+  }
+
   function renderTargetSetGeometry(target = activeQuest?.__gwNormalizedTarget) {
     if (!targetLayer || !target || target.mode !== "target_set") return;
 
     targetLayer.clearLayers();
 
+    if (map.getZoom() < TARGET_SET_MIN_ZOOM) {
+      renderTargetSetCoarseGeometry(target);
+      return;
+    }
+
+    const qualifyingClass = targetSetQualifying ? "is-qualifying" : "";
+    const claimedKeys = claimedTargetSetCellKeys();
+
     visibleTargetSetCells(target).forEach((cell) => {
       const bounds = cellBounds(cell.ix, cell.iy, 0);
+      const claimedClass = claimedKeys.has(cell.key) ? "is-claimed" : "";
       L.rectangle(bounds, {
         pane: QUEST_PANE,
         interactive: false,
-        className: "gw-quest-target-glyph-cell"
+        className: ["gw-quest-target-glyph-cell", qualifyingClass, claimedClass]
+          .filter(Boolean)
+          .join(" ")
       }).addTo(targetLayer);
 
       L.marker(bounds.getCenter(), {
@@ -548,7 +828,9 @@
         interactive: false,
         icon: L.divIcon({
           className: "",
-          html: `<div class="gw-quest-target-glyph"></div>`,
+          html: `<div class="gw-quest-target-glyph ${qualifyingClass} ${claimedClass}">${
+            claimedClass ? '<span class="gw-quest-target-glyph-check">✓</span>' : ""
+          }</div>`,
           iconSize: [18, 18],
           iconAnchor: [9, 9]
         })
@@ -583,6 +865,26 @@
     } else {
       map.on("move zoom resize viewreset zoomend moveend", scheduleTargetSetRender);
     }
+  }
+
+  function setTargetSetQualifying(inside) {
+    const next = inside === true;
+    if (targetSetQualifying === next) return;
+
+    targetSetQualifying = next;
+    renderTargetSetGeometry();
+  }
+
+  function claimedTargetSetCellKeys() {
+    const keys = window.GridWildQuestEvidence?.getClaimedTargetCellKeys?.(activeQuest);
+    if (keys instanceof Set) return keys;
+    return new Set(Array.isArray(keys) ? keys : []);
+  }
+
+  function targetSetProgressLabel() {
+    const progress = window.GridWildQuestEvidence?.getQuestProgress?.(activeQuest);
+    if (!progress || progress.mode !== "target_cells") return "";
+    return `${progress.claimed} / ${progress.target} target squares complete`;
   }
 
   function normalizeTargetSet(raw = {}) {
@@ -1022,6 +1324,7 @@
     const distEl = document.getElementById("gwActiveQuestDistance");
 
     if (!target || target.mode === "anywhere") {
+      setTargetSetQualifying(false);
       clearTetherLine();
       if (distEl) distEl.textContent = "ANY";
       if (subEl) subEl.textContent = "Open-world quest · any qualifying observation";
@@ -1032,6 +1335,7 @@
     const targetLL = targetLatLng(target);
 
     if (!targetLL) {
+      if (target.mode === "target_set") setTargetSetQualifying(false);
       clearTetherLine();
       if (distEl) distEl.textContent = target.mode === "target_set" ? "HUD" : "GPS";
       if (subEl) subEl.textContent = initialHudSubText(target);
@@ -1039,6 +1343,7 @@
     }
 
     if (!userLL) {
+      if (target.mode === "target_set") setTargetSetQualifying(false);
       clearTetherLine();
       if (distEl) distEl.textContent = "GPS";
       if (subEl) subEl.textContent = "Waiting for GPS fix";
@@ -1051,30 +1356,44 @@
 
     if (distEl) distEl.textContent = formatMeters(d);
 
-    if (subEl && target.mode === "target_set") {
+    if (target.mode === "target_set") {
       const status = activeTargetStatus(userLL.lat, userLL.lng);
-      if (status.inside) {
-        subEl.textContent = "Target square reached - scan nature to complete";
-      } else if (d <= 50) {
-        subEl.textContent = "Target squares nearby";
-      } else {
-        subEl.textContent = `${target.label || target.cellKey || "Patch targets"} - target squares marked`;
+      const progressText = targetSetProgressLabel();
+      setTargetSetQualifying(status.inside);
+      if (subEl) {
+        if (status.inside) {
+          subEl.textContent = progressText
+            ? `Target square reached - ${progressText}`
+            : "Target square reached - scan nature to complete";
+        } else if (d <= 50) {
+          subEl.textContent = progressText
+            ? `${progressText} - target squares nearby`
+            : "Target squares nearby";
+        } else {
+          subEl.textContent = progressText
+            ? `${progressText} - target squares marked`
+            : `${target.label || target.cellKey || "Patch targets"} - target squares marked`;
+        }
       }
       return;
     }
 
-    if (subEl && target.mode === "patch_polygon") {
+    if (target.mode === "patch_polygon") {
+      setTargetSetQualifying(false);
       const status = activeTargetStatus(userLL.lat, userLL.lng);
-      if (status.inside) {
-        subEl.textContent = "Inside Patch - identify an unknown";
-      } else if (d <= 50) {
-        subEl.textContent = "Patch boundary nearby";
-      } else {
-        subEl.textContent = `${target.label || "Patch"} - identify unknowns inside`;
+      if (subEl) {
+        if (status.inside) {
+          subEl.textContent = "Inside Patch - identify an unknown";
+        } else if (d <= 50) {
+          subEl.textContent = "Patch boundary nearby";
+        } else {
+          subEl.textContent = `${target.label || "Patch"} - identify unknowns inside`;
+        }
       }
       return;
     }
 
+    setTargetSetQualifying(false);
     if (subEl) {
       if (d <= Math.max(12, GRID_SIZE_M * (target.radiusCells + 1))) {
         subEl.textContent = "Arrived · scan nature to complete";
@@ -1144,6 +1463,12 @@
 
     activeQuest = quest;
     activeQuest.__gwNormalizedTarget = normalizeTarget(quest);
+    targetSetQualifying = false;
+
+    const userLL = getUserLatLng();
+    if (activeQuest.__gwNormalizedTarget.mode === "target_set" && userLL) {
+      targetSetQualifying = activeTargetStatus(userLL.lat, userLL.lng).inside === true;
+    }
 
     window.__gwState = window.__gwState || {};
     window.__gwState.activeQuestId = quest.id;
@@ -1169,6 +1494,12 @@
 
   window.addEventListener("gridwild:unitschange", updateTetherAndHud);
   window.addEventListener("gwUserLocationUpdated", updateTetherAndHud);
+  window.addEventListener("gwQuestEvidenceChanged", () => {
+    if (activeQuest?.__gwNormalizedTarget?.mode === "target_set") {
+      renderTargetSetGeometry();
+    }
+    updateTetherAndHud();
+  });
 
   window.addEventListener("gwQuestStarted", (evt) => {
     // Do not auto-embark newly created quests; user explicitly chooses Embark.
