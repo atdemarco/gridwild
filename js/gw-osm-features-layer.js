@@ -28,9 +28,16 @@
   let fetchTimer = null;
   let lastFetchKey = null;
   let fetchInFlight = false;
+  let fetchRequestedWhileInFlight = false;
   let lastFetchStartedAt = 0;
+  let lastFetchScheduleZoom = null;
+  let zoomFetchSettleUntil = 0;
+  let zoomGestureInProgress = false;
+  let zoomRenderSettleUntil = 0;
+  let zoomRenderTimer = null;
   let overpassDisabledUntil = 0;
   let cachedFeatureBounds = null;
+  let cachedParksBounds = null;
 
   let features = {
     trails: [],
@@ -48,13 +55,29 @@
 
   const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
   const FETCH_DEBOUNCE_MS = 900;
+  const ZOOM_FETCH_SETTLE_MS = 1600;
+  const ZOOM_OUT_FETCH_SETTLE_MS = 2800;
+  const ZOOM_RENDER_SETTLE_MS = 180;
   const FETCH_MIN_INTERVAL_MS = 9000;
   const OVERPASS_RATE_LIMIT_COOLDOWN_MS = 120000;
   const OVERPASS_ERROR_COOLDOWN_MS = 30000;
   const MIN_ZOOM = 15;
-  const QUERY_BOUNDS_PAD_RATIO = 0.35;
+  const CLOSE_DETAIL_MIN_ZOOM = 18;
+  const LEAN_QUERY_BOUNDS_PAD_RATIO = 0.5;
+  const LOCAL_CACHE_KEY = "gridwild.osmFeatures.cache.v4";
+  const LOCAL_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  const LOCAL_CACHE_MAX_ENTRIES = 12;
+  const QUERY_PROFILE_LEAN = "lean";
+  const QUERY_PROFILE_DETAIL = "detail";
+  const QUERY_PROFILE_PARKS = "parks";
 
   let listenersBound = false;
+  let cachedFeatureProfile = null;
+
+  function timeOsmVerbose(label, fn, detail = null) {
+    const timer = window.GridWildVerboseConsole;
+    return timer?.time ? timer.time(label, fn, detail) : fn();
+  }
 
   function ensurePane(name, zIndex) {
     if (!map.getPane(name)) {
@@ -101,7 +124,9 @@
       } else {
         map.on("move zoom resize viewreset zoomend moveend", scheduleRender);
       }
-      map.on("moveend zoomend", scheduleFetch);
+      lastFetchScheduleZoom = Number(map?.getZoom?.());
+      map.on("moveend zoomend", handleFetchMapEvent);
+      map.on("zoomstart zoomend", handleOsmRenderZoomLifecycle);
     }
   }
 
@@ -125,16 +150,33 @@
     buildingTopLeft = buildingLayout.topLeft;
   }
 
-  function getBufferedQueryBounds() {
-    return map.getBounds().pad(QUERY_BOUNDS_PAD_RATIO);
+  function getLeanQueryBounds() {
+    return map.getBounds().pad(LEAN_QUERY_BOUNDS_PAD_RATIO);
+  }
+
+  function getQueryBoundsForProfile(profile = currentQueryProfile()) {
+    const queryProfile = normalizeQueryProfile(profile);
+    if (queryProfile === QUERY_PROFILE_LEAN) return getLeanQueryBounds();
+    return map.getBounds();
   }
 
   function boundsToBboxString(b) {
     return `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
   }
 
-  function boundsToFetchKey(b) {
+  function currentQueryProfile() {
+    const zoom = Number(map?.getZoom?.());
+    return zoom >= CLOSE_DETAIL_MIN_ZOOM ? QUERY_PROFILE_DETAIL : QUERY_PROFILE_LEAN;
+  }
+
+  function normalizeQueryProfile(profile) {
+    if (profile === QUERY_PROFILE_PARKS) return QUERY_PROFILE_PARKS;
+    return profile === QUERY_PROFILE_LEAN ? QUERY_PROFILE_LEAN : QUERY_PROFILE_DETAIL;
+  }
+
+  function boundsToFetchKey(b, profile = currentQueryProfile()) {
     return [
+      normalizeQueryProfile(profile),
       b.getSouth().toFixed(4),
       b.getWest().toFixed(4),
       b.getNorth().toFixed(4),
@@ -152,57 +194,537 @@
     );
   }
 
-  function hasCachedCoverage() {
-    return boundsContain(cachedFeatureBounds, map.getBounds());
+  function serializeBounds(bounds) {
+    if (!bounds) return null;
+    return {
+      south: bounds.getSouth(),
+      west: bounds.getWest(),
+      north: bounds.getNorth(),
+      east: bounds.getEast()
+    };
   }
 
-  function buildOverpassQuery(queryBounds = getBufferedQueryBounds()) {
+  function deserializeBounds(bounds) {
+    if (
+      !bounds ||
+      !Number.isFinite(bounds.south) ||
+      !Number.isFinite(bounds.west) ||
+      !Number.isFinite(bounds.north) ||
+      !Number.isFinite(bounds.east)
+    ) {
+      return null;
+    }
+
+    return L.latLngBounds(L.latLng(bounds.south, bounds.west), L.latLng(bounds.north, bounds.east));
+  }
+
+  function hasCachedCoverage(profile = currentQueryProfile()) {
+    return (
+      normalizeQueryProfile(cachedFeatureProfile) === normalizeQueryProfile(profile) &&
+      boundsContain(cachedFeatureBounds, map.getBounds())
+    );
+  }
+
+  function hasParksCoverageForCurrentView() {
+    const currentBounds = map.getBounds();
+    return (
+      boundsContain(cachedFeatureBounds, currentBounds) ||
+      boundsContain(cachedParksBounds, currentBounds)
+    );
+  }
+
+  function featureCounts(featureSet = features) {
+    return {
+      trails: featureSet.trails.length,
+      parks: featureSet.parks.length,
+      buildings: featureSet.buildings.length,
+      water: featureSet.water.length,
+      roads: featureSet.roads.length,
+      places: featureSet.places.length
+    };
+  }
+
+  function formatCountSummary(counts) {
+    return Object.entries(counts || {})
+      .map(([kind, count]) => `${kind}=${Number(count) || 0}`)
+      .join(", ");
+  }
+
+  function rawOsmElementCounts(data) {
+    const counts = {
+      nodes: 0,
+      ways: 0,
+      relations: 0
+    };
+
+    for (const element of data?.elements || []) {
+      if (element.type === "node") counts.nodes++;
+      else if (element.type === "way") counts.ways++;
+      else if (element.type === "relation") counts.relations++;
+    }
+
+    return counts;
+  }
+
+  function featureElementType(feature) {
+    const type = String(feature?.id || "").split("/")[0];
+    return type || "unknown";
+  }
+
+  function featureSubtype(kind, feature) {
+    const tags = feature?.tags || {};
+
+    if (kind === "parks") {
+      for (const tag of ["leisure", "boundary", "natural", "landuse", "amenity", "historic"]) {
+        if (tags[tag]) return `${tag}=${tags[tag]}`;
+      }
+    }
+
+    if (kind === "water") {
+      if (tags.natural) return `natural=${tags.natural}`;
+      if (tags.waterway) return `waterway=${tags.waterway}`;
+    }
+
+    if (kind === "trails" || kind === "roads") {
+      if (tags.highway) return `highway=${tags.highway}`;
+    }
+
+    if (kind === "buildings") {
+      return tags.building ? `building=${tags.building}` : "building=*";
+    }
+
+    if (kind === "places") {
+      if (tags.place) return `place=${tags.place}`;
+      if (tags.name) return "named habitat/place node";
+    }
+
+    return "other";
+  }
+
+  function featureSubtypeRows(featureSet = features) {
+    const byKey = new Map();
+    const categoryOrder = Object.keys(emptyFeatures());
+
+    for (const category of categoryOrder) {
+      for (const feature of featureSet?.[category] || []) {
+        const subtype = featureSubtype(category, feature);
+        const key = `${category}|${subtype}`;
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            category,
+            subtype,
+            total: 0,
+            nodes: 0,
+            ways: 0,
+            relations: 0
+          });
+        }
+
+        const row = byKey.get(key);
+        const elementType = featureElementType(feature);
+        row.total += 1;
+        if (elementType === "node") row.nodes += 1;
+        else if (elementType === "way") row.ways += 1;
+        else if (elementType === "relation") row.relations += 1;
+      }
+    }
+
+    return Array.from(byKey.values()).sort((a, b) => {
+      const categoryDelta = categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category);
+      return categoryDelta || b.total - a.total || a.subtype.localeCompare(b.subtype);
+    });
+  }
+
+  function logOsmSubtypeBreakdown(source, featureSet = features, options = {}) {
+    if (window.GridWildVerboseConsole?.enabled?.() !== true) return;
+    if (!window.console?.info) return;
+
+    const rows = featureSubtypeRows(featureSet);
+    const profile = normalizeQueryProfile(
+      options.profile || cachedFeatureProfile || currentQueryProfile()
+    );
+
+    if (!rows.length) {
+      console.info(`GridWild verbose OSM subtype counts (${profile}/${source}): none`);
+      return;
+    }
+
+    console.info(`GridWild verbose OSM subtype counts (${profile}/${source})`);
+    if (window.console?.table) {
+      console.table(rows);
+    } else {
+      console.info(rows);
+    }
+  }
+
+  function logOsmFeatureCounts(source, featureSet = features, options = {}) {
+    if (!window.console?.info) return;
+
+    const categoryCounts = featureCounts(featureSet);
+    const profile = normalizeQueryProfile(
+      options.profile || cachedFeatureProfile || currentQueryProfile()
+    );
+    const rawCounts = options.rawCounts || null;
+    const rawSummary = rawCounts ? `; raw ${formatCountSummary(rawCounts)}` : "";
+
+    console.info(
+      `GridWild OSM ${source} counts (${profile}): ${formatCountSummary(categoryCounts)}${rawSummary}`,
+      {
+        source,
+        profile,
+        categories: categoryCounts,
+        rawElements: rawCounts,
+        bounds: serializeBounds(options.bounds || cachedFeatureBounds)
+      }
+    );
+    logOsmSubtypeBreakdown(source, featureSet, { ...options, profile });
+  }
+
+  function formatCategoryList(categories, options = {}) {
+    if (!categories?.length) return "none";
+    const prefix = options.prefix || "";
+    return categories.map((category) => `${prefix}${category}`).join(", ");
+  }
+
+  function getQueryCategoryPlan(profile = currentQueryProfile()) {
+    const queryProfile = normalizeQueryProfile(profile);
+    const includeDetailCategories = queryProfile === QUERY_PROFILE_DETAIL;
+    const detailCategories = ["buildings", "trails/ways", "roads", "place ways"];
+
+    return {
+      profile: queryProfile,
+      includeBuildings: includeDetailCategories,
+      includeTrails: includeDetailCategories,
+      includeRoads: includeDetailCategories,
+      includePlaceWays: includeDetailCategories,
+      included: [
+        ...(includeDetailCategories ? detailCategories : []),
+        "parks",
+        "water",
+        "place nodes"
+      ],
+      excluded: includeDetailCategories ? [] : detailCategories
+    };
+  }
+
+  function logOsmQueryIssued(profile = currentQueryProfile()) {
+    if (!window.console?.info) return;
+
+    const plan = getQueryCategoryPlan(profile);
+    console.info(
+      `GridWild OSM query issued (${plan.profile}): included ${formatCategoryList(
+        plan.included
+      )}; excluded ${formatCategoryList(plan.excluded, { prefix: "no " })}`
+    );
+  }
+
+  function cloneFeatureSetForStorage(featureSet) {
+    const next = emptyFeatures();
+
+    for (const kind of Object.keys(next)) {
+      next[kind] = (featureSet[kind] || []).map((feature) => ({
+        id: feature.id,
+        tags: feature.tags || {},
+        closed: !!feature.closed,
+        points: (feature.points || []).map((point) => ({
+          lat: point.lat,
+          lng: point.lng
+        }))
+      }));
+    }
+
+    return next;
+  }
+
+  function hydrateFeatureSet(raw) {
+    const next = emptyFeatures();
+    if (!raw || typeof raw !== "object") return next;
+
+    for (const kind of Object.keys(next)) {
+      next[kind] = (raw[kind] || [])
+        .map((feature) => {
+          const points = (feature.points || [])
+            .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+            .map((point) => L.latLng(point.lat, point.lng));
+
+          if (points.length < (kind === "places" ? 1 : 2)) return null;
+
+          return {
+            id: feature.id,
+            tags: feature.tags || {},
+            points,
+            closed: !!feature.closed
+          };
+        })
+        .filter(Boolean);
+    }
+
+    return next;
+  }
+
+  function mergeFeatureList(existing = [], incoming = []) {
+    const byId = new Map();
+
+    existing.forEach((feature) => {
+      if (!feature?.id) return;
+      byId.set(feature.id, feature);
+    });
+    incoming.forEach((feature) => {
+      if (!feature?.id) return;
+      byId.set(feature.id, feature);
+    });
+
+    return Array.from(byId.values());
+  }
+
+  function mergeParksIntoActiveFeatures(parkFeatureSet) {
+    features = {
+      trails: features.trails || [],
+      parks: mergeFeatureList(features.parks, parkFeatureSet?.parks),
+      buildings: features.buildings || [],
+      water: features.water || [],
+      roads: features.roads || [],
+      places: mergeFeatureList(features.places, parkFeatureSet?.places)
+    };
+  }
+
+  function readLocalCacheEntries() {
+    try {
+      const raw = window.localStorage?.getItem(LOCAL_CACHE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return [];
+
+      const now = Date.now();
+      return parsed.filter(
+        (entry) => entry && now - Number(entry.savedAt || 0) < LOCAL_CACHE_TTL_MS
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  function writeLocalCacheEntries(entries) {
+    const trimmed = entries
+      .slice()
+      .sort(
+        (a, b) => Number(b.lastUsedAt || b.savedAt || 0) - Number(a.lastUsedAt || a.savedAt || 0)
+      )
+      .slice(0, LOCAL_CACHE_MAX_ENTRIES);
+    let lastError = null;
+
+    while (trimmed.length) {
+      try {
+        window.localStorage?.setItem(LOCAL_CACHE_KEY, JSON.stringify(trimmed));
+        return;
+      } catch (err) {
+        lastError = err;
+        trimmed.pop();
+      }
+    }
+
+    try {
+      window.localStorage?.removeItem(LOCAL_CACHE_KEY);
+    } catch (err) {
+      lastError = err;
+    }
+
+    if (lastError) {
+      console.warn("GridWild OSM local cache write skipped:", lastError);
+    }
+  }
+
+  function loadLocalCoverageForCurrentView(profile = currentQueryProfile()) {
+    const requestedProfile = normalizeQueryProfile(profile);
+    const currentBounds = map.getBounds();
+    const entries = readLocalCacheEntries();
+    const match = entries
+      .map((entry, index) => ({
+        entry,
+        index,
+        bounds: deserializeBounds(entry.bounds),
+        queryProfile: normalizeQueryProfile(entry.queryProfile)
+      }))
+      .filter(
+        (candidate) =>
+          candidate.queryProfile === requestedProfile &&
+          boundsContain(candidate.bounds, currentBounds)
+      )
+      .sort((a, b) => Number(b.entry.savedAt || 0) - Number(a.entry.savedAt || 0))[0];
+
+    if (!match) return false;
+
+    features = hydrateFeatureSet(match.entry.features);
+    cachedFeatureBounds = match.bounds;
+    cachedFeatureProfile = match.queryProfile;
+    cachedParksBounds = match.bounds;
+    lastFetchKey = match.entry.fetchKey || boundsToFetchKey(match.bounds, match.queryProfile);
+    entries[match.index] = {
+      ...match.entry,
+      lastUsedAt: Date.now()
+    };
+    writeLocalCacheEntries(entries);
+    logOsmFeatureCounts("cache", features, {
+      profile: match.queryProfile,
+      bounds: match.bounds,
+      rawCounts: match.entry.rawCounts
+    });
+    publishFeaturesUpdated();
+    scheduleRender();
+    return true;
+  }
+
+  function loadLocalParksCoverageForCurrentView() {
+    const currentBounds = map.getBounds();
+    const entries = readLocalCacheEntries();
+    const match = entries
+      .map((entry, index) => ({
+        entry,
+        index,
+        bounds: deserializeBounds(entry.bounds),
+        queryProfile: normalizeQueryProfile(entry.queryProfile)
+      }))
+      .filter((candidate) => boundsContain(candidate.bounds, currentBounds))
+      .sort((a, b) => {
+        const aFullFeatureCache = a.queryProfile === QUERY_PROFILE_PARKS ? 0 : 1;
+        const bFullFeatureCache = b.queryProfile === QUERY_PROFILE_PARKS ? 0 : 1;
+        if (aFullFeatureCache !== bFullFeatureCache) {
+          return bFullFeatureCache - aFullFeatureCache;
+        }
+        return Number(b.entry.savedAt || 0) - Number(a.entry.savedAt || 0);
+      })[0];
+
+    if (!match) return false;
+
+    const hydrated = hydrateFeatureSet(match.entry.features);
+    if (match.queryProfile === QUERY_PROFILE_PARKS) {
+      mergeParksIntoActiveFeatures(hydrated);
+      cachedParksBounds = match.bounds;
+    } else {
+      features = hydrated;
+      cachedFeatureBounds = match.bounds;
+      cachedFeatureProfile = match.queryProfile;
+      cachedParksBounds = match.bounds;
+    }
+    lastFetchKey = match.entry.fetchKey || boundsToFetchKey(match.bounds, match.queryProfile);
+    entries[match.index] = {
+      ...match.entry,
+      lastUsedAt: Date.now()
+    };
+    writeLocalCacheEntries(entries);
+    logOsmFeatureCounts("parks-cache", features, {
+      profile: match.queryProfile,
+      bounds: match.bounds,
+      rawCounts: match.entry.rawCounts
+    });
+    publishFeaturesUpdated();
+    scheduleRender();
+    return true;
+  }
+
+  function logParksQueryIssued() {
+    if (!window.console?.info) return;
+    console.info(
+      "GridWild OSM query issued (parks): included parks; excluded no buildings, no trails/ways, no roads, no water, no generic places"
+    );
+  }
+
+  function saveLocalCoverage(
+    fetchKey,
+    bounds,
+    featureSet,
+    profile = currentQueryProfile(),
+    options = {}
+  ) {
+    const queryProfile = normalizeQueryProfile(profile);
+    const entries = readLocalCacheEntries().filter((entry) => entry.fetchKey !== fetchKey);
+    entries.push({
+      fetchKey,
+      queryProfile,
+      bounds: serializeBounds(bounds),
+      savedAt: Date.now(),
+      lastUsedAt: Date.now(),
+      counts: featureCounts(featureSet),
+      rawCounts: options.rawCounts || null,
+      features: cloneFeatureSetForStorage(featureSet)
+    });
+    writeLocalCacheEntries(entries);
+  }
+
+  function buildCloseDetailOverpassClauses(bbox) {
+    // Close-detail clauses use the live FOV, not the buffered context superchunk.
+    return `
+        way["building"](${bbox});
+    `;
+  }
+
+  function buildTrailWayOverpassClauses(bbox) {
+    return `
+        way["highway"~"path|footway|cycleway|bridleway|track"](${bbox});
+    `;
+  }
+
+  function buildRoadOverpassClauses(bbox) {
+    return `
+        way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|service|unclassified|living_street|road"](${bbox});
+    `;
+  }
+
+  function buildParksOverpassClauses(bbox) {
+    return `
+        way["leisure"~"park|garden|nature_reserve"](${bbox});
+        node["leisure"~"park|garden|nature_reserve"]["name"](${bbox});
+
+        way["boundary"~"protected_area|national_park"](${bbox});
+        node["boundary"~"protected_area|national_park"]["name"](${bbox});
+
+        way["natural"~"wood|wetland|scrub|heath|grassland"](${bbox});
+        node["natural"~"wood|wetland|scrub|heath|grassland"]["name"](${bbox});
+
+        way["landuse"~"forest|grass|meadow|recreation_ground|allotments|orchard|cemetery"](${bbox});
+        node["landuse"~"forest|grass|meadow|recreation_ground|allotments|orchard|cemetery"]["name"](${bbox});
+
+        way["amenity"="grave_yard"](${bbox});
+        node["amenity"="grave_yard"]["name"](${bbox});
+
+        way["historic"="cemetery"](${bbox});
+        node["historic"="cemetery"]["name"](${bbox});
+    `;
+  }
+
+  function buildParksOverpassQuery(queryBounds = map.getBounds()) {
     const bbox = boundsToBboxString(queryBounds);
 
     return `
       [out:json][timeout:25];
       (
-        way["building"](${bbox});
-        relation["building"](${bbox});
+        ${buildParksOverpassClauses(bbox)}
+      );
+      out geom;
+    `;
+  }
 
-        way["highway"~"path|footway|cycleway|bridleway|track"](${bbox});
-        way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|service|unclassified|living_street|road"](${bbox});
+  function buildOverpassQuery(queryBounds = null, profile = currentQueryProfile()) {
+    const effectiveBounds = queryBounds || getQueryBoundsForProfile(profile);
+    const bbox = boundsToBboxString(effectiveBounds);
+    const queryCategories = getQueryCategoryPlan(profile);
 
-        way["leisure"~"park|garden|nature_reserve"](${bbox});
-        relation["leisure"~"park|garden|nature_reserve"](${bbox});
-        node["leisure"~"park|garden|nature_reserve"]["name"](${bbox});
+    return `
+      [out:json][timeout:25];
+      (
+        ${queryCategories.includeBuildings ? buildCloseDetailOverpassClauses(bbox) : ""}
+        ${queryCategories.includeTrails ? buildTrailWayOverpassClauses(bbox) : ""}
+        ${queryCategories.includeRoads ? buildRoadOverpassClauses(bbox) : ""}
 
-        way["boundary"~"protected_area|national_park"](${bbox});
-        relation["boundary"~"protected_area|national_park"](${bbox});
-        node["boundary"~"protected_area|national_park"]["name"](${bbox});
-
-        way["natural"~"wood|wetland|scrub|heath|grassland"](${bbox});
-        relation["natural"~"wood|wetland|scrub|heath|grassland"](${bbox});
-        node["natural"~"wood|wetland|scrub|heath|grassland"]["name"](${bbox});
-
-        way["landuse"~"forest|grass|meadow|recreation_ground|allotments|orchard|cemetery"](${bbox});
-        relation["landuse"~"forest|grass|meadow|recreation_ground|allotments|orchard|cemetery"](${bbox});
-        node["landuse"~"forest|grass|meadow|recreation_ground|allotments|orchard|cemetery"]["name"](${bbox});
-
-        way["amenity"="grave_yard"](${bbox});
-        relation["amenity"="grave_yard"](${bbox});
-        node["amenity"="grave_yard"]["name"](${bbox});
-
-        way["historic"="cemetery"](${bbox});
-        relation["historic"="cemetery"](${bbox});
-        node["historic"="cemetery"]["name"](${bbox});
+        ${buildParksOverpassClauses(bbox)}
 
         way["natural"="water"](${bbox});
-        relation["natural"="water"](${bbox});
 
         way["waterway"="riverbank"](${bbox});
-        relation["waterway"="riverbank"](${bbox});
 
         way["waterway"~"stream|river|canal|ditch|drain"](${bbox});
 
         node["place"]["name"](${bbox});
-        way["place"]["name"](${bbox});
-        relation["place"]["name"](${bbox});
+        ${queryCategories.includePlaceWays ? `way["place"]["name"](${bbox});` : ""}
       );
       out geom;
     `;
@@ -374,14 +896,7 @@
       new CustomEvent("gwOsmFeaturesUpdated", {
         detail: {
           version: featuresVersion,
-          counts: {
-            trails: features.trails.length,
-            parks: features.parks.length,
-            buildings: features.buildings.length,
-            water: features.water.length,
-            roads: features.roads.length,
-            places: features.places.length
-          }
+          counts: featureCounts(features)
         }
       })
     );
@@ -403,45 +918,46 @@
     }
   }
 
-  async function fetchFeatures() {
-    if ((window.__gwState?.showOsmFeatures ?? true) === false) return;
-    if (fetchInFlight) return;
+  async function fetchParksForCurrentView() {
+    if (hasParksCoverageForCurrentView()) {
+      scheduleRender();
+      return false;
+    }
+
+    if (loadLocalParksCoverageForCurrentView()) {
+      return false;
+    }
+
+    if (fetchInFlight) {
+      fetchRequestedWhileInFlight = true;
+      return false;
+    }
 
     const now = Date.now();
-    if (now < overpassDisabledUntil) return;
-
-    if (hasCachedCoverage()) {
-      scheduleRender();
-      return;
-    }
-
-    const sinceLastFetch = now - lastFetchStartedAt;
-    if (lastFetchStartedAt && sinceLastFetch < FETCH_MIN_INTERVAL_MS) {
-      scheduleFetch(FETCH_MIN_INTERVAL_MS - sinceLastFetch);
-      return;
-    }
-
+    if (now < overpassDisabledUntil) return false;
     if (map.getZoom() < MIN_ZOOM) {
       scheduleRender();
-      return;
+      return false;
     }
 
-    const queryBounds = getBufferedQueryBounds();
-    const key = boundsToFetchKey(queryBounds);
-    if (key === lastFetchKey) return;
+    const queryProfile = QUERY_PROFILE_PARKS;
+    const queryBounds = map.getBounds();
+    const key = boundsToFetchKey(queryBounds, queryProfile);
+    if (key === lastFetchKey) return false;
 
     fetchInFlight = true;
     lastFetchStartedAt = now;
     showFetchToast();
 
     try {
+      logParksQueryIssued();
       const resp = await fetch(OVERPASS_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
         },
         body: new URLSearchParams({
-          data: buildOverpassQuery(queryBounds)
+          data: buildParksOverpassQuery(queryBounds)
         })
       });
 
@@ -456,22 +972,150 @@
       }
 
       const data = await resp.json();
+      const rawCounts = rawOsmElementCounts(data);
+      const parkFeatures = parseFeatures(data);
+      mergeParksIntoActiveFeatures(parkFeatures);
+      lastFetchKey = key;
+      cachedParksBounds = queryBounds;
+      saveLocalCoverage(key, queryBounds, parkFeatures, queryProfile, { rawCounts });
+
+      logOsmFeatureCounts("parks-fetch", parkFeatures, {
+        profile: queryProfile,
+        bounds: queryBounds,
+        rawCounts
+      });
+      publishFeaturesUpdated();
+      scheduleRender();
+      return true;
+    } catch (err) {
+      console.warn("GridWild OSM parks fetch failed:", err);
+      return false;
+    } finally {
+      fetchInFlight = false;
+      if (fetchRequestedWhileInFlight) {
+        fetchRequestedWhileInFlight = false;
+        scheduleFetch(fetchDelayForCurrentMotionState());
+      }
+    }
+  }
+
+  async function fetchFeatures() {
+    if ((window.__gwState?.showOsmFeatures ?? true) === false) return;
+    if (fetchInFlight) {
+      fetchRequestedWhileInFlight = true;
+      return;
+    }
+    const queryProfile = currentQueryProfile();
+
+    const now = Date.now();
+    if (now < overpassDisabledUntil) return;
+
+    if (hasCachedCoverage(queryProfile)) {
+      scheduleRender();
+      return;
+    }
+
+    if (loadLocalCoverageForCurrentView(queryProfile)) {
+      return;
+    }
+
+    const sinceLastFetch = now - lastFetchStartedAt;
+    if (lastFetchStartedAt && sinceLastFetch < FETCH_MIN_INTERVAL_MS) {
+      scheduleFetch(FETCH_MIN_INTERVAL_MS - sinceLastFetch);
+      return;
+    }
+
+    if (map.getZoom() < MIN_ZOOM) {
+      scheduleRender();
+      return;
+    }
+
+    const queryBounds = getQueryBoundsForProfile(queryProfile);
+    const key = boundsToFetchKey(queryBounds, queryProfile);
+    if (key === lastFetchKey) return;
+
+    fetchInFlight = true;
+    lastFetchStartedAt = now;
+    showFetchToast();
+
+    try {
+      logOsmQueryIssued(queryProfile);
+      const resp = await fetch(OVERPASS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+        },
+        body: new URLSearchParams({
+          data: buildOverpassQuery(queryBounds, queryProfile)
+        })
+      });
+
+      if (!resp.ok) {
+        if (resp.status === 429) {
+          overpassDisabledUntil = Date.now() + OVERPASS_RATE_LIMIT_COOLDOWN_MS;
+          showFetchStatusToast("OSM data rate-limited; keeping current OSM cache");
+        } else {
+          overpassDisabledUntil = Date.now() + OVERPASS_ERROR_COOLDOWN_MS;
+        }
+        throw new Error(`Overpass HTTP ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      const rawCounts = rawOsmElementCounts(data);
       features = parseFeatures(data);
       lastFetchKey = key;
       cachedFeatureBounds = queryBounds;
+      cachedFeatureProfile = queryProfile;
+      cachedParksBounds = queryBounds;
+      saveLocalCoverage(key, queryBounds, features, queryProfile, { rawCounts });
 
+      logOsmFeatureCounts("fetch", features, {
+        profile: queryProfile,
+        bounds: queryBounds,
+        rawCounts
+      });
       publishFeaturesUpdated();
       scheduleRender();
     } catch (err) {
       console.warn("GridWild OSM feature fetch failed:", err);
     } finally {
       fetchInFlight = false;
+      if (fetchRequestedWhileInFlight) {
+        fetchRequestedWhileInFlight = false;
+        scheduleFetch(fetchDelayForCurrentMotionState());
+      }
     }
   }
 
+  function fetchDelayForCurrentMotionState() {
+    const remainingZoomSettleMs = Math.max(0, zoomFetchSettleUntil - Date.now());
+    return Math.max(FETCH_DEBOUNCE_MS, remainingZoomSettleMs);
+  }
+
+  function handleFetchMapEvent(evt) {
+    return timeOsmVerbose("handleFetchMapEvent", () => {
+      const zoom = Number(map?.getZoom?.());
+
+      // Wait through the final zoom frames before asking Overpass, especially on zoom-out.
+      if (evt?.type === "zoomend" && Number.isFinite(zoom)) {
+        const zoomedOut = Number.isFinite(lastFetchScheduleZoom) && zoom < lastFetchScheduleZoom;
+        zoomFetchSettleUntil =
+          Date.now() + (zoomedOut ? ZOOM_OUT_FETCH_SETTLE_MS : ZOOM_FETCH_SETTLE_MS);
+        lastFetchScheduleZoom = zoom;
+      } else if (!Number.isFinite(lastFetchScheduleZoom) && Number.isFinite(zoom)) {
+        lastFetchScheduleZoom = zoom;
+      }
+
+      scheduleFetch(fetchDelayForCurrentMotionState());
+    });
+  }
+
   function scheduleFetch(delayMs = FETCH_DEBOUNCE_MS) {
+    const requestedDelay = Number(delayMs);
+    const delay = Number.isFinite(requestedDelay) ? requestedDelay : FETCH_DEBOUNCE_MS;
+
     clearTimeout(fetchTimer);
-    fetchTimer = setTimeout(fetchFeatures, Math.max(0, Number(delayMs) || 0));
+    fetchTimer = setTimeout(fetchFeatures, Math.max(0, delay));
   }
 
   function beginPath(ctxLocal, points, topLeft) {
@@ -605,6 +1249,7 @@
   function renderBuildingLayer() {
     const showBuildings = window.__gwState?.showOsmBuildings ?? true;
 
+    if (currentQueryProfile() !== QUERY_PROFILE_DETAIL) return;
     if (!showBuildings) return;
 
     for (const f of features.buildings) {
@@ -626,24 +1271,28 @@
   }
 
   function render() {
-    raf = null;
+    return timeOsmVerbose("GridWildOsmFeaturesLayer.render", () => {
+      raf = null;
 
-    ensureCanvas();
-    resizeCanvas();
-    clearCanvases();
+      if (zoomGestureInProgress) return;
+      if (Date.now() < zoomRenderSettleUntil) {
+        scheduleRenderAfterZoomSettle();
+        return;
+      }
 
-    if ((window.__gwState?.showOsmFeatures ?? true) === false) return;
-    if (map.getZoom() < MIN_ZOOM) return;
+      ensureCanvas();
+      resizeCanvas();
+      clearCanvases();
 
-    renderContextLayer();
-    renderBuildingLayer();
+      if ((window.__gwState?.showOsmFeatures ?? true) === false) return;
+      if (map.getZoom() < MIN_ZOOM) return;
+
+      renderContextLayer();
+      renderBuildingLayer();
+    });
   }
 
-  function scheduleRender(evt) {
-    if (evt?.type === "move" && window.GridWildCanvasPerf?.canvasCoversViewport?.(contextLayout)) {
-      return;
-    }
-
+  function requestOsmFeatureRenderFrame() {
     if (raf) return;
     if (window.GridWildMapMotionQueue?.requestFrame) {
       raf = true;
@@ -653,10 +1302,53 @@
     }
   }
 
+  function scheduleRenderAfterZoomSettle() {
+    if (zoomGestureInProgress) return;
+
+    const delay = Math.max(0, zoomRenderSettleUntil - Date.now());
+    clearTimeout(zoomRenderTimer);
+    zoomRenderTimer = setTimeout(() => {
+      zoomRenderTimer = null;
+      requestOsmFeatureRenderFrame();
+    }, delay);
+  }
+
+  function handleOsmRenderZoomLifecycle(evt) {
+    return timeOsmVerbose("handleOsmRenderZoomLifecycle", () => {
+      if (evt?.type === "zoomstart") {
+        zoomGestureInProgress = true;
+        clearTimeout(zoomRenderTimer);
+        zoomRenderTimer = null;
+        return;
+      }
+
+      if (evt?.type === "zoomend") {
+        zoomGestureInProgress = false;
+        zoomRenderSettleUntil = Date.now() + ZOOM_RENDER_SETTLE_MS;
+        scheduleRenderAfterZoomSettle();
+      }
+    });
+  }
+
+  function scheduleRender(evt) {
+    if (evt?.type === "zoom") return;
+    if (zoomGestureInProgress || Date.now() < zoomRenderSettleUntil) {
+      scheduleRenderAfterZoomSettle();
+      return;
+    }
+
+    if (evt?.type === "move" && window.GridWildCanvasPerf?.canvasCoversViewport?.(contextLayout)) {
+      return;
+    }
+
+    requestOsmFeatureRenderFrame();
+  }
+
   window.GridWildOsmFeaturesLayer = {
     render,
     scheduleRender,
     fetchFeatures,
+    fetchParksForCurrentView,
     scheduleFetch,
 
     setVisible(show) {
@@ -700,10 +1392,11 @@
     },
 
     getFeatures() {
+      const includeCloseDetail = currentQueryProfile() === QUERY_PROFILE_DETAIL;
       return {
         trails: features.trails.slice(),
         parks: features.parks.slice(),
-        buildings: features.buildings.slice(),
+        buildings: includeCloseDetail ? features.buildings.slice() : [],
         water: features.water.slice(),
         roads: features.roads.slice(),
         places: features.places.slice()
@@ -716,8 +1409,19 @@
 
     getCacheStatus() {
       const bounds = cachedFeatureBounds;
+      const queryProfile = currentQueryProfile();
       return {
-        hasCoverage: hasCachedCoverage(),
+        hasCoverage: hasCachedCoverage(queryProfile),
+        queryProfile,
+        cachedFeatureProfile,
+        cachedParksBounds: cachedParksBounds
+          ? {
+              south: cachedParksBounds.getSouth(),
+              west: cachedParksBounds.getWest(),
+              north: cachedParksBounds.getNorth(),
+              east: cachedParksBounds.getEast()
+            }
+          : null,
         fetchInFlight,
         overpassCooldownMs: Math.max(0, overpassDisabledUntil - Date.now()),
         bounds: bounds
@@ -728,14 +1432,8 @@
               east: bounds.getEast()
             }
           : null,
-        counts: {
-          trails: features.trails.length,
-          parks: features.parks.length,
-          buildings: features.buildings.length,
-          water: features.water.length,
-          roads: features.roads.length,
-          places: features.places.length
-        }
+        counts: featureCounts(features),
+        localCacheEntries: readLocalCacheEntries().length
       };
     }
   };

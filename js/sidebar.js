@@ -83,6 +83,7 @@
     window.__gwState.fogSmoothingEnabled = $("toggleFogSmoothing")?.checked ?? true;
     window.__gwState.godsEyeEnabled = $("toggleGodsEye")?.checked ?? false;
     window.__gwState.lockToLocation = $("toggleLockLocation")?.checked ?? true;
+    window.__gwState.verboseConsoleEnabled = $("toggleVerboseConsole")?.checked ?? false;
 
     updateLegendText();
     saveUIState();
@@ -210,6 +211,7 @@
       "toggleFogSmoothing",
       "toggleGodsEye",
       "toggleLockLocation",
+      "toggleVerboseConsole",
       "toggleOsmBuildings",
       "toggleSurveyView",
       "togglePatchView"
@@ -469,6 +471,7 @@ function saveUIState() {
     fogSmoothingEnabled: byId("toggleFogSmoothing")?.checked ?? true,
     godsEyeEnabled: byId("toggleGodsEye")?.checked ?? false,
     lockToLocation: byId("toggleLockLocation")?.checked ?? true,
+    verboseConsoleEnabled: byId("toggleVerboseConsole")?.checked ?? false,
     heatMetric: getSelectedHeatMetric(),
     baseMap: getSelectedBaseMap(),
     onlyMeFilterEnabled: window.__gwFilters?.onlyMe === true,
@@ -539,6 +542,8 @@ function applySavedUIState() {
   window.__gwState.showNicheSparkles = s.showNicheSparkles === true;
   if (byId("toggleGodsEye")) byId("toggleGodsEye").checked = s.godsEyeEnabled ?? false;
   if (byId("toggleLockLocation")) byId("toggleLockLocation").checked = s.lockToLocation ?? true;
+  if (byId("toggleVerboseConsole"))
+    byId("toggleVerboseConsole").checked = s.verboseConsoleEnabled ?? false;
   if (byId("toggleFogSmoothing"))
     byId("toggleFogSmoothing").checked = s.fogSmoothingEnabled ?? false;
   if (byId("toggleOsmBuildings")) byId("toggleOsmBuildings").checked = s.showOsmBuildings ?? true;
@@ -546,6 +551,7 @@ function applySavedUIState() {
   if (byId("togglePatchView")) byId("togglePatchView").checked = s.showPatchView ?? true;
   window.__gwState.showSurveyView = s.showSurveyView ?? true;
   window.__gwState.showPatchView = s.showPatchView ?? true;
+  window.__gwState.verboseConsoleEnabled = s.verboseConsoleEnabled === true;
   window.__gwFilters = window.__gwFilters || {};
   window.__gwFilters.onlyMe = s.onlyMeFilterEnabled === true;
   window.__gwState.onlyMeFilterEnabled = window.__gwFilters.onlyMe;

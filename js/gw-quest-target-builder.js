@@ -90,6 +90,8 @@
   const state = {
     root: null,
     context: null,
+    minimizedDraft: null,
+    minimized: false,
     previewLayer: null,
     previewTimer: null,
     latestPreview: null,
@@ -195,7 +197,13 @@
         line-height: 1.15;
       }
 
-      .gw-qtb-close {
+      .gw-qtb-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .gw-qtb-window-btn {
         width: 34px;
         height: 34px;
         display: grid;
@@ -205,6 +213,14 @@
         background: rgba(248,239,215,0.08);
         color: #f8efd7;
         cursor: pointer;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 950;
+        line-height: 1;
+      }
+
+      .gw-qtb-window-btn:hover {
+        background: rgba(248,239,215,0.14);
       }
 
       .gw-qtb-body {
@@ -592,8 +608,14 @@
     return `${taxon}${observed} by ${signal}${cutoff} in ${source}`;
   }
 
-  function renderWindow(context) {
-    const spec = defaultSpec(context);
+  function selectedAttr(value, current) {
+    return String(value) === String(current) ? "selected" : "";
+  }
+
+  function renderWindow(context, options = {}) {
+    const spec = { ...defaultSpec(context), ...(options.spec || {}) };
+    const displayRadius = context?.source === "patch" ? 9 : spec.radiusCells;
+    const name = options.name || autoName(spec, context);
     const sourceText = sourceLabel(context);
     return `
       <div class="gw-qtb-window" role="dialog" aria-modal="true" aria-label="Quest Target Builder">
@@ -602,7 +624,10 @@
             <div class="gw-qtb-kicker">${esc(sourceModeLabel(context))}</div>
             <div class="gw-qtb-title">Quest Target Builder</div>
           </div>
-          <button class="gw-qtb-close" type="button" aria-label="Close target builder" title="Close">X</button>
+          <div class="gw-qtb-head-actions">
+            <button class="gw-qtb-window-btn" type="button" aria-label="Minimize target builder" title="Minimize" data-gw-qtb-minimize>_</button>
+            <button class="gw-qtb-window-btn gw-qtb-close" type="button" aria-label="Close target builder" title="Close">X</button>
+          </div>
         </div>
 
         <div class="gw-qtb-body">
@@ -617,7 +642,7 @@
             <div class="gw-qtb-fieldset">
               <div class="gw-qtb-field is-wide">
                 <label for="gwQtbName">Name</label>
-                <input id="gwQtbName" data-gw-qtb-name type="text" value="${esc(autoName(spec, context))}" autocomplete="off">
+                <input id="gwQtbName" data-gw-qtb-name type="text" value="${esc(name)}" autocomplete="off">
               </div>
 
               <div class="gw-qtb-grid">
@@ -628,10 +653,10 @@
                 <div class="gw-qtb-field">
                   <label for="gwQtbRadius">Range</label>
                   <select id="gwQtbRadius" data-gw-qtb-control="radiusCells" ${context?.source === "patch" ? "disabled" : ""}>
-                    <option value="4">9x9 cells</option>
-                    <option value="9" selected>19x19 cells</option>
-                    <option value="14">29x29 cells</option>
-                    <option value="20">41x41 cells</option>
+                    <option value="4" ${selectedAttr(4, displayRadius)}>9x9 cells</option>
+                    <option value="9" ${selectedAttr(9, displayRadius)}>19x19 cells</option>
+                    <option value="14" ${selectedAttr(14, displayRadius)}>29x29 cells</option>
+                    <option value="20" ${selectedAttr(20, displayRadius)}>41x41 cells</option>
                   </select>
                 </div>
               </div>
@@ -667,10 +692,10 @@
                 <div class="gw-qtb-field">
                   <label for="gwQtbObserved">History</label>
                   <select id="gwQtbObserved" data-gw-qtb-control="observedFilter">
-                    <option value="all">All cells</option>
-                    <option value="observed">Observed historically</option>
-                    <option value="unobserved">Never observed</option>
-                    <option value="stale365" selected>Observed, stale >1 year</option>
+                    <option value="all" ${selectedAttr("all", spec.observedFilter)}>All cells</option>
+                    <option value="observed" ${selectedAttr("observed", spec.observedFilter)}>Observed historically</option>
+                    <option value="unobserved" ${selectedAttr("unobserved", spec.observedFilter)}>Never observed</option>
+                    <option value="stale365" ${selectedAttr("stale365", spec.observedFilter)}>Observed, stale >1 year</option>
                   </select>
                 </div>
               </div>
@@ -682,27 +707,27 @@
                 <div class="gw-qtb-field">
                   <label>Enabled</label>
                   <label class="gw-qtb-toggle-row">
-                    <input type="checkbox" data-gw-qtb-control="cutoffEnabled">
+                    <input type="checkbox" data-gw-qtb-control="cutoffEnabled" ${spec.cutoffEnabled ? "checked" : ""}>
                     <span>Apply cutoff</span>
                   </label>
                 </div>
                 <div class="gw-qtb-field">
                   <label for="gwQtbCutoffMode">Mode</label>
                   <select id="gwQtbCutoffMode" data-gw-qtb-control="cutoffMode">
-                    <option value="raw">Raw value</option>
-                    <option value="z">Z score</option>
+                    <option value="raw" ${selectedAttr("raw", spec.cutoffMode)}>Raw value</option>
+                    <option value="z" ${selectedAttr("z", spec.cutoffMode)}>Z score</option>
                   </select>
                 </div>
                 <div class="gw-qtb-field">
                   <label for="gwQtbComparator">Direction</label>
                   <select id="gwQtbComparator" data-gw-qtb-control="comparator">
-                    <option value="above">>=</option>
-                    <option value="below"><=</option>
+                    <option value="above" ${selectedAttr("above", spec.comparator)}>&gt;=</option>
+                    <option value="below" ${selectedAttr("below", spec.comparator)}>&lt;=</option>
                   </select>
                 </div>
                 <div class="gw-qtb-field">
                   <label for="gwQtbThreshold">Threshold</label>
-                  <input id="gwQtbThreshold" data-gw-qtb-control="threshold" type="number" step="0.1" value="1">
+                  <input id="gwQtbThreshold" data-gw-qtb-control="threshold" type="number" step="0.1" value="${esc(spec.threshold)}">
                 </div>
               </div>
             </div>
@@ -712,8 +737,8 @@
                 <div class="gw-qtb-field">
                   <label for="gwQtbCompletion">Completion</label>
                   <select id="gwQtbCompletion" data-gw-qtb-control="completionMode">
-                    <option value="all" selected>Fill every target cell</option>
-                    <option value="one">One qualifying observation</option>
+                    <option value="all" ${selectedAttr("all", spec.completionMode)}>Fill every target cell</option>
+                    <option value="one" ${selectedAttr("one", spec.completionMode)}>One qualifying observation</option>
                   </select>
                 </div>
                 <div class="gw-qtb-preview" data-gw-qtb-preview>
@@ -1294,8 +1319,101 @@
     return allSavedTargets().find((row) => String(row.id) === String(id)) || null;
   }
 
+  function currentName() {
+    return String(state.root?.querySelector("[data-gw-qtb-name]")?.value || "").trim();
+  }
+
+  function captureDraft() {
+    const spec = state.root ? readSpec() : state.minimizedDraft?.spec || defaultSpec();
+    const name = currentName() || state.minimizedDraft?.name || autoName(spec);
+    return {
+      context: state.context,
+      spec,
+      name,
+      nameTouched: state.nameTouched || Boolean(state.minimizedDraft?.nameTouched)
+    };
+  }
+
+  function clearPendingPreview() {
+    if (!state.previewTimer) return;
+    window.clearTimeout(state.previewTimer);
+    state.previewTimer = null;
+  }
+
+  function clearMinimizedState(options = {}) {
+    state.minimized = false;
+    state.minimizedDraft = null;
+    if (
+      options.dismissPuck === true &&
+      window.GridWildInfoPuck?.currentKind?.() === "quest-target"
+    ) {
+      window.GridWildInfoPuck.dismiss();
+    }
+  }
+
+  function mountWindow(draft = {}) {
+    injectStyles();
+    state.context = draft.context || normalizeContext({});
+    state.nameTouched = draft.nameTouched === true;
+    state.root = document.createElement("div");
+    state.root.className = "gw-qtb-backdrop";
+    state.root.innerHTML = renderWindow(state.context, {
+      spec: draft.spec,
+      name: draft.name
+    });
+    document.body.appendChild(state.root);
+    syncLensControl();
+    bindWindow();
+    updatePreview();
+    if (draft.focus !== false) state.root.querySelector("[data-gw-qtb-name]")?.focus();
+  }
+
+  function restoreMinimized() {
+    const draft = state.minimizedDraft;
+    if (!draft) return;
+
+    state.root?.remove();
+    state.root = null;
+    clearPendingPreview();
+    clearMinimizedState();
+    mountWindow({ ...draft, focus: true });
+  }
+
+  function dismissMinimized() {
+    clearPendingPreview();
+    clearMinimizedState();
+    state.context = null;
+    state.latestPreview = null;
+    clearPreviewLayer();
+  }
+
+  function minimizeBuilder() {
+    if (!state.root) return;
+    if (!window.GridWildInfoPuck?.minimize) {
+      toast("Minimize tools are still loading.");
+      return;
+    }
+
+    const draft = captureDraft();
+    refreshPreviewNow();
+    state.minimizedDraft = draft;
+    state.minimized = true;
+    state.root.remove();
+    state.root = null;
+    clearPendingPreview();
+
+    window.GridWildInfoPuck.minimize({
+      kind: "quest-target",
+      mark: "Q",
+      title: draft.name || "Quest Target Builder",
+      restore: restoreMinimized,
+      onDismiss: dismissMinimized
+    });
+  }
+
   function bindWindow() {
     state.root.querySelector(".gw-qtb-close")?.addEventListener("click", close);
+    state.root.querySelector("[data-gw-qtb-minimize]")?.addEventListener("click", minimizeBuilder);
     state.root.querySelector("[data-gw-qtb-cancel]")?.addEventListener("click", close);
     state.root.addEventListener("click", (event) => {
       if (event.target === state.root) close();
@@ -1364,24 +1482,17 @@
     }
 
     close();
-    injectStyles();
-    state.context = normalizeContext(options);
-    state.nameTouched = false;
-    state.root = document.createElement("div");
-    state.root.className = "gw-qtb-backdrop";
-    state.root.innerHTML = renderWindow(state.context);
-    document.body.appendChild(state.root);
-    syncLensControl();
-    bindWindow();
-    updatePreview();
-    state.root.querySelector("[data-gw-qtb-name]")?.focus();
+    clearMinimizedState({ dismissPuck: true });
+    mountWindow({
+      context: normalizeContext(options),
+      nameTouched: false,
+      focus: true
+    });
   }
 
   function close() {
-    if (state.previewTimer) {
-      window.clearTimeout(state.previewTimer);
-      state.previewTimer = null;
-    }
+    clearPendingPreview();
+    clearMinimizedState({ dismissPuck: true });
     state.root?.remove();
     state.root = null;
     state.context = null;

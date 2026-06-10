@@ -10,7 +10,7 @@
     "format:check": "prettier --check \"index.html\" \"css/**/*.css\" \"js/**/*.js\" \"netlify/functions/**/*.js\" \"scripts/**/*.js\" \"*.json\" \"docs/**/*.md\"",
     "lint": "eslint \"js/**/*.js\" \"netlify/functions/**/*.js\" \"scripts/**/*.js\" \"eslint.config.mjs\"",
     "publish:grid-assets": "node scripts/publish-grid-assets.js",
-    "test": "node scripts/audit-function-auth.js && node scripts/audit-economy-authority.js"
+    "test": "node scripts/test-playable-taxonomy.js && node scripts/audit-function-auth.js && node scripts/audit-economy-authority.js"
   },
   "repository": {
     "type": "git",

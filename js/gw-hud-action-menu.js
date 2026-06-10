@@ -284,12 +284,6 @@
         sub: "Share this exact map view"
       },
       {
-        id: "field-note",
-        icon: "N",
-        label: "Drop Field Note",
-        sub: "Save a note at this point"
-      },
-      {
         id: "street-view",
         icon: "G",
         label: "Google Street View",
@@ -699,10 +693,11 @@
   async function handleAction(action, context) {
     if (action === "patches") {
       const rows =
-        window.GridWildPatches?.showLocalPatchHighlights?.({
+        (await window.GridWildPatches?.showLocalPatchHighlights?.({
           marginRatio: 0.08,
-          candidateLimit: 80
-        }) || [];
+          candidateLimit: 80,
+          includeINatProjects: true
+        })) || [];
       toast(
         rows.length
           ? `Showing ${rows.length} local patch${rows.length === 1 ? "" : "es"}.`

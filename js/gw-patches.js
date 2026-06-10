@@ -9,13 +9,63 @@
   const INAT_PROJECT_RESULT_LIMIT = 12;
   const INAT_PROJECT_SEARCH_PAGE_SIZE = 24;
   const INAT_PROJECT_GEOMETRY_CHECK_LIMIT = 18;
+  const INAT_PROJECT_NEARBY_GEOMETRY_CHECK_LIMIT = 72;
+  const INAT_PROJECT_FOV_MARGIN_RATIO = 0.14;
+  const INAT_PROJECT_MAX_FOV_BOUNDS_RATIO = 1;
+  const INAT_PLACE_NEARBY_PAGE_SIZE = 50;
+  const INAT_PLACE_PROJECT_LOOKUP_LIMIT = 18;
+  const INAT_PROJECTS_PER_PLACE_LIMIT = 12;
   const NEARBY_PROJECT_RADIUS_M = 50000;
   const PATCH_COMPLETENESS_MAX_EXACT_CELLS = 12000;
   const PATCH_COMPLETENESS_MAX_SAMPLE_CELLS = 6000;
+  const PATCH_HERE_SELECTION_SCAN_LIMIT = 1800;
   const PATCH_QUEST_TARGET_MAX_CELLS = 400;
   const PATCH_QUEST_SCAN_MAX_BBOX_CELLS = 120000;
   const PATCH_MENU_LONG_HOLD_MS = 620;
   const PATCH_MENU_MOVE_TOLERANCE_PX = 14;
+  const PATCH_LABEL_ICON_WIDTH = 158;
+  const PATCH_LABEL_ICON_HEIGHT = 36;
+  const PATCH_LABEL_ICON_ANCHOR_X = 79;
+  const PATCH_LABEL_ICON_ANCHOR_Y = 40;
+  const PATCH_LABEL_VIEWPORT_PADDING_PX = 14;
+  const PATCH_LABEL_SELECTED_LIFT_PX = 16;
+  const PATCH_LABEL_DEFAULT_LIFT_PX = 3;
+  const PATCH_BOUNDARY_THEMES = {
+    default: {
+      lineColor: "#ffd85a",
+      glowColor: "#fff2a8",
+      fillColor: "#ffd85a",
+      fillOpacity: 0.1,
+      homeFillOpacity: 0.16,
+      peekFillOpacity: 0.2,
+      candidateFillColor: "#ffed9a",
+      candidateFillOpacity: 0.16,
+      className: "gw-patch-boundary-gold",
+      glowClassName: "gw-patch-boundary-glow-gold",
+      peekClassName: "gw-patch-peek-outline-gold",
+      labelBg: "rgba(255,216,90,0.94)",
+      labelText: "#231a12",
+      labelRing: "rgba(255,216,90,0.30)",
+      labelGlow: "rgba(255,216,90,0.24)"
+    },
+    inat_project: {
+      lineColor: "#7ddfff",
+      glowColor: "#c7f5ff",
+      fillColor: "#7ddfff",
+      fillOpacity: 0.13,
+      homeFillOpacity: 0.19,
+      peekFillOpacity: 0.22,
+      candidateFillColor: "#a9efff",
+      candidateFillOpacity: 0.18,
+      className: "gw-patch-boundary-inat",
+      glowClassName: "gw-patch-boundary-glow-inat",
+      peekClassName: "gw-patch-peek-outline-inat",
+      labelBg: "rgba(125,223,255,0.92)",
+      labelText: "#06242c",
+      labelRing: "rgba(125,223,255,0.38)",
+      labelGlow: "rgba(125,223,255,0.28)"
+    }
+  };
 
   const projectBoundaryCache = new Map();
   const placeGeometryCache = new Map();
@@ -29,10 +79,12 @@
     peekMapClickHandler: null,
     peekRunId: 0,
     peekRows: [],
+    selectedPatchId: null,
     lastOpen: { id: null, at: 0 },
     actionMenuRoot: null,
     patchHoldTimer: null,
     patchHoldStart: null,
+    labelUpdateRaf: null,
     suppressPatchInfoUntil: 0,
     suppressHudActionMenuUntil: 0
   };
@@ -71,6 +123,39 @@
     } catch {
       return null;
     }
+  }
+
+  function isINatProjectPatch(patch) {
+    return (
+      patch?.source === "inat_project" ||
+      patch?.metadata?.imported_from === "inat_project" ||
+      /iNaturalist/i.test(String(patch?.source_label || ""))
+    );
+  }
+
+  function patchBoundaryTheme(patch) {
+    return isINatProjectPatch(patch)
+      ? PATCH_BOUNDARY_THEMES.inat_project
+      : PATCH_BOUNDARY_THEMES.default;
+  }
+
+  function patchBoundarySurveyStyle(patch) {
+    const theme = patchBoundaryTheme(patch);
+    return {
+      fillColor: theme.fillColor,
+      lineColor: theme.lineColor,
+      lineWeight: 3,
+      fillOpacity: theme.fillOpacity
+    };
+  }
+
+  function patchHudThemeVars(theme) {
+    return [
+      `--gw-patch-theme-ring:${theme.labelRing}`,
+      `--gw-patch-theme-soft-glow:${theme.labelGlow}`,
+      `--gw-patch-theme-label-bg:${theme.labelBg}`,
+      `--gw-patch-theme-text:${theme.labelText}`
+    ].join(";");
   }
 
   function loadPatches() {
@@ -184,6 +269,17 @@
     }
 
     return mapCenterOrigin() || avatar || null;
+  }
+
+  function nearbySearchBounds() {
+    if (!window.map?.getBounds || !window.L) return null;
+    return expandLatLngBounds(map.getBounds(), INAT_PROJECT_FOV_MARGIN_RATIO);
+  }
+
+  function currentFovBounds() {
+    if (!window.map?.getBounds) return null;
+    const bounds = map.getBounds();
+    return bounds?.isValid?.() ? bounds : null;
   }
 
   function distanceM(a, b) {
@@ -682,6 +778,44 @@
     return { lat: maxLat, lng };
   }
 
+  function clampNumber(value, min, max) {
+    if (max < min) return (min + max) / 2;
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function patchLabelLatLngForViewport(latlng, rings = [], options = {}) {
+    if (
+      !latlng ||
+      !window.map?.getBounds ||
+      !window.map?.getSize ||
+      !window.map?.latLngToContainerPoint ||
+      !window.map?.containerPointToLatLng ||
+      !window.L?.point
+    ) {
+      return latlng;
+    }
+
+    const bounds = map.getBounds();
+    if (!ringsIntersectBounds(rings, bounds)) return latlng;
+
+    const size = map.getSize();
+    const preferred = map.latLngToContainerPoint(latlng);
+    const padding = PATCH_LABEL_VIEWPORT_PADDING_PX;
+    const lift = options.selected ? PATCH_LABEL_SELECTED_LIFT_PX : PATCH_LABEL_DEFAULT_LIFT_PX;
+    const visualHeight = PATCH_LABEL_ICON_HEIGHT + (options.selected ? 3 : 0);
+
+    const minX = padding + PATCH_LABEL_ICON_ANCHOR_X;
+    const maxX = size.x - padding - (PATCH_LABEL_ICON_WIDTH - PATCH_LABEL_ICON_ANCHOR_X);
+    const minY = padding + PATCH_LABEL_ICON_ANCHOR_Y + lift;
+    const maxY = size.y - padding + PATCH_LABEL_ICON_ANCHOR_Y + lift - visualHeight;
+    const clamped = L.point(
+      clampNumber(preferred.x, minX, maxX),
+      clampNumber(preferred.y, minY, maxY)
+    );
+
+    return map.containerPointToLatLng(clamped);
+  }
+
   function expandLatLngBounds(bounds, ratio = 0.08) {
     if (!bounds?.isValid?.()) return bounds;
 
@@ -697,6 +831,40 @@
     const points = validRingPoints([ring]);
     if (!points.length) return null;
     return L.latLngBounds(points.map((point) => [point.lat, point.lng]));
+  }
+
+  function ringsBounds(rings = []) {
+    const points = validRingPoints(rings);
+    if (!points.length || !window.L) return null;
+    return L.latLngBounds(points.map((point) => [point.lat, point.lng]));
+  }
+
+  function boundsSizeMeters(bounds) {
+    if (!bounds?.isValid?.()) return null;
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    const se = { lat: sw.lat, lng: ne.lng };
+    const nw = { lat: ne.lat, lng: sw.lng };
+    const widthM = Math.max(distanceM(sw, se), distanceM(nw, ne));
+    const heightM = Math.max(distanceM(sw, nw), distanceM(se, ne));
+    const areaM2 = widthM * heightM;
+    if (![widthM, heightM, areaM2].every(Number.isFinite) || areaM2 <= 0) return null;
+    return { widthM, heightM, areaM2 };
+  }
+
+  function ringsFitWithinFovSize(rings = [], fovBounds, ratio = INAT_PROJECT_MAX_FOV_BOUNDS_RATIO) {
+    const boundarySize = boundsSizeMeters(ringsBounds(rings));
+    const fovSize = boundsSizeMeters(fovBounds);
+    if (!boundarySize || !fovSize) return true;
+
+    const widthLimit = fovSize.widthM * ratio;
+    const heightLimit = fovSize.heightM * ratio;
+    const areaLimit = fovSize.areaM2 * ratio;
+    return (
+      boundarySize.widthM <= widthLimit &&
+      boundarySize.heightM <= heightLimit &&
+      boundarySize.areaM2 <= areaLimit
+    );
   }
 
   function boundsCorners(bounds) {
@@ -724,6 +892,93 @@
 
   function patchIntersectsBounds(patch, bounds) {
     return patchRings(patch).some((ring) => ringIntersectsBounds(ring, bounds));
+  }
+
+  function ringsIntersectBounds(rings = [], bounds) {
+    return (Array.isArray(rings) ? rings : []).some((ring) => ringIntersectsBounds(ring, bounds));
+  }
+
+  function parseINatNearbyPlaces(data) {
+    const raw = data?.results;
+    const groups = Array.isArray(raw)
+      ? [raw]
+      : raw && typeof raw === "object"
+        ? Object.values(raw)
+        : [];
+    const seen = new Set();
+    return groups
+      .flat()
+      .filter((place) => place?.id)
+      .filter((place) => {
+        const key = String(place.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  function placeLatLng(place) {
+    const coords = place?.point_geojson?.coordinates;
+    if (Array.isArray(coords) && coords.length >= 2) {
+      const lng = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+
+    const [lat, lng] = String(place?.location || "")
+      .split(",")
+      .map(Number);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  }
+
+  function safeGeoJsonRings(input) {
+    try {
+      return parseGeoJsonGeometry(input).rings || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function placeGeometryRings(place) {
+    const rings = safeGeoJsonRings(place?.geometry_geojson || place?.geojson || place?.geometry);
+    if (rings.length) return rings;
+    return safeGeoJsonRings(place?.bounding_box_geojson);
+  }
+
+  function placeFitsFov(place, searchBounds, maxSizeBounds) {
+    if (!searchBounds?.isValid?.()) return true;
+    const rings = placeGeometryRings(place);
+    if (rings.length) {
+      return (
+        ringsIntersectBounds(rings, searchBounds) && ringsFitWithinFovSize(rings, maxSizeBounds)
+      );
+    }
+
+    const point = placeLatLng(place);
+    return point ? searchBounds.contains([point.lat, point.lng]) : false;
+  }
+
+  function sortPlacesForProjectLookup(places = []) {
+    return places.slice().sort((a, b) => {
+      const ar = placeGeometryRings(a);
+      const br = placeGeometryRings(b);
+      const as = boundsSizeMeters(ringsBounds(ar));
+      const bs = boundsSizeMeters(ringsBounds(br));
+      const aa = Number.isFinite(as?.areaM2)
+        ? as.areaM2
+        : Number.isFinite(Number(a?.bbox_area))
+          ? Number(a.bbox_area)
+          : Infinity;
+      const ba = Number.isFinite(bs?.areaM2)
+        ? bs.areaM2
+        : Number.isFinite(Number(b?.bbox_area))
+          ? Number(b.bbox_area)
+          : Infinity;
+      if (aa !== ba) return aa - ba;
+      return String(a?.display_name || a?.name || a?.slug || "").localeCompare(
+        String(b?.display_name || b?.name || b?.slug || "")
+      );
+    });
   }
 
   function suppressHudActionMenu(ms = 900) {
@@ -762,11 +1017,7 @@
     if (!patch) return false;
 
     suppressHudActionMenu();
-    if (getPatch(patch.id)) {
-      openPatchActionMenu(patch, { originalEvent, latlng });
-    } else {
-      openPatchPeekInfo(patch, latlng);
-    }
+    openPatchActionMenu(patch, { originalEvent, latlng });
     return true;
   }
 
@@ -792,6 +1043,17 @@
 
     if (!clone.survey_geometry) {
       clone.survey_geometry = surveyGeometryForPatch(clone);
+    } else if (isINatProjectPatch(clone)) {
+      clone.survey_geometry = {
+        ...clone.survey_geometry,
+        styles: {
+          ...(clone.survey_geometry.styles || {}),
+          boundary: {
+            ...(clone.survey_geometry.styles?.boundary || {}),
+            ...patchBoundarySurveyStyle(clone)
+          }
+        }
+      };
     }
 
     return clone;
@@ -799,6 +1061,7 @@
 
   function surveyGeometryForPatch(patch) {
     const boundary = primaryBoundary(patch);
+    const boundaryStyle = patchBoundarySurveyStyle(patch);
     return {
       boundary,
       paths: [],
@@ -806,12 +1069,7 @@
       denseZones: [],
       assets: [],
       styles: {
-        boundary: {
-          fillColor: "#6fb7ff",
-          lineColor: "#f0d18a",
-          lineWeight: 3,
-          fillOpacity: 0.12
-        }
+        boundary: boundaryStyle
       }
     };
   }
@@ -841,6 +1099,7 @@
   function removePatch(id) {
     const before = state.patches.length;
     state.patches = state.patches.filter((patch) => patch.id !== id);
+    if (String(state.selectedPatchId || "") === String(id)) state.selectedPatchId = null;
     if (state.homePatchId === id) {
       state.homePatchId = null;
       saveHomePatchId();
@@ -931,11 +1190,21 @@
         filter: drop-shadow(0 0 4px rgba(255,216,90,0.46));
       }
 
+      .gw-patch-boundary.gw-patch-boundary-inat {
+        filter: drop-shadow(0 0 5px rgba(125,223,255,0.52));
+      }
+
       .gw-patch-hud-label {
         width: 158px;
         pointer-events: none;
         transform: translateY(-2px);
         filter: drop-shadow(0 5px 12px rgba(0,0,0,0.42));
+        transition: transform 140ms ease, filter 140ms ease;
+      }
+
+      .gw-patch-hud-label.is-selected {
+        transform: translateY(-13px) scale(1.045);
+        filter: drop-shadow(0 9px 18px rgba(0,0,0,0.58));
       }
 
       .gw-patch-completeness-bar {
@@ -945,7 +1214,7 @@
         overflow: hidden;
         border: 1px solid rgba(255,255,255,0.72);
         background: rgba(28,24,21,0.82);
-        box-shadow: 0 0 0 1px rgba(255,216,90,0.30), 0 0 10px rgba(255,216,90,0.24);
+        box-shadow: 0 0 0 1px var(--gw-patch-theme-ring, rgba(255,216,90,0.30)), 0 0 10px var(--gw-patch-theme-soft-glow, rgba(255,216,90,0.24));
       }
 
       .gw-patch-completeness-fill {
@@ -969,8 +1238,8 @@
         max-width: 124px;
         border-radius: 999px;
         padding: 3px 8px;
-        color: #231a12;
-        background: rgba(255,216,90,0.94);
+        color: var(--gw-patch-theme-text, #231a12);
+        background: var(--gw-patch-theme-label-bg, rgba(255,216,90,0.94));
         border: 1px solid rgba(255,255,255,0.76);
         font-size: 10px;
         line-height: 1;
@@ -978,6 +1247,12 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        transition: box-shadow 140ms ease, border-color 140ms ease;
+      }
+
+      .gw-patch-hud-label.is-selected .gw-patch-label-name {
+        border-color: rgba(0,0,0,0.82);
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.72), 0 5px 12px rgba(0,0,0,0.24);
       }
 
       .gw-patch-completeness-text {
@@ -986,7 +1261,7 @@
         padding: 3px 6px;
         color: #fff7df;
         background: rgba(20,17,15,0.88);
-        border: 1px solid rgba(255,216,90,0.32);
+        border: 1px solid var(--gw-patch-theme-ring, rgba(255,216,90,0.32));
         font-size: 10px;
         line-height: 1;
         font-weight: 950;
@@ -1010,6 +1285,14 @@
 
       .gw-patch-peek-outline:hover {
         filter: drop-shadow(0 0 18px rgba(255,216,90,0.96));
+      }
+
+      .gw-patch-peek-outline.gw-patch-peek-outline-inat {
+        filter: drop-shadow(0 0 14px rgba(125,223,255,0.72));
+      }
+
+      .gw-patch-peek-outline.gw-patch-peek-outline-inat:hover {
+        filter: drop-shadow(0 0 18px rgba(125,223,255,0.90));
       }
 
       .gw-patch-action-menu {
@@ -1110,11 +1393,97 @@
     });
   }
 
+  function patchBoundaryBaseStyle(patch, home) {
+    const theme = patchBoundaryTheme(patch);
+    return {
+      color: theme.lineColor,
+      opacity: 0.96,
+      weight: home ? 4 : 3.5,
+      fillColor: theme.fillColor,
+      fillOpacity: home ? theme.homeFillOpacity : theme.fillOpacity,
+      dashArray: home ? "" : "9 6"
+    };
+  }
+
+  function patchBoundarySelectedStyle(patch, home) {
+    const base = patchBoundaryBaseStyle(patch, home);
+    return {
+      ...base,
+      color: "#050505",
+      opacity: 1,
+      weight: home ? 5.5 : 5,
+      dashArray: ""
+    };
+  }
+
+  function setPatchLayerSelectionStyle(layer) {
+    if (!layer?._gwPatchId || !layer.setStyle) return;
+    const selected = String(layer._gwPatchId) === String(state.selectedPatchId || "");
+    layer.setStyle(selected ? layer._gwPatchSelectedStyle : layer._gwPatchBaseStyle);
+  }
+
+  function applySelectedPatchLayerStyles() {
+    [state.layer, state.peekLayer].forEach((group) => {
+      group?.eachLayer?.(setPatchLayerSelectionStyle);
+    });
+  }
+
+  function cellsForPatchHereSelection(patch) {
+    const rings = patchRings(patch);
+    const bounds = patchCellBounds(rings);
+    if (!bounds) return [];
+
+    const bboxCells = (bounds.maxIx - bounds.minIx + 1) * (bounds.maxIy - bounds.minIy + 1);
+    const stride = Math.max(1, Math.ceil(Math.sqrt(bboxCells / PATCH_HERE_SELECTION_SCAN_LIMIT)));
+    const cells = [];
+
+    for (let iy = bounds.minIy; iy <= bounds.maxIy; iy += stride) {
+      for (let ix = bounds.minIx; ix <= bounds.maxIx; ix += stride) {
+        const center = cellCenterPoint(ix, iy);
+        if (!center || !pointInRings(center, rings)) continue;
+        cells.push({
+          ix,
+          iy,
+          key: window.GridWildGrid?.cellKey?.(ix, iy) || `${ix},${iy}`
+        });
+      }
+    }
+
+    return cells;
+  }
+
+  function raiseHereForSelectedPatch(patch) {
+    if (!patch?.id || !window.GridWildHerePanel?.isOpen?.()) return;
+    const rings = patchRings(patch);
+    const bounds = patchCellBounds(rings);
+    const cells = cellsForPatchHereSelection(patch);
+    if (!cells.length || !window.GridWildSelectionTool?.setSelectionFromCells) return;
+
+    window.GridWildSelectionTool.setSelectionFromCells(cells, {
+      label: patchTitle(patch),
+      source: "patch_selection",
+      signature: `patch:${patch.id}:${cells.length}`,
+      bounds,
+      rings,
+      toast: false
+    });
+    window.GridWildHerePanel.scheduleRefresh?.(10);
+  }
+
+  function selectPatch(patch) {
+    if (!patch?.id) return;
+    selectPatchHudLabel(patch.id);
+    raiseHereForSelectedPatch(patch);
+  }
+
   function selectPatchHudLabel(patchId) {
+    state.selectedPatchId = patchId ? String(patchId) : null;
     document.querySelectorAll(".gw-patch-hud-label.is-selected").forEach((el) => {
       el.classList.remove("is-selected");
     });
     setPatchHudLabelState(patchId, "is-selected", true);
+    applySelectedPatchLayerStyles();
+    updatePatchLabelPositions();
   }
 
   function closePatchActionMenu() {
@@ -1179,7 +1548,7 @@
     const pos = clampPatchMenuPosition(x, y);
 
     closePatchActionMenu();
-    selectPatchHudLabel(patch.id);
+    selectPatch(patch);
 
     const root = document.createElement("div");
     root.className = "gw-patch-action-menu";
@@ -1237,7 +1606,7 @@
     const pos = clampPatchMenuPosition(x, y);
 
     closePatchActionMenu();
-    selectPatchHudLabel(patch.id);
+    selectPatch(patch);
 
     const root = document.createElement("div");
     root.className = "gw-patch-action-menu";
@@ -1272,7 +1641,8 @@
         const rect = button.getBoundingClientRect();
         closePatchActionMenu();
         if (action === "info") {
-          openPatchDetail(patch.id, evt?.latlng || null);
+          if (getPatch(patch.id)) openPatchDetail(patch.id, evt?.latlng || null);
+          else openPatchPeekInfo(patch, evt?.latlng || null);
         } else if (action === "quest") {
           openPatchQuestTypeMenu(patch, rect);
         }
@@ -1340,17 +1710,21 @@
   function addPatchPolygon(patch, points, home) {
     if (!Array.isArray(points) || points.length < 3) return;
     const layer = state.layer;
+    const theme = patchBoundaryTheme(patch);
+    const selected = String(patch.id) === String(state.selectedPatchId || "");
+    const baseStyle = patchBoundaryBaseStyle(patch, home);
+    const selectedStyle = patchBoundarySelectedStyle(patch, home);
     L.polygon(
       points.map((p) => [p.lat, p.lng]),
       {
         pane: PANE,
-        color: "#ffd85a",
+        color: theme.glowColor,
         opacity: 0.22,
         weight: home ? 11 : 9,
         fillOpacity: 0,
         interactive: false,
         bubblingMouseEvents: false,
-        className: "gw-patch-boundary-glow"
+        className: `gw-patch-boundary-glow ${theme.glowClassName}`
       }
     ).addTo(layer);
 
@@ -1358,38 +1732,40 @@
       points.map((p) => [p.lat, p.lng]),
       {
         pane: PANE,
-        color: "#ffd85a",
-        opacity: 0.96,
-        weight: home ? 4 : 3.5,
-        fillColor: "#ffd85a",
-        fillOpacity: home ? 0.16 : 0.1,
-        dashArray: home ? "" : "9 6",
+        ...(selected ? selectedStyle : baseStyle),
         interactive: true,
         bubblingMouseEvents: false,
-        className: "gw-patch-boundary"
+        className: `gw-patch-boundary ${theme.className}`
       }
     ).addTo(layer);
 
-    target.on("click", (evt) => openPatchHudInfo(patch, evt));
-    target.on("dblclick", (evt) => openPatchHudInfo(patch, evt));
+    target._gwPatchId = patch.id;
+    target._gwPatchBaseStyle = baseStyle;
+    target._gwPatchSelectedStyle = selectedStyle;
+
+    target.on("click", (evt) => selectPatchFromMap(patch, evt));
+    target.on("dblclick", (evt) => selectPatchFromMap(patch, evt));
     target.on("contextmenu", (evt) => openPatchActionMenu(patch, evt));
     target.on("mouseover", () => setPatchHudLabelState(patch.id, "is-hovered", true));
     target.on("mouseout", () => setPatchHudLabelState(patch.id, "is-hovered", false));
     bindPatchLongHold(target, patch);
   }
 
-  function openPatchHudInfo(patch, evt) {
+  function selectPatchFromMap(patch, evt) {
     if (evt?.originalEvent && window.L?.DomEvent?.stop) L.DomEvent.stop(evt.originalEvent);
     if (Date.now() < state.suppressPatchInfoUntil) return;
+    closePatchActionMenu();
     const now = Date.now();
     if (state.lastOpen.id === patch.id && now - state.lastOpen.at < 450) return;
     state.lastOpen = { id: patch.id, at: now };
-    selectPatchHudLabel(patch.id);
-    openPatchDetail(patch.id, evt?.latlng);
+    selectPatch(patch);
   }
 
-  function addPatchCompletenessLabel(patch, rings) {
-    const latlng = topBoundaryLabelLatLng(rings);
+  function addPatchCompletenessLabel(patch, rings, options = {}) {
+    const selected =
+      options.selected === true || String(patch.id) === String(state.selectedPatchId || "");
+    const preferredLatLng = topBoundaryLabelLatLng(rings);
+    const latlng = patchLabelLatLngForViewport(preferredLatLng, rings, { selected });
     if (!latlng) return;
 
     const completeness = patchCompleteness(patch, rings);
@@ -1397,8 +1773,11 @@
     const percentWidth = `${Math.round(completeness.percent * 1000) / 10}%`;
     const title = patchTitle(patch);
     const color = completenessColor(completeness.percent);
+    const theme = patchBoundaryTheme(patch);
+    const targetLayer = options.layer || state.layer;
+    if (!targetLayer) return;
 
-    L.marker(latlng, {
+    const marker = L.marker(latlng, {
       pane: PANE,
       interactive: false,
       keyboard: false,
@@ -1407,10 +1786,10 @@
         className: "",
         html: `
           <div
-            class="gw-patch-hud-label"
+            class="gw-patch-hud-label${selected ? " is-selected" : ""}"
             data-patch-id="${esc(patch.id)}"
             title="${esc(`${title}: ${percentText} complete${completeness.sampled ? " (estimated)" : ""}`)}"
-            style="--gw-patch-completeness-width:${esc(percentWidth)};--gw-patch-completeness-color:${esc(color)};"
+            style="--gw-patch-completeness-width:${esc(percentWidth)};--gw-patch-completeness-color:${esc(color)};${esc(patchHudThemeVars(theme))};"
           >
             <div class="gw-patch-completeness-bar" aria-hidden="true">
               <div class="gw-patch-completeness-fill"></div>
@@ -1421,10 +1800,39 @@
             </div>
           </div>
         `,
-        iconSize: [158, 36],
-        iconAnchor: [79, 40]
+        iconSize: [PATCH_LABEL_ICON_WIDTH, PATCH_LABEL_ICON_HEIGHT],
+        iconAnchor: [PATCH_LABEL_ICON_ANCHOR_X, PATCH_LABEL_ICON_ANCHOR_Y]
       })
-    }).addTo(state.layer);
+    }).addTo(targetLayer);
+    marker._gwPatchLabel = true;
+    marker._gwPatchId = patch.id;
+    marker._gwPatchLabelPreferredLatLng = preferredLatLng;
+    marker._gwPatchLabelRings = rings;
+  }
+
+  function updatePatchLabelMarker(marker) {
+    if (!marker?._gwPatchLabel || !marker.setLatLng) return;
+    const selected = String(marker._gwPatchId || "") === String(state.selectedPatchId || "");
+    const latlng = patchLabelLatLngForViewport(
+      marker._gwPatchLabelPreferredLatLng,
+      marker._gwPatchLabelRings,
+      { selected }
+    );
+    if (latlng) marker.setLatLng(latlng);
+  }
+
+  function updatePatchLabelPositions() {
+    [state.layer, state.peekLayer].forEach((group) => {
+      group?.eachLayer?.(updatePatchLabelMarker);
+    });
+  }
+
+  function requestPatchLabelPositionUpdate() {
+    if (state.labelUpdateRaf) return;
+    state.labelUpdateRaf = window.requestAnimationFrame(() => {
+      state.labelUpdateRaf = null;
+      updatePatchLabelPositions();
+    });
   }
 
   function clearLocalPatchHighlights(options = {}) {
@@ -1458,6 +1866,67 @@
       seen.add(patch.id);
       return patchIntersectsBounds(patch, bounds);
     });
+  }
+
+  function mergePatchRows(rows = []) {
+    const seen = new Set();
+    return rows.filter((patch) => {
+      if (!patch?.id || seen.has(patch.id)) return false;
+      seen.add(patch.id);
+      return true;
+    });
+  }
+
+  function patchFromINatProjectCandidate(project) {
+    const geometry = project?.__gwBoundaryGeometry || null;
+    const rings = Array.isArray(geometry?.rings) ? geometry.rings : [];
+    if (!rings.length) return null;
+
+    const projectId = project.id || project.slug || project.__gwPlaceId;
+    const patch = withDerivedPatchFields({
+      id: patchIdFor("inat_project", projectId),
+      name: project.title || project.name || project.slug || "iNaturalist project patch",
+      source: "inat_project",
+      source_id: String(projectId || ""),
+      source_url:
+        project.uri ||
+        `https://www.inaturalist.org/projects/${project.slug || project.id || projectId}`,
+      source_label: "iNaturalist project",
+      boundary: rings[0],
+      geometry: {
+        type: geometry.type || "polygon",
+        rings,
+        geojson: geometry.geojson || null,
+        source_format: geometry.source_format
+      },
+      metadata: {
+        project,
+        place_id: project.__gwPlaceId || project.__gwCandidatePlaceId || null,
+        imported_from: "inat_project",
+        runtime_candidate: true
+      },
+      created_at: new Date().toISOString()
+    });
+
+    return patch
+      ? {
+          ...patch,
+          candidate: true,
+          distance_m: Number(project.distance_m)
+        }
+      : null;
+  }
+
+  async function nearbyINatProjectPatchCandidates(options = {}) {
+    if (!window.map?.getBounds || !window.L) return [];
+    const bounds = expandLatLngBounds(window.map.getBounds(), Number(options.marginRatio) || 0.08);
+    const savedIds = new Set(state.patches.map((patch) => patch.id));
+    const projects = await searchINatProjects("", { nearby: true });
+    return projects
+      .map(patchFromINatProjectCandidate)
+      .filter(Boolean)
+      .filter((patch) => !savedIds.has(patch.id))
+      .filter((patch) => patchIntersectsBounds(patch, bounds));
   }
 
   function openPatchPeekInfo(patch, latlng = null) {
@@ -1520,6 +1989,23 @@
     let count = 0;
 
     rows.forEach((patch) => {
+      const theme = patchBoundaryTheme(patch);
+      const selected = String(patch.id) === String(state.selectedPatchId || "");
+      const baseStyle = {
+        color: theme.glowColor,
+        opacity: 0.98,
+        weight: 4,
+        fillColor: patch.candidate ? theme.candidateFillColor : theme.fillColor,
+        fillOpacity: patch.candidate ? theme.candidateFillOpacity : theme.peekFillOpacity,
+        dashArray: patch.candidate ? "10 6" : ""
+      };
+      const selectedStyle = {
+        ...baseStyle,
+        color: "#050505",
+        opacity: 1,
+        weight: 5,
+        dashArray: ""
+      };
       patchRings(patch).forEach((ring) => {
         if (!Array.isArray(ring) || ring.length < 3) return;
         count++;
@@ -1527,24 +2013,40 @@
           ring.map((point) => [point.lat, point.lng]),
           {
             pane: PANE,
-            color: "#fff2a8",
-            opacity: 0.98,
-            weight: 4,
-            fillColor: patch.candidate ? "#ffed9a" : "#ffd85a",
-            fillOpacity: patch.candidate ? 0.16 : 0.2,
-            dashArray: patch.candidate ? "10 6" : "",
+            ...(selected ? selectedStyle : baseStyle),
             interactive: true,
             bubblingMouseEvents: false,
-            className: "gw-patch-peek-outline"
+            className: `gw-patch-peek-outline ${theme.peekClassName}`
           }
         ).addTo(peekLayer);
 
+        polygon._gwPatchId = patch.id;
+        polygon._gwPatchBaseStyle = baseStyle;
+        polygon._gwPatchSelectedStyle = selectedStyle;
+
         polygon.on("click", (evt) => {
           if (evt?.originalEvent && window.L?.DomEvent?.stop) L.DomEvent.stop(evt.originalEvent);
-          selectPatchHudLabel(patch.id);
-          openPatchPeekInfo(patch, evt?.latlng || null);
+          selectPatch(patch);
+          if (!getPatch(patch.id)) highlightPatchRows(state.peekRows);
         });
+        polygon.on("dblclick", (evt) => {
+          if (evt?.originalEvent && window.L?.DomEvent?.stop) L.DomEvent.stop(evt.originalEvent);
+          selectPatch(patch);
+          if (!getPatch(patch.id)) highlightPatchRows(state.peekRows);
+        });
+        polygon.on("contextmenu", (evt) => {
+          if (evt?.originalEvent && window.L?.DomEvent?.stop) L.DomEvent.stop(evt.originalEvent);
+          openPatchActionMenu(patch, evt);
+        });
+        bindPatchLongHold(polygon, patch);
       });
+
+      if (selected && !getPatch(patch.id)) {
+        addPatchCompletenessLabel(patch, patchRings(patch), {
+          layer: peekLayer,
+          selected: true
+        });
+      }
     });
 
     if (count && window.map?.on) {
@@ -1555,21 +2057,44 @@
     return count;
   }
 
-  function showLocalPatchHighlights(options = {}) {
+  async function showLocalPatchHighlights(options = {}) {
     const runId = ++state.peekRunId;
     setVisible(true);
-    window.GridWildOsmFeaturesLayer?.scheduleFetch?.(0);
-    const rows = localPatchesInFov(options);
+    const parksHydratePromise =
+      window.GridWildOsmFeaturesLayer?.fetchParksForCurrentView?.() || null;
+    let rows = localPatchesInFov(options);
+    let hydratedINatRows = [];
     highlightPatchRows(rows);
+
+    if (parksHydratePromise?.then) {
+      await parksHydratePromise;
+      if (state.peekRunId === runId) {
+        rows = localPatchesInFov(options);
+        highlightPatchRows(rows);
+      }
+    }
 
     if (options.retryAfterOsm !== false) {
       const retry = () => {
         if (state.peekRunId !== runId) return;
-        const refreshedRows = localPatchesInFov(options);
+        const refreshedRows = mergePatchRows([...localPatchesInFov(options), ...hydratedINatRows]);
         if (refreshedRows.length) highlightPatchRows(refreshedRows);
       };
       window.addEventListener("gwOsmFeaturesUpdated", retry, { once: true });
       window.setTimeout(() => window.removeEventListener("gwOsmFeaturesUpdated", retry), 1800);
+    }
+
+    if (options.includeINatProjects !== false) {
+      try {
+        const inatRows = await nearbyINatProjectPatchCandidates(options);
+        if (state.peekRunId === runId && inatRows.length) {
+          hydratedINatRows = inatRows;
+          rows = mergePatchRows([...localPatchesInFov(options), ...hydratedINatRows]);
+          highlightPatchRows(rows);
+        }
+      } catch (err) {
+        console.warn("Could not hydrate nearby iNat project patches:", err);
+      }
     }
 
     return rows;
@@ -1594,8 +2119,9 @@
     });
   }
 
-  function focusPatch(id) {
+  function focusPatch(id, options = {}) {
     const patch = getPatch(id);
+    if (options.select === true) selectPatch(patch);
     focusPatchObject(patch);
   }
 
@@ -2165,10 +2691,10 @@
 
     root.querySelector("#gwPatchFindNearbyProjects")?.addEventListener("click", async () => {
       const box = root.querySelector("#gwPatchNearbyResults");
-      box.innerHTML = "Finding nearby boundary projects...";
+      box.innerHTML = "Finding boundary projects in this map view...";
       try {
         const projects = await searchINatProjects("", { nearby: true });
-        box.innerHTML = renderProjectResults(projects);
+        box.innerHTML = renderProjectResults(projects, { nearby: true });
       } catch (err) {
         box.innerHTML = `Could not find projects: ${esc(err.message)}`;
       }
@@ -2301,13 +2827,34 @@
 
   async function filterProjectsWithBoundaries(projects = [], options = {}) {
     const origin = options.origin || null;
-    const checks = projects.slice(0, INAT_PROJECT_GEOMETRY_CHECK_LIMIT).map(async (project) => {
+    const searchBounds = options.bounds || null;
+    const maxSizeBounds = options.maxSizeBounds || searchBounds;
+    const rejectOversize = options.rejectOversize === true || options.nearby === true;
+    const geometryLimit =
+      Number(options.geometryCheckLimit) ||
+      (options.nearby
+        ? INAT_PROJECT_NEARBY_GEOMETRY_CHECK_LIMIT
+        : INAT_PROJECT_GEOMETRY_CHECK_LIMIT);
+    const checks = projects.slice(0, geometryLimit).map(async (project) => {
       try {
         const resolved = await resolveINatProjectBoundary(project);
         if (!resolved) return null;
 
         const distance = origin ? distanceToRingsM(origin, resolved.geometry.rings) : Infinity;
-        if (options.nearby && (!Number.isFinite(distance) || distance > NEARBY_PROJECT_RADIUS_M)) {
+        if (options.nearby) {
+          // Nearby iNat projects must be drawable, in view, and no larger than one FOV.
+          if (searchBounds?.isValid?.()) {
+            if (!ringsIntersectBounds(resolved.geometry.rings, searchBounds)) return null;
+          } else if (!Number.isFinite(distance) || distance > NEARBY_PROJECT_RADIUS_M) {
+            return null;
+          }
+        }
+
+        if (
+          rejectOversize &&
+          maxSizeBounds?.isValid?.() &&
+          !ringsFitWithinFovSize(resolved.geometry.rings, maxSizeBounds)
+        ) {
           return null;
         }
 
@@ -2315,6 +2862,7 @@
           ...resolved.project,
           __gwPlaceId: resolved.placeId,
           __gwBoundaryGeometry: resolved.geometry,
+          __gwInFov: options.nearby === true && searchBounds?.isValid?.(),
           distance_m: distance
         };
       } catch (err) {
@@ -2338,33 +2886,160 @@
       .slice(0, INAT_PROJECT_RESULT_LIMIT);
   }
 
-  async function searchINatProjects(query, options = {}) {
-    const url = new URL("https://api.inaturalist.org/v1/projects");
-    url.searchParams.set(
-      "per_page",
-      String(options.nearby ? INAT_PROJECT_SEARCH_PAGE_SIZE : INAT_PROJECT_RESULT_LIMIT)
-    );
-    if (query) url.searchParams.set("q", query);
-    const origin = nearbySearchOrigin();
-    if (options.nearby && origin) {
-      url.searchParams.set("lat", String(origin.lat));
-      url.searchParams.set("lng", String(origin.lng));
-    }
-    const data = await fetchINatJson(url);
-    const projects = Array.isArray(data.results) ? data.results : [];
-    return await filterProjectsWithBoundaries(projects, {
-      nearby: options.nearby === true,
+  function fovProjectSearchPoints(bounds, origin) {
+    if (!bounds?.isValid?.()) return origin ? [origin] : [];
+
+    const center = bounds.getCenter();
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    const raw = [
+      { lat: center.lat, lng: center.lng },
+      { lat: sw.lat, lng: sw.lng },
+      { lat: sw.lat, lng: ne.lng },
+      { lat: ne.lat, lng: sw.lng },
+      { lat: ne.lat, lng: ne.lng },
       origin
+    ].filter(Boolean);
+    const seen = new Set();
+    return raw.filter((point) => {
+      const lat = Number(point.lat);
+      const lng = Number(point.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+      const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
   }
 
-  function renderProjectResults(projects = []) {
-    if (!projects.length) return `<div class="gw-muted">No boundary projects found.</div>`;
+  function mergeProjectCandidates(groups = []) {
+    const byKey = new Map();
+    groups.flat().forEach((project) => {
+      const key = projectLookupId(project) || String(project?.title || project?.name || "");
+      if (!key || byKey.has(key)) return;
+      byKey.set(key, project);
+    });
+    return Array.from(byKey.values());
+  }
+
+  async function fetchINatProjectCandidates(query, options = {}) {
+    const url = new URL("https://api.inaturalist.org/v1/projects");
+    url.searchParams.set("per_page", String(options.perPage || INAT_PROJECT_RESULT_LIMIT));
+    if (query) url.searchParams.set("q", query);
+    if (options.placeId) url.searchParams.set("place_id", String(options.placeId));
+    const point = options.point || null;
+    if (point) {
+      url.searchParams.set("lat", String(point.lat));
+      url.searchParams.set("lng", String(point.lng));
+    }
+    const data = await fetchINatJson(url);
+    return Array.isArray(data.results) ? data.results : [];
+  }
+
+  async function fetchINatPlacesInBounds(bounds, options = {}) {
+    if (!bounds?.isValid?.()) return [];
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    const url = new URL("https://api.inaturalist.org/v1/places/nearby");
+    url.searchParams.set("swlat", String(sw.lat));
+    url.searchParams.set("swlng", String(sw.lng));
+    url.searchParams.set("nelat", String(ne.lat));
+    url.searchParams.set("nelng", String(ne.lng));
+    url.searchParams.set("per_page", String(options.perPage || INAT_PLACE_NEARBY_PAGE_SIZE));
+
+    const data = await fetchINatJson(url);
+    const maxSizeBounds = options.maxSizeBounds || currentFovBounds() || bounds;
+    return sortPlacesForProjectLookup(
+      parseINatNearbyPlaces(data).filter((place) => placeFitsFov(place, bounds, maxSizeBounds))
+    );
+  }
+
+  async function fetchINatProjectCandidatesForPlaces(places = [], options = {}) {
+    const selected = sortPlacesForProjectLookup(places).slice(
+      0,
+      options.placeLimit || INAT_PLACE_PROJECT_LOOKUP_LIMIT
+    );
+    const settled = await Promise.allSettled(
+      selected.map(async (place) => {
+        const projects = await fetchINatProjectCandidates(options.query || "", {
+          placeId: place.id,
+          perPage: options.perPage || INAT_PROJECTS_PER_PLACE_LIMIT
+        });
+        return projects.map((project) => ({
+          ...project,
+          __gwCandidatePlaceId: place.id,
+          __gwCandidatePlaceName: place.display_name || place.name || place.slug || ""
+        }));
+      })
+    );
+
+    return mergeProjectCandidates(
+      settled.filter((result) => result.status === "fulfilled").map((result) => result.value)
+    );
+  }
+
+  async function searchINatProjects(query, options = {}) {
+    const origin = nearbySearchOrigin();
+    const bounds = options.nearby ? nearbySearchBounds() : null;
+    const maxSizeBounds = currentFovBounds() || bounds;
+    let projects = [];
+
+    if (options.nearby) {
+      const points = fovProjectSearchPoints(bounds, origin);
+      const settled = await Promise.allSettled([
+        fetchINatPlacesInBounds(bounds, { maxSizeBounds }).then((places) =>
+          fetchINatProjectCandidatesForPlaces(places, {
+            query,
+            perPage: INAT_PROJECTS_PER_PLACE_LIMIT
+          })
+        ),
+        ...points.map((point) =>
+          fetchINatProjectCandidates(query, {
+            point,
+            perPage: INAT_PROJECT_SEARCH_PAGE_SIZE
+          })
+        )
+      ]);
+      const batches = settled
+        .filter((result) => result.status === "fulfilled")
+        .map((result) => result.value);
+      projects = mergeProjectCandidates(batches);
+      if (!projects.length) {
+        const failed = settled.find((result) => result.status === "rejected");
+        if (failed) throw failed.reason;
+      }
+    } else {
+      projects = await fetchINatProjectCandidates(query, {
+        perPage: INAT_PROJECT_RESULT_LIMIT
+      });
+    }
+
+    return await filterProjectsWithBoundaries(projects, {
+      nearby: options.nearby === true,
+      origin,
+      bounds,
+      maxSizeBounds,
+      rejectOversize: true,
+      geometryCheckLimit: options.nearby
+        ? INAT_PROJECT_NEARBY_GEOMETRY_CHECK_LIMIT
+        : INAT_PROJECT_GEOMETRY_CHECK_LIMIT
+    });
+  }
+
+  function renderProjectResults(projects = [], options = {}) {
+    if (!projects.length) {
+      return `<div class="gw-muted">${
+        options.nearby
+          ? "No boundary projects found in this map view."
+          : "No boundary projects found."
+      }</div>`;
+    }
     return projects
       .map((project) => {
         const meta = [
           Number.isFinite(Number(project.distance_m)) ? formatDistance(project.distance_m) : null,
           project.slug || project.project_type || "iNaturalist project",
+          project.__gwInFov ? "in view" : null,
           project.__gwPlaceId ? "boundary" : null
         ].filter(Boolean);
 
@@ -2392,6 +3067,9 @@
     const { project, placeId, geometry } = resolved;
     const rings = geometry.rings || [];
     if (!rings.length) throw new Error("No boundary geometry found.");
+    if (!ringsFitWithinFovSize(rings, currentFovBounds())) {
+      throw new Error("Project boundary is larger than the current map view.");
+    }
 
     const firstRing = rings[0] || [];
     const patch = upsertPatch({
@@ -2425,12 +3103,7 @@
         denseZones: [],
         assets: [],
         styles: {
-          boundary: {
-            fillColor: "#6fb7ff",
-            lineColor: "#f0d18a",
-            lineWeight: 3,
-            fillOpacity: 0.12
-          }
+          boundary: patchBoundarySurveyStyle({ source: "inat_project" })
         }
       },
       metadata: {
@@ -2461,6 +3134,23 @@
     return value || null;
   }
 
+  function firstPlaceIdFromFieldRows(rows = []) {
+    if (!Array.isArray(rows)) return null;
+    for (const row of rows) {
+      const field = String(row?.field || row?.key || row?.term || "").toLowerCase();
+      if (!field.includes("place")) continue;
+      const id =
+        firstPlaceId(row.value_number) ||
+        firstPlaceId(row.value) ||
+        firstPlaceId(row.values) ||
+        firstPlaceId(row.value_keyword) ||
+        firstPlaceId(row.operand_id) ||
+        firstPlaceId(row.operand);
+      if (id) return id;
+    }
+    return null;
+  }
+
   function inferProjectPlaceId(project) {
     const rules = [
       ...(project.project_observation_rules || []),
@@ -2481,6 +3171,8 @@
       firstPlaceId(project.search_parameters?.places) ||
       firstPlaceId(project.rule_preferences?.place_id) ||
       firstPlaceId(project.rule_preferences?.places) ||
+      firstPlaceIdFromFieldRows(project.search_parameters) ||
+      firstPlaceIdFromFieldRows(project.rule_preferences) ||
       placeRule?.operand_id ||
       placeRule?.operand?.id ||
       null
@@ -2592,6 +3284,9 @@
     window.addEventListener("gridwild:filterschange", render);
     window.addEventListener("gridwild:heatchange", render);
     window.addEventListener("gwBootstrapReady", render);
+    window.map?.on?.("move", requestPatchLabelPositionUpdate);
+    window.map?.on?.("moveend", updatePatchLabelPositions);
+    window.map?.on?.("zoomend", render);
     document.addEventListener(
       "pointerdown",
       (event) => {

@@ -48,6 +48,7 @@ const gridShimmerLayer = L.layerGroup([], { pane: "gridShimmerPane" }).addTo(map
 let gridHeatCanvas = null;
 let gridHeatCtx = null;
 let gridHeatRaf = null;
+let gridHeatPendingRenderOptions = null;
 let gridHeatThrottleTimer = null;
 let gridHeatLastRenderAt = 0;
 let gridHeatCanvasTopLeft = L.point(0, 0);
@@ -67,6 +68,7 @@ const COARSE_HEAT_AUTO_STEPS = [
 const COARSE_HEAT_TILE_BINS = 32;
 const COARSE_HEAT_TILE_CACHE_MAX = 96;
 const COARSE_HEAT_TILE_MAX_PX = 1200;
+const COARSE_HEAT_TILE_ZOOM_BUCKET = 0.5;
 const COARSE_HEAT_SOURCE_LOOKUP_CACHE_MAX = 50000;
 const COARSE_HEAT_RENDER_BIN_BUDGET = 64000;
 const COARSE_HEAT_RENDER_TILE_BUDGET = 160;
@@ -630,36 +632,51 @@ window.getGridWildTransientRevealStrength = getGridWildTransientRevealStrength;
 window.isGridWildTransientRevealCell = isGridWildTransientRevealCell;
 window.triggerGodsEyeBlast = triggerGodsEyeBlast;
 
+function timeGridWildVerbose(label, fn, detail = null) {
+  const timer = window.GridWildVerboseConsole;
+  return timer?.time ? timer.time(label, fn, detail) : fn();
+}
+
 function markCenterMacroVisitedByGodsEye(force = false) {
-  const state = window.__gwState || {};
-  if (!state.godsEyeEnabled) return;
-  if (!window.GridWildFog || typeof window.GridWildFog.markVisited !== "function") return;
+  return timeGridWildVerbose("markCenterMacroVisitedByGodsEye", () => {
+    const state = window.__gwState || {};
+    if (!state.godsEyeEnabled) return;
+    if (!window.GridWildFog || typeof window.GridWildFog.markVisited !== "function") return;
 
-  const center = getCenterFineCell();
-  const centerKey = `${center.ix},${center.iy}`;
+    const center = getCenterFineCell();
+    const centerKey = `${center.ix},${center.iy}`;
 
-  if (!force && state.lastGodsEyeCenterKey === centerKey) return;
+    if (!force && state.lastGodsEyeCenterKey === centerKey) return;
 
-  state.lastGodsEyeCenterKey = centerKey;
+    state.lastGodsEyeCenterKey = centerKey;
 
-  const timestamp = Date.now();
-  const keys = getCenterMacroCellKeys();
+    const timestamp = Date.now();
+    const keys = getCenterMacroCellKeys();
 
-  keys.forEach((key) => {
-    window.GridWildFog.markVisited(key, timestamp);
+    const markKeys = () => {
+      keys.forEach((key) => {
+        window.GridWildFog.markVisited(key, timestamp);
+      });
+    };
+
+    if (typeof window.GridWildFog.batchUpdates === "function") {
+      window.GridWildFog.batchUpdates(markKeys);
+    } else {
+      markKeys();
+    }
+
+    if (window.GridWildFogCanvas) {
+      window.GridWildFogCanvas.scheduleRender();
+    }
+
+    if (typeof window.updateGrid === "function") {
+      window.updateGrid();
+    }
+
+    if (typeof window.refreshGridWildMobileInfo === "function") {
+      window.refreshGridWildMobileInfo();
+    }
   });
-
-  if (window.GridWildFogCanvas) {
-    window.GridWildFogCanvas.scheduleRender();
-  }
-
-  if (typeof window.updateGrid === "function") {
-    window.updateGrid();
-  }
-
-  if (typeof window.refreshGridWildMobileInfo === "function") {
-    window.refreshGridWildMobileInfo();
-  }
 }
 
 window.markCenterMacroVisitedByGodsEye = markCenterMacroVisitedByGodsEye;
@@ -2502,6 +2519,130 @@ function hasGridMetricSignal(metrics) {
   );
 }
 
+window.GridWildCoarseHeatCoverageIndex =
+  window.GridWildCoarseHeatCoverageIndex ||
+  (function () {
+    let sourceCounts = null;
+    let sourceSize = -1;
+    const indexesByBin = new Map();
+
+    function parseCellKey(key) {
+      const comma = String(key).indexOf(",");
+      if (comma <= 0) return null;
+
+      const ix = Number(String(key).slice(0, comma));
+      const iy = Number(String(key).slice(comma + 1));
+      if (!Number.isFinite(ix) || !Number.isFinite(iy)) return null;
+      return { ix, iy };
+    }
+
+    function ensureFreshSource(counts) {
+      if (counts === sourceCounts && counts?.size === sourceSize) return;
+      sourceCounts = counts || null;
+      sourceSize = counts?.size ?? -1;
+      indexesByBin.clear();
+    }
+
+    function buildIndex(binSize, counts) {
+      const normalizedBin = Math.max(1, Math.round(Number(binSize) || 1));
+      const binsByX = new Map();
+      let binCount = 0;
+      let cellCount = 0;
+
+      for (const [key, metrics] of counts.entries()) {
+        if (!hasGridMetricSignal(metrics)) continue;
+
+        const cell = parseCellKey(key);
+        if (!cell) continue;
+
+        const bx = Math.floor(cell.ix / normalizedBin) * normalizedBin;
+        const by = Math.floor(cell.iy / normalizedBin) * normalizedBin;
+        let ySet = binsByX.get(bx);
+        if (!ySet) {
+          ySet = new Set();
+          binsByX.set(bx, ySet);
+        }
+        if (!ySet.has(by)) binCount++;
+        ySet.add(by);
+        cellCount++;
+      }
+
+      return { binSize: normalizedBin, binsByX, binCount, cellCount };
+    }
+
+    function getIndex(binSize) {
+      const counts = window.__staticGridCounts;
+      if (!(counts instanceof Map) || counts.size === 0) return null;
+
+      ensureFreshSource(counts);
+
+      const normalizedBin = Math.max(1, Math.round(Number(binSize) || 1));
+      if (indexesByBin.has(normalizedBin)) return indexesByBin.get(normalizedBin);
+
+      const index = window.GridWildVerboseConsole?.time
+        ? window.GridWildVerboseConsole.time(
+            `GridWildCoarseHeatCoverageIndex.build(${normalizedBin})`,
+            () => buildIndex(normalizedBin, counts)
+          )
+        : buildIndex(normalizedBin, counts);
+      indexesByBin.set(normalizedBin, index);
+      return index;
+    }
+
+    function hasCoverage(binSize, startAnchorX, endAnchorX, startAnchorY, endAnchorY) {
+      if (window.GridWildMeOverlayFilter?.isActive?.()) return true;
+      if (window.GridWildPyriteLake?.isEnabled?.()) return true;
+
+      const index = getIndex(binSize);
+      if (!index?.binCount) return false;
+
+      for (let ix = startAnchorX; ix <= endAnchorX; ix += index.binSize) {
+        const ySet = index.binsByX.get(ix);
+        if (!ySet) continue;
+
+        for (let iy = startAnchorY; iy <= endAnchorY; iy += index.binSize) {
+          if (ySet.has(iy)) return true;
+        }
+      }
+
+      return false;
+    }
+
+    function invalidate() {
+      sourceCounts = null;
+      sourceSize = -1;
+      indexesByBin.clear();
+    }
+
+    return {
+      ensure: getIndex,
+      hasCoverage,
+      invalidate,
+      stats: () => ({
+        sourceSize,
+        binIndexes: indexesByBin.size,
+        bins: Array.from(indexesByBin.values()).map((index) => ({
+          binSize: index.binSize,
+          binCount: index.binCount,
+          cellCount: index.cellCount
+        }))
+      })
+    };
+  })();
+
+function scheduleCoarseHeatCoverageWarmup() {
+  const warm = () => {
+    if (!isCoarseHeatEnabled()) return;
+    window.GridWildCoarseHeatCoverageIndex?.ensure?.(getEffectiveCoarseHeatBinSize());
+  };
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(warm, { timeout: 1500 });
+  } else {
+    window.setTimeout(warm, 0);
+  }
+}
+
 function mergeMetricObjects(target, source) {
   for (const [key, value] of Object.entries(source || {})) {
     target[key] = (Number(target[key]) || 0) + (Number(value) || 0);
@@ -3484,39 +3625,45 @@ function isGridWildInfoPanelVisible() {
 }
 
 function refreshGridWildHudPanels(options = {}) {
-  const force = options.force === true;
-  const key = getCenterMacroRefreshKey();
+  return timeGridWildVerbose("refreshGridWildHudPanels", () => {
+    const force = options.force === true;
+    const key = getCenterMacroRefreshKey();
 
-  if (!force) {
-    if (!isGridWildInfoPanelVisible()) return false;
-    if (key === __lastGridWildHudCenterRefreshKey) return false;
-  }
+    if (!force) {
+      if (!isGridWildInfoPanelVisible()) return false;
+      if (key === __lastGridWildHudCenterRefreshKey) return false;
+    }
 
-  __lastGridWildHudCenterRefreshKey = key;
+    __lastGridWildHudCenterRefreshKey = key;
 
-  if (typeof window.updateHudCenterSummary === "function") {
-    window.updateHudCenterSummary();
-  }
+    if (typeof window.updateHudCenterSummary === "function") {
+      timeGridWildVerbose("updateHudCenterSummary", () => window.updateHudCenterSummary());
+    }
 
-  if (typeof window.updateTopObserversPanel === "function") {
-    window.updateTopObserversPanel();
-  }
+    if (typeof window.updateTopObserversPanel === "function") {
+      timeGridWildVerbose("updateTopObserversPanel", () => window.updateTopObserversPanel());
+    }
 
-  if (typeof window.updateHudCladogram === "function") {
-    window.updateHudCladogram();
-  }
+    if (typeof window.updateHudCladogram === "function") {
+      timeGridWildVerbose("updateHudCladogram", () => window.updateHudCladogram());
+    }
 
-  return true;
+    return true;
+  });
 }
 
 window.refreshGridWildHudPanels = refreshGridWildHudPanels;
 
 // this now renders the static assets
 function updateGrid() {
-  markCenterMacroVisitedByGodsEye();
-  updateGridLines();
-  updateStaticGridHeat();
-  refreshGridWildHudPanels();
+  return timeGridWildVerbose("updateGrid", () => {
+    timeGridWildVerbose("updateGrid.markCenterMacroVisitedByGodsEye", () =>
+      markCenterMacroVisitedByGodsEye()
+    );
+    timeGridWildVerbose("updateGridLines", () => updateGridLines());
+    timeGridWildVerbose("updateStaticGridHeat", () => updateStaticGridHeat());
+    timeGridWildVerbose("updateGrid.refreshGridWildHudPanels", () => refreshGridWildHudPanels());
+  });
 }
 
 if (window.GridWildMapMotionQueue?.subscribe) {
@@ -4069,7 +4216,9 @@ async function loadStaticHeatmapCsvFallback(url) {
 function installStaticHeatmapCounts(counts) {
   window.__staticGridCounts = counts;
   window.__gwStaticHeatLoaded = true;
+  window.GridWildCoarseHeatCoverageIndex?.invalidate?.();
   window.GridWildCoarseHeatCache?.invalidate?.();
+  scheduleCoarseHeatCoverageWarmup();
   window.dispatchEvent(
     new CustomEvent("gridwild:staticheatloaded", {
       detail: { count: counts?.size || 0 }
@@ -4548,6 +4697,15 @@ window.GridWildCoarseHeatTileCache =
       return value;
     }
 
+    function peek(key) {
+      if (!cache.has(key)) return null;
+      const value = cache.get(key);
+      cache.delete(key);
+      cache.set(key, value);
+      hits++;
+      return value;
+    }
+
     function invalidate() {
       cache.clear();
       hits = 0;
@@ -4556,6 +4714,7 @@ window.GridWildCoarseHeatTileCache =
 
     return {
       get,
+      peek,
       invalidate,
       size: () => cache.size,
       stats: () => ({ size: cache.size, hits, misses })
@@ -4969,18 +5128,47 @@ function coarseHeatTileBounds(tileIx, tileIy, tileFineCells) {
   };
 }
 
+function getCoarseHeatFogRenderSignature() {
+  const state = window.__gwState || {};
+  if (state.showFog !== true || !window.GridWildFog) return "0";
+
+  const stats = window.GridWildFog.getStats?.() || {};
+  const avatar = getCurrentUserCellIndices?.() || null;
+  const center = state.godsEyeEnabled ? getCenterFineCell?.() : null;
+  const pulse = state.godsEyeBlastPulse || null;
+  const minuteBucket = Math.floor(Date.now() / 60000);
+
+  return [
+    "1",
+    `stored:${Number(stats.storedCells) || 0}`,
+    `surveyed:${Number(stats.surveyed) || 0}`,
+    `documented:${Number(stats.documented) || 0}`,
+    `expired:${Number(stats.expired) || 0}`,
+    `avatar:${avatar ? `${avatar.ix},${avatar.iy}` : "none"}`,
+    `eye:${state.godsEyeEnabled ? 1 : 0}`,
+    `center:${center ? `${center.ix},${center.iy}` : "none"}`,
+    `pulse:${pulse?.startedAt || 0}`,
+    `minute:${minuteBucket}`
+  ].join(",");
+}
+
 function getCoarseHeatTileSignature(binSize, sourceSignature) {
   const state = window.__gwState || {};
   const binCacheVersion = window.GridWildCoarseHeatCache?.stats?.().dataVersion ?? 0;
+  const zoom = Number(map?.getZoom?.());
+  const zoomBucket = Number.isFinite(zoom)
+    ? Math.round(zoom / COARSE_HEAT_TILE_ZOOM_BUCKET) * COARSE_HEAT_TILE_ZOOM_BUCKET
+    : 0;
 
   return [
     `source:${sourceSignature}`,
     `sourceVersion:${binCacheVersion}`,
     `bin:${binSize}`,
-    `zoom:${map.getZoom().toFixed(3)}`,
+    `zoomBucket:${zoomBucket.toFixed(2)}`,
     `lens:${state.activeLens || "classic"}`,
     `log:${state.logHeat === false ? 0 : 1}`,
-    `contrast:${state.highContrastLensEnabled === true ? 1 : 0}`
+    `contrast:${state.highContrastLensEnabled === true ? 1 : 0}`,
+    `fog:${getCoarseHeatFogRenderSignature()}`
   ].join("|");
 }
 
@@ -4995,6 +5183,87 @@ function isCoarseHeatTileCacheSafe(binSize) {
 
   const tileCssPx = (tileFineCells * GRID_SIZE_M) / metersPerPixel;
   return tileCssPx <= COARSE_HEAT_TILE_MAX_PX;
+}
+
+function coarseFogAdjustedOpacityForCell(key, baseOpacity, fogOn) {
+  if (!fogOn || !window.GridWildFog) {
+    return { visible: true, opacity: baseOpacity, documented: false };
+  }
+
+  const fogState = window.GridWildFog.getCellFogState(key);
+  const transientRevealStrength =
+    typeof window.getGridWildTransientRevealStrength === "function"
+      ? window.getGridWildTransientRevealStrength(key)
+      : window.isGridWildTransientVisibleCell?.(key)
+        ? 1
+        : 0;
+  const transientVisible = transientRevealStrength > 0;
+
+  if (!transientVisible && (fogState.state === "unknown" || fogState.state === "expired")) {
+    return { visible: false, opacity: 0, documented: false };
+  }
+
+  let opacity = baseOpacity;
+
+  if (transientVisible && fogState?.state !== "documented") {
+    opacity = Math.max(opacity, 0.18 + transientRevealStrength * 0.24);
+  }
+
+  if (fogState?.state === "surveyed") {
+    opacity = Math.max(0.08, opacity * fogState.reveal);
+  }
+
+  if (fogState?.state === "documented") {
+    opacity = Math.min(0.92, opacity + 0.12);
+  }
+
+  return {
+    visible: true,
+    opacity,
+    documented: fogState?.state === "documented"
+  };
+}
+
+function paintCoarseHeatBin(ctx, ix, iy, binSize, baseStyle, originBounds = null) {
+  const fogOn = window.__gwState?.showFog === true;
+  const baseOpacity = Math.min(0.82, Number(baseStyle.fillOpacity || 0.25));
+  const fillColor = baseStyle.fillColor || "rgba(90,160,90,1)";
+
+  if (!fogOn || !window.GridWildFog) {
+    const x0 = ix * GRID_SIZE_M;
+    const y0 = iy * GRID_SIZE_M;
+    const x1 = x0 + binSize * GRID_SIZE_M;
+    const y1 = y0 + binSize * GRID_SIZE_M;
+    const pxRect = coarseHeatPaintRect(gridMetersRectLayerBounds(x0, y0, x1, y1), originBounds);
+
+    ctx.globalAlpha = baseOpacity;
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(pxRect.x, pxRect.y, pxRect.w, pxRect.h);
+    return 1;
+  }
+
+  let painted = 0;
+  ctx.fillStyle = fillColor;
+
+  for (let cx = ix; cx < ix + binSize; cx++) {
+    for (let cy = iy; cy < iy + binSize; cy++) {
+      const fog = coarseFogAdjustedOpacityForCell(`${cx},${cy}`, baseOpacity, true);
+      if (!fog.visible || fog.opacity <= 0) continue;
+
+      const x0 = cx * GRID_SIZE_M;
+      const y0 = cy * GRID_SIZE_M;
+      const pxRect = coarseHeatPaintRect(
+        gridMetersRectLayerBounds(x0, y0, x0 + GRID_SIZE_M, y0 + GRID_SIZE_M),
+        originBounds
+      );
+
+      ctx.globalAlpha = fog.opacity;
+      ctx.fillRect(pxRect.x, pxRect.y, pxRect.w, pxRect.h);
+      painted++;
+    }
+  }
+
+  return painted;
 }
 
 function renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSignature) {
@@ -5031,17 +5300,7 @@ function renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSigna
       const baseStyle = metricsToFill(metrics);
       if (!baseStyle) continue;
 
-      const x0 = ix * GRID_SIZE_M;
-      const y0 = iy * GRID_SIZE_M;
-      const x1 = x0 + binSize * GRID_SIZE_M;
-      const y1 = y0 + binSize * GRID_SIZE_M;
-      const binBounds = gridMetersRectLayerBounds(x0, y0, x1, y1);
-      const pxRect = coarseHeatPaintRect(binBounds, tileBounds);
-
-      ctx.globalAlpha = Math.min(0.82, Number(baseStyle.fillOpacity || 0.25));
-      ctx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
-      ctx.fillRect(pxRect.x, pxRect.y, pxRect.w, pxRect.h);
-      painted++;
+      painted += paintCoarseHeatBin(ctx, ix, iy, binSize, baseStyle, tileBounds);
     }
   }
 
@@ -5049,9 +5308,11 @@ function renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSigna
   return { canvas, painted };
 }
 
-function renderCoarseTiledHeatCanvas() {
+function renderCoarseTiledHeatCanvas(options = {}) {
+  const allowCacheMisses = options.allowCoarseTileMisses !== false;
   const binSize = getEffectiveCoarseHeatBinSize();
   if (!isCoarseHeatTileCacheSafe(binSize)) {
+    if (!allowCacheMisses) return 0;
     return renderCoarseMedianHeatCanvasDirect();
   }
 
@@ -5064,6 +5325,17 @@ function renderCoarseTiledHeatCanvas() {
   const span = getCoarseHeatBinSpan(startAnchorX, endAnchorX, startAnchorY, endAnchorY, binSize);
   if (!span.safe) {
     warnCoarseHeatBudgetExceeded("tiled bin budget", { ...span, binSize });
+    return 0;
+  }
+  if (
+    window.GridWildCoarseHeatCoverageIndex?.hasCoverage?.(
+      binSize,
+      startAnchorX,
+      endAnchorX,
+      startAnchorY,
+      endAnchorY
+    ) === false
+  ) {
     return 0;
   }
   const tileFineCells = getCoarseHeatTileFineCells(binSize);
@@ -5098,9 +5370,12 @@ function renderCoarseTiledHeatCanvas() {
   for (let tileIx = startTileIx; tileIx <= endTileIx; tileIx++) {
     for (let tileIy = startTileIy; tileIy <= endTileIy; tileIy++) {
       const key = getCoarseHeatTileKey(tileIx, tileIy, binSize, tileSignature);
-      const tile = window.GridWildCoarseHeatTileCache.get(key, () =>
-        renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSignature)
-      );
+      const tile = allowCacheMisses
+        ? window.GridWildCoarseHeatTileCache.get(key, () =>
+            renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSignature)
+          )
+        : window.GridWildCoarseHeatTileCache.peek?.(key);
+      if (!allowCacheMisses && !tile) continue;
       if (tile == null) return renderCoarseMedianHeatCanvasDirect();
       if (!tile?.painted) continue;
 
@@ -5112,13 +5387,7 @@ function renderCoarseTiledHeatCanvas() {
 
   for (const { tile, tileBounds } of tilesToDraw) {
     gridHeatCtx.globalAlpha = 1;
-    gridHeatCtx.drawImage(
-      tile.canvas,
-      tileBounds.x,
-      tileBounds.y,
-      tile.canvas.width,
-      tile.canvas.height
-    );
+    gridHeatCtx.drawImage(tile.canvas, tileBounds.x, tileBounds.y, tileBounds.w, tileBounds.h);
   }
 
   gridHeatCtx.globalAlpha = 1;
@@ -5366,13 +5635,30 @@ function isGridHeatSettledEvent(evt) {
   );
 }
 
-function requestGridHeatCanvasFrame() {
-  if (gridHeatRaf) return;
+function requestGridHeatCanvasFrame(options = {}) {
+  const allowCoarseTileMisses = options.allowCoarseTileMisses !== false;
+
+  if (gridHeatRaf) {
+    if (allowCoarseTileMisses) {
+      gridHeatPendingRenderOptions = {
+        ...(gridHeatPendingRenderOptions || {}),
+        ...options,
+        allowCoarseTileMisses: true
+      };
+    }
+    return;
+  }
+
+  gridHeatPendingRenderOptions = {
+    allowCoarseTileMisses,
+    reason: options.reason || null
+  };
+
   if (window.GridWildMapMotionQueue?.requestFrame) {
     gridHeatRaf = true;
-    window.GridWildMapMotionQueue.requestFrame("grid-heat", renderGridHeatCanvas);
+    window.GridWildMapMotionQueue.requestFrame("grid-heat", () => renderGridHeatCanvas());
   } else {
-    gridHeatRaf = requestAnimationFrame(renderGridHeatCanvas);
+    gridHeatRaf = requestAnimationFrame(() => renderGridHeatCanvas());
   }
 }
 
@@ -5385,7 +5671,10 @@ function scheduleGridHeatCanvasRender(evt) {
   }
 
   if (evt?.type === "move") {
-    requestGridHeatCanvasFrame();
+    requestGridHeatCanvasFrame({
+      allowCoarseTileMisses: false,
+      reason: "move-preview"
+    });
     return;
   }
 
@@ -5471,6 +5760,8 @@ function drawFineHeatItem(item, fogOn) {
 }
 
 function renderGridHeatCanvas() {
+  const renderOptions = gridHeatPendingRenderOptions || {};
+  gridHeatPendingRenderOptions = null;
   gridHeatRaf = null;
   gridHeatLastRenderAt = performance.now();
 
@@ -5488,7 +5779,7 @@ function renderGridHeatCanvas() {
   if (!(counts instanceof Map) || (counts.size === 0 && !pyriteEnabled)) return;
 
   if (isCoarseHeatEnabled()) {
-    renderCoarseMedianHeatCanvas();
+    renderCoarseMedianHeatCanvas(renderOptions);
     return;
   }
 
@@ -5631,6 +5922,17 @@ function renderCoarseMedianHeatCanvasDirect() {
     warnCoarseHeatBudgetExceeded("direct bin budget", { ...span, binSize });
     return 0;
   }
+  if (
+    window.GridWildCoarseHeatCoverageIndex?.hasCoverage?.(
+      binSize,
+      startAnchorX,
+      endAnchorX,
+      startAnchorY,
+      endAnchorY
+    ) === false
+  ) {
+    return 0;
+  }
   let painted = 0;
   const items = [];
   const hydrationScope = makeCoarseRichHydrationScope(
@@ -5678,28 +5980,24 @@ function renderCoarseMedianHeatCanvasDirect() {
     const baseStyle = metricsToFill(metrics);
     if (!baseStyle) continue;
 
-    const x0 = ix * GRID_SIZE_M;
-    const y0 = iy * GRID_SIZE_M;
-    const x1 = x0 + binSize * GRID_SIZE_M;
-    const y1 = y0 + binSize * GRID_SIZE_M;
-    const pxRect = coarseHeatPaintRect(gridMetersRectLayerBounds(x0, y0, x1, y1));
-
-    gridHeatCtx.globalAlpha = Math.min(0.82, Number(baseStyle.fillOpacity || 0.25));
-    gridHeatCtx.fillStyle = baseStyle.fillColor || "rgba(90,160,90,1)";
-    gridHeatCtx.fillRect(pxRect.x, pxRect.y, pxRect.w, pxRect.h);
-    painted++;
+    painted += paintCoarseHeatBin(gridHeatCtx, ix, iy, binSize, baseStyle);
   }
 
   gridHeatCtx.globalAlpha = 1;
   return painted;
 }
 
-function renderCoarseMedianHeatCanvas() {
+function renderCoarseMedianHeatCanvas(options = {}) {
+  if (options.allowCoarseTileMisses === false) {
+    if (isHeatZThresholdEnabled() || isHeatMorphologyEnabled()) return 0;
+    return renderCoarseTiledHeatCanvas(options);
+  }
+
   if (isHeatZThresholdEnabled() || isHeatMorphologyEnabled()) {
     return renderCoarseMedianHeatCanvasDirect();
   }
 
-  return renderCoarseTiledHeatCanvas();
+  return renderCoarseTiledHeatCanvas(options);
 }
 
 function latLngToDisplayCellKey(lat, lng) {
@@ -5836,27 +6134,44 @@ function getStickyZoomTarget() {
   return map.getBoundsZoom(bounds, false);
 }
 
-function applyStickyZoom(force = false) {
-  const state = window.__gwState || {};
-  if (!state.stickyZoomEnabled) return;
+let lastStickyZoomLevel = Number.isFinite(map.getZoom()) ? map.getZoom() : null;
 
-  const targetZoom = getStickyZoomTarget();
-  const currentZoom = map.getZoom();
-  const tol = state.stickyZoomTolerance ?? 0.35;
+function applyStickyZoom(options = {}) {
+  return timeGridWildVerbose("applyStickyZoom", () => {
+    const state = window.__gwState || {};
+    if (!state.stickyZoomEnabled) return;
 
-  if (!force && Math.abs(currentZoom - targetZoom) > tol) return;
-  if (Math.abs(currentZoom - targetZoom) < 0.001) return;
+    const force = options === true || options?.force === true;
+    const zoomedOut = options?.zoomedOut === true;
+    const targetZoom = getStickyZoomTarget();
+    const currentZoom = map.getZoom();
+    const tol = state.stickyZoomTolerance ?? 0.35;
 
-  state.stickyZoomAnimating = true;
-  map.setZoom(targetZoom, { animate: true });
+    if (!force && zoomedOut) return;
+    if (!force && Math.abs(currentZoom - targetZoom) > tol) return;
+    if (Math.abs(currentZoom - targetZoom) < 0.001) return;
 
-  setTimeout(() => {
-    state.stickyZoomAnimating = false;
-  }, 250);
+    state.stickyZoomAnimating = true;
+    map.setZoom(targetZoom, { animate: true });
+
+    setTimeout(() => {
+      state.stickyZoomAnimating = false;
+    }, 250);
+  });
+}
+
+function handleStickyZoomEnd(evt) {
+  return timeGridWildVerbose("handleStickyZoomEnd", () => {
+    const currentZoom = map.getZoom();
+    const zoomedOut = Number.isFinite(lastStickyZoomLevel) && currentZoom < lastStickyZoomLevel;
+
+    applyStickyZoom({ event: evt, zoomedOut });
+    lastStickyZoomLevel = currentZoom;
+  });
 }
 
 // add sticky zoom enable
-map.on("zoomend", applyStickyZoom);
+map.on("zoomend", handleStickyZoomEnd);
 
 function parseViewBox(svg) {
   const vb = (svg.getAttribute("viewBox") || "0 0 260 280").trim().split(/\s+/).map(Number);

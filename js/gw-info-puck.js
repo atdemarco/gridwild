@@ -86,6 +86,10 @@
         background: #76e7bf;
       }
 
+      .gw-info-puck[data-kind="quest-target"] .gw-info-puck-mark {
+        background: #9bd7ff;
+      }
+
       .gw-info-puck-text {
         overflow: hidden;
         text-overflow: ellipsis;
@@ -316,6 +320,7 @@
   window.GridWildInfoPuck = {
     minimize,
     restore,
-    dismiss
+    dismiss,
+    currentKind: () => current?.kind || null
   };
 })();

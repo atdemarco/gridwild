@@ -16,10 +16,16 @@
 
   // After 24h, surveyed cells begin visually fading back toward fog
   const SURVEY_FULL_STRENGTH_MS = 24 * 60 * 60 * 1000;
+  const SAVE_DEBOUNCE_MS = 900;
+  const QUOTA_WARNING_THROTTLE_MS = 60000;
+  const MAX_SURVEYED_STORE_CELLS = 2500;
 
   let cellStore = loadStore();
   let saveBatchDepth = 0;
   let saveBatchDirty = false;
+  let saveTimer = null;
+  let quotaSaveSuppressed = false;
+  let lastQuotaWarningAt = 0;
 
   function nowMs() {
     return Date.now();
@@ -36,17 +42,98 @@
     }
   }
 
-  function saveStore() {
+  function isQuotaExceeded(err) {
+    return (
+      err?.name === "QuotaExceededError" ||
+      err?.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+      err?.code === 22 ||
+      err?.code === 1014
+    );
+  }
+
+  function documentedTimestamp(cell) {
+    return Math.max(Number(cell?.observed_at) || 0, Number(cell?.recent_inat_observed_at) || 0);
+  }
+
+  function pruneFogStore(timestamp = nowMs(), options = {}) {
+    const surveyed = [];
+
+    for (const [key, cell] of Object.entries(cellStore)) {
+      const documentedAt = documentedTimestamp(cell);
+      const visitedAt = Number(cell?.visited_at) || 0;
+      if (!documentedAt && (!visitedAt || timestamp - visitedAt >= SURVEY_TTL_MS)) {
+        delete cellStore[key];
+        continue;
+      }
+
+      if (!documentedAt && visitedAt > 0) surveyed.push({ key, visitedAt });
+    }
+
+    const maxSurveyed = Number(options.maxSurveyed) || MAX_SURVEYED_STORE_CELLS;
+    if (surveyed.length <= maxSurveyed) return;
+
+    surveyed
+      .sort((a, b) => a.visitedAt - b.visitedAt)
+      .slice(0, surveyed.length - maxSurveyed)
+      .forEach((row) => delete cellStore[row.key]);
+  }
+
+  function warnQuotaOnce(err) {
+    const now = nowMs();
+    if (now - lastQuotaWarningAt < QUOTA_WARNING_THROTTLE_MS) return;
+    lastQuotaWarningAt = now;
+    console.warn("GridWild fog store is full; pruning temporary fog progress.", err);
+  }
+
+  function writeStoreNow() {
+    pruneFogStore();
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cellStore));
+      quotaSaveSuppressed = false;
+      return true;
+    } catch (err) {
+      if (isQuotaExceeded(err)) {
+        pruneFogStore(nowMs(), { maxSurveyed: Math.floor(MAX_SURVEYED_STORE_CELLS / 2) });
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(cellStore));
+          quotaSaveSuppressed = false;
+          warnQuotaOnce(err);
+          return true;
+        } catch (retryErr) {
+          quotaSaveSuppressed = true;
+          warnQuotaOnce(retryErr);
+          return false;
+        }
+      }
+
+      console.warn("GridWild fog store could not be saved:", err);
+      return false;
+    }
+  }
+
+  function flushSave() {
+    if (saveTimer) {
+      window.clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    return writeStoreNow();
+  }
+
+  function saveStore(options = {}) {
     if (saveBatchDepth > 0) {
       saveBatchDirty = true;
       return;
     }
 
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cellStore));
-    } catch (err) {
-      console.warn("GridWild fog store could not be saved:", err);
+    if (options.immediate) {
+      flushSave();
+      return;
     }
+
+    if (quotaSaveSuppressed) return;
+    if (saveTimer) return;
+    saveTimer = window.setTimeout(flushSave, SAVE_DEBOUNCE_MS);
   }
 
   function batchUpdates(fn) {
@@ -211,7 +298,7 @@
 
   function clearAllFogProgress() {
     cellStore = {};
-    saveStore();
+    saveStore({ immediate: true });
   }
 
   function clearMovementExploration() {
@@ -225,7 +312,7 @@
       }
     }
 
-    saveStore();
+    saveStore({ immediate: true });
   }
 
   function clearRecentINatObserved() {
@@ -233,7 +320,7 @@
       delete cell.recent_inat_observed_at;
       delete cell.recent_inat_obs_count;
     }
-    saveStore();
+    saveStore({ immediate: true });
   }
 
   function markRecentINatObserved(key, options = {}) {

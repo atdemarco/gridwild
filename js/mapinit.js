@@ -14,6 +14,56 @@ window.map = L.map("map", {
 });
 const map = window.map; // local alias
 
+window.GridWildVerboseConsole =
+  window.GridWildVerboseConsole ||
+  (function () {
+    const MIN_DURATION_MS = 100;
+
+    function enabled() {
+      return window.__gwState?.verboseConsoleEnabled === true;
+    }
+
+    function now() {
+      return window.performance?.now?.() ?? Date.now();
+    }
+
+    function log(label, durationMs, detail = null) {
+      if (!enabled()) return;
+      if (!(durationMs >= MIN_DURATION_MS)) return;
+
+      const message = `GridWild verbose ${label}: ${durationMs.toFixed(1)}ms`;
+      if (detail == null) console.info(message);
+      else console.info(message, detail);
+    }
+
+    function time(label, fn, detail = null) {
+      if (!enabled() || typeof fn !== "function") return fn?.();
+
+      const start = now();
+      const finish = () =>
+        log(label, now() - start, typeof detail === "function" ? detail() : detail);
+
+      try {
+        const result = fn();
+        if (result?.then && typeof result.finally === "function") {
+          return result.finally(finish);
+        }
+        finish();
+        return result;
+      } catch (err) {
+        finish();
+        throw err;
+      }
+    }
+
+    return {
+      enabled,
+      log,
+      time,
+      thresholdMs: MIN_DURATION_MS
+    };
+  })();
+
 window.GridWildMapMotionQueue = (function (existing = {}) {
   const DEFAULT_EVENTS = ["move", "zoom", "resize", "viewreset", "zoomend", "moveend"];
   const subscribers = new Map();
@@ -40,16 +90,23 @@ window.GridWildMapMotionQueue = (function (existing = {}) {
   function flushFrameTasks() {
     frameRaf = null;
     const snapshot = makeSnapshot();
-    const tasks = Array.from(frameTasks.values());
+    const tasks = Array.from(frameTasks.entries());
     frameTasks.clear();
 
-    for (const task of tasks) {
-      try {
-        task(snapshot);
-      } catch (err) {
-        console.warn("GridWild map motion render task failed:", err);
+    window.GridWildVerboseConsole.time(
+      `GridWildMapMotionQueue.flushFrameTasks(${tasks.length})`,
+      () => {
+        for (const [key, task] of tasks) {
+          try {
+            window.GridWildVerboseConsole.time(`GridWildMapMotionQueue.frameTask:${key}`, () =>
+              task(snapshot)
+            );
+          } catch (err) {
+            console.warn("GridWild map motion render task failed:", err);
+          }
+        }
       }
-    }
+    );
   }
 
   function requestFrame(key, callback) {
@@ -60,14 +117,22 @@ window.GridWildMapMotionQueue = (function (existing = {}) {
   }
 
   function dispatchMapMotion(evt) {
-    for (const entry of subscribers.values()) {
-      if (!entry.events.has(evt?.type)) continue;
-      try {
-        entry.callback(evt);
-      } catch (err) {
-        console.warn("GridWild map motion subscriber failed:", err);
+    window.GridWildVerboseConsole.time(
+      `GridWildMapMotionQueue.dispatch(${evt?.type || "event"})`,
+      () => {
+        for (const [key, entry] of subscribers.entries()) {
+          if (!entry.events.has(evt?.type)) continue;
+          try {
+            window.GridWildVerboseConsole.time(
+              `GridWildMapMotionQueue.subscriber:${key}:${evt?.type || "event"}`,
+              () => entry.callback(evt)
+            );
+          } catch (err) {
+            console.warn("GridWild map motion subscriber failed:", err);
+          }
+        }
       }
-    }
+    );
   }
 
   function ensureBound(events) {
@@ -156,6 +221,7 @@ installGridWildViewportGestureGuard();
 
 const GRIDWILD_BASE_MAP_STORAGE_KEY = "gridwildBaseMap";
 const GRIDWILD_DAY_NIGHT_MODE_STORAGE_KEY = "gridwildDayNightMode";
+const GRIDWILD_MAP_VIEW_STORAGE_KEY = "gridwildMapView";
 
 function normalizeGridWildBaseMapChoice(value) {
   return value === "terrain" ? "terrain" : "street";
@@ -192,6 +258,45 @@ function readGridWildInitialMapLinkView() {
 }
 
 const GRIDWILD_INITIAL_MAP_LINK_VIEW = readGridWildInitialMapLinkView();
+
+function readSavedGridWildMapView() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(GRIDWILD_MAP_VIEW_STORAGE_KEY) || "null");
+    const lat = Number(raw?.lat);
+    const lng = Number(raw?.lng);
+    const zoom = Number(raw?.zoom);
+
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) return null;
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) return null;
+
+    return {
+      lat,
+      lng,
+      zoom: Number.isFinite(zoom) ? Math.max(2, Math.min(22, zoom)) : 18
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistGridWildMapView() {
+  try {
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+    if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return;
+    if (!Number.isFinite(zoom)) return;
+
+    localStorage.setItem(
+      GRIDWILD_MAP_VIEW_STORAGE_KEY,
+      JSON.stringify({
+        lat: Number(center.lat.toFixed(7)),
+        lng: Number(center.lng.toFixed(7)),
+        zoom: Number(zoom.toFixed(3)),
+        savedAt: Date.now()
+      })
+    );
+  } catch {}
+}
 
 function readSavedGridWildBaseMapChoice() {
   try {
@@ -261,6 +366,7 @@ window.__gwState = {
   lockZoom: 19,
   metricUnitsEnabled: false,
   showGpsCircle: false,
+  verboseConsoleEnabled: false,
   dayNightMode: readSavedGridWildDayNightMode(),
   activeLens: "classic"
 };
@@ -449,14 +555,22 @@ setGridWildDayNightMode(window.__gwState.dayNightMode, { persist: false });
 
 // Default view (in case location fails)
 //map.setView([38.9072, -77.0369], 17); // DC fallback
+const GRIDWILD_SAVED_MAP_VIEW = readSavedGridWildMapView();
 if (GRIDWILD_INITIAL_MAP_LINK_VIEW) {
   map.setView(
     [GRIDWILD_INITIAL_MAP_LINK_VIEW.lat, GRIDWILD_INITIAL_MAP_LINK_VIEW.lng],
     GRIDWILD_INITIAL_MAP_LINK_VIEW.zoom
   );
+} else if (GRIDWILD_SAVED_MAP_VIEW) {
+  map.setView(
+    [GRIDWILD_SAVED_MAP_VIEW.lat, GRIDWILD_SAVED_MAP_VIEW.lng],
+    GRIDWILD_SAVED_MAP_VIEW.zoom
+  );
 } else {
   map.setView([38.911325, -77.076678], 19); // GEORGETOWN POLLINATOR GARDEN HOME!
 }
+
+map.on("moveend zoomend", persistGridWildMapView);
 
 const hud = document.getElementById("status");
 

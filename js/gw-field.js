@@ -338,6 +338,18 @@
     return patch.source_label || patch.source || "patch";
   }
 
+  function patchInsetColor(patch) {
+    if (!patch) return "#f0d18a";
+    if (
+      patch.source === "inat_project" ||
+      patch.metadata?.imported_from === "inat_project" ||
+      /iNaturalist/i.test(String(patch.source_label || ""))
+    ) {
+      return "#7ddfff";
+    }
+    return patch.survey_geometry?.styles?.boundary?.fillColor || "#f0d18a";
+  }
+
   function surveyRows() {
     return window.GridWildSurveyDesigner?.loadSurveys?.() || [];
   }
@@ -615,7 +627,8 @@
       })
       .join("");
 
-    const outline = `<rect x="1.2" y="1.2" width="${Math.max(0, w - 2.4)}" height="${Math.max(0, h - 2.4)}" rx="2.4" fill="rgba(255,231,163,0.04)" stroke="rgba(255,231,163,0.78)" stroke-width="1.8" stroke-dasharray="5 4"></rect>`;
+    const outlineColor = options.color || "#ffe7a3";
+    const outline = `<rect x="1.2" y="1.2" width="${Math.max(0, w - 2.4)}" height="${Math.max(0, h - 2.4)}" rx="2.4" fill="rgba(255,231,163,0.04)" stroke="${outlineColor}" opacity="0.86" stroke-width="1.8" stroke-dasharray="5 4"></rect>`;
 
     return `
       <div class="gw-field-minimap">
@@ -663,7 +676,7 @@
         item: patch,
         cells: rings.length ? cellsForRings(rings) : [],
         rings,
-        color: "#f0d18a"
+        color: patchInsetColor(patch)
       };
     }
 
@@ -746,6 +759,10 @@
 
       <button class="gw-mini-btn gw-field-bottom-action gw-field-center-button" id="gwFieldCenterSquareBtn" type="button">
         CENTER SQUARE
+      </button>
+
+      <button class="gw-mini-btn gw-field-bottom-action" id="gwFieldTaxonomyExplorerBtn" type="button">
+        Explorer UI
       </button>
     `;
   }
@@ -1305,6 +1322,11 @@
 
       if (evt.target.closest("#gwFieldCenterSquareBtn")) {
         openCenterSquarePopup();
+        return;
+      }
+
+      if (evt.target.closest("#gwFieldTaxonomyExplorerBtn")) {
+        window.GridWildPlayableTaxonomyExplorer?.open?.();
       }
     });
   }

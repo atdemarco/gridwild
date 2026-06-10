@@ -51,54 +51,61 @@ function syncGpsAccuracyCircle(latlng, accuracyMeters) {
   accuracyCircle.setRadius(Math.max(accuracyMeters || 0, 5));
 }
 
+function timeLocationVerbose(label, fn, detail = null) {
+  const timer = window.GridWildVerboseConsole;
+  return timer?.time ? timer.time(label, fn, detail) : fn();
+}
+
 function setUserLocation(lat, lng, accuracyMeters) {
-  window.__gwLastUserLocation = {
-    lat: Number(lat),
-    lng: Number(lng),
-    accuracyMeters: Number(accuracyMeters),
-    updatedAt: new Date().toISOString()
-  };
+  return timeLocationVerbose("setUserLocation", () => {
+    window.__gwLastUserLocation = {
+      lat: Number(lat),
+      lng: Number(lng),
+      accuracyMeters: Number(accuracyMeters),
+      updatedAt: new Date().toISOString()
+    };
 
-  updateGpsHealthBadge(accuracyMeters);
-  const latlng = [lat, lng];
+    updateGpsHealthBadge(accuracyMeters);
+    const latlng = [lat, lng];
 
-  if (!userMarker) {
-    userMarker = L.marker(latlng, {
-      icon: makeUserHeadingIcon(lastHeading ?? 0)
-    })
-      .addTo(map)
-      .bindPopup("You are here");
-  } else {
-    userMarker.setLatLng(latlng);
-    updateUserMarkerHeading(lastHeading ?? 0);
-  }
+    if (!userMarker) {
+      userMarker = L.marker(latlng, {
+        icon: makeUserHeadingIcon(lastHeading ?? 0)
+      })
+        .addTo(map)
+        .bindPopup("You are here");
+    } else {
+      userMarker.setLatLng(latlng);
+      updateUserMarkerHeading(lastHeading ?? 0);
+    }
 
-  syncGpsAccuracyCircle(latlng, accuracyMeters);
+    syncGpsAccuracyCircle(latlng, accuracyMeters);
 
-  const zoom = map.getZoom();
-  const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
+    const zoom = map.getZoom();
+    const zoomMultiplier = Math.pow(2, zoom - 17).toFixed(2);
 
-  const metersPerPixel = getMapResolution();
-  const cellMeters = 20 * 0.3048; // same constant used in grid code
-  const cellPixels = (cellMeters / metersPerPixel).toFixed(0);
-  const accuracyLabel =
-    window.GridWildUnits?.formatDistance?.(accuracyMeters) || `${Math.round(accuracyMeters)} m`;
-  const resolutionLabel =
-    window.GridWildUnits?.formatDistance?.(metersPerPixel) || `${metersPerPixel.toFixed(2)} m`;
+    const metersPerPixel = getMapResolution();
+    const cellMeters = 20 * 0.3048; // same constant used in grid code
+    const cellPixels = (cellMeters / metersPerPixel).toFixed(0);
+    const accuracyLabel =
+      window.GridWildUnits?.formatDistance?.(accuracyMeters) || `${Math.round(accuracyMeters)} m`;
+    const resolutionLabel =
+      window.GridWildUnits?.formatDistance?.(metersPerPixel) || `${metersPerPixel.toFixed(2)} m`;
 
-  hud.innerHTML = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (&plusmn;${accuracyLabel})
+    hud.innerHTML = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} (&plusmn;${accuracyLabel})
         <span style="opacity:.65"> <br>Zoom x${zoomMultiplier}
         &bull; ${resolutionLabel}/px
         &bull; cell approx ${cellPixels}px
         </span>`;
 
-  if (window.GridWildOverviewMap) {
-    window.GridWildOverviewMap.updateUserLocation(lat, lng, accuracyMeters);
-  }
+    if (window.GridWildOverviewMap) {
+      window.GridWildOverviewMap.updateUserLocation(lat, lng, accuracyMeters);
+    }
 
-  if (window.GridWildParty?.recordPartyPosition) {
-    window.GridWildParty.recordPartyPosition(lat, lng, accuracyMeters);
-  }
+    if (window.GridWildParty?.recordPartyPosition) {
+      window.GridWildParty.recordPartyPosition(lat, lng, accuracyMeters);
+    }
+  });
 }
 
 // Geolocation
@@ -865,32 +872,36 @@ function formatZoomMultiplier() {
 let scaleHatchRaf = null;
 
 function updateMapScaleHatch() {
-  const hatch = document.getElementById("gwMapScaleHatch");
-  const label = document.getElementById("gwMapScaleHatchLabel");
-  if (!hatch || !label) return;
+  return timeLocationVerbose("updateMapScaleHatch", () => {
+    const hatch = document.getElementById("gwMapScaleHatch");
+    const label = document.getElementById("gwMapScaleHatchLabel");
+    if (!hatch || !label) return;
 
-  const scale = chooseScaleDistance(getMapResolution());
-  if (!scale) return;
+    const scale = chooseScaleDistance(getMapResolution());
+    if (!scale) return;
 
-  hatch.style.width = `${Math.round(scale.px)}px`;
-  const distanceLabel =
-    window.GridWildUnits?.formatDistance?.(scale.meters) || `${Math.round(scale.meters)} m`;
-  label.textContent = `${distanceLabel} ${formatZoomMultiplier()}`;
+    hatch.style.width = `${Math.round(scale.px)}px`;
+    const distanceLabel =
+      window.GridWildUnits?.formatDistance?.(scale.meters) || `${Math.round(scale.meters)} m`;
+    label.textContent = `${distanceLabel} ${formatZoomMultiplier()}`;
+  });
 }
 
 function scheduleMapScaleHatch() {
-  if (scaleHatchRaf) return;
-  const run = () => {
-    scaleHatchRaf = null;
-    updateMapScaleHatch();
-  };
+  return timeLocationVerbose("scheduleMapScaleHatch", () => {
+    if (scaleHatchRaf) return;
+    const run = () => {
+      scaleHatchRaf = null;
+      updateMapScaleHatch();
+    };
 
-  if (window.GridWildMapMotionQueue?.requestFrame) {
-    scaleHatchRaf = true;
-    window.GridWildMapMotionQueue.requestFrame("map-scale-hatch", run);
-  } else {
-    scaleHatchRaf = requestAnimationFrame(run);
-  }
+    if (window.GridWildMapMotionQueue?.requestFrame) {
+      scaleHatchRaf = true;
+      window.GridWildMapMotionQueue.requestFrame("map-scale-hatch", run);
+    } else {
+      scaleHatchRaf = requestAnimationFrame(run);
+    }
+  });
 }
 
 if (window.GridWildMapMotionQueue?.subscribe) {

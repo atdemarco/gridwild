@@ -1404,6 +1404,11 @@ window.__gwUser = window.__gwUser || {
           </label>
 
           <label class="gw-toggleline">
+            <input type="checkbox" id="toggleVerboseConsole_clone" />
+            <span>Verbose Console</span>
+          </label>
+
+          <label class="gw-toggleline">
             <input type="checkbox" id="toggleHighContrast_clone" />
             <span>Contrast</span>
           </label>
@@ -2258,6 +2263,7 @@ window.__gwUser = window.__gwUser || {
       ["toggleFogSmoothing", "toggleFogSmoothing_clone"],
       ["toggleGodsEye", "toggleGodsEye_clone"],
       ["toggleLockLocation", "toggleLockLocation_clone"],
+      ["toggleVerboseConsole", "toggleVerboseConsole_clone"],
       ["toggleOsmBuildings", "toggleOsmBuildings_clone"],
       ["toggleSurveyView", "toggleSurveyView_clone"]
     ].forEach(([realId, cloneId]) => {
@@ -2300,6 +2306,7 @@ window.__gwUser = window.__gwUser || {
     mirrorCheckbox("toggleFogSmoothing", "toggleFogSmoothing_clone");
     mirrorCheckbox("toggleGodsEye", "toggleGodsEye_clone");
     mirrorCheckbox("toggleLockLocation", "toggleLockLocation_clone");
+    mirrorCheckbox("toggleVerboseConsole", "toggleVerboseConsole_clone");
     mirrorCheckbox("toggleOsmBuildings", "toggleOsmBuildings_clone");
     mirrorCheckbox("toggleSurveyView", "toggleSurveyView_clone");
     window.GridWildField?.bind?.(infoBody);
