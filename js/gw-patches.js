@@ -21,6 +21,12 @@
   const PATCH_HERE_SELECTION_SCAN_LIMIT = 1800;
   const PATCH_QUEST_TARGET_MAX_CELLS = 400;
   const PATCH_QUEST_SCAN_MAX_BBOX_CELLS = 120000;
+  const PATCH_VIEW_SEARCH_RADIUS_M = 220;
+  const PATCH_VIEW_OSM_FETCH_RADIUS_M = 420;
+  const PATCH_VIEW_INAT_SEARCH_RADIUS_M = 900;
+  const PATCH_VIEW_OSM_CANDIDATE_LIMIT = 160;
+  const PATCH_VIEW_INAT_PROJECT_LIMIT = 18;
+  const PATCH_VIEW_INAT_GEOMETRY_CHECK_LIMIT = 96;
   const PATCH_MENU_LONG_HOLD_MS = 620;
   const PATCH_MENU_MOVE_TOLERANCE_PX = 14;
   const PATCH_LABEL_ICON_WIDTH = 158;
@@ -274,6 +280,27 @@
   function nearbySearchBounds() {
     if (!window.map?.getBounds || !window.L) return null;
     return expandLatLngBounds(map.getBounds(), INAT_PROJECT_FOV_MARGIN_RATIO);
+  }
+
+  function normalizeLatLng(latlng) {
+    const lat = Number(latlng?.lat);
+    const lng = Number(latlng?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  }
+
+  function boundsAroundLatLng(latlng, radiusM = PATCH_VIEW_SEARCH_RADIUS_M) {
+    const point = normalizeLatLng(latlng);
+    if (!point || !window.L) return null;
+
+    const latPad = Math.max(0.00008, Number(radiusM) / 111320);
+    const lngScale = Math.max(0.18, Math.cos((point.lat * Math.PI) / 180));
+    const lngPad = Math.max(0.00008, Number(radiusM) / (111320 * lngScale));
+
+    return L.latLngBounds(
+      [point.lat - latPad, point.lng - lngPad],
+      [point.lat + latPad, point.lng + lngPad]
+    );
   }
 
   function currentFovBounds() {
@@ -945,12 +972,13 @@
     return safeGeoJsonRings(place?.bounding_box_geojson);
   }
 
-  function placeFitsFov(place, searchBounds, maxSizeBounds) {
+  function placeFitsFov(place, searchBounds, maxSizeBounds, options = {}) {
     if (!searchBounds?.isValid?.()) return true;
     const rings = placeGeometryRings(place);
     if (rings.length) {
       return (
-        ringsIntersectBounds(rings, searchBounds) && ringsFitWithinFovSize(rings, maxSizeBounds)
+        ringsIntersectBounds(rings, searchBounds) &&
+        (options.rejectOversize === false || ringsFitWithinFovSize(rings, maxSizeBounds))
       );
     }
 
@@ -1868,6 +1896,50 @@
     });
   }
 
+  function patchTouchesLatLngArea(patch, latlng, bounds, radiusM = PATCH_VIEW_SEARCH_RADIUS_M) {
+    const point = normalizeLatLng(latlng);
+    if (!point || !patch?.id) return false;
+    const rings = patchRings(patch);
+    return (
+      pointInRings(point, rings) ||
+      patchIntersectsBounds(patch, bounds) ||
+      distanceToRingsM(point, rings) <= radiusM
+    );
+  }
+
+  function localPatchesAtLatLng(latlng, options = {}) {
+    const point = normalizeLatLng(latlng);
+    if (!point) return [];
+
+    const radiusM = Number(options.radiusM) || PATCH_VIEW_SEARCH_RADIUS_M;
+    const bounds = options.bounds || boundsAroundLatLng(point, radiusM);
+    const savedRows = state.patches
+      .map((patch) => ({
+        ...patch,
+        is_home_patch: patch.id === state.homePatchId,
+        distance_m: distanceToRingsM(point, patchRings(patch)),
+        candidate: false
+      }))
+      .filter((patch) => patchTouchesLatLngArea(patch, point, bounds, radiusM));
+
+    const candidateRows = nearbyOsmPatchCandidates({
+      origin: point,
+      bounds,
+      radiusM,
+      limit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT,
+      includeFallback: true
+    });
+    const seen = new Set();
+
+    return [...savedRows, ...candidateRows]
+      .filter((patch) => {
+        if (!patch?.id || seen.has(patch.id)) return false;
+        seen.add(patch.id);
+        return patchTouchesLatLngArea(patch, point, bounds, radiusM);
+      })
+      .sort((a, b) => Number(a.distance_m || Infinity) - Number(b.distance_m || Infinity));
+  }
+
   function mergePatchRows(rows = []) {
     const seen = new Set();
     return rows.filter((patch) => {
@@ -1915,6 +1987,29 @@
           distance_m: Number(project.distance_m)
         }
       : null;
+  }
+
+  async function nearbyINatProjectPatchCandidatesAtLatLng(latlng, options = {}) {
+    const point = normalizeLatLng(latlng);
+    if (!point || !window.L) return [];
+
+    const radiusM = Number(options.radiusM) || PATCH_VIEW_INAT_SEARCH_RADIUS_M;
+    const bounds = options.bounds || boundsAroundLatLng(point, radiusM);
+    const savedIds = new Set(state.patches.map((patch) => patch.id));
+    const projects = await searchINatProjects("", {
+      nearby: true,
+      origin: point,
+      bounds,
+      rejectOversize: false,
+      geometryCheckLimit: options.geometryCheckLimit || PATCH_VIEW_INAT_GEOMETRY_CHECK_LIMIT,
+      resultLimit: options.resultLimit || PATCH_VIEW_INAT_PROJECT_LIMIT
+    });
+
+    return projects
+      .map(patchFromINatProjectCandidate)
+      .filter(Boolean)
+      .filter((patch) => !savedIds.has(patch.id))
+      .filter((patch) => patchTouchesLatLngArea(patch, point, bounds, radiusM));
   }
 
   async function nearbyINatProjectPatchCandidates(options = {}) {
@@ -2094,6 +2189,73 @@
         }
       } catch (err) {
         console.warn("Could not hydrate nearby iNat project patches:", err);
+      }
+    }
+
+    return rows;
+  }
+
+  async function showPatchViewAtLatLng(latlng, options = {}) {
+    const point = normalizeLatLng(latlng);
+    if (!point || !window.L) return [];
+
+    const runId = ++state.peekRunId;
+    setVisible(true);
+
+    const searchRadiusM = Number(options.radiusM) || PATCH_VIEW_SEARCH_RADIUS_M;
+    const osmFetchRadiusM = Number(options.osmFetchRadiusM) || PATCH_VIEW_OSM_FETCH_RADIUS_M;
+    const inatRadiusM = Number(options.inatRadiusM) || PATCH_VIEW_INAT_SEARCH_RADIUS_M;
+    const searchBounds = boundsAroundLatLng(point, searchRadiusM);
+    const osmFetchBounds = boundsAroundLatLng(point, osmFetchRadiusM);
+    const inatBounds = boundsAroundLatLng(point, inatRadiusM);
+    let rows = localPatchesAtLatLng(point, {
+      bounds: searchBounds,
+      radiusM: searchRadiusM,
+      candidateLimit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT
+    });
+    let hydratedINatRows = [];
+    highlightPatchRows(rows);
+
+    const parksHydratePromise =
+      window.GridWildOsmFeaturesLayer?.fetchParksForBounds?.(osmFetchBounds, {
+        broad: true,
+        ignoreMinZoom: true,
+        profile: "patch-view"
+      }) || null;
+
+    if (parksHydratePromise?.then) {
+      await parksHydratePromise;
+      if (state.peekRunId === runId) {
+        rows = localPatchesAtLatLng(point, {
+          bounds: searchBounds,
+          radiusM: searchRadiusM,
+          candidateLimit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT
+        });
+        highlightPatchRows(rows);
+      }
+    }
+
+    if (options.includeINatProjects !== false) {
+      try {
+        hydratedINatRows = await nearbyINatProjectPatchCandidatesAtLatLng(point, {
+          bounds: inatBounds,
+          radiusM: inatRadiusM,
+          geometryCheckLimit: options.geometryCheckLimit || PATCH_VIEW_INAT_GEOMETRY_CHECK_LIMIT,
+          resultLimit: options.resultLimit || PATCH_VIEW_INAT_PROJECT_LIMIT
+        });
+        if (state.peekRunId === runId && hydratedINatRows.length) {
+          rows = mergePatchRows([
+            ...localPatchesAtLatLng(point, {
+              bounds: searchBounds,
+              radiusM: searchRadiusM,
+              candidateLimit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT
+            }),
+            ...hydratedINatRows
+          ]).sort((a, b) => Number(a.distance_m || Infinity) - Number(b.distance_m || Infinity));
+          highlightPatchRows(rows);
+        }
+      } catch (err) {
+        console.warn("Could not hydrate iNat project patches at selected point:", err);
       }
     }
 
@@ -2282,17 +2444,39 @@
       return "cemetery";
     if (tags.boundary === "national_park") return "national park";
     if (tags.boundary === "protected_area") return "protected area";
+    if (tags.leisure === "common") return "common";
+    if (tags.leisure === "dog_park") return "dog park";
     if (tags.leisure === "garden") return "garden";
+    if (tags.leisure === "golf_course") return "golf course";
     if (tags.leisure === "nature_reserve") return "nature reserve";
+    if (tags.leisure === "pitch") return "field";
+    if (tags.leisure === "playground") return "playground";
     if (tags.natural === "wetland") return "wetland";
     if (tags.natural === "scrub") return "scrubland";
     if (tags.natural === "heath") return "heath";
+    if (tags.natural === "shrubbery") return "shrubbery";
+    if (tags.natural === "tree_row") return "tree row";
     if (tags.natural === "wood" || tags.landuse === "forest") return "woodland";
     if (tags.natural === "grassland" || tags.landuse === "grass" || tags.landuse === "meadow")
       return "grassland";
     if (tags.landuse === "recreation_ground") return "recreation ground";
     if (tags.landuse === "allotments") return "allotments";
+    if (tags.landuse === "brownfield") return "brownfield";
+    if (tags.landuse === "farmland") return "farmland";
+    if (tags.landuse === "farmyard") return "farmyard";
+    if (tags.landuse === "greenfield") return "greenfield";
+    if (tags.landuse === "greenhouse_horticulture") return "greenhouse";
     if (tags.landuse === "orchard") return "orchard";
+    if (tags.landuse === "plant_nursery") return "plant nursery";
+    if (tags.landuse === "village_green") return "village green";
+    if (tags.landuse === "vineyard") return "vineyard";
+    if (tags.landcover === "flowerbed") return "flowerbed";
+    if (tags.landcover === "grass") return "grass";
+    if (tags.landcover === "greenery") return "greenery";
+    if (tags.landcover === "meadow") return "meadow";
+    if (tags.landcover === "trees") return "tree cover";
+    if (tags.tourism === "camp_site") return "camp site";
+    if (tags.tourism === "picnic_site") return "picnic site";
     return "park";
   }
 
@@ -2410,8 +2594,15 @@
     });
   }
 
-  function nearbyOsmPatchCandidates(limit = 12) {
-    const origin = locationOrigin();
+  function nearbyOsmPatchCandidates(limitOrOptions = 12) {
+    const options =
+      limitOrOptions && typeof limitOrOptions === "object"
+        ? limitOrOptions
+        : { limit: limitOrOptions };
+    const limit = Number(options.limit ?? options.candidateLimit ?? 12) || 12;
+    const origin = normalizeLatLng(options.origin) || locationOrigin();
+    const searchBounds = options.bounds || null;
+    const radiusM = Number(options.radiusM);
     const savedIds = new Set(state.patches.map((patch) => patch.id));
     const osmFeatures = window.GridWildOsmFeaturesLayer?.getFeatures?.() || {};
     const features = (osmFeatures.parks || []).filter((feature) => feature.closed !== false);
@@ -2421,6 +2612,15 @@
       .map((feature) => patchFromOsmFeature(feature, labelContext))
       .filter(Boolean)
       .filter((patch) => !savedIds.has(patch.id))
+      .filter((patch) => {
+        if (!searchBounds?.isValid?.()) return true;
+        const rings = patch.geometry?.rings || [patch.boundary];
+        return (
+          patchIntersectsBounds(patch, searchBounds) ||
+          pointInRings(origin, rings) ||
+          (Number.isFinite(radiusM) && distanceToRingsM(origin, rings) <= radiusM)
+        );
+      })
       .map((patch) => ({
         ...patch,
         distance_m: distanceToRingsM(origin, patch.geometry?.rings || [patch.boundary]),
@@ -2442,7 +2642,12 @@
     const namedRows = withoutInheritedDuplicates.filter(
       (patch) => patch.metadata?.osm_label_source !== "fallback"
     );
-    const sourceRows = namedRows.length ? namedRows : withoutInheritedDuplicates;
+    const sourceRows =
+      options.includeFallback === true
+        ? withoutInheritedDuplicates
+        : namedRows.length
+          ? namedRows
+          : withoutInheritedDuplicates;
 
     return sourceRows
       .sort((a, b) => Number(a.distance_m || Infinity) - Number(b.distance_m || Infinity))
@@ -2835,6 +3040,7 @@
       (options.nearby
         ? INAT_PROJECT_NEARBY_GEOMETRY_CHECK_LIMIT
         : INAT_PROJECT_GEOMETRY_CHECK_LIMIT);
+    const resultLimit = Number(options.resultLimit) || INAT_PROJECT_RESULT_LIMIT;
     const checks = projects.slice(0, geometryLimit).map(async (project) => {
       try {
         const resolved = await resolveINatProjectBoundary(project);
@@ -2883,7 +3089,7 @@
           String(b.title || b.name || b.slug || b.id || "")
         );
       })
-      .slice(0, INAT_PROJECT_RESULT_LIMIT);
+      .slice(0, resultLimit);
   }
 
   function fovProjectSearchPoints(bounds, origin) {
@@ -2950,7 +3156,11 @@
     const data = await fetchINatJson(url);
     const maxSizeBounds = options.maxSizeBounds || currentFovBounds() || bounds;
     return sortPlacesForProjectLookup(
-      parseINatNearbyPlaces(data).filter((place) => placeFitsFov(place, bounds, maxSizeBounds))
+      parseINatNearbyPlaces(data).filter((place) =>
+        placeFitsFov(place, bounds, maxSizeBounds, {
+          rejectOversize: options.rejectOversize
+        })
+      )
     );
   }
 
@@ -2979,15 +3189,18 @@
   }
 
   async function searchINatProjects(query, options = {}) {
-    const origin = nearbySearchOrigin();
-    const bounds = options.nearby ? nearbySearchBounds() : null;
-    const maxSizeBounds = currentFovBounds() || bounds;
+    const origin = options.origin || nearbySearchOrigin();
+    const bounds = options.nearby ? options.bounds || nearbySearchBounds() : null;
+    const maxSizeBounds = options.maxSizeBounds || currentFovBounds() || bounds;
     let projects = [];
 
     if (options.nearby) {
       const points = fovProjectSearchPoints(bounds, origin);
       const settled = await Promise.allSettled([
-        fetchINatPlacesInBounds(bounds, { maxSizeBounds }).then((places) =>
+        fetchINatPlacesInBounds(bounds, {
+          maxSizeBounds,
+          rejectOversize: options.rejectOversize
+        }).then((places) =>
           fetchINatProjectCandidatesForPlaces(places, {
             query,
             perPage: INAT_PROJECTS_PER_PLACE_LIMIT
@@ -3019,10 +3232,13 @@
       origin,
       bounds,
       maxSizeBounds,
-      rejectOversize: true,
-      geometryCheckLimit: options.nearby
-        ? INAT_PROJECT_NEARBY_GEOMETRY_CHECK_LIMIT
-        : INAT_PROJECT_GEOMETRY_CHECK_LIMIT
+      rejectOversize: options.rejectOversize !== false,
+      geometryCheckLimit:
+        Number(options.geometryCheckLimit) ||
+        (options.nearby
+          ? INAT_PROJECT_NEARBY_GEOMETRY_CHECK_LIMIT
+          : INAT_PROJECT_GEOMETRY_CHECK_LIMIT),
+      resultLimit: options.resultLimit
     });
   }
 
@@ -3308,6 +3524,7 @@
     getPatch,
     getPatches: () => patchesWithDistance(),
     isVisible: () => state.layerVisible,
+    showPatchViewAtLatLng,
     showLocalPatchHighlights,
     clearLocalPatchHighlights,
     shouldSuppressHudActionMenu,

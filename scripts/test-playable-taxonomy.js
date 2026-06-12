@@ -18,6 +18,13 @@ function loadPlayableTaxonomyApi() {
 const api = loadPlayableTaxonomyApi();
 
 assert.ok(api, "GridWildPlayableTaxonomy API should load");
+assert.equal(
+  api.profileArtifactUrl,
+  "assets/playable_taxonomy/playable_taxon_profiles.json",
+  "playable taxonomy should advertise its hydrated profile artifact"
+);
+assert.equal(api.getProfileSource().source, "seed", "seed profiles should be the initial fallback");
+assert.equal(typeof api.loadProfiles, "function", "playable taxonomy should expose a hydrator");
 
 assert.equal(
   api.computeBeginnerPlayabilityScore({
@@ -87,6 +94,32 @@ assert.equal(
 
 assert.equal(api.profiles.length, 18, "the MVP should seed the requested 18 taxon groups");
 assert.equal(api.validateSeedProfiles().length, 0, "seed profiles should be valid");
+
+const artifactPath = path.join(
+  __dirname,
+  "..",
+  "assets",
+  "playable_taxonomy",
+  "playable_taxon_profiles.json"
+);
+const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+assert.equal(
+  artifact.schema_version,
+  "gridwild-playable-taxonomy-profiles-v1",
+  "profile artifact should declare the expected schema"
+);
+assert.ok(
+  ["playable-taxonomy-seed-v001", "playable-taxonomy-gbif-v001"].includes(
+    artifact.playable_taxonomy_version
+  ),
+  "profile artifact should declare a recognized playable taxonomy version"
+);
+assert.equal(artifact.profiles.length, 18, "profile artifact should include the MVP profiles");
+assert.equal(
+  api.validateSeedProfiles(artifact.profiles).length,
+  0,
+  "profile artifact should satisfy the runtime profile validator"
+);
 
 for (const profile of api.profiles) {
   assert.equal(

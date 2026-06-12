@@ -57,6 +57,9 @@ let gridHeatMeterTransform = null;
 const GRID_HEAT_INTERACTION_RENDER_INTERVAL_MS = 80;
 const COARSE_HEAT_AUTO_SCALE_PX = 118;
 const COARSE_HEAT_AUTO_STEPS = [
+  { scaleFt: 42240, binSize: 64 },
+  { scaleFt: 21120, binSize: 32 },
+  { scaleFt: 10560, binSize: 16 },
   { scaleFt: 5280, binSize: 8 },
   { maxZoomMultiplier: 0.06, binSize: 10 },
   { maxZoomMultiplier: 0.13, binSize: 8 },
@@ -4721,6 +4724,200 @@ window.GridWildCoarseHeatTileCache =
     };
   })();
 
+window.GridWildCoarsePyramid =
+  window.GridWildCoarsePyramid ||
+  (function () {
+    const MAX_TILE_CACHE = 160;
+    const EMPTY_TILE = Symbol("empty coarse pyramid tile");
+    let manifest = null;
+    let manifestPromise = null;
+    let manifestFailed = false;
+    let levelsByBin = new Map();
+    const tileCache = new Map();
+    const tilePending = new Map();
+    let requestedTiles = 0;
+    let loadedTiles = 0;
+    let failedTiles = 0;
+    let lastRender = null;
+
+    function buildIndex(nextManifest) {
+      const nextLevels = new Map();
+      for (const level of nextManifest?.levels || []) {
+        const binSize = Math.round(Number(level?.bin_size) || 0);
+        if (!binSize) continue;
+        const tilesByKey = new Map();
+        for (const tile of level.tiles || []) {
+          if (!tile?.file) continue;
+          tilesByKey.set(`${Number(tile.tile_ix)},${Number(tile.tile_iy)}`, tile);
+        }
+        nextLevels.set(binSize, { ...level, tilesByKey });
+      }
+      levelsByBin = nextLevels;
+    }
+
+    function ensureManifest() {
+      if (manifest || manifestFailed) return manifest;
+      if (manifestPromise) return null;
+      if (!window.GridWildAssets?.loadCoarsePyramidManifest) return null;
+
+      manifestPromise = window.GridWildAssets.loadCoarsePyramidManifest()
+        .then((nextManifest) => {
+          manifest = nextManifest || null;
+          manifestFailed = !manifest;
+          if (manifest) buildIndex(manifest);
+          if (typeof scheduleGridHeatCanvasRender === "function" && isCoarseHeatEnabled()) {
+            scheduleGridHeatCanvasRender({ force: true });
+          }
+          return manifest;
+        })
+        .catch((err) => {
+          manifestFailed = true;
+          console.warn("GridWild coarse pyramid unavailable.", err);
+          return null;
+        })
+        .finally(() => {
+          manifestPromise = null;
+        });
+
+      return null;
+    }
+
+    function levelForBin(binSize) {
+      ensureManifest();
+      return levelsByBin.get(Math.round(Number(binSize) || 0)) || null;
+    }
+
+    function levels() {
+      ensureManifest();
+      return Array.from(levelsByBin.values()).sort(
+        (a, b) => Number(a.bin_size) - Number(b.bin_size)
+      );
+    }
+
+    function isManifestPending() {
+      return Boolean(manifestPromise);
+    }
+
+    function touchCache(key, value) {
+      tileCache.set(key, value);
+      while (tileCache.size > MAX_TILE_CACHE) {
+        const oldestKey = tileCache.keys().next().value;
+        tileCache.delete(oldestKey);
+      }
+    }
+
+    function readCacheValue(value) {
+      return value === EMPTY_TILE ? null : value;
+    }
+
+    function tileFor(level, tileIx, tileIy, options = {}) {
+      if (!level) return null;
+      const key = `${level.bin_size}:${tileIx}:${tileIy}`;
+      if (tileCache.has(key)) {
+        const cached = tileCache.get(key);
+        tileCache.delete(key);
+        tileCache.set(key, cached);
+        return readCacheValue(cached);
+      }
+
+      const tileManifest = level.tilesByKey?.get?.(`${tileIx},${tileIy}`) || null;
+      if (!tileManifest) {
+        touchCache(key, EMPTY_TILE);
+        return null;
+      }
+
+      if (tilePending.has(key)) return null;
+      if (options.fetch === false) return null;
+      if (!window.GridWildAssets?.coarsePyramidTileUrl) return null;
+
+      requestedTiles++;
+      const job = window.GridWildAssets.coarsePyramidTileUrl(tileManifest.file)
+        .then((url) => {
+          if (!url) throw new Error(`No URL for coarse pyramid tile ${tileManifest.file}`);
+          return fetch(url);
+        })
+        .then((resp) => {
+          if (!resp.ok) {
+            if (resp.status === 404) {
+              touchCache(key, EMPTY_TILE);
+              return null;
+            }
+            throw new Error(`HTTP ${resp.status} for ${tileManifest.file}`);
+          }
+          return resp.json();
+        })
+        .then((tile) => {
+          if (tile?.cells) {
+            loadedTiles++;
+            touchCache(key, tile);
+          }
+          return tile;
+        })
+        .catch((err) => {
+          failedTiles++;
+          console.warn("GridWild coarse pyramid tile unavailable.", err);
+          touchCache(key, EMPTY_TILE);
+          return null;
+        })
+        .finally(() => {
+          tilePending.delete(key);
+          if (typeof scheduleGridHeatCanvasRender === "function" && isCoarseHeatEnabled()) {
+            scheduleGridHeatCanvasRender({ force: true });
+          }
+        });
+
+      tilePending.set(key, job);
+      return null;
+    }
+
+    function invalidate() {
+      tileCache.clear();
+      tilePending.clear();
+      requestedTiles = 0;
+      loadedTiles = 0;
+      failedTiles = 0;
+      lastRender = null;
+    }
+
+    function recordRender(info) {
+      lastRender = {
+        ...(info || {}),
+        at: Date.now()
+      };
+    }
+
+    function stats() {
+      return {
+        manifestLoaded: Boolean(manifest),
+        manifestPending: isManifestPending(),
+        manifestFailed,
+        levels: Array.from(levelsByBin.keys()).sort((a, b) => a - b),
+        cachedTiles: tileCache.size,
+        pendingTiles: tilePending.size,
+        requestedTiles,
+        loadedTiles,
+        failedTiles,
+        buildId: manifest?.build_id || null,
+        lastRender
+      };
+    }
+
+    return {
+      ensureManifest,
+      levelForBin,
+      levels,
+      isManifestPending,
+      tileFor,
+      invalidate,
+      recordRender,
+      stats
+    };
+  })();
+
+window.getGridWildCoarsePyramidStats = function getGridWildCoarsePyramidStats() {
+  return window.GridWildCoarsePyramid?.stats?.() || null;
+};
+
 function median(values) {
   const nums = values
     .map(Number)
@@ -5266,6 +5463,288 @@ function paintCoarseHeatBin(ctx, ix, iy, binSize, baseStyle, originBounds = null
   return painted;
 }
 
+function canUsePrecomputedCoarseHeat() {
+  if (window.__gwState?.precomputedCoarseHeatEnabled === false) return false;
+  if (!window.GridWildCoarsePyramid?.levelForBin) return false;
+  if (window.GridWildMeOverlayFilter?.isActive?.()) return false;
+  if (window.GridWildIconicOverlayFilter?.isActive?.()) return false;
+  if (window.GridWildPyriteLake?.isEnabled?.()) return false;
+  return true;
+}
+
+function getPrecomputedCoarseView(binSize) {
+  const { startX, endX, startY, endY } = getPaddedBoundsMeters();
+  const binSizeM = binSize * GRID_SIZE_M;
+  const startAnchorX = Math.floor(startX / binSizeM) * binSize;
+  const endAnchorX = Math.floor((endX - GRID_SIZE_M) / binSizeM) * binSize;
+  const startAnchorY = Math.floor(startY / binSizeM) * binSize;
+  const endAnchorY = Math.floor((endY - GRID_SIZE_M) / binSizeM) * binSize;
+  const span = getCoarseHeatBinSpan(startAnchorX, endAnchorX, startAnchorY, endAnchorY, binSize);
+  return { startAnchorX, endAnchorX, startAnchorY, endAnchorY, span };
+}
+
+function precomputedCoarseTileRange(level, view) {
+  const declaredTileFineCells = Math.round(Number(level?.tile_fine_cells) || 0);
+  const tileFineCells =
+    declaredTileFineCells > 0 ? declaredTileFineCells : getCoarseHeatTileFineCells(level.bin_size);
+  const startTileIx = Math.floor(view.startAnchorX / tileFineCells);
+  const endTileIx = Math.floor(view.endAnchorX / tileFineCells);
+  const startTileIy = Math.floor(view.startAnchorY / tileFineCells);
+  const endTileIy = Math.floor(view.endAnchorY / tileFineCells);
+  const tileCols = Math.max(0, endTileIx - startTileIx + 1);
+  const tileRows = Math.max(0, endTileIy - startTileIy + 1);
+  return {
+    tileFineCells,
+    startTileIx,
+    endTileIx,
+    startTileIy,
+    endTileIy,
+    tileCols,
+    tileRows,
+    tileCount: tileCols * tileRows
+  };
+}
+
+function precomputedCoarseCandidate(level) {
+  const binSize = Math.round(Number(level?.bin_size) || 0);
+  if (!binSize) return null;
+
+  const view = getPrecomputedCoarseView(binSize);
+  const range = precomputedCoarseTileRange(level, view);
+  const tileSafe =
+    Number.isFinite(range.tileCount) &&
+    range.tileCount > 0 &&
+    range.tileCount <= COARSE_HEAT_RENDER_TILE_BUDGET;
+
+  return {
+    level,
+    binSize,
+    view,
+    range,
+    safe: view.span.safe && tileSafe,
+    reason: !view.span.safe ? "bin budget" : !tileSafe ? "tile budget" : "ok"
+  };
+}
+
+function selectPrecomputedCoarseLevel(requestedBinSize) {
+  const requestedLevel = window.GridWildCoarsePyramid.levelForBin(requestedBinSize);
+  if (!requestedLevel && window.GridWildCoarsePyramid.isManifestPending?.()) {
+    return { status: "pending", requestedBinSize };
+  }
+
+  const levels = (window.GridWildCoarsePyramid.levels?.() || []).filter(
+    (level) => Math.round(Number(level?.bin_size) || 0) >= requestedBinSize
+  );
+
+  if (
+    requestedLevel &&
+    !levels.some((level) => Number(level.bin_size) === Number(requestedLevel.bin_size))
+  ) {
+    levels.unshift(requestedLevel);
+  }
+
+  if (!levels.length) {
+    return { status: "missing", requestedBinSize };
+  }
+
+  let coarsestCandidate = null;
+  for (const level of levels) {
+    const candidate = precomputedCoarseCandidate(level);
+    if (!candidate) continue;
+    coarsestCandidate = candidate;
+    if (candidate.safe) {
+      return {
+        status: "ready",
+        requestedBinSize,
+        ...candidate
+      };
+    }
+  }
+
+  if (!coarsestCandidate) {
+    return { status: "missing", requestedBinSize };
+  }
+
+  return {
+    status: "overBudget",
+    requestedBinSize,
+    ...coarsestCandidate
+  };
+}
+
+function precomputedCoarseCellInView(cell, view) {
+  const ix = Math.round(Number(cell?.ix));
+  const iy = Math.round(Number(cell?.iy));
+  return (
+    Number.isFinite(ix) &&
+    Number.isFinite(iy) &&
+    ix >= view.startAnchorX &&
+    ix <= view.endAnchorX &&
+    iy >= view.startAnchorY &&
+    iy <= view.endAnchorY
+  );
+}
+
+function precomputedCoarseMetrics(cell) {
+  if (!cell) return null;
+  const monthTotals = Array.isArray(cell.month_totals)
+    ? cell.month_totals.map((value) => Number(value) || 0).slice(0, 12)
+    : [];
+  while (monthTotals.length < 12) monthTotals.push(0);
+  const iconicCounts =
+    cell.iconic_counts &&
+    typeof cell.iconic_counts === "object" &&
+    !Array.isArray(cell.iconic_counts)
+      ? cell.iconic_counts
+      : {};
+  const count = Number(cell.count) || 0;
+  const totalCount = Number(cell.total_count) || count;
+  const activeSquares =
+    Number(cell.nActiveSquares) ||
+    Number(cell.occupied_fine_squares) ||
+    Number(count > 0 || totalCount > 0);
+
+  return {
+    ...cell,
+    count,
+    total_count: totalCount,
+    species: Number(cell.species) || Number(cell.genera) || Number(cell.unique_served_taxa) || 0,
+    genera: Number(cell.genera) || Number(cell.species) || Number(cell.unique_served_taxa) || 0,
+    observers: Number(cell.observers) || 0,
+    n_captive: Number(cell.n_captive) || 0,
+    nSquares: Number(cell.nSquares) || Number(cell.n_squares) || Number(cell.bin_size) ** 2 || 0,
+    nActiveSquares: activeSquares,
+    month_totals: monthTotals,
+    iconic_counts: iconicCounts,
+    dominant_iconic: cell.dominant_iconic || "Unknown",
+    iconic_n: Number(cell.iconic_n) || Object.keys(iconicCounts).length,
+    peak_month: Number(cell.peak_month) || 1,
+    seasonal_strength: Number(cell.seasonal_strength) || 0,
+    month_entropy: Number(cell.month_entropy) || 0,
+    last_observed: cell.last_observed || null,
+    median_last10_observed: cell.median_last10_observed || null,
+    last_observed_ms: Number(cell.last_observed_ms) || parseGridDateMs(cell.last_observed),
+    median_last10_observed_ms:
+      Number(cell.median_last10_observed_ms) || parseGridDateMs(cell.median_last10_observed),
+    source: "precomputed_coarse_pyramid"
+  };
+}
+
+function renderPrecomputedCoarseHeatCanvas(options = {}) {
+  if (!canUsePrecomputedCoarseHeat()) return null;
+
+  const allowFetches = options.allowCoarseTileMisses !== false;
+  const requestedBinSize = getEffectiveCoarseHeatBinSize();
+  const selected = selectPrecomputedCoarseLevel(requestedBinSize);
+  if (selected.status === "pending") {
+    window.GridWildCoarsePyramid.recordRender?.({
+      status: "pending",
+      requestedBinSize
+    });
+    return 0;
+  }
+  if (selected.status === "missing") {
+    window.GridWildCoarsePyramid.recordRender?.({
+      status: "missing",
+      requestedBinSize
+    });
+    return null;
+  }
+  if (selected.status !== "ready") {
+    window.GridWildCoarsePyramid.recordRender?.({
+      status: selected.status || "overBudget",
+      requestedBinSize,
+      binSize: selected.binSize || null,
+      reason: selected.reason || "budget",
+      span: selected.view?.span || null,
+      range: selected.range || null
+    });
+    warnCoarseHeatBudgetExceeded(`precomputed ${selected.reason || "budget"}`, {
+      requestedBinSize,
+      binSize: selected.binSize,
+      span: selected.view?.span,
+      tileCols: selected.range?.tileCols,
+      tileRows: selected.range?.tileRows,
+      tileCount: selected.range?.tileCount
+    });
+    return 0;
+  }
+
+  const { level, binSize, view, range } = selected;
+
+  const items = [];
+
+  for (let tileIx = range.startTileIx; tileIx <= range.endTileIx; tileIx++) {
+    for (let tileIy = range.startTileIy; tileIy <= range.endTileIy; tileIy++) {
+      const tile = window.GridWildCoarsePyramid.tileFor(level, tileIx, tileIy, {
+        fetch: allowFetches
+      });
+      if (!tile) continue;
+
+      for (const cell of tile.cells || []) {
+        if (!precomputedCoarseCellInView(cell, view)) continue;
+        const metrics = precomputedCoarseMetrics(cell);
+        const heatValue = getHeatValueForCell(metrics);
+        if (heatValue <= 0) continue;
+        items.push({
+          ix: Math.round(Number(cell.ix)),
+          iy: Math.round(Number(cell.iy)),
+          key: `${cell.ix},${cell.iy}`,
+          metrics,
+          heatValue
+        });
+      }
+    }
+  }
+
+  if (!items.length) {
+    window.GridWildCoarsePyramid.recordRender?.({
+      status: "empty",
+      requestedBinSize,
+      binSize,
+      tileCount: range.tileCount,
+      pendingTiles: window.GridWildCoarsePyramid.stats?.()?.pendingTiles || 0
+    });
+    return 0;
+  }
+
+  const heatZStats = isHeatZThresholdEnabled()
+    ? buildZStats(items.map((item) => item.heatValue))
+    : null;
+  const heatMorphologyMask = isHeatMorphologyEnabled()
+    ? buildThresholdedHeatMorphologyMask(items, heatZStats, { step: binSize })
+    : null;
+  let painted = 0;
+
+  for (const item of items) {
+    const { ix, iy, metrics, heatValue, key } = item;
+    if (
+      heatMorphologyMask
+        ? !heatMorphologyMask.has(key)
+        : !passesHeatZThreshold(heatValue, heatZStats)
+    ) {
+      continue;
+    }
+
+    const baseStyle = metricsToFill(metrics);
+    if (!baseStyle) continue;
+    painted += paintCoarseHeatBin(gridHeatCtx, ix, iy, binSize, baseStyle);
+  }
+
+  gridHeatCtx.globalAlpha = 1;
+  window.GridWildCoarsePyramid.recordRender?.({
+    status: "painted",
+    requestedBinSize,
+    binSize,
+    painted,
+    itemCount: items.length,
+    tileCount: range.tileCount,
+    tileCols: range.tileCols,
+    tileRows: range.tileRows
+  });
+  return painted;
+}
+
 function renderCoarseHeatTile(tileIx, tileIy, binSize, sourceLookup, sourceSignature) {
   const tileFineCells = getCoarseHeatTileFineCells(binSize);
   const {
@@ -5776,9 +6255,11 @@ function renderGridHeatCanvas() {
 
   const counts = window.__staticGridCounts;
   const pyriteEnabled = window.GridWildPyriteLake?.isEnabled?.() === true;
-  if (!(counts instanceof Map) || (counts.size === 0 && !pyriteEnabled)) return;
+  const coarseHeatEnabled = isCoarseHeatEnabled();
+  if (!(counts instanceof Map) || (counts.size === 0 && !pyriteEnabled && !coarseHeatEnabled))
+    return;
 
-  if (isCoarseHeatEnabled()) {
+  if (coarseHeatEnabled) {
     renderCoarseMedianHeatCanvas(renderOptions);
     return;
   }
@@ -5988,6 +6469,9 @@ function renderCoarseMedianHeatCanvasDirect() {
 }
 
 function renderCoarseMedianHeatCanvas(options = {}) {
+  const precomputedPainted = renderPrecomputedCoarseHeatCanvas(options);
+  if (precomputedPainted !== null) return precomputedPainted;
+
   if (options.allowCoarseTileMisses === false) {
     if (isHeatZThresholdEnabled() || isHeatMorphologyEnabled()) return 0;
     return renderCoarseTiledHeatCanvas(options);

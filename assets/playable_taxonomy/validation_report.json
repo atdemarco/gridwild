@@ -1,0 +1,23 @@
+{
+  "schema_version": "gridwild-playable-taxonomy-validation-v1",
+  "playable_taxonomy_version": "playable-taxonomy-gbif-v001",
+  "generated_at": "2026-06-11T01:32:35Z",
+  "canonical_backbone": {
+    "source": "GBIF Backbone",
+    "taxon_file": "Taxon.tsv",
+    "vernacular_file": "VernacularName.tsv"
+  },
+  "curated_profile_source": {
+    "type": "browser-seed-module",
+    "file": "js/gw-playable-taxonomy.js",
+    "version": "curated-seed"
+  },
+  "profile_count": 18,
+  "configured_anchor_count": 24,
+  "matched_anchor_count": 24,
+  "rollup_rule_count": 24,
+  "vernacular_alias_count": 272,
+  "unmatched_profiles": [],
+  "partial_profiles": [],
+  "profile_errors": []
+}

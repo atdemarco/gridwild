@@ -6,6 +6,12 @@
   "scripts": {
     "audit:economy-authority": "node scripts/audit-economy-authority.js",
     "audit:function-auth": "node scripts/audit-function-auth.js",
+    "build:coarse-pyramid": "node scripts/build-coarse-pyramid.js",
+    "build:gold-served-taxonomy": "node scripts/build-gold-served-taxonomy.js",
+    "export:playable-taxonomy": "node scripts/export-playable-taxonomy.js",
+    "generate:playable-taxa": "node scripts/generate-playable-taxa-gbif.js",
+    "hydrate:playable-taxonomy": "node scripts/hydrate-playable-taxonomy-gbif.js",
+    "score:playable-taxa": "node scripts/score-playable-taxa-evidence.js",
     "format": "prettier --write \"index.html\" \"css/**/*.css\" \"js/**/*.js\" \"netlify/functions/**/*.js\" \"scripts/**/*.js\" \"*.json\" \"docs/**/*.md\"",
     "format:check": "prettier --check \"index.html\" \"css/**/*.css\" \"js/**/*.js\" \"netlify/functions/**/*.js\" \"scripts/**/*.js\" \"*.json\" \"docs/**/*.md\"",
     "lint": "eslint \"js/**/*.js\" \"netlify/functions/**/*.js\" \"scripts/**/*.js\" \"eslint.config.mjs\"",

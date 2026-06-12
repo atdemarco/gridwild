@@ -58,11 +58,19 @@ interface TaxonEndpointProfile {
   fallbackReason?: string;
 }
 
+interface PlayableTaxonomyProfileSource {
+  source: string;
+  url: string | null;
+  playableTaxonomyVersion: string;
+  loadedAt: string | null;
+}
+
 interface GridWildPlayableTaxonomyApi {
   ranks: readonly TaxonomicRank[];
   endpointModes: readonly EndpointMode[];
   endpointSources: readonly TaxonEndpointSource[];
   scoreWeights: Readonly<Record<keyof TaxonEndpointMetrics, number>>;
+  profileArtifactUrl: string;
   profiles: readonly TaxonEndpointProfile[];
   computeBeginnerPlayabilityScore(metrics: Partial<TaxonEndpointMetrics>): number;
   compareRanks(a: TaxonomicRank, b: TaxonomicRank): number | null;
@@ -70,12 +78,23 @@ interface GridWildPlayableTaxonomyApi {
   endpointModeLabel(mode: EndpointMode): string;
   formatEndpointRanks(primaryRank: TaxonomicRank, alternateRanks?: TaxonomicRank[]): string;
   getEndpointForTaxonGroup(input: string | Record<string, unknown>): TaxonEndpointProfile;
+  getProfileSource(): PlayableTaxonomyProfileSource;
   getProfiles(): TaxonEndpointProfile[];
-  getQuestLanguageForEndpoint(input: TaxonEndpointProfile | string | Record<string, unknown>): string;
+  getQuestLanguageForEndpoint(
+    input: TaxonEndpointProfile | string | Record<string, unknown>
+  ): string;
   isRankAtLeastAsSpecific(rank: TaxonomicRank, minimumRank: TaxonomicRank): boolean;
   isRankBroaderThan(rank: TaxonomicRank, otherRank: TaxonomicRank): boolean;
   isValidRank(rank: string): rank is TaxonomicRank;
+  loadProfiles(options?: {
+    force?: boolean;
+    profiles?: TaxonEndpointProfile[];
+    playableTaxonomyVersion?: string;
+    source?: string;
+    url?: string;
+  }): Promise<TaxonEndpointProfile[]>;
   normalizeSearch(value: string): string;
+  restoreSeedProfiles(): TaxonEndpointProfile[];
   validateSeedProfiles(profiles?: TaxonEndpointProfile[]): string[];
   validateTaxonEndpointProfile(profile: TaxonEndpointProfile): string[];
 }

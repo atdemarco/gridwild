@@ -9,7 +9,8 @@
   const state = {
     catalogPromise: null,
     catalog: null,
-    manifestPromise: null
+    manifestPromise: null,
+    coarsePyramidManifestPromise: null
   };
 
   function trimTrailingSlash(value) {
@@ -98,6 +99,14 @@
     return resp.json();
   }
 
+  async function assetRelativeUrl(relativePath) {
+    if (!relativePath) return null;
+    const catalog = await getCatalog();
+    const manifestUrl = catalog.urls.manifest;
+    if (!manifestUrl) return null;
+    return new URL(String(relativePath).replace(/^\/+/g, ""), manifestUrl).href;
+  }
+
   async function loadManifest() {
     if (state.manifestPromise) return state.manifestPromise;
     state.manifestPromise = (async () => {
@@ -105,6 +114,22 @@
       return fetchJson(url, "GridWild asset manifest");
     })();
     return state.manifestPromise;
+  }
+
+  async function loadCoarsePyramidManifest() {
+    if (state.coarsePyramidManifestPromise) return state.coarsePyramidManifestPromise;
+    state.coarsePyramidManifestPromise = (async () => {
+      const manifest = await loadManifest();
+      const file = manifest?.coarse_pyramid_manifest_file;
+      if (!file) return null;
+      const url = await assetRelativeUrl(file);
+      return fetchJson(url, "GridWild coarse pyramid manifest");
+    })();
+    return state.coarsePyramidManifestPromise;
+  }
+
+  async function coarsePyramidTileUrl(tileFile) {
+    return assetRelativeUrl(tileFile);
   }
 
   async function superchunkUrl(superIx, superIy) {
@@ -117,7 +142,10 @@
     getMode,
     getCatalog,
     assetUrl,
+    assetRelativeUrl,
     loadManifest,
+    loadCoarsePyramidManifest,
+    coarsePyramidTileUrl,
     superchunkUrl,
     localCatalog
   };

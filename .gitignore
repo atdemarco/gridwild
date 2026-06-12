@@ -4,3 +4,9 @@
 .env
 node_modules
 node_modules
+
+# Generated Playable Taxonomy artifacts: too large for git; keep local or publish sharded CDN copies.
+assets/playable_taxonomy/generated_playable_taxa.json
+assets/playable_taxonomy/scored_playable_taxa.json
+assets/playable_taxonomy/*.duckdb
+assets/playable_taxonomy/*.parquet

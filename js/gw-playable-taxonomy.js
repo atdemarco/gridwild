@@ -83,6 +83,7 @@
   });
 
   const SCORE_FIELDS = Object.freeze(Object.keys(SCORE_WEIGHTS));
+  const PROFILE_ARTIFACT_URL = "assets/playable_taxonomy/playable_taxon_profiles.json";
 
   const SEED_PROFILES = [
     {
@@ -673,15 +674,113 @@
     return copy;
   }
 
-  const SEEDED_PROFILES = Object.freeze(SEED_PROFILES.map(normalizeProfile));
-
-  const PROFILE_INDEX = new Map();
-  SEEDED_PROFILES.forEach((profile) => {
-    [profile.taxonKey, profile.displayName, ...(profile.aliases || [])].forEach((term) => {
-      const normalized = normalizeSearch(term);
-      if (normalized && !PROFILE_INDEX.has(normalized)) PROFILE_INDEX.set(normalized, profile);
+  function buildProfileIndex(profiles) {
+    const index = new Map();
+    profiles.forEach((profile) => {
+      [profile.taxonKey, profile.displayName, ...(profile.aliases || [])].forEach((term) => {
+        const normalized = normalizeSearch(term);
+        if (normalized && !index.has(normalized)) index.set(normalized, profile);
+      });
     });
-  });
+    return index;
+  }
+
+  const SEEDED_PROFILES = Object.freeze(SEED_PROFILES.map(normalizeProfile));
+  let activeProfiles = SEEDED_PROFILES;
+  let activeProfileIndex = buildProfileIndex(activeProfiles);
+  let activeProfileSource = {
+    source: "seed",
+    url: null,
+    playableTaxonomyVersion: "playable-taxonomy-seed",
+    loadedAt: null
+  };
+  let profileLoadPromise = null;
+
+  function profilePayloadProfiles(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.profiles)) return payload.profiles;
+    return null;
+  }
+
+  function activateProfiles(payload, options = {}) {
+    const profiles = profilePayloadProfiles(payload);
+    if (!profiles) {
+      throw new Error("Playable taxonomy artifact must be an array or contain profiles[].");
+    }
+
+    const normalized = Object.freeze(profiles.map(normalizeProfile));
+    const errors = validateSeedProfiles(normalized);
+    if (errors.length) {
+      throw new Error(`Playable taxonomy artifact is invalid: ${errors.slice(0, 5).join("; ")}`);
+    }
+
+    activeProfiles = normalized;
+    activeProfileIndex = buildProfileIndex(activeProfiles);
+    activeProfileSource = {
+      source: options.source || payload.source || "artifact",
+      url: options.url || null,
+      playableTaxonomyVersion:
+        options.playableTaxonomyVersion ||
+        payload.playable_taxonomy_version ||
+        payload.playableTaxonomyVersion ||
+        "playable-taxonomy-artifact",
+      loadedAt: new Date().toISOString()
+    };
+
+    return getProfiles();
+  }
+
+  function restoreSeedProfiles() {
+    activeProfiles = SEEDED_PROFILES;
+    activeProfileIndex = buildProfileIndex(activeProfiles);
+    activeProfileSource = {
+      source: "seed",
+      url: null,
+      playableTaxonomyVersion: "playable-taxonomy-seed",
+      loadedAt: null
+    };
+    profileLoadPromise = null;
+    return getProfiles();
+  }
+
+  async function loadProfiles(options = {}) {
+    if (Array.isArray(options.profiles)) {
+      return activateProfiles(
+        {
+          profiles: options.profiles,
+          playable_taxonomy_version: options.playableTaxonomyVersion
+        },
+        { source: options.source || "provided" }
+      );
+    }
+
+    const force = options.force === true;
+    const url = options.url || PROFILE_ARTIFACT_URL;
+    if (!force && activeProfileSource.source === "artifact") return getProfiles();
+    if (!force && profileLoadPromise) return profileLoadPromise;
+    if (typeof root.fetch !== "function") return getProfiles();
+
+    profileLoadPromise = root
+      .fetch(url, { headers: { accept: "application/json" } })
+      .then((resp) => {
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return resp.json();
+      })
+      .then((payload) => activateProfiles(payload, { source: "artifact", url }))
+      .catch((err) => {
+        console.warn("Playable taxonomy artifact unavailable; using seeded profiles.", err);
+        return getProfiles();
+      })
+      .finally(() => {
+        profileLoadPromise = null;
+      });
+
+    return profileLoadPromise;
+  }
+
+  function getProfileSource() {
+    return { ...activeProfileSource };
+  }
 
   function extractLookupTerms(input) {
     if (typeof input === "string") return [input];
@@ -727,7 +826,7 @@
   function getEndpointForTaxonGroup(input) {
     const terms = extractLookupTerms(input);
     for (const term of terms) {
-      const match = PROFILE_INDEX.get(normalizeSearch(term));
+      const match = activeProfileIndex.get(normalizeSearch(term));
       if (match) return match;
     }
     return fallbackFor(input);
@@ -852,7 +951,7 @@
   }
 
   function getProfiles() {
-    return SEEDED_PROFILES.map((profile) => ({
+    return activeProfiles.map((profile) => ({
       ...profile,
       beginnerEndpointAlternatives: profile.beginnerEndpointAlternatives.slice(),
       developerEndpointAlternatives: profile.developerEndpointAlternatives.slice(),
@@ -867,19 +966,25 @@
     endpointModes: ENDPOINT_MODES,
     endpointSources: ENDPOINT_SOURCES,
     scoreWeights: SCORE_WEIGHTS,
-    profiles: SEEDED_PROFILES,
+    profileArtifactUrl: PROFILE_ARTIFACT_URL,
+    get profiles() {
+      return activeProfiles;
+    },
     computeBeginnerPlayabilityScore,
     compareRanks,
     displayRank,
     endpointModeLabel,
     formatEndpointRanks,
     getEndpointForTaxonGroup,
+    getProfileSource,
     getProfiles,
     getQuestLanguageForEndpoint,
     isRankAtLeastAsSpecific,
     isRankBroaderThan,
     isValidRank,
+    loadProfiles,
     normalizeSearch,
+    restoreSeedProfiles,
     validateSeedProfiles,
     validateTaxonEndpointProfile
   };

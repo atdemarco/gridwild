@@ -7,6 +7,10 @@ This workflow publishes generated GridWild biodiversity assets:
 - Supabase Postgres holds build and superchunk metadata for lookup.
 - The `service_role` key is used only from local scripts or CI, never browser code.
 
+Before expanding this pipeline for Gold Lake, precomputed coarse heat, hosted OSM,
+or playable taxonomy pruning, keep the published artifacts aligned with the
+[GridWild Data Product Contract](grid-data-product-contract.md).
+
 ## 1. Create the Blob Storage Bucket
 
 ### Cloudflare R2
@@ -86,14 +90,15 @@ From PowerShell:
 ```powershell
 $env:SUPABASE_URL="https://YOUR_PROJECT_ID.supabase.co"
 $env:SUPABASE_SERVICE_ROLE_KEY="YOUR_SERVICE_ROLE_KEY"
-$env:GRIDWILD_ASSET_DIR="C:\Users\ad1470\Documents\GRIDWILD_ASSETS"
+$env:GRIDWILD_ASSET_DIR="C:\Users\ad1470\Desktop\gridwild\world\gold\dc_va_served_v001"
 $env:GRIDWILD_STORAGE_BACKEND="r2"
 $env:GRIDWILD_R2_BUCKET="gridwild-assets"
 $env:GRIDWILD_ASSET_PUBLIC_BASE="https://assets.gridwild.com"
 $env:CLOUDFLARE_ACCOUNT_ID="YOUR_CLOUDFLARE_ACCOUNT_ID"
 $env:R2_ACCESS_KEY_ID="YOUR_R2_ACCESS_KEY_ID"
 $env:R2_SECRET_ACCESS_KEY="YOUR_R2_SECRET_ACCESS_KEY"
-npm.cmd run publish:grid-assets
+npm.cmd run publish:grid-assets -- --dry-run
+npm.cmd run publish:grid-assets -- --no-promote
 ```
 
 From Git Bash:
@@ -101,20 +106,35 @@ From Git Bash:
 ```bash
 SUPABASE_URL="https://YOUR_PROJECT_ID.supabase.co" \
 SUPABASE_SERVICE_ROLE_KEY="YOUR_SERVICE_ROLE_KEY" \
-GRIDWILD_ASSET_DIR="/c/Users/ad1470/Documents/GRIDWILD_ASSETS" \
+GRIDWILD_ASSET_DIR="/c/Users/ad1470/Desktop/gridwild/world/gold/dc_va_served_v001" \
 GRIDWILD_STORAGE_BACKEND="r2" \
 GRIDWILD_R2_BUCKET="gridwild-assets" \
 GRIDWILD_ASSET_PUBLIC_BASE="https://assets.gridwild.com" \
 CLOUDFLARE_ACCOUNT_ID="YOUR_CLOUDFLARE_ACCOUNT_ID" \
 R2_ACCESS_KEY_ID="YOUR_R2_ACCESS_KEY_ID" \
 R2_SECRET_ACCESS_KEY="YOUR_R2_SECRET_ACCESS_KEY" \
-npm run publish:grid-assets
+npm run publish:grid-assets -- --dry-run
+npm run publish:grid-assets -- --no-promote
 ```
 
 Or, if `.env` is populated:
 
 ```bash
-npm run publish:grid-assets
+npm run publish:grid-assets -- --dry-run
+npm run publish:grid-assets -- --no-promote
+```
+
+`--dry-run` validates every required local file without uploading or writing to
+Supabase. Use it before a large upload.
+
+`--no-promote` uploads blobs and upserts Supabase metadata, but leaves
+`gw_asset_builds.is_current` unchanged. This creates a staged build you can
+inspect before the live game starts using it.
+
+After staged verification, promote the same build intentionally:
+
+```powershell
+npm.cmd run publish:grid-assets -- --promote-only
 ```
 
 The script uploads files under a build-specific prefix:
@@ -124,8 +144,35 @@ builds/<manifest.build_id>/manifest.json
 builds/<manifest.build_id>/dc_heat.csv
 builds/<manifest.build_id>/observer_dictionary.json
 builds/<manifest.build_id>/squares_genus_summary.json
+builds/<manifest.build_id>/policy_rollup_summary.csv
+builds/<manifest.build_id>/served_taxonomy_policy.csv
+builds/<manifest.build_id>/validation_report.json
 builds/<manifest.build_id>/square_genera_superchunks/super_123_456.json
+builds/<manifest.build_id>/coarse_pyramid/manifest.json
+builds/<manifest.build_id>/coarse_pyramid/summary.csv
+builds/<manifest.build_id>/coarse_pyramid/bin_8/tile_123_456.json
 ```
+
+If `manifest.pmtiles_file` points to an existing local `.pmtiles` file, the
+publisher also uploads it. If the PMTiles file is still missing, the upload
+continues and leaves the JSON/CSV served build staged or published.
+
+If `manifest.coarse_pyramid_manifest_file` points to a generated coarse pyramid
+manifest, the publisher validates and uploads every tile listed in that manifest.
+Build or rebuild the pyramid before publishing when the served Gold manifest has
+changed:
+
+```powershell
+$buildId = "gridwild_gold_dc_va_served_v001_coarse_v001_$(Get-Date -Format yyyyMMdd_HHmmss)"
+npm.cmd run build:coarse-pyramid -- --build-id $buildId
+npm.cmd run publish:grid-assets -- --dry-run
+npm.cmd run publish:grid-assets -- --no-promote
+npm.cmd run publish:grid-assets -- --promote-only
+```
+
+Use a new build ID when adding or rebuilding coarse pyramid files. R2/CDN object
+paths are immutable-cache under `builds/<build_id>/`, so changing the published
+manifest under an existing build ID can leave browsers with stale metadata.
 
 The script is safe to rerun for the same build. It overwrites Storage/R2 objects and upserts Postgres rows.
 
@@ -155,7 +202,8 @@ You should see:
 
 - One row in `gw_asset_builds` for the published build.
 - One row in `gw_superchunks` per manifest superchunk.
-- Exactly one current build with `is_current = true`.
+- For a staged upload, the new build has `is_current = false`.
+- After promotion, exactly one current build has `is_current = true`.
 - Files in R2 or Storage under `gridwild-assets/builds/<build_id>/`.
 - Public CDN URLs under `https://assets.gridwild.com/builds/<build_id>/` when using R2.
 

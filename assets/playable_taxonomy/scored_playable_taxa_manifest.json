@@ -1,0 +1,277 @@
+{
+  "schema_version": "gridwild-scored-playable-taxa-manifest-v1",
+  "playable_taxa_score_version": "playable-taxa-score-v001",
+  "playable_taxa_version": "playable-taxa-gbif-v001",
+  "playable_taxonomy_version": "playable-taxonomy-gbif-v001",
+  "generated_at": "2026-06-11T15:41:12Z",
+  "source": "taxon-level-playability-heuristic",
+  "scoring_model": {
+    "name": "taxon_level_playability_heuristic_v001",
+    "score_weights": {
+      "identifiability": 0.3,
+      "observability": 0.2,
+      "localDataSupport": 0.2,
+      "validationReliability": 0.15,
+      "distinctiveness": 0.15
+    },
+    "evidence_scale": "local",
+    "recent_since_year": 2016,
+    "lat_lon_bin_degrees": 0.02,
+    "storage_action_thresholds": {
+      "min_keep_score": 70,
+      "min_developer_score": 58,
+      "min_collapse_score": 38,
+      "min_occurrences": 3
+    },
+    "notes": [
+      "Scores lower taxa with the same five conceptual components as curated playable groups.",
+      "Per-taxon heuristics combine profile priors, common-name signal, rank fit, species-mode policy, sibling crowding, and occurrence evidence.",
+      "GBIF backbone supplies taxonomy; occurrence evidence supplies local/commonness support.",
+      "iNaturalist-specific human identifiability signals are intentionally left for cached future enrichment."
+    ]
+  },
+  "inputs": {
+    "catalog": "generated_playable_taxa.json",
+    "profiles": "playable_taxon_profiles.json",
+    "occurrence": {
+      "kind": "parquet_directory",
+      "label": "C:\\Users\\ad1470\\Desktop\\gridwild\\world\\parquet\\occurrence_silver_v001"
+    }
+  },
+  "files": {
+    "catalog": "scored_playable_taxa.json"
+  },
+  "summary": {
+    "taxon_count": 123215,
+    "with_occurrence_evidence": 52220,
+    "with_common_name": 25576,
+    "occurrence_count": 114541840,
+    "keep_count": 8212,
+    "collapse_count": 7406,
+    "developer_only_count": 29698,
+    "drop_count": 77899,
+    "score_count": 123215,
+    "mean_individual_playability_score": 45.88,
+    "evidence_scale": "local",
+    "recent_since_year": 2016,
+    "global_limit_applied": false,
+    "profile_stats": [
+      {
+        "playableGroupKey": "beetles",
+        "playableGroupName": "Beetles",
+        "taxonCount": 341,
+        "keepCount": 0,
+        "collapseCount": 46,
+        "developerOnlyCount": 104,
+        "dropCount": 191,
+        "occurrenceCount": 1871022,
+        "scoredTaxonCount": 341,
+        "meanIndividualPlayabilityScore": 38.34
+      },
+      {
+        "playableGroupKey": "birds",
+        "playableGroupName": "Birds / Aves",
+        "taxonCount": 14641,
+        "keepCount": 6211,
+        "collapseCount": 0,
+        "developerOnlyCount": 221,
+        "dropCount": 8209,
+        "occurrenceCount": 9160886,
+        "scoredTaxonCount": 14641,
+        "meanIndividualPlayabilityScore": 61.58
+      },
+      {
+        "playableGroupKey": "butterflies",
+        "playableGroupName": "Butterflies",
+        "taxonCount": 18347,
+        "keepCount": 0,
+        "collapseCount": 1748,
+        "developerOnlyCount": 6002,
+        "dropCount": 10597,
+        "occurrenceCount": 6691543,
+        "scoredTaxonCount": 18347,
+        "meanIndividualPlayabilityScore": 45.17
+      },
+      {
+        "playableGroupKey": "ferns",
+        "playableGroupName": "Ferns",
+        "taxonCount": 19067,
+        "keepCount": 157,
+        "collapseCount": 2182,
+        "developerOnlyCount": 6426,
+        "dropCount": 10302,
+        "occurrenceCount": 26512801,
+        "scoredTaxonCount": 19067,
+        "meanIndividualPlayabilityScore": 43.75
+      },
+      {
+        "playableGroupKey": "flies",
+        "playableGroupName": "Flies / Diptera",
+        "taxonCount": 296,
+        "keepCount": 0,
+        "collapseCount": 45,
+        "developerOnlyCount": 75,
+        "dropCount": 176,
+        "occurrenceCount": 794335,
+        "scoredTaxonCount": 296,
+        "meanIndividualPlayabilityScore": 36.05
+      },
+      {
+        "playableGroupKey": "fungi",
+        "playableGroupName": "Fungi",
+        "taxonCount": 2358,
+        "keepCount": 0,
+        "collapseCount": 188,
+        "developerOnlyCount": 285,
+        "dropCount": 1885,
+        "occurrenceCount": 1697240,
+        "scoredTaxonCount": 2358,
+        "meanIndividualPlayabilityScore": 26.6
+      },
+      {
+        "playableGroupKey": "grasses-sedges-rushes",
+        "playableGroupName": "Grasses, sedges, and rushes",
+        "taxonCount": 3,
+        "keepCount": 0,
+        "collapseCount": 0,
+        "developerOnlyCount": 3,
+        "dropCount": 0,
+        "occurrenceCount": 1035400,
+        "scoredTaxonCount": 3,
+        "meanIndividualPlayabilityScore": 74.3
+      },
+      {
+        "playableGroupKey": "hymenoptera",
+        "playableGroupName": "Bees, wasps, and ants / Hymenoptera",
+        "taxonCount": 243,
+        "keepCount": 0,
+        "collapseCount": 19,
+        "developerOnlyCount": 60,
+        "dropCount": 164,
+        "occurrenceCount": 1662482,
+        "scoredTaxonCount": 243,
+        "meanIndividualPlayabilityScore": 34.11
+      },
+      {
+        "playableGroupKey": "lichens",
+        "playableGroupName": "Lichens",
+        "taxonCount": 2358,
+        "keepCount": 0,
+        "collapseCount": 248,
+        "developerOnlyCount": 165,
+        "dropCount": 1945,
+        "occurrenceCount": 1697240,
+        "scoredTaxonCount": 2358,
+        "meanIndividualPlayabilityScore": 17.01
+      },
+      {
+        "playableGroupKey": "mammals",
+        "playableGroupName": "Mammals",
+        "taxonCount": 21100,
+        "keepCount": 1249,
+        "collapseCount": 0,
+        "developerOnlyCount": 222,
+        "dropCount": 19629,
+        "occurrenceCount": 1188842,
+        "scoredTaxonCount": 21100,
+        "meanIndividualPlayabilityScore": 40.2
+      },
+      {
+        "playableGroupKey": "mosses-liverworts",
+        "playableGroupName": "Mosses and liverworts",
+        "taxonCount": 249,
+        "keepCount": 0,
+        "collapseCount": 81,
+        "developerOnlyCount": 74,
+        "dropCount": 94,
+        "occurrenceCount": 295782,
+        "scoredTaxonCount": 249,
+        "meanIndividualPlayabilityScore": 40.47
+      },
+      {
+        "playableGroupKey": "moths",
+        "playableGroupName": "Moths",
+        "taxonCount": 167,
+        "keepCount": 0,
+        "collapseCount": 15,
+        "developerOnlyCount": 105,
+        "dropCount": 47,
+        "occurrenceCount": 6539878,
+        "scoredTaxonCount": 167,
+        "meanIndividualPlayabilityScore": 57.48
+      },
+      {
+        "playableGroupKey": "odonata",
+        "playableGroupName": "Dragonflies and damselflies / Odonata",
+        "taxonCount": 1251,
+        "keepCount": 226,
+        "collapseCount": 80,
+        "developerOnlyCount": 147,
+        "dropCount": 798,
+        "occurrenceCount": 1008172,
+        "scoredTaxonCount": 1251,
+        "meanIndividualPlayabilityScore": 43.78
+      },
+      {
+        "playableGroupKey": "reptiles-amphibians",
+        "playableGroupName": "Reptiles and amphibians",
+        "taxonCount": 1246,
+        "keepCount": 199,
+        "collapseCount": 21,
+        "developerOnlyCount": 115,
+        "dropCount": 911,
+        "occurrenceCount": 868694,
+        "scoredTaxonCount": 1246,
+        "meanIndividualPlayabilityScore": 42.29
+      },
+      {
+        "playableGroupKey": "snails-slugs",
+        "playableGroupName": "Snails and slugs",
+        "taxonCount": 906,
+        "keepCount": 170,
+        "collapseCount": 93,
+        "developerOnlyCount": 108,
+        "dropCount": 535,
+        "occurrenceCount": 712293,
+        "scoredTaxonCount": 906,
+        "meanIndividualPlayabilityScore": 41.53
+      },
+      {
+        "playableGroupKey": "spiders",
+        "playableGroupName": "Spiders",
+        "taxonCount": 205,
+        "keepCount": 0,
+        "collapseCount": 36,
+        "developerOnlyCount": 71,
+        "dropCount": 98,
+        "occurrenceCount": 904388,
+        "scoredTaxonCount": 205,
+        "meanIndividualPlayabilityScore": 42.78
+      },
+      {
+        "playableGroupKey": "trees",
+        "playableGroupName": "Trees",
+        "taxonCount": 23943,
+        "keepCount": 0,
+        "collapseCount": 1204,
+        "developerOnlyCount": 8510,
+        "dropCount": 14229,
+        "occurrenceCount": 26960042,
+        "scoredTaxonCount": 23943,
+        "meanIndividualPlayabilityScore": 46.61
+      },
+      {
+        "playableGroupKey": "wildflowers",
+        "playableGroupName": "Wildflowers / herbaceous flowering plants",
+        "taxonCount": 16494,
+        "keepCount": 0,
+        "collapseCount": 1400,
+        "developerOnlyCount": 7005,
+        "dropCount": 8089,
+        "occurrenceCount": 24940800,
+        "scoredTaxonCount": 16494,
+        "meanIndividualPlayabilityScore": 49.42
+      }
+    ]
+  }
+}

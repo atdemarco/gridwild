@@ -70,6 +70,7 @@
   const QUERY_PROFILE_LEAN = "lean";
   const QUERY_PROFILE_DETAIL = "detail";
   const QUERY_PROFILE_PARKS = "parks";
+  const QUERY_PROFILE_PATCH_VIEW = "patch-view";
 
   let listenersBound = false;
   let cachedFeatureProfile = null;
@@ -171,7 +172,13 @@
 
   function normalizeQueryProfile(profile) {
     if (profile === QUERY_PROFILE_PARKS) return QUERY_PROFILE_PARKS;
+    if (profile === QUERY_PROFILE_PATCH_VIEW) return QUERY_PROFILE_PATCH_VIEW;
     return profile === QUERY_PROFILE_LEAN ? QUERY_PROFILE_LEAN : QUERY_PROFILE_DETAIL;
+  }
+
+  function isParksOnlyQueryProfile(profile) {
+    const queryProfile = normalizeQueryProfile(profile);
+    return queryProfile === QUERY_PROFILE_PARKS || queryProfile === QUERY_PROFILE_PATCH_VIEW;
   }
 
   function boundsToFetchKey(b, profile = currentQueryProfile()) {
@@ -573,8 +580,9 @@
     return true;
   }
 
-  function loadLocalParksCoverageForCurrentView() {
-    const currentBounds = map.getBounds();
+  function loadLocalParksCoverageForBounds(currentBounds = map.getBounds(), options = {}) {
+    if (!currentBounds?.isValid?.()) return false;
+    const requestedProfile = options.profile ? normalizeQueryProfile(options.profile) : null;
     const entries = readLocalCacheEntries();
     const match = entries
       .map((entry, index) => ({
@@ -583,10 +591,14 @@
         bounds: deserializeBounds(entry.bounds),
         queryProfile: normalizeQueryProfile(entry.queryProfile)
       }))
-      .filter((candidate) => boundsContain(candidate.bounds, currentBounds))
+      .filter((candidate) => {
+        if (!boundsContain(candidate.bounds, currentBounds)) return false;
+        if (!requestedProfile) return true;
+        return candidate.queryProfile === requestedProfile;
+      })
       .sort((a, b) => {
-        const aFullFeatureCache = a.queryProfile === QUERY_PROFILE_PARKS ? 0 : 1;
-        const bFullFeatureCache = b.queryProfile === QUERY_PROFILE_PARKS ? 0 : 1;
+        const aFullFeatureCache = isParksOnlyQueryProfile(a.queryProfile) ? 0 : 1;
+        const bFullFeatureCache = isParksOnlyQueryProfile(b.queryProfile) ? 0 : 1;
         if (aFullFeatureCache !== bFullFeatureCache) {
           return bFullFeatureCache - aFullFeatureCache;
         }
@@ -596,7 +608,7 @@
     if (!match) return false;
 
     const hydrated = hydrateFeatureSet(match.entry.features);
-    if (match.queryProfile === QUERY_PROFILE_PARKS) {
+    if (isParksOnlyQueryProfile(match.queryProfile)) {
       mergeParksIntoActiveFeatures(hydrated);
       cachedParksBounds = match.bounds;
     } else {
@@ -619,6 +631,10 @@
     publishFeaturesUpdated();
     scheduleRender();
     return true;
+  }
+
+  function loadLocalParksCoverageForCurrentView() {
+    return loadLocalParksCoverageForBounds(map.getBounds());
   }
 
   function logParksQueryIssued() {
@@ -669,7 +685,26 @@
     `;
   }
 
-  function buildParksOverpassClauses(bbox) {
+  function buildParksOverpassClauses(bbox, options = {}) {
+    const broadPatchViewClauses = options.broad
+      ? `
+        way["leisure"~"common|dog_park|playground|pitch|golf_course"](${bbox});
+        node["leisure"~"common|dog_park|playground|pitch|golf_course"]["name"](${bbox});
+
+        way["landuse"~"village_green|greenfield|brownfield|farmland|farmyard|plant_nursery|greenhouse_horticulture|vineyard"](${bbox});
+        node["landuse"~"village_green|greenfield|brownfield|farmland|farmyard|plant_nursery|greenhouse_horticulture|vineyard"]["name"](${bbox});
+
+        way["landcover"~"grass|trees|meadow|flowerbed|greenery"](${bbox});
+        node["landcover"~"grass|trees|meadow|flowerbed|greenery"]["name"](${bbox});
+
+        way["natural"~"shrubbery|tree_row"](${bbox});
+        node["natural"~"shrubbery|tree_row"]["name"](${bbox});
+
+        way["tourism"~"picnic_site|camp_site"](${bbox});
+        node["tourism"~"picnic_site|camp_site"]["name"](${bbox});
+      `
+      : "";
+
     return `
         way["leisure"~"park|garden|nature_reserve"](${bbox});
         node["leisure"~"park|garden|nature_reserve"]["name"](${bbox});
@@ -688,16 +723,18 @@
 
         way["historic"="cemetery"](${bbox});
         node["historic"="cemetery"]["name"](${bbox});
+
+        ${broadPatchViewClauses}
     `;
   }
 
-  function buildParksOverpassQuery(queryBounds = map.getBounds()) {
+  function buildParksOverpassQuery(queryBounds = map.getBounds(), options = {}) {
     const bbox = boundsToBboxString(queryBounds);
 
     return `
       [out:json][timeout:25];
       (
-        ${buildParksOverpassClauses(bbox)}
+        ${buildParksOverpassClauses(bbox, options)}
       );
       out geom;
     `;
@@ -751,35 +788,57 @@
     return Math.abs(a.lat - b.lat) < 1e-7 && Math.abs(a.lng - b.lng) < 1e-7;
   }
 
+  function hasParkLikeTags(tags = {}) {
+    return (
+      tags.leisure === "park" ||
+      tags.leisure === "garden" ||
+      tags.leisure === "nature_reserve" ||
+      tags.leisure === "common" ||
+      tags.leisure === "dog_park" ||
+      tags.leisure === "playground" ||
+      tags.leisure === "pitch" ||
+      tags.leisure === "golf_course" ||
+      tags.boundary === "protected_area" ||
+      tags.boundary === "national_park" ||
+      tags.natural === "wood" ||
+      tags.natural === "wetland" ||
+      tags.natural === "scrub" ||
+      tags.natural === "heath" ||
+      tags.natural === "grassland" ||
+      tags.natural === "shrubbery" ||
+      tags.natural === "tree_row" ||
+      tags.landuse === "forest" ||
+      tags.landuse === "grass" ||
+      tags.landuse === "meadow" ||
+      tags.landuse === "recreation_ground" ||
+      tags.landuse === "allotments" ||
+      tags.landuse === "orchard" ||
+      tags.landuse === "cemetery" ||
+      tags.landuse === "village_green" ||
+      tags.landuse === "greenfield" ||
+      tags.landuse === "brownfield" ||
+      tags.landuse === "farmland" ||
+      tags.landuse === "farmyard" ||
+      tags.landuse === "plant_nursery" ||
+      tags.landuse === "greenhouse_horticulture" ||
+      tags.landuse === "vineyard" ||
+      tags.landcover === "grass" ||
+      tags.landcover === "trees" ||
+      tags.landcover === "meadow" ||
+      tags.landcover === "flowerbed" ||
+      tags.landcover === "greenery" ||
+      tags.amenity === "grave_yard" ||
+      tags.historic === "cemetery" ||
+      tags.tourism === "picnic_site" ||
+      tags.tourism === "camp_site"
+    );
+  }
+
   function classifyFeature(el) {
     const tags = el.tags || {};
 
     if (tags.place && tags.name) return "places";
-    if (
-      el.type === "node" &&
-      tags.name &&
-      (tags.leisure === "park" ||
-        tags.leisure === "garden" ||
-        tags.leisure === "nature_reserve" ||
-        tags.boundary === "protected_area" ||
-        tags.boundary === "national_park" ||
-        tags.natural === "wood" ||
-        tags.natural === "wetland" ||
-        tags.natural === "scrub" ||
-        tags.natural === "heath" ||
-        tags.natural === "grassland" ||
-        tags.landuse === "forest" ||
-        tags.landuse === "grass" ||
-        tags.landuse === "meadow" ||
-        tags.landuse === "recreation_ground" ||
-        tags.landuse === "allotments" ||
-        tags.landuse === "orchard" ||
-        tags.landuse === "cemetery" ||
-        tags.amenity === "grave_yard" ||
-        tags.historic === "cemetery")
-    ) {
-      return "places";
-    }
+    if (el.type === "node" && tags.name && hasParkLikeTags(tags)) return "places";
 
     if (tags.building) return "buildings";
 
@@ -795,29 +854,7 @@
       return "water";
     }
 
-    if (
-      tags.leisure === "park" ||
-      tags.leisure === "garden" ||
-      tags.leisure === "nature_reserve" ||
-      tags.boundary === "protected_area" ||
-      tags.boundary === "national_park" ||
-      tags.natural === "wood" ||
-      tags.natural === "wetland" ||
-      tags.natural === "scrub" ||
-      tags.natural === "heath" ||
-      tags.natural === "grassland" ||
-      tags.landuse === "forest" ||
-      tags.landuse === "grass" ||
-      tags.landuse === "meadow" ||
-      tags.landuse === "recreation_ground" ||
-      tags.landuse === "allotments" ||
-      tags.landuse === "orchard" ||
-      tags.landuse === "cemetery" ||
-      tags.amenity === "grave_yard" ||
-      tags.historic === "cemetery"
-    ) {
-      return "parks";
-    }
+    if (hasParkLikeTags(tags)) return "parks";
 
     if (
       tags.highway === "path" ||
@@ -918,13 +955,28 @@
     }
   }
 
-  async function fetchParksForCurrentView() {
-    if (hasParksCoverageForCurrentView()) {
+  async function fetchParksForBounds(queryBounds = map.getBounds(), options = {}) {
+    if (!queryBounds?.isValid?.()) return false;
+
+    const queryProfile = normalizeQueryProfile(
+      options.profile || (options.broad ? QUERY_PROFILE_PATCH_VIEW : QUERY_PROFILE_PARKS)
+    );
+
+    if (
+      queryProfile !== QUERY_PROFILE_PATCH_VIEW &&
+      (boundsContain(cachedFeatureBounds, queryBounds) ||
+        boundsContain(cachedParksBounds, queryBounds))
+    ) {
       scheduleRender();
       return false;
     }
 
-    if (loadLocalParksCoverageForCurrentView()) {
+    if (
+      options.useCache !== false &&
+      loadLocalParksCoverageForBounds(queryBounds, {
+        profile: queryProfile === QUERY_PROFILE_PATCH_VIEW ? queryProfile : null
+      })
+    ) {
       return false;
     }
 
@@ -935,13 +987,11 @@
 
     const now = Date.now();
     if (now < overpassDisabledUntil) return false;
-    if (map.getZoom() < MIN_ZOOM) {
+    if (options.ignoreMinZoom !== true && map.getZoom() < MIN_ZOOM) {
       scheduleRender();
       return false;
     }
 
-    const queryProfile = QUERY_PROFILE_PARKS;
-    const queryBounds = map.getBounds();
     const key = boundsToFetchKey(queryBounds, queryProfile);
     if (key === lastFetchKey) return false;
 
@@ -957,7 +1007,9 @@
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
         },
         body: new URLSearchParams({
-          data: buildParksOverpassQuery(queryBounds)
+          data: buildParksOverpassQuery(queryBounds, {
+            broad: queryProfile === QUERY_PROFILE_PATCH_VIEW || options.broad === true
+          })
         })
       });
 
@@ -997,6 +1049,17 @@
         scheduleFetch(fetchDelayForCurrentMotionState());
       }
     }
+  }
+
+  async function fetchParksForCurrentView() {
+    if (hasParksCoverageForCurrentView()) {
+      scheduleRender();
+      return false;
+    }
+
+    return await fetchParksForBounds(map.getBounds(), {
+      profile: QUERY_PROFILE_PARKS
+    });
   }
 
   async function fetchFeatures() {
@@ -1348,6 +1411,7 @@
     render,
     scheduleRender,
     fetchFeatures,
+    fetchParksForBounds,
     fetchParksForCurrentView,
     scheduleFetch,
 

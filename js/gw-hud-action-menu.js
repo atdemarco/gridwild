@@ -248,6 +248,12 @@
   function menuItems(context) {
     const items = [
       {
+        id: "view-patch",
+        icon: "V",
+        label: "View Patch",
+        sub: "Reveal patch geometry at this point"
+      },
+      {
         id: "patches",
         icon: "P",
         label: "Show Local Patches",
@@ -691,6 +697,19 @@
   }
 
   async function handleAction(action, context) {
+    if (action === "view-patch") {
+      const rows =
+        (await window.GridWildPatches?.showPatchViewAtLatLng?.(context?.latlng, {
+          includeINatProjects: true
+        })) || [];
+      toast(
+        rows.length
+          ? `Showing ${rows.length} patch${rows.length === 1 ? "" : "es"} at this point.`
+          : "No patch geometry found at this point."
+      );
+      return;
+    }
+
     if (action === "patches") {
       const rows =
         (await window.GridWildPatches?.showLocalPatchHighlights?.({

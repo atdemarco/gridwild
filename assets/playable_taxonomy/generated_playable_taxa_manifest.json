@@ -1,0 +1,298 @@
+{
+  "schema_version": "gridwild-generated-playable-taxa-manifest-v1",
+  "playable_taxa_version": "playable-taxa-gbif-v001",
+  "playable_taxonomy_version": "playable-taxonomy-gbif-v001",
+  "generated_at": "2026-06-11T02:25:14Z",
+  "source": "gbif-backbone-descendant-expansion",
+  "rank_mode": "beginner",
+  "scoring_model": {
+    "individual_taxon_scores": false,
+    "inherited_group_score_field": "beginnerPlayabilityScore",
+    "future_inputs": [
+      "local observation count",
+      "occupied square count",
+      "observer count",
+      "seasonality",
+      "validation reliability",
+      "manual identifiability overrides"
+    ]
+  },
+  "canonical_backbone": {
+    "source": "GBIF Backbone",
+    "taxon_file": "Taxon.tsv",
+    "vernacular_file": "VernacularName.tsv"
+  },
+  "profile_source": {
+    "file": "playable_taxon_profiles.json",
+    "source": "gbif-backbone-hydrated"
+  },
+  "files": {
+    "catalog": "generated_playable_taxa.json"
+  },
+  "summary": {
+    "profile_count": 18,
+    "expanded_profile_count": 18,
+    "anchor_count": 24,
+    "taxon_count": 123215,
+    "ready_taxon_count": 43762,
+    "needs_filter_taxon_count": 79453,
+    "common_name_count": 25576,
+    "common_names_enabled": true,
+    "global_limit_applied": false
+  },
+  "profile_stats": [
+    {
+      "playableGroupKey": "birds",
+      "playableGroupName": "Birds / Aves",
+      "endpointRank": "species",
+      "speciesMode": "required",
+      "generatedTaxonCount": 14641,
+      "emittedTaxonCount": 14641,
+      "uniqueAcceptedTaxonCount": 14641,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "canonical_clade"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "mammals",
+      "playableGroupName": "Mammals",
+      "endpointRank": "species",
+      "speciesMode": "required",
+      "generatedTaxonCount": 21100,
+      "emittedTaxonCount": 21100,
+      "uniqueAcceptedTaxonCount": 21100,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "canonical_clade"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "reptiles-amphibians",
+      "playableGroupName": "Reptiles and amphibians",
+      "endpointRank": "genus",
+      "speciesMode": "optional",
+      "generatedTaxonCount": 1246,
+      "emittedTaxonCount": 1246,
+      "uniqueAcceptedTaxonCount": 1246,
+      "anchorCount": 2,
+      "anchorKinds": [
+        "multi_clade"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "odonata",
+      "playableGroupName": "Dragonflies and damselflies / Odonata",
+      "endpointRank": "genus",
+      "speciesMode": "bonus",
+      "generatedTaxonCount": 1251,
+      "emittedTaxonCount": 1251,
+      "uniqueAcceptedTaxonCount": 1251,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "canonical_clade"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "butterflies",
+      "playableGroupName": "Butterflies",
+      "endpointRank": "genus",
+      "speciesMode": "optional",
+      "generatedTaxonCount": 18347,
+      "emittedTaxonCount": 18347,
+      "uniqueAcceptedTaxonCount": 18347,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "broad_clade"
+      ],
+      "needsLocalFilter": true
+    },
+    {
+      "playableGroupKey": "moths",
+      "playableGroupName": "Moths",
+      "endpointRank": "family",
+      "speciesMode": "bonus",
+      "generatedTaxonCount": 167,
+      "emittedTaxonCount": 167,
+      "uniqueAcceptedTaxonCount": 167,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "broad_clade"
+      ],
+      "needsLocalFilter": true
+    },
+    {
+      "playableGroupKey": "beetles",
+      "playableGroupName": "Beetles",
+      "endpointRank": "family",
+      "speciesMode": "discouraged",
+      "generatedTaxonCount": 341,
+      "emittedTaxonCount": 341,
+      "uniqueAcceptedTaxonCount": 341,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "canonical_clade"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "flies",
+      "playableGroupName": "Flies / Diptera",
+      "endpointRank": "family",
+      "speciesMode": "discouraged",
+      "generatedTaxonCount": 296,
+      "emittedTaxonCount": 296,
+      "uniqueAcceptedTaxonCount": 296,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "canonical_clade"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "hymenoptera",
+      "playableGroupName": "Bees, wasps, and ants / Hymenoptera",
+      "endpointRank": "family",
+      "speciesMode": "discouraged",
+      "generatedTaxonCount": 243,
+      "emittedTaxonCount": 243,
+      "uniqueAcceptedTaxonCount": 243,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "canonical_clade"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "spiders",
+      "playableGroupName": "Spiders",
+      "endpointRank": "family",
+      "speciesMode": "discouraged",
+      "generatedTaxonCount": 205,
+      "emittedTaxonCount": 205,
+      "uniqueAcceptedTaxonCount": 205,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "canonical_clade"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "trees",
+      "playableGroupName": "Trees",
+      "endpointRank": "genus",
+      "speciesMode": "optional",
+      "generatedTaxonCount": 23943,
+      "emittedTaxonCount": 23943,
+      "uniqueAcceptedTaxonCount": 23943,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "ecological_group"
+      ],
+      "needsLocalFilter": true
+    },
+    {
+      "playableGroupKey": "wildflowers",
+      "playableGroupName": "Wildflowers / herbaceous flowering plants",
+      "endpointRank": "genus",
+      "speciesMode": "optional",
+      "generatedTaxonCount": 16494,
+      "emittedTaxonCount": 16494,
+      "uniqueAcceptedTaxonCount": 16494,
+      "anchorCount": 2,
+      "anchorKinds": [
+        "ecological_group"
+      ],
+      "needsLocalFilter": true
+    },
+    {
+      "playableGroupKey": "grasses-sedges-rushes",
+      "playableGroupName": "Grasses, sedges, and rushes",
+      "endpointRank": "family",
+      "speciesMode": "discouraged",
+      "generatedTaxonCount": 3,
+      "emittedTaxonCount": 3,
+      "uniqueAcceptedTaxonCount": 3,
+      "anchorCount": 3,
+      "anchorKinds": [
+        "multi_family"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "ferns",
+      "playableGroupName": "Ferns",
+      "endpointRank": "genus",
+      "speciesMode": "bonus",
+      "generatedTaxonCount": 19067,
+      "emittedTaxonCount": 19067,
+      "uniqueAcceptedTaxonCount": 19067,
+      "anchorCount": 2,
+      "anchorKinds": [
+        "canonical_clade",
+        "fallback_clade"
+      ],
+      "needsLocalFilter": true
+    },
+    {
+      "playableGroupKey": "fungi",
+      "playableGroupName": "Fungi",
+      "endpointRank": "family",
+      "speciesMode": "discouraged",
+      "generatedTaxonCount": 2358,
+      "emittedTaxonCount": 2358,
+      "uniqueAcceptedTaxonCount": 2358,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "canonical_clade"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "lichens",
+      "playableGroupName": "Lichens",
+      "endpointRank": "family",
+      "speciesMode": "hidden",
+      "generatedTaxonCount": 2358,
+      "emittedTaxonCount": 2358,
+      "uniqueAcceptedTaxonCount": 2358,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "functional_group"
+      ],
+      "needsLocalFilter": true
+    },
+    {
+      "playableGroupKey": "mosses-liverworts",
+      "playableGroupName": "Mosses and liverworts",
+      "endpointRank": "family",
+      "speciesMode": "hidden",
+      "generatedTaxonCount": 249,
+      "emittedTaxonCount": 249,
+      "uniqueAcceptedTaxonCount": 249,
+      "anchorCount": 2,
+      "anchorKinds": [
+        "multi_clade"
+      ],
+      "needsLocalFilter": false
+    },
+    {
+      "playableGroupKey": "snails-slugs",
+      "playableGroupName": "Snails and slugs",
+      "endpointRank": "family",
+      "speciesMode": "bonus",
+      "generatedTaxonCount": 906,
+      "emittedTaxonCount": 906,
+      "uniqueAcceptedTaxonCount": 906,
+      "anchorCount": 1,
+      "anchorKinds": [
+        "canonical_clade"
+      ],
+      "needsLocalFilter": false
+    }
+  ]
+}

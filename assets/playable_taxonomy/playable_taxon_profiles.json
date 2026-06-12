@@ -1,0 +1,2107 @@
+{
+  "schema_version": "gridwild-playable-taxonomy-profiles-v1",
+  "playable_taxonomy_version": "playable-taxonomy-gbif-v001",
+  "generated_at": "2026-06-11T01:32:35Z",
+  "source": "gbif-backbone-hydrated",
+  "canonical_backbone": {
+    "source": "GBIF Backbone",
+    "taxon_file": "Taxon.tsv",
+    "vernacular_file": "VernacularName.tsv"
+  },
+  "curated_profile_source": {
+    "type": "browser-seed-module",
+    "file": "js/gw-playable-taxonomy.js",
+    "version": "curated-seed"
+  },
+  "score_weights": {
+    "identifiability": 0.3,
+    "observability": 0.2,
+    "localDataSupport": 0.2,
+    "validationReliability": 0.15,
+    "distinctiveness": 0.15
+  },
+  "profiles": [
+    {
+      "taxonKey": "birds",
+      "displayName": "Birds / Aves",
+      "iNaturalistTaxonId": 3,
+      "broadParentGroup": "Animals",
+      "beginnerEndpointRank": "species",
+      "developerEndpointRank": "species",
+      "expertEndpointRank": "subspecies",
+      "expertEndpointAlternatives": [
+        "species"
+      ],
+      "minimumConfidenceRank": "species",
+      "speciesMode": "required",
+      "rationale": "High observability, field-guide culture, and strong community convergence make many birds beginner-playable at species level.",
+      "beginnerQuestLanguage": "Find a bird and try to resolve it to species.",
+      "metrics": {
+        "observability": 94,
+        "identifiability": 92,
+        "distinctiveness": 86,
+        "localDataSupport": 95,
+        "validationReliability": 92
+      },
+      "notesFlags": [
+        "field-guide-friendly",
+        "species-rich-but-well-supported"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "aves",
+        "bird",
+        "Aves",
+        "Animalia",
+        "Chordata",
+        "Fugle",
+        "Birds",
+        "oiseaux",
+        "eun",
+        "eòin",
+        "isean",
+        "iseanan",
+        "鳥綱",
+        "vogels",
+        "lottit",
+        "fåglar",
+        "Птахи"
+      ],
+      "beginnerEndpointAlternatives": [],
+      "developerEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 92.1,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "212"
+        ],
+        "anchors": [
+          {
+            "queryName": "Aves",
+            "queryRank": "CLASS",
+            "anchorKind": "canonical_clade",
+            "note": "",
+            "matchedTaxonKey": "212",
+            "matchedScientificName": "Aves",
+            "matchedCanonicalName": "Aves",
+            "matchedRank": "class",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "212",
+            "scientificName": "Aves",
+            "canonicalName": "Aves",
+            "rank": "class",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "44",
+            "lineage": [
+              "Animalia",
+              "Chordata",
+              "Aves"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Fugle",
+          "Birds",
+          "bird",
+          "oiseaux",
+          "eun",
+          "eòin",
+          "isean",
+          "iseanan",
+          "鳥綱",
+          "vogels",
+          "lottit",
+          "fåglar",
+          "Птахи"
+        ]
+      }
+    },
+    {
+      "taxonKey": "mammals",
+      "displayName": "Mammals",
+      "iNaturalistTaxonId": 40151,
+      "broadParentGroup": "Animals",
+      "beginnerEndpointRank": "species",
+      "developerEndpointRank": "species",
+      "expertEndpointRank": "subspecies",
+      "expertEndpointAlternatives": [
+        "species"
+      ],
+      "minimumConfidenceRank": "species",
+      "speciesMode": "required",
+      "rationale": "Many local mammal communities have low species richness and many species are visually recognizable from shape, size, tracks, or context.",
+      "beginnerQuestLanguage": "Find a mammal sign or mammal observation and resolve it to species when the evidence supports it.",
+      "metrics": {
+        "observability": 70,
+        "identifiability": 84,
+        "distinctiveness": 78,
+        "localDataSupport": 84,
+        "validationReliability": 82
+      },
+      "notesFlags": [
+        "some-observations-use-signs",
+        "camera-trap-friendly"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "mammalia",
+        "mammal",
+        "Mammalia",
+        "Animalia",
+        "Chordata",
+        "Herbivore",
+        "Mammal",
+        "Mammals",
+        "mammifères",
+        "哺乳綱",
+        "pattedyr",
+        "zoogdieren",
+        "sogdyr",
+        "spendyr",
+        "mamífero",
+        "njiccehasat",
+        "däggdjur",
+        "Ссавці"
+      ],
+      "beginnerEndpointAlternatives": [],
+      "developerEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 80,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "359"
+        ],
+        "anchors": [
+          {
+            "queryName": "Mammalia",
+            "queryRank": "CLASS",
+            "anchorKind": "canonical_clade",
+            "note": "",
+            "matchedTaxonKey": "359",
+            "matchedScientificName": "Mammalia",
+            "matchedCanonicalName": "Mammalia",
+            "matchedRank": "class",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "359",
+            "scientificName": "Mammalia",
+            "canonicalName": "Mammalia",
+            "rank": "class",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "44",
+            "lineage": [
+              "Animalia",
+              "Chordata",
+              "Mammalia"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Herbivore",
+          "Mammal",
+          "Mammals",
+          "mammifères",
+          "哺乳綱",
+          "pattedyr",
+          "zoogdieren",
+          "sogdyr",
+          "spendyr",
+          "mamífero",
+          "njiccehasat",
+          "däggdjur",
+          "Ссавці"
+        ]
+      }
+    },
+    {
+      "taxonKey": "reptiles-amphibians",
+      "displayName": "Reptiles and amphibians",
+      "iNaturalistTaxonId": null,
+      "broadParentGroup": "Animals",
+      "beginnerEndpointRank": "genus",
+      "beginnerEndpointAlternatives": [
+        "species"
+      ],
+      "developerEndpointRank": "species",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "genus",
+      "speciesMode": "optional",
+      "rationale": "Many are visually identifiable, but regional lookalike complexes make genus the safer beginner endpoint in an initial non-local slice.",
+      "beginnerQuestLanguage": "Find a reptile or amphibian and aim for genus first; species is a win when the field marks are clear.",
+      "metrics": {
+        "observability": 62,
+        "identifiability": 72,
+        "distinctiveness": 74,
+        "localDataSupport": 70,
+        "validationReliability": 68
+      },
+      "notesFlags": [
+        "regional-complexes",
+        "location-will-improve-resolution"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "reptilia",
+        "amphibia",
+        "herps",
+        "reptile",
+        "amphibian",
+        "Sphenodontia",
+        "Reptilia",
+        "Animalia",
+        "Chordata",
+        "Amphibia",
+        "Padder",
+        "Amphibian",
+        "Amphibians",
+        "amphibiens",
+        "muir-thìreach",
+        "muir-thìrich",
+        "amfibieën",
+        "anfíbio",
+        "rihcceeallit",
+        "groddjur",
+        "Земноводні"
+      ],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 69.3,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "11569602",
+          "131"
+        ],
+        "anchors": [
+          {
+            "queryName": "Reptilia",
+            "queryRank": "CLASS",
+            "anchorKind": "multi_clade",
+            "note": "",
+            "matchedTaxonKey": "12170550",
+            "matchedScientificName": "Reptilia",
+            "matchedCanonicalName": "Reptilia",
+            "matchedRank": "class",
+            "matchedStatus": "proparte synonym",
+            "acceptedTaxonKey": "11569602",
+            "scientificName": "Sphenodontia",
+            "canonicalName": "Sphenodontia",
+            "rank": "class",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "44",
+            "lineage": [
+              "Animalia",
+              "Chordata",
+              "Sphenodontia"
+            ]
+          },
+          {
+            "queryName": "Amphibia",
+            "queryRank": "CLASS",
+            "anchorKind": "multi_clade",
+            "note": "",
+            "matchedTaxonKey": "131",
+            "matchedScientificName": "Amphibia",
+            "matchedCanonicalName": "Amphibia",
+            "matchedRank": "class",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "131",
+            "scientificName": "Amphibia",
+            "canonicalName": "Amphibia",
+            "rank": "class",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "44",
+            "lineage": [
+              "Animalia",
+              "Chordata",
+              "Amphibia"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Padder",
+          "Amphibian",
+          "Amphibians",
+          "amphibiens",
+          "muir-thìreach",
+          "muir-thìrich",
+          "amfibieën",
+          "anfíbio",
+          "rihcceeallit",
+          "groddjur",
+          "Земноводні"
+        ]
+      }
+    },
+    {
+      "taxonKey": "odonata",
+      "displayName": "Dragonflies and damselflies / Odonata",
+      "iNaturalistTaxonId": 47792,
+      "broadParentGroup": "Insects",
+      "beginnerEndpointRank": "genus",
+      "developerEndpointRank": "species",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "genus",
+      "speciesMode": "bonus",
+      "rationale": "Odonates are visible and photographable, but species identification can require angles, sex, age, or fine detail.",
+      "beginnerQuestLanguage": "Find a dragonfly or damselfly and try to place it to genus.",
+      "metrics": {
+        "observability": 82,
+        "identifiability": 70,
+        "distinctiveness": 74,
+        "localDataSupport": 76,
+        "validationReliability": 70
+      },
+      "notesFlags": [
+        "photographable",
+        "detail-dependent-species"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "dragonflies",
+        "damselflies",
+        "dragonfly",
+        "damselfly",
+        "Odonata",
+        "Animalia",
+        "Arthropoda",
+        "Insecta",
+        "Guldsmede",
+        "Damselflies",
+        "Dragonflies And Damselflies",
+        "Dragonfly",
+        "Indet Dragon/Damselfly",
+        "Invertebrates (Damselflies & Dragonflies)",
+        "tairbh-nathrach",
+        "tarbh-nathrach",
+        "libellen en waterjuffers",
+        "augestikkarar",
+        "trollsländor"
+      ],
+      "beginnerEndpointAlternatives": [],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 74.2,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "789"
+        ],
+        "anchors": [
+          {
+            "queryName": "Odonata",
+            "queryRank": "ORDER",
+            "anchorKind": "canonical_clade",
+            "note": "",
+            "matchedTaxonKey": "789",
+            "matchedScientificName": "Odonata",
+            "matchedCanonicalName": "Odonata",
+            "matchedRank": "order",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "789",
+            "scientificName": "Odonata",
+            "canonicalName": "Odonata",
+            "rank": "order",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "216",
+            "lineage": [
+              "Animalia",
+              "Arthropoda",
+              "Insecta",
+              "Odonata"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Guldsmede",
+          "Damselflies",
+          "Dragonflies And Damselflies",
+          "Dragonfly",
+          "Indet Dragon/Damselfly",
+          "Invertebrates (Damselflies & Dragonflies)",
+          "dragonflies",
+          "tairbh-nathrach",
+          "tarbh-nathrach",
+          "libellen en waterjuffers",
+          "augestikkarar",
+          "trollsländor"
+        ]
+      }
+    },
+    {
+      "taxonKey": "butterflies",
+      "displayName": "Butterflies",
+      "iNaturalistTaxonId": null,
+      "broadParentGroup": "Insects",
+      "beginnerEndpointRank": "genus",
+      "beginnerEndpointAlternatives": [
+        "species"
+      ],
+      "developerEndpointRank": "species",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "genus",
+      "speciesMode": "optional",
+      "rationale": "Many butterflies are beginner-identifiable, but lookalike complexes and worn individuals make genus the safer default endpoint.",
+      "beginnerQuestLanguage": "Find a butterfly and aim for genus; species counts when the pattern is clear.",
+      "metrics": {
+        "observability": 86,
+        "identifiability": 74,
+        "distinctiveness": 78,
+        "localDataSupport": 82,
+        "validationReliability": 74
+      },
+      "notesFlags": [
+        "charismatic",
+        "lookalike-complexes"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "butterfly",
+        "rhopalocera",
+        "lepidoptera butterfly",
+        "Lepidoptera",
+        "Animalia",
+        "Arthropoda",
+        "Insecta",
+        "Sommerfugle",
+        "Butterflies",
+        "Butterflies & Moths",
+        "Caterpillar",
+        "Invertebrates (Butterflies)",
+        "Invertebrates (Moths)",
+        "Moth",
+        "Moths",
+        "Unidentified Lepidopteran",
+        "butterflies and moths",
+        "vlinders",
+        "sommarfuglar",
+        "beaivelottit",
+        "fjärilar"
+      ],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 78.6,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "797"
+        ],
+        "anchors": [
+          {
+            "queryName": "Lepidoptera",
+            "queryRank": "ORDER",
+            "anchorKind": "broad_clade",
+            "note": "Butterflies are a beginner-playable subset inside Lepidoptera.",
+            "matchedTaxonKey": "797",
+            "matchedScientificName": "Lepidoptera",
+            "matchedCanonicalName": "Lepidoptera",
+            "matchedRank": "order",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "797",
+            "scientificName": "Lepidoptera",
+            "canonicalName": "Lepidoptera",
+            "rank": "order",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "216",
+            "lineage": [
+              "Animalia",
+              "Arthropoda",
+              "Insecta",
+              "Lepidoptera"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Sommerfugle",
+          "Butterflies",
+          "Butterflies & Moths",
+          "Caterpillar",
+          "Invertebrates (Butterflies)",
+          "Invertebrates (Moths)",
+          "Moth",
+          "Moths",
+          "Unidentified Lepidopteran",
+          "butterflies and moths",
+          "vlinders",
+          "sommarfuglar",
+          "beaivelottit",
+          "fjärilar"
+        ]
+      }
+    },
+    {
+      "taxonKey": "moths",
+      "displayName": "Moths",
+      "iNaturalistTaxonId": null,
+      "broadParentGroup": "Insects",
+      "beginnerEndpointRank": "family",
+      "beginnerEndpointAlternatives": [
+        "genus"
+      ],
+      "developerEndpointRank": "genus",
+      "developerEndpointAlternatives": [
+        "species"
+      ],
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "bonus",
+      "rationale": "Moths are extremely diverse; many species are difficult, but some families and genera are recognizable and rewarding.",
+      "beginnerQuestLanguage": "Find a moth and place it into a family or recognizable genus.",
+      "metrics": {
+        "observability": 72,
+        "identifiability": 54,
+        "distinctiveness": 62,
+        "localDataSupport": 74,
+        "validationReliability": 58
+      },
+      "notesFlags": [
+        "very-diverse",
+        "night-observation-friendly"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "moth",
+        "lepidoptera moth",
+        "Lepidoptera",
+        "Animalia",
+        "Arthropoda",
+        "Insecta",
+        "Sommerfugle",
+        "Butterflies",
+        "Butterflies & Moths",
+        "Caterpillar",
+        "Invertebrates (Butterflies)",
+        "Invertebrates (Moths)",
+        "Moth",
+        "Moths",
+        "Unidentified Lepidopteran",
+        "butterflies and moths",
+        "vlinders",
+        "sommarfuglar",
+        "beaivelottit",
+        "fjärilar"
+      ],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 63.4,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "797"
+        ],
+        "anchors": [
+          {
+            "queryName": "Lepidoptera",
+            "queryRank": "ORDER",
+            "anchorKind": "broad_clade",
+            "note": "Moths are a beginner-playable subset inside Lepidoptera.",
+            "matchedTaxonKey": "797",
+            "matchedScientificName": "Lepidoptera",
+            "matchedCanonicalName": "Lepidoptera",
+            "matchedRank": "order",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "797",
+            "scientificName": "Lepidoptera",
+            "canonicalName": "Lepidoptera",
+            "rank": "order",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "216",
+            "lineage": [
+              "Animalia",
+              "Arthropoda",
+              "Insecta",
+              "Lepidoptera"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Sommerfugle",
+          "Butterflies",
+          "Butterflies & Moths",
+          "Caterpillar",
+          "Invertebrates (Butterflies)",
+          "Invertebrates (Moths)",
+          "Moth",
+          "Moths",
+          "Unidentified Lepidopteran",
+          "butterflies and moths",
+          "vlinders",
+          "sommarfuglar",
+          "beaivelottit",
+          "fjärilar"
+        ]
+      }
+    },
+    {
+      "taxonKey": "beetles",
+      "displayName": "Beetles",
+      "iNaturalistTaxonId": 47208,
+      "broadParentGroup": "Insects",
+      "beginnerEndpointRank": "family",
+      "beginnerEndpointAlternatives": [
+        "genus"
+      ],
+      "developerEndpointRank": "genus",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "discouraged",
+      "rationale": "Beetles are very diverse, and species identification is often expert-level without close structural detail.",
+      "beginnerQuestLanguage": "Find a beetle and try for family; genus is a strong next step.",
+      "metrics": {
+        "observability": 68,
+        "identifiability": 48,
+        "distinctiveness": 58,
+        "localDataSupport": 72,
+        "validationReliability": 54
+      },
+      "notesFlags": [
+        "high-diversity",
+        "species-often-expert"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "coleoptera",
+        "beetle",
+        "Coleoptera",
+        "Animalia",
+        "Arthropoda",
+        "Insecta",
+        "Käfer",
+        "Κολεόπτερα",
+        "Beetle",
+        "Beetles",
+        "Invertebrates (Beetles)",
+        "coléoptères",
+        "daolag",
+        "daolagan",
+        "coleotteri",
+        "甲虫／鞘翅目",
+        "vabalai",
+        "kevers",
+        "kevers, schildvleugeligen, torren",
+        "biller",
+        "chrząszcze",
+        "жесткокрылые",
+        "жуки",
+        "hrošči",
+        "skalbaggar",
+        "kınkanatlılar",
+        "твердокрилі"
+      ],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 59.2,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "1470"
+        ],
+        "anchors": [
+          {
+            "queryName": "Coleoptera",
+            "queryRank": "ORDER",
+            "anchorKind": "canonical_clade",
+            "note": "",
+            "matchedTaxonKey": "1470",
+            "matchedScientificName": "Coleoptera",
+            "matchedCanonicalName": "Coleoptera",
+            "matchedRank": "order",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "1470",
+            "scientificName": "Coleoptera",
+            "canonicalName": "Coleoptera",
+            "rank": "order",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "216",
+            "lineage": [
+              "Animalia",
+              "Arthropoda",
+              "Insecta",
+              "Coleoptera"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Käfer",
+          "Κολεόπτερα",
+          "Beetle",
+          "Beetles",
+          "Invertebrates (Beetles)",
+          "coléoptères",
+          "daolag",
+          "daolagan",
+          "coleotteri",
+          "甲虫／鞘翅目",
+          "vabalai",
+          "kevers",
+          "kevers, schildvleugeligen, torren",
+          "biller",
+          "chrząszcze",
+          "жесткокрылые",
+          "жуки",
+          "hrošči",
+          "skalbaggar",
+          "kınkanatlılar",
+          "твердокрилі"
+        ]
+      }
+    },
+    {
+      "taxonKey": "flies",
+      "displayName": "Flies / Diptera",
+      "iNaturalistTaxonId": 47822,
+      "broadParentGroup": "Insects",
+      "beginnerEndpointRank": "family",
+      "developerEndpointRank": "genus",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "discouraged",
+      "rationale": "Many fly species need expert review or microscopy, so family-level play is a better beginner default.",
+      "beginnerQuestLanguage": "Find a fly and identify the family or broad fly type.",
+      "metrics": {
+        "observability": 70,
+        "identifiability": 42,
+        "distinctiveness": 50,
+        "localDataSupport": 68,
+        "validationReliability": 48
+      },
+      "notesFlags": [
+        "microscopy-common",
+        "family-level-play"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "diptera",
+        "fly",
+        "Diptera",
+        "Animalia",
+        "Arthropoda",
+        "Insecta",
+        "Tovinger",
+        "brachycera",
+        "Zweiflügler",
+        "Flies",
+        "Fly",
+        "Gnats",
+        "Indet. Fly",
+        "Invertebrates (Flies)",
+        "Mosquitoes",
+        "True Flies",
+        "two-winged flies",
+        "diptères",
+        "cnuimh",
+        "cnuimhean",
+        "cuileag",
+        "cuileagan",
+        "gith",
+        "githean",
+        "ハエ／双翅目",
+        "tweevleugeligen",
+        "vliegen en muggen",
+        "tovenger",
+        "tvåvingar",
+        "Двокрилі"
+      ],
+      "beginnerEndpointAlternatives": [],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 54.9,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "811"
+        ],
+        "anchors": [
+          {
+            "queryName": "Diptera",
+            "queryRank": "ORDER",
+            "anchorKind": "canonical_clade",
+            "note": "",
+            "matchedTaxonKey": "811",
+            "matchedScientificName": "Diptera",
+            "matchedCanonicalName": "Diptera",
+            "matchedRank": "order",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "811",
+            "scientificName": "Diptera",
+            "canonicalName": "Diptera",
+            "rank": "order",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "216",
+            "lineage": [
+              "Animalia",
+              "Arthropoda",
+              "Insecta",
+              "Diptera"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Tovinger",
+          "brachycera",
+          "Zweiflügler",
+          "Flies",
+          "Fly",
+          "Gnats",
+          "Indet. Fly",
+          "Invertebrates (Flies)",
+          "Mosquitoes",
+          "True Flies",
+          "two-winged flies",
+          "diptères",
+          "cnuimh",
+          "cnuimhean",
+          "cuileag",
+          "cuileagan",
+          "gith",
+          "githean",
+          "ハエ／双翅目",
+          "tweevleugeligen",
+          "vliegen en muggen",
+          "tovenger",
+          "tvåvingar",
+          "Двокрилі"
+        ]
+      }
+    },
+    {
+      "taxonKey": "hymenoptera",
+      "displayName": "Bees, wasps, and ants / Hymenoptera",
+      "iNaturalistTaxonId": 47201,
+      "broadParentGroup": "Insects",
+      "beginnerEndpointRank": "family",
+      "beginnerEndpointAlternatives": [
+        "genus"
+      ],
+      "developerEndpointRank": "genus",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "discouraged",
+      "rationale": "Some groups are recognizable, but many bees, wasps, and ants are difficult at species level from casual photos.",
+      "beginnerQuestLanguage": "Find a bee, wasp, or ant and aim for family or a familiar genus.",
+      "metrics": {
+        "observability": 74,
+        "identifiability": 50,
+        "distinctiveness": 58,
+        "localDataSupport": 72,
+        "validationReliability": 52
+      },
+      "notesFlags": [
+        "mixed-beginner-access",
+        "many-specialist-ids"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "bees",
+        "wasps",
+        "ants",
+        "bee",
+        "wasp",
+        "ant",
+        "Hymenoptera",
+        "Animalia",
+        "Arthropoda",
+        "Insecta",
+        "Hautflügler",
+        "Ants",
+        "Ants, Bees And Wasps",
+        "Ants, Bees, Wasps, And Sawflies",
+        "Bees",
+        "Invertebrates (Bees & Wasps)",
+        "Wasps",
+        "årevinger",
+        "vliesvleugeligen",
+        "årevengjer",
+        "steklar",
+        "hymenopterans"
+      ],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 60.7,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "1457"
+        ],
+        "anchors": [
+          {
+            "queryName": "Hymenoptera",
+            "queryRank": "ORDER",
+            "anchorKind": "canonical_clade",
+            "note": "",
+            "matchedTaxonKey": "1457",
+            "matchedScientificName": "Hymenoptera",
+            "matchedCanonicalName": "Hymenoptera",
+            "matchedRank": "order",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "1457",
+            "scientificName": "Hymenoptera",
+            "canonicalName": "Hymenoptera",
+            "rank": "order",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "216",
+            "lineage": [
+              "Animalia",
+              "Arthropoda",
+              "Insecta",
+              "Hymenoptera"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Hautflügler",
+          "Ants",
+          "Ants, Bees And Wasps",
+          "Ants, Bees, Wasps, And Sawflies",
+          "Bees",
+          "Invertebrates (Bees & Wasps)",
+          "Wasps",
+          "årevinger",
+          "vliesvleugeligen",
+          "årevengjer",
+          "steklar",
+          "hymenopterans"
+        ]
+      }
+    },
+    {
+      "taxonKey": "spiders",
+      "displayName": "Spiders",
+      "iNaturalistTaxonId": 47119,
+      "broadParentGroup": "Arachnids",
+      "beginnerEndpointRank": "family",
+      "beginnerEndpointAlternatives": [
+        "genus"
+      ],
+      "developerEndpointRank": "genus",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "discouraged",
+      "rationale": "Many spiders require close detail or expert review, but family and genus endpoints are often playable.",
+      "beginnerQuestLanguage": "Find a spider and try for family; genus is a good challenge when details are visible.",
+      "metrics": {
+        "observability": 66,
+        "identifiability": 52,
+        "distinctiveness": 62,
+        "localDataSupport": 68,
+        "validationReliability": 56
+      },
+      "notesFlags": [
+        "detail-dependent",
+        "family-genus-playable"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "araneae",
+        "spider",
+        "Araneae",
+        "Animalia",
+        "Arthropoda",
+        "Arachnida",
+        "Edderkopper",
+        "Webspinnen",
+        "echte Spinnen",
+        "Αράχνες",
+        "Invertebrates (Spiders)",
+        "Spider",
+        "True Spiders",
+        "spiders",
+        "damhain-allaidh",
+        "damhan-allaidh",
+        "poca-salainn",
+        "pocannan-salainn",
+        "araneidi",
+        "ragni",
+        "クモ目",
+        "vorai",
+        "spinnen",
+        "pająki",
+        "пауки",
+        "pajki",
+        "spindlar",
+        "örümcekler takımı",
+        "Павуки"
+      ],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 60.1,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "1496"
+        ],
+        "anchors": [
+          {
+            "queryName": "Araneae",
+            "queryRank": "ORDER",
+            "anchorKind": "canonical_clade",
+            "note": "",
+            "matchedTaxonKey": "1496",
+            "matchedScientificName": "Araneae",
+            "matchedCanonicalName": "Araneae",
+            "matchedRank": "order",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "1496",
+            "scientificName": "Araneae",
+            "canonicalName": "Araneae",
+            "rank": "order",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "367",
+            "lineage": [
+              "Animalia",
+              "Arthropoda",
+              "Arachnida",
+              "Araneae"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Edderkopper",
+          "Webspinnen",
+          "echte Spinnen",
+          "Αράχνες",
+          "Invertebrates (Spiders)",
+          "Spider",
+          "True Spiders",
+          "spiders",
+          "damhain-allaidh",
+          "damhan-allaidh",
+          "poca-salainn",
+          "pocannan-salainn",
+          "araneidi",
+          "ragni",
+          "クモ目",
+          "vorai",
+          "spinnen",
+          "pająki",
+          "пауки",
+          "pajki",
+          "spindlar",
+          "örümcekler takımı",
+          "Павуки"
+        ]
+      }
+    },
+    {
+      "taxonKey": "trees",
+      "displayName": "Trees",
+      "iNaturalistTaxonId": null,
+      "broadParentGroup": "Plants",
+      "beginnerEndpointRank": "genus",
+      "beginnerEndpointAlternatives": [
+        "species"
+      ],
+      "developerEndpointRank": "species",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "genus",
+      "speciesMode": "optional",
+      "rationale": "Many trees are learnable from leaves, bark, habit, fruit, and seasonality, but species confidence varies by region and season.",
+      "beginnerQuestLanguage": "Find a tree and place it to genus; species counts when leaves, bark, or fruit are clear.",
+      "metrics": {
+        "observability": 92,
+        "identifiability": 74,
+        "distinctiveness": 78,
+        "localDataSupport": 82,
+        "validationReliability": 72
+      },
+      "notesFlags": [
+        "seasonal-characters",
+        "genus-first"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "tree",
+        "woody plants",
+        "forest trees",
+        "Plantae",
+        "Planteriget",
+        "Plant",
+        "plants",
+        "植物界",
+        "planteriket",
+        "planten",
+        "šattut",
+        "egentliga växter"
+      ],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 79.5,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "6"
+        ],
+        "anchors": [
+          {
+            "queryName": "Plantae",
+            "queryRank": "KINGDOM",
+            "anchorKind": "ecological_group",
+            "note": "Trees are a growth-form play group, not one GBIF clade.",
+            "matchedTaxonKey": "6",
+            "matchedScientificName": "Plantae",
+            "matchedCanonicalName": "Plantae",
+            "matchedRank": "kingdom",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "6",
+            "scientificName": "Plantae",
+            "canonicalName": "Plantae",
+            "rank": "kingdom",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": null,
+            "lineage": [
+              "Plantae"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Planteriget",
+          "Plant",
+          "plants",
+          "植物界",
+          "planteriket",
+          "planten",
+          "šattut",
+          "egentliga växter"
+        ]
+      }
+    },
+    {
+      "taxonKey": "wildflowers",
+      "displayName": "Wildflowers / herbaceous flowering plants",
+      "iNaturalistTaxonId": null,
+      "broadParentGroup": "Plants",
+      "beginnerEndpointRank": "genus",
+      "beginnerEndpointAlternatives": [
+        "family",
+        "species"
+      ],
+      "developerEndpointRank": "species",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "optional",
+      "rationale": "Wildflowers are visually rewarding, but difficulty varies widely by group, season, and available plant parts.",
+      "beginnerQuestLanguage": "Find a wildflower and identify its family or genus; species is a bonus when the characters line up.",
+      "metrics": {
+        "observability": 88,
+        "identifiability": 64,
+        "distinctiveness": 72,
+        "localDataSupport": 80,
+        "validationReliability": 64
+      },
+      "notesFlags": [
+        "variable-difficulty",
+        "flowering-season-matters"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "wildflower",
+        "flowering plants",
+        "herbaceous plants",
+        "angiosperms",
+        "Magnoliopsida",
+        "Plantae",
+        "Tracheophyta",
+        "Liliopsida",
+        "Tokimbladede",
+        "Zweikeimblättrige",
+        "Dicots",
+        "Dicotyledons",
+        "tvåhjärtbladiga blomväxter",
+        "Enkimbladede",
+        "Einkeimblättrige",
+        "Monocot",
+        "Monocots",
+        "Monocotyledon",
+        "enhjärtbladiga blomväxter",
+        "monocotyledons"
+      ],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 73.2,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "220",
+          "196"
+        ],
+        "anchors": [
+          {
+            "queryName": "Magnoliopsida",
+            "queryRank": "CLASS",
+            "anchorKind": "ecological_group",
+            "note": "Wildflowers are a field/play group inside flowering plants.",
+            "matchedTaxonKey": "220",
+            "matchedScientificName": "Magnoliopsida",
+            "matchedCanonicalName": "Magnoliopsida",
+            "matchedRank": "class",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "220",
+            "scientificName": "Magnoliopsida",
+            "canonicalName": "Magnoliopsida",
+            "rank": "class",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "7707728",
+            "lineage": [
+              "Plantae",
+              "Tracheophyta",
+              "Magnoliopsida"
+            ]
+          },
+          {
+            "queryName": "Liliopsida",
+            "queryRank": "CLASS",
+            "anchorKind": "ecological_group",
+            "note": "Wildflowers are a field/play group inside flowering plants.",
+            "matchedTaxonKey": "196",
+            "matchedScientificName": "Liliopsida",
+            "matchedCanonicalName": "Liliopsida",
+            "matchedRank": "class",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "196",
+            "scientificName": "Liliopsida",
+            "canonicalName": "Liliopsida",
+            "rank": "class",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "7707728",
+            "lineage": [
+              "Plantae",
+              "Tracheophyta",
+              "Liliopsida"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Tokimbladede",
+          "Zweikeimblättrige",
+          "Dicots",
+          "Dicotyledons",
+          "tvåhjärtbladiga blomväxter",
+          "angiosperms",
+          "flowering plants",
+          "Enkimbladede",
+          "Einkeimblättrige",
+          "Monocot",
+          "Monocots",
+          "Monocotyledon",
+          "enhjärtbladiga blomväxter",
+          "monocotyledons"
+        ]
+      }
+    },
+    {
+      "taxonKey": "grasses-sedges-rushes",
+      "displayName": "Grasses, sedges, and rushes",
+      "iNaturalistTaxonId": null,
+      "broadParentGroup": "Plants",
+      "beginnerEndpointRank": "family",
+      "beginnerEndpointAlternatives": [
+        "genus"
+      ],
+      "developerEndpointRank": "genus",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "discouraged",
+      "rationale": "Species often require technical characters, but family and some genus endpoints are useful for beginner play.",
+      "beginnerQuestLanguage": "Find a grass, sedge, or rush and aim for family or a recognizable genus.",
+      "metrics": {
+        "observability": 84,
+        "identifiability": 38,
+        "distinctiveness": 46,
+        "localDataSupport": 70,
+        "validationReliability": 44
+      },
+      "notesFlags": [
+        "technical-characters",
+        "family-first"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "grass",
+        "grasses",
+        "sedge",
+        "sedges",
+        "rush",
+        "rushes",
+        "graminoids",
+        "Poaceae",
+        "Plantae",
+        "Tracheophyta",
+        "Liliopsida",
+        "Poales",
+        "Cyperaceae",
+        "Juncaceae",
+        "Græsfamilien",
+        "Süßgräser",
+        "Cereal",
+        "Couch",
+        "Grass",
+        "Grasses",
+        "Turf",
+        "grass family",
+        "Graminées",
+        "Poacées",
+        "イネ科",
+        "მარცვლოვნები",
+        "grassenfamilie",
+        "grasfamilien",
+        "gräs",
+        "벼과",
+        "Halvgræsfamilien",
+        "Sauergräser",
+        "Sedge",
+        "Sedge Family",
+        "Sedges",
+        "Cypéracées",
+        "カヤツリグサ科",
+        "ისლისებრნი",
+        "starrfamilien",
+        "cypergrassenfamilie",
+        "storrfamilien",
+        "halvgräs",
+        "Binsengewächse",
+        "Rush Family",
+        "Rushes",
+        "Joncacées",
+        "ჭილისებრნი",
+        "sivfamilien",
+        "russenfamilie",
+        "giilošattut",
+        "tågväxter"
+      ],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 55.7,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "3073",
+          "7708",
+          "5353"
+        ],
+        "anchors": [
+          {
+            "queryName": "Poaceae",
+            "queryRank": "FAMILY",
+            "anchorKind": "multi_family",
+            "note": "",
+            "matchedTaxonKey": "3073",
+            "matchedScientificName": "Poaceae",
+            "matchedCanonicalName": "Poaceae",
+            "matchedRank": "family",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "3073",
+            "scientificName": "Poaceae",
+            "canonicalName": "Poaceae",
+            "rank": "family",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "1369",
+            "lineage": [
+              "Plantae",
+              "Tracheophyta",
+              "Liliopsida",
+              "Poales",
+              "Poaceae"
+            ]
+          },
+          {
+            "queryName": "Cyperaceae",
+            "queryRank": "FAMILY",
+            "anchorKind": "multi_family",
+            "note": "",
+            "matchedTaxonKey": "7708",
+            "matchedScientificName": "Cyperaceae",
+            "matchedCanonicalName": "Cyperaceae",
+            "matchedRank": "family",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "7708",
+            "scientificName": "Cyperaceae",
+            "canonicalName": "Cyperaceae",
+            "rank": "family",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "1369",
+            "lineage": [
+              "Plantae",
+              "Tracheophyta",
+              "Liliopsida",
+              "Poales",
+              "Cyperaceae"
+            ]
+          },
+          {
+            "queryName": "Juncaceae",
+            "queryRank": "FAMILY",
+            "anchorKind": "multi_family",
+            "note": "",
+            "matchedTaxonKey": "5353",
+            "matchedScientificName": "Juncaceae",
+            "matchedCanonicalName": "Juncaceae",
+            "matchedRank": "family",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "5353",
+            "scientificName": "Juncaceae",
+            "canonicalName": "Juncaceae",
+            "rank": "family",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "1369",
+            "lineage": [
+              "Plantae",
+              "Tracheophyta",
+              "Liliopsida",
+              "Poales",
+              "Juncaceae"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Græsfamilien",
+          "Süßgräser",
+          "Cereal",
+          "Couch",
+          "Grass",
+          "Grasses",
+          "Turf",
+          "grass family",
+          "Graminées",
+          "Poacées",
+          "イネ科",
+          "მარცვლოვნები",
+          "grassenfamilie",
+          "grasfamilien",
+          "gräs",
+          "벼과",
+          "Halvgræsfamilien",
+          "Sauergräser",
+          "Sedge",
+          "Sedge Family",
+          "Sedges",
+          "Cypéracées",
+          "カヤツリグサ科",
+          "ისლისებრნი",
+          "starrfamilien",
+          "cypergrassenfamilie",
+          "storrfamilien",
+          "halvgräs",
+          "Binsengewächse",
+          "Rush Family",
+          "Rushes",
+          "Joncacées",
+          "ჭილისებრნი",
+          "sivfamilien",
+          "russenfamilie",
+          "giilošattut",
+          "tågväxter"
+        ]
+      }
+    },
+    {
+      "taxonKey": "ferns",
+      "displayName": "Ferns",
+      "iNaturalistTaxonId": null,
+      "broadParentGroup": "Plants",
+      "beginnerEndpointRank": "genus",
+      "developerEndpointRank": "species",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "genus",
+      "speciesMode": "bonus",
+      "rationale": "Many ferns are learnable to genus, while species often need closer sori, frond, or habitat detail.",
+      "beginnerQuestLanguage": "Find a fern and try to place it to genus.",
+      "metrics": {
+        "observability": 76,
+        "identifiability": 62,
+        "distinctiveness": 64,
+        "localDataSupport": 68,
+        "validationReliability": 60
+      },
+      "notesFlags": [
+        "genus-playable",
+        "species-needs-detail"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "fern",
+        "Polypodiopsida",
+        "Plantae",
+        "Tracheophyta",
+        "Polypodiophyta",
+        "Bregner & padderokker",
+        "Ferns",
+        "Leptosporangiate Ferns",
+        "ウラボシ綱",
+        "bregner",
+        "ormbunksväxter",
+        "Karplanter",
+        "Vascular plants",
+        "tracheophytes",
+        "維管束植物門",
+        "vaatplanten",
+        "kärlväxter"
+      ],
+      "beginnerEndpointAlternatives": [],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 66,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "7228684",
+          "7707728"
+        ],
+        "anchors": [
+          {
+            "queryName": "Polypodiopsida",
+            "queryRank": "CLASS",
+            "anchorKind": "canonical_clade",
+            "note": "",
+            "matchedTaxonKey": "7228684",
+            "matchedScientificName": "Polypodiopsida",
+            "matchedCanonicalName": "Polypodiopsida",
+            "matchedRank": "class",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "7228684",
+            "scientificName": "Polypodiopsida",
+            "canonicalName": "Polypodiopsida",
+            "rank": "class",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "7707728",
+            "lineage": [
+              "Plantae",
+              "Tracheophyta",
+              "Polypodiopsida"
+            ]
+          },
+          {
+            "queryName": "Polypodiophyta",
+            "queryRank": "PHYLUM",
+            "anchorKind": "fallback_clade",
+            "note": "Fallback anchor if GBIF backbone ranks ferns by phylum.",
+            "matchedTaxonKey": "7473139",
+            "matchedScientificName": "Polypodiophyta",
+            "matchedCanonicalName": "Polypodiophyta",
+            "matchedRank": "phylum",
+            "matchedStatus": "synonym",
+            "acceptedTaxonKey": "7707728",
+            "scientificName": "Tracheophyta",
+            "canonicalName": "Tracheophyta",
+            "rank": "phylum",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "6",
+            "lineage": [
+              "Plantae",
+              "Tracheophyta"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Bregner & padderokker",
+          "Ferns",
+          "Leptosporangiate Ferns",
+          "ウラボシ綱",
+          "bregner",
+          "ormbunksväxter",
+          "Karplanter",
+          "Vascular plants",
+          "tracheophytes",
+          "維管束植物門",
+          "vaatplanten",
+          "kärlväxter"
+        ]
+      }
+    },
+    {
+      "taxonKey": "fungi",
+      "displayName": "Fungi",
+      "iNaturalistTaxonId": 47170,
+      "broadParentGroup": "Fungi",
+      "beginnerEndpointRank": "family",
+      "beginnerEndpointAlternatives": [
+        "genus"
+      ],
+      "developerEndpointRank": "genus",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "discouraged",
+      "rationale": "Species identification often requires microscopy, chemistry, substrate, or expert review, but broad form groups and genera can be playable.",
+      "beginnerQuestLanguage": "Find a fungus and identify its broad form, family, or genus.",
+      "metrics": {
+        "observability": 64,
+        "identifiability": 40,
+        "distinctiveness": 58,
+        "localDataSupport": 66,
+        "validationReliability": 42
+      },
+      "notesFlags": [
+        "broad-form-groups",
+        "microscopy-or-chemistry-common"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "fungus",
+        "mushrooms",
+        "mushroom",
+        "Fungi",
+        "Svamperiget",
+        "Fungi Including Lichens",
+        "菌界",
+        "schimmels",
+        "soppriket",
+        "guobbarat",
+        "svampar"
+      ],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 53,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "5"
+        ],
+        "anchors": [
+          {
+            "queryName": "Fungi",
+            "queryRank": "KINGDOM",
+            "anchorKind": "canonical_clade",
+            "note": "",
+            "matchedTaxonKey": "5",
+            "matchedScientificName": "Fungi",
+            "matchedCanonicalName": "Fungi",
+            "matchedRank": "kingdom",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "5",
+            "scientificName": "Fungi",
+            "canonicalName": "Fungi",
+            "rank": "kingdom",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": null,
+            "lineage": [
+              "Fungi"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Svamperiget",
+          "Fungi",
+          "Fungi Including Lichens",
+          "菌界",
+          "schimmels",
+          "soppriket",
+          "guobbarat",
+          "svampar"
+        ]
+      }
+    },
+    {
+      "taxonKey": "lichens",
+      "displayName": "Lichens",
+      "iNaturalistTaxonId": null,
+      "broadParentGroup": "Fungi",
+      "beginnerEndpointRank": "family",
+      "developerEndpointRank": "genus",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "hidden",
+      "rationale": "Many lichens require chemistry, microscopy, or expert characters, so broad group or family play is the beginner-safe endpoint.",
+      "beginnerQuestLanguage": "Find a lichen and place it into a broad group or family.",
+      "metrics": {
+        "observability": 70,
+        "identifiability": 34,
+        "distinctiveness": 48,
+        "localDataSupport": 58,
+        "validationReliability": 36
+      },
+      "notesFlags": [
+        "chemistry-common",
+        "broad-group-play"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "lichen",
+        "Fungi",
+        "Svamperiget",
+        "Fungi Including Lichens",
+        "菌界",
+        "schimmels",
+        "soppriket",
+        "guobbarat",
+        "svampar"
+      ],
+      "beginnerEndpointAlternatives": [],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 48.4,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "5"
+        ],
+        "anchors": [
+          {
+            "queryName": "Fungi",
+            "queryRank": "KINGDOM",
+            "anchorKind": "functional_group",
+            "note": "Lichens are a functional play group mostly inside Fungi.",
+            "matchedTaxonKey": "5",
+            "matchedScientificName": "Fungi",
+            "matchedCanonicalName": "Fungi",
+            "matchedRank": "kingdom",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "5",
+            "scientificName": "Fungi",
+            "canonicalName": "Fungi",
+            "rank": "kingdom",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": null,
+            "lineage": [
+              "Fungi"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Svamperiget",
+          "Fungi",
+          "Fungi Including Lichens",
+          "菌界",
+          "schimmels",
+          "soppriket",
+          "guobbarat",
+          "svampar"
+        ]
+      }
+    },
+    {
+      "taxonKey": "mosses-liverworts",
+      "displayName": "Mosses and liverworts",
+      "iNaturalistTaxonId": null,
+      "broadParentGroup": "Plants",
+      "beginnerEndpointRank": "family",
+      "developerEndpointRank": "genus",
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "hidden",
+      "rationale": "Many mosses and liverworts require magnification or expert characters, making broad group or family the safer beginner endpoint.",
+      "beginnerQuestLanguage": "Find a moss or liverwort and identify the broad group or family.",
+      "metrics": {
+        "observability": 76,
+        "identifiability": 32,
+        "distinctiveness": 42,
+        "localDataSupport": 56,
+        "validationReliability": 34
+      },
+      "notesFlags": [
+        "magnification-common",
+        "broad-group-play"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "moss",
+        "mosses",
+        "liverwort",
+        "liverworts",
+        "bryophytes",
+        "Bryophyta",
+        "Plantae",
+        "Marchantiophyta",
+        "Mosser",
+        "Laubmoose",
+        "Bryophyte",
+        "Bryophytes",
+        "Hornworts",
+        "Moss",
+        "Mosses",
+        "Mosses And Liverworts",
+        "Non-Vascular Land Plants",
+        "còinneach",
+        "còinnich",
+        "mossen",
+        "bladmosar",
+        "lastasámmálat",
+        "bladmossor",
+        "Levermosser",
+        "Liverwort",
+        "Liverworts",
+        "cuilse aibheach",
+        "cuilsean aibheach",
+        "duilleagag a' chruithneachd",
+        "lus an àirneig",
+        "levermosar",
+        "muoksesámmálat",
+        "levermossor",
+        "hepatics"
+      ],
+      "beginnerEndpointAlternatives": [],
+      "developerEndpointAlternatives": [],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 47.4,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "35",
+          "9"
+        ],
+        "anchors": [
+          {
+            "queryName": "Bryophyta",
+            "queryRank": "PHYLUM",
+            "anchorKind": "multi_clade",
+            "note": "",
+            "matchedTaxonKey": "35",
+            "matchedScientificName": "Bryophyta",
+            "matchedCanonicalName": "Bryophyta",
+            "matchedRank": "phylum",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "35",
+            "scientificName": "Bryophyta",
+            "canonicalName": "Bryophyta",
+            "rank": "phylum",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "6",
+            "lineage": [
+              "Plantae",
+              "Bryophyta"
+            ]
+          },
+          {
+            "queryName": "Marchantiophyta",
+            "queryRank": "PHYLUM",
+            "anchorKind": "multi_clade",
+            "note": "",
+            "matchedTaxonKey": "9",
+            "matchedScientificName": "Marchantiophyta",
+            "matchedCanonicalName": "Marchantiophyta",
+            "matchedRank": "phylum",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "9",
+            "scientificName": "Marchantiophyta",
+            "canonicalName": "Marchantiophyta",
+            "rank": "phylum",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "6",
+            "lineage": [
+              "Plantae",
+              "Marchantiophyta"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Mosser",
+          "Laubmoose",
+          "Bryophyte",
+          "Bryophytes",
+          "Hornworts",
+          "Moss",
+          "Mosses",
+          "Mosses And Liverworts",
+          "Non-Vascular Land Plants",
+          "còinneach",
+          "còinnich",
+          "mossen",
+          "bladmosar",
+          "lastasámmálat",
+          "bladmossor",
+          "Levermosser",
+          "Liverwort",
+          "Liverworts",
+          "cuilse aibheach",
+          "cuilsean aibheach",
+          "duilleagag a' chruithneachd",
+          "lus an àirneig",
+          "levermosar",
+          "muoksesámmálat",
+          "levermossor",
+          "hepatics"
+        ]
+      }
+    },
+    {
+      "taxonKey": "snails-slugs",
+      "displayName": "Snails and slugs",
+      "iNaturalistTaxonId": null,
+      "broadParentGroup": "Mollusks",
+      "beginnerEndpointRank": "family",
+      "beginnerEndpointAlternatives": [
+        "genus"
+      ],
+      "developerEndpointRank": "genus",
+      "developerEndpointAlternatives": [
+        "species"
+      ],
+      "expertEndpointRank": "species",
+      "minimumConfidenceRank": "family",
+      "speciesMode": "bonus",
+      "rationale": "Some snails and slugs are recognizable, but many require shell, anatomy, or close detail for species confidence.",
+      "beginnerQuestLanguage": "Find a snail or slug and aim for family or genus.",
+      "metrics": {
+        "observability": 60,
+        "identifiability": 50,
+        "distinctiveness": 56,
+        "localDataSupport": 58,
+        "validationReliability": 50
+      },
+      "notesFlags": [
+        "detail-dependent",
+        "some-recognizable-genera"
+      ],
+      "source": "mixed",
+      "iNaturalistStats": null,
+      "aliases": [
+        "snail",
+        "slug",
+        "gastropods",
+        "gastropoda",
+        "Gastropoda",
+        "Animalia",
+        "Mollusca",
+        "Snegle",
+        "Bauchfüßer",
+        "Gastropoden",
+        "Schnecken",
+        "Gastropods",
+        "Slugs",
+        "Snail",
+        "Snails",
+        "Snails And Slugs",
+        "Limaces",
+        "seilcheag",
+        "seilcheag eadar-thràghadh",
+        "seilcheagan",
+        "seilcheagan eadar-thràghadh",
+        "腹足綱",
+        "buikpotigen",
+        "slakken",
+        "Lesma",
+        "Улитки и слизни",
+        "брюхоногие",
+        "riifu",
+        "riipu",
+        "snäckor",
+        "Черевоногі"
+      ],
+      "expertEndpointAlternatives": [],
+      "beginnerPlayabilityScore": 54.5,
+      "gbif": {
+        "hydrationStatus": "matched",
+        "playableTaxonomyVersion": "playable-taxonomy-gbif-v001",
+        "hydratedAt": "2026-06-11T01:32:35Z",
+        "canonicalBackbone": "GBIF Backbone",
+        "acceptedTaxonKeys": [
+          "225"
+        ],
+        "anchors": [
+          {
+            "queryName": "Gastropoda",
+            "queryRank": "CLASS",
+            "anchorKind": "canonical_clade",
+            "note": "",
+            "matchedTaxonKey": "225",
+            "matchedScientificName": "Gastropoda",
+            "matchedCanonicalName": "Gastropoda",
+            "matchedRank": "class",
+            "matchedStatus": "accepted",
+            "acceptedTaxonKey": "225",
+            "scientificName": "Gastropoda",
+            "canonicalName": "Gastropoda",
+            "rank": "class",
+            "taxonomicStatus": "accepted",
+            "parentTaxonKey": "52",
+            "lineage": [
+              "Animalia",
+              "Mollusca",
+              "Gastropoda"
+            ]
+          }
+        ],
+        "vernacularAliases": [
+          "Snegle",
+          "Bauchfüßer",
+          "Gastropoden",
+          "Schnecken",
+          "Gastropods",
+          "Slugs",
+          "Snail",
+          "Snails",
+          "Snails And Slugs",
+          "Limaces",
+          "seilcheag",
+          "seilcheag eadar-thràghadh",
+          "seilcheagan",
+          "seilcheagan eadar-thràghadh",
+          "腹足綱",
+          "buikpotigen",
+          "slakken",
+          "Lesma",
+          "Улитки и слизни",
+          "брюхоногие",
+          "riifu",
+          "riipu",
+          "snäckor",
+          "Черевоногі"
+        ]
+      }
+    }
+  ]
+}
