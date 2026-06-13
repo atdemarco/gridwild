@@ -8,6 +8,7 @@
   const PLAYER_KEY = "gwPlayerId";
   const PLAYER_SESSION_KEY = "gwPlayerSession";
   let sessionInvalidNotified = false;
+  let welcomeBackToastShown = false;
 
   function esc(s) {
     return String(s ?? "")
@@ -55,6 +56,34 @@
     document.body.appendChild(toast);
 
     window.setTimeout(() => toast.remove(), 3200);
+  }
+
+  function welcomeName(account = getAccount()) {
+    const displayName = String(window.__gwState?.player?.display_name || "").trim();
+    const username = String(account?.username || "").trim();
+
+    return displayName || (username ? `@${username}` : "explorer");
+  }
+
+  function showWelcomeBackToast() {
+    if (welcomeBackToastShown) return;
+    if (!isSignedIn()) return;
+
+    const account = getAccount();
+    if (!account?.username) return;
+
+    welcomeBackToastShown = true;
+
+    window.setTimeout(() => {
+      if (!isSignedIn()) return;
+
+      const message = `Welcome back, ${welcomeName(account)}.`;
+      if (typeof window.showGridWildToast === "function") {
+        window.showGridWildToast(message);
+      } else {
+        showToast(message);
+      }
+    }, 1100);
   }
 
   function setSignedIn(payload) {
@@ -577,6 +606,13 @@
     logIn,
     signOut,
     renderAccountCardHtml,
-    bindButtons
+    bindButtons,
+    showWelcomeBackToast
   };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", showWelcomeBackToast, { once: true });
+  } else {
+    showWelcomeBackToast();
+  }
 })();

@@ -6621,8 +6621,15 @@ window.handleUserPositionUpdate = async function (lat, lng, force = false) {
         map.setView(userLatLng, targetZoom, { animate: true });
       }
     } else if (force || centerDistM > 2) {
-      state.programmaticAutoCenterUntil = Date.now() + 900;
-      map.panTo(userLatLng, { animate: true });
+      if (typeof window.animateLockedUserView === "function") {
+        window.animateLockedUserView(userLatLng, targetZoom, {
+          animate: true,
+          duration: 0.45
+        });
+      } else {
+        state.programmaticAutoCenterUntil = Date.now() + 900;
+        map.panTo(userLatLng, { animate: true });
+      }
     }
   }
 

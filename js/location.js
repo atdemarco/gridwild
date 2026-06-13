@@ -129,10 +129,21 @@ const LOCK_VIEW_ANIMATION_SECONDS = 0.9;
 
 const GPS_GOOD_THRESHOLD_M = 20;
 const MAP_HEADING_ROTATION_ENABLED = true;
+const COMPASS_ORIENTATION_HEADS_UP = "headsUp";
+const COMPASS_ORIENTATION_NORTH_UP = "northUp";
+const COMPASS_ORIENTATION_TRANSITION_MS = 420;
+const COMPASS_CAMERA_WRITE_LOG_LIMIT = 80;
 
 let mapHeadingDeg = 0;
 let mapHeadingRaf = null;
 let mapHeadingTransformApplied = false;
+let orientationMode = window.__gwState?.lockToLocation
+  ? COMPASS_ORIENTATION_HEADS_UP
+  : COMPASS_ORIENTATION_NORTH_UP;
+let orientationTransition = null;
+let orientationTransitionTarget = null;
+let orientationTransitionRaf = null;
+let orientationTransitionToken = 0;
 
 function normalizeLockZoomMode(mode) {
   return mode === "wide" ? "wide" : "close";
@@ -157,6 +168,95 @@ function setProgrammaticLockMoveGuardFor(seconds = LOCK_VIEW_ANIMATION_SECONDS) 
   window.__gwState.lockViewAnimationUntil = Date.now() + durationMs;
 }
 
+function targetCompassOrientationMode() {
+  return window.__gwState?.lockToLocation
+    ? COMPASS_ORIENTATION_HEADS_UP
+    : COMPASS_ORIENTATION_NORTH_UP;
+}
+
+function compassOrientationMode() {
+  return orientationMode;
+}
+
+function compassHeadingOrFallback(fallback = mapHeadingDeg) {
+  return lastHeading !== null && Number.isFinite(Number(lastHeading))
+    ? Number(lastHeading)
+    : Number(fallback) || 0;
+}
+
+function cameraBearingForOrientationMode(mode, headingDeg = lastHeading) {
+  return mode === COMPASS_ORIENTATION_HEADS_UP
+    ? normalizeHeading(Number.isFinite(Number(headingDeg)) ? Number(headingDeg) : mapHeadingDeg)
+    : 0;
+}
+
+function cameraBearingForMode(headingDeg = lastHeading) {
+  if (orientationTransition) {
+    return normalizeHeading(Number(mapHeadingDeg) || 0);
+  }
+
+  return cameraBearingForOrientationMode(orientationMode, headingDeg);
+}
+
+function shouldUseMapBearingOrientation() {
+  return orientationTransition !== null || orientationMode === COMPASS_ORIENTATION_HEADS_UP;
+}
+
+function shouldTreatCameraAsHeadingUp() {
+  return (
+    orientationTransition !== null ||
+    orientationMode === COMPASS_ORIENTATION_HEADS_UP ||
+    targetCompassOrientationMode() === COMPASS_ORIENTATION_HEADS_UP
+  );
+}
+
+function signedHeadingDeltaDeg(from, to) {
+  return ((normalizeHeading(to) - normalizeHeading(from) + 540) % 360) - 180;
+}
+
+function easeOrientationTransition(t) {
+  const x = Math.max(0, Math.min(1, Number(t) || 0));
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+function refreshCompassOrientationDebugState() {
+  window.__gwCompassOrientationMode = orientationMode;
+  window.__gwCompassOrientationTargetMode = targetCompassOrientationMode();
+  window.__gwCompassOrientationTransition = orientationTransition;
+  window.__gwCompassMapBearing = normalizeHeading(Number(mapHeadingDeg) || 0);
+}
+
+function logCameraBearingWrite(source, requestedBearing = cameraBearingForMode()) {
+  const mode = compassOrientationMode();
+  refreshCompassOrientationDebugState();
+  window.__gwCompassCameraWrites = Array.isArray(window.__gwCompassCameraWrites)
+    ? window.__gwCompassCameraWrites
+    : [];
+
+  const entry = {
+    at: Date.now(),
+    source: String(source || "unknown"),
+    requestedBearing: normalizeHeading(Number(requestedBearing) || 0),
+    mode,
+    targetMode: targetCompassOrientationMode(),
+    transition: orientationTransition
+  };
+  window.__gwCompassCameraWrites.push(entry);
+  if (window.__gwCompassCameraWrites.length > COMPASS_CAMERA_WRITE_LOG_LIMIT) {
+    window.__gwCompassCameraWrites.splice(
+      0,
+      window.__gwCompassCameraWrites.length - COMPASS_CAMERA_WRITE_LOG_LIMIT
+    );
+  }
+  if (window.__gwDebugCompassCamera === true) {
+    console.debug("[GridWild compass camera]", entry);
+  }
+}
+
+function preserveCompassBearingAfterCameraWrite(source) {
+  applyMapRotation(cameraBearingForMode(), { source });
+}
+
 function animateLockedUserView(latlng, zoom, options = {}) {
   const { animate = true, duration = LOCK_VIEW_ANIMATION_SECONDS, forceFly = false } = options;
 
@@ -165,19 +265,31 @@ function animateLockedUserView(latlng, zoom, options = {}) {
   const targetZoom = Number.isFinite(Number(zoom)) ? Number(zoom) : map.getZoom();
   const currentZoom = map.getZoom();
   const shouldFly = forceFly || Math.abs(currentZoom - targetZoom) > 0.05;
+  const headingUp = shouldTreatCameraAsHeadingUp();
 
-  setProgrammaticLockMoveGuardFor(duration);
+  setProgrammaticLockMoveGuardFor(headingUp ? 0.2 : duration);
 
-  if (animate && shouldFly && typeof map.flyTo === "function") {
+  if (headingUp) {
+    if (shouldFly) {
+      map.setView(latlng, targetZoom, { animate: false });
+      preserveCompassBearingAfterCameraWrite("gps-follow-setView");
+    } else {
+      map.panTo(latlng, { animate: false });
+      preserveCompassBearingAfterCameraWrite("gps-follow-panTo");
+    }
+  } else if (animate && shouldFly && typeof map.flyTo === "function") {
     map.flyTo(latlng, targetZoom, {
       animate: true,
       duration,
       easeLinearity: 0.25
     });
+    preserveCompassBearingAfterCameraWrite("gps-follow-flyTo");
   } else if (shouldFly) {
     map.setView(latlng, targetZoom, { animate });
+    preserveCompassBearingAfterCameraWrite("gps-follow-setView");
   } else {
     map.panTo(latlng, { animate });
+    preserveCompassBearingAfterCameraWrite("gps-follow-panTo");
   }
 }
 
@@ -400,7 +512,7 @@ function disableLocationLock() {
   setLockZoomMode("close");
   showGridWildToast("Follow lock disabled");
   window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
-  applyMapRotation(0);
+  startOrientationTransition(COMPASS_ORIENTATION_NORTH_UP, { source: "disableLocationLock" });
 
   const cb = document.getElementById("toggleLockLocation");
   if (cb && cb.checked) {
@@ -605,7 +717,7 @@ function applyCompassHeading(headingDeg, source = "unknown") {
   window.__gwCompassHeading = lastHeading;
   window.__gwCompassSource = source;
   updateUserMarkerHeading(lastHeading);
-  applyMapRotation(lastHeading);
+  applyMapRotation(lastHeading, { source });
 }
 
 function headingFromDeviceOrientation(event) {
@@ -705,17 +817,111 @@ async function startCompassTracking(options = {}) {
   return compassListenersAttached;
 }
 
+function finishOrientationTransition(targetMode, source) {
+  const finalBearing = cameraBearingForOrientationMode(
+    targetMode,
+    compassHeadingOrFallback(mapHeadingDeg)
+  );
+
+  orientationTransitionRaf = null;
+  orientationTransition = null;
+  orientationTransitionTarget = null;
+  orientationMode = targetMode;
+  mapHeadingDeg = finalBearing;
+  updateUserMarkerHeading(lastHeading ?? 0);
+  setMapPaneHeadingTransform();
+  logCameraBearingWrite(`${source}:transition-complete`, finalBearing);
+}
+
+function startOrientationTransition(targetMode = targetCompassOrientationMode(), options = {}) {
+  const source = typeof options === "string" ? options : options?.source || "orientation";
+  const nextMode =
+    targetMode === COMPASS_ORIENTATION_HEADS_UP
+      ? COMPASS_ORIENTATION_HEADS_UP
+      : COMPASS_ORIENTATION_NORTH_UP;
+
+  if (orientationTransition && orientationTransitionTarget === nextMode) {
+    scheduleMapHeadingTransform();
+    return;
+  }
+
+  if (!MAP_HEADING_ROTATION_ENABLED) {
+    orientationMode = nextMode;
+    orientationTransition = null;
+    orientationTransitionTarget = null;
+    mapHeadingDeg = 0;
+    mapHeadingTransformApplied = false;
+    refreshCompassOrientationDebugState();
+    return;
+  }
+
+  const fromBearing = Number(mapHeadingDeg) || 0;
+  const heading = compassHeadingOrFallback(fromBearing);
+  const toBearing = cameraBearingForOrientationMode(nextMode, heading);
+  const delta = signedHeadingDeltaDeg(fromBearing, toBearing);
+
+  if (orientationTransitionRaf) {
+    cancelAnimationFrame(orientationTransitionRaf);
+    orientationTransitionRaf = null;
+  }
+
+  const token = ++orientationTransitionToken;
+
+  orientationTransition = nextMode === COMPASS_ORIENTATION_HEADS_UP ? "toHeadsUp" : "toNorthUp";
+  orientationTransitionTarget = nextMode;
+  refreshCompassOrientationDebugState();
+  logCameraBearingWrite(`${source}:transition-start`, fromBearing);
+
+  if (Math.abs(delta) < 0.5) {
+    finishOrientationTransition(nextMode, source);
+    return;
+  }
+
+  const durationMs = Math.max(
+    120,
+    Math.min(800, Number(options?.durationMs) || COMPASS_ORIENTATION_TRANSITION_MS)
+  );
+  const startedAt = performance.now();
+
+  const step = (timestamp) => {
+    if (token !== orientationTransitionToken) return;
+
+    const progress = Math.min(1, (timestamp - startedAt) / durationMs);
+    const eased = easeOrientationTransition(progress);
+    mapHeadingDeg = fromBearing + delta * eased;
+    updateUserMarkerHeading(lastHeading ?? 0);
+    setMapPaneHeadingTransform();
+
+    if (progress < 1) {
+      orientationTransitionRaf = requestAnimationFrame(step);
+      return;
+    }
+
+    finishOrientationTransition(nextMode, source);
+  };
+
+  orientationTransitionRaf = requestAnimationFrame(step);
+}
+
 function syncCompassTracking(options = {}) {
-  if (window.__gwState?.lockToLocation) {
+  const targetMode = targetCompassOrientationMode();
+
+  if (targetMode === COMPASS_ORIENTATION_HEADS_UP) {
     startCompassTracking(options);
-    applyMapRotation(lastHeading ?? 0);
   } else {
     if (compassPermissionState === "granted" || compassListenersAttached) {
       startCompassTracking({ requestPermission: false });
     }
-    applyMapRotation(0);
-    updateUserMarkerHeading(lastHeading ?? 0);
   }
+
+  updateUserMarkerHeading(lastHeading ?? 0);
+
+  if (targetMode !== orientationMode || orientationTransition) {
+    startOrientationTransition(targetMode, { source: "syncCompassTracking" });
+    return;
+  }
+
+  applyMapRotation(lastHeading ?? 0, { source: "syncCompassTracking" });
 }
 
 function getCompassState() {
@@ -723,7 +929,12 @@ function getCompassState() {
     active: compassListenersAttached,
     permission: compassPermissionState,
     heading: lastHeading,
-    source: window.__gwCompassSource || null
+    source: window.__gwCompassSource || null,
+    mode: compassOrientationMode(),
+    targetMode: targetCompassOrientationMode(),
+    transition: orientationTransition,
+    cameraBearing: cameraBearingForMode(),
+    cameraWrites: (window.__gwCompassCameraWrites || []).slice(-12)
   };
 }
 
@@ -736,23 +947,38 @@ function getMapPanePosition(mapPane) {
   return L.point(0, 0);
 }
 
+function getHeadingTransformOrigin(pos) {
+  const size = map.getSize();
+  let containerPoint = L.point(size.x / 2, size.y / 2);
+  const loc = lastFix || window.__gwLastUserLocation;
+  const lat = Number(loc?.latitude ?? loc?.lat);
+  const lng = Number(loc?.longitude ?? loc?.lng);
+
+  if (shouldUseMapBearingOrientation() && Number.isFinite(lat) && Number.isFinite(lng)) {
+    containerPoint = map.latLngToContainerPoint([lat, lng]);
+  }
+
+  return {
+    x: containerPoint.x - pos.x,
+    y: containerPoint.y - pos.y
+  };
+}
+
 function setMapPaneHeadingTransform() {
   if (!MAP_HEADING_ROTATION_ENABLED) return;
 
   const mapPane = map.getPane("mapPane");
   if (!mapPane) return;
 
-  const rotationDeg = window.__gwState?.lockToLocation ? -mapHeadingDeg : 0;
+  const rotationDeg = shouldUseMapBearingOrientation() ? -mapHeadingDeg : 0;
   const shouldRotate = Math.abs(rotationDeg) > 0.01;
   if (!shouldRotate && !mapHeadingTransformApplied) return;
 
   const pos = getMapPanePosition(mapPane);
-  const size = map.getSize();
-  const originX = size.x / 2 - pos.x;
-  const originY = size.y / 2 - pos.y;
+  const origin = getHeadingTransformOrigin(pos);
 
   // Leaflet owns the pane translation; GridWild appends heading rotation only.
-  mapPane.style.transformOrigin = shouldRotate ? `${originX}px ${originY}px` : "";
+  mapPane.style.transformOrigin = shouldRotate ? `${origin.x}px ${origin.y}px` : "";
   mapPane.style.transform = shouldRotate
     ? `translate3d(${pos.x}px, ${pos.y}px, 0) rotate(${rotationDeg}deg)`
     : `translate3d(${pos.x}px, ${pos.y}px, 0)`;
@@ -776,14 +1002,30 @@ function scheduleMapHeadingTransform() {
   }
 }
 
-function applyMapRotation(headingDeg = 0) {
+function applyMapRotation(headingDeg = 0, options = {}) {
+  const source = typeof options === "string" ? options : options?.source || "applyMapRotation";
+  const ownsTransition =
+    source === "orientation-transition" || String(source).endsWith(":transition-complete");
+  const requestedBearing =
+    orientationTransition && !ownsTransition
+      ? normalizeHeading(Number(headingDeg) || 0)
+      : cameraBearingForMode(headingDeg);
+
+  if (orientationTransition && !ownsTransition) {
+    logCameraBearingWrite(`${source}:suppressed-during-transition`, requestedBearing);
+    scheduleMapHeadingTransform();
+    return;
+  }
+
+  logCameraBearingWrite(source, requestedBearing);
+
   if (!MAP_HEADING_ROTATION_ENABLED) {
     mapHeadingDeg = 0;
     mapHeadingTransformApplied = false;
     return;
   }
 
-  mapHeadingDeg = normalizeHeading(Number(headingDeg) || 0);
+  mapHeadingDeg = requestedBearing;
 
   scheduleMapHeadingTransform();
 }
