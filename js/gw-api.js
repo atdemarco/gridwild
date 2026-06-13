@@ -312,6 +312,26 @@ window.GridWildAPI = {
     return postFunction("get-quests", { player_id: this.getPlayerId() });
   },
 
+  async getDraftObservationMirrors() {
+    return postFunction("get-draft-observations", {
+      player_id: this.getPlayerId()
+    });
+  },
+
+  async upsertDraftObservationMirrors(drafts = []) {
+    return postFunction("upsert-draft-observations", {
+      player_id: this.getPlayerId(),
+      drafts
+    });
+  },
+
+  async deleteDraftObservationMirror(draftId) {
+    return postFunction("delete-draft-observation", {
+      player_id: this.getPlayerId(),
+      draft_id: draftId
+    });
+  },
+
   async getNearbyLocalNiches(lat, lng, options = {}) {
     return postFunction("get-local-niches", {
       player_id: this.getPlayerId(),

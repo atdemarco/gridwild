@@ -24,6 +24,22 @@
     return document.getElementById(id);
   }
 
+  function shouldAvoidSearchAutofocus() {
+    return (
+      window.matchMedia?.("(pointer: coarse), (max-width: 760px)")?.matches ||
+      window.innerWidth <= 760
+    );
+  }
+
+  function focusInitialPanelTarget() {
+    if (shouldAvoidSearchAutofocus()) {
+      $("gwFieldBookClose")?.focus({ preventScroll: true });
+      return;
+    }
+
+    $("gwFieldBookSearch")?.focus();
+  }
+
   function esc(value) {
     return String(value ?? "")
       .replace(/&/g, "&amp;")
@@ -1200,7 +1216,7 @@
     if (!panel.hidden) {
       loadExemplarsForMark(activeMarkId);
       renderMatrix();
-      $("gwFieldBookSearch")?.focus();
+      focusInitialPanelTarget();
     }
   }
 

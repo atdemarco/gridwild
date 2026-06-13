@@ -629,7 +629,9 @@
       panX,
       panY,
       rotationDeg: rotate,
-      exposureDelta: exposure
+      exposureDelta: exposure,
+      outputWidth: canvas.width,
+      outputHeight: canvas.height
     });
   }
 

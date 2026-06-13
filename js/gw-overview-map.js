@@ -42,6 +42,13 @@
           inset 0 1px 0 rgba(255,255,255,0.05);
       }
 
+      .gw-overview-shell .leaflet-container,
+      .gw-overview-shell .leaflet-map-pane,
+      .gw-overview-shell .leaflet-pane {
+        max-width: 100%;
+        max-height: 100%;
+      }
+
       .gw-overview-shell.is-expanded {
         position: fixed;
         left: 50%;
@@ -96,7 +103,7 @@
         border: 1px solid rgba(215,183,116,0.5);
         background: rgba(20,17,15,0.82);
         color: #f0d18a;
-        font-size: 20px;
+        font-size: 22px;
         line-height: 1;
         font-weight: 950;
         cursor: pointer;
@@ -109,13 +116,26 @@
       }
 
       #gwOverviewMap {
+        position: absolute;
+        inset: 0;
+        display: block;
         width: 100%;
         height: 100%;
         background: #1c211d;
+        overflow: hidden;
+        border-radius: inherit;
+        contain: layout paint;
       }
 
       #gwOverviewMap .leaflet-control-container {
         display: none;
+      }
+
+      #gwOverviewMap .leaflet-map-pane,
+      #gwOverviewMap .leaflet-tile-pane,
+      #gwOverviewMap .leaflet-overlay-pane,
+      #gwOverviewMap .leaflet-marker-pane {
+        will-change: transform;
       }
 
       .gw-overview-viewport {
@@ -188,7 +208,7 @@
     shell.className = "gw-overview-shell";
     shell.innerHTML = `
       <div class="gw-overview-title">Field Map</div>
-      <button class="gw-overview-minimize" type="button" aria-label="Minimize field map" title="Minimize">-</button>
+      <button class="gw-overview-minimize" type="button" aria-label="Close expanded field map" title="Close">&times;</button>
       <div id="gwOverviewMap"></div>
     `;
 
@@ -205,8 +225,16 @@
     });
   }
 
+  function handleOutsidePointerDown(event) {
+    if (!expanded) return;
+    const shell = document.getElementById("gwOverviewShell");
+    if (!shell || shell.contains(event.target)) return;
+    setExpanded(false);
+  }
+
   function init() {
     if (!window.L || !window.map) return;
+    if (overviewMap) return;
 
     injectStyles();
     makeShell();
@@ -220,11 +248,18 @@
       boxZoom: false,
       keyboard: false,
       tap: false,
-      touchZoom: false
+      touchZoom: false,
+      inertia: false,
+      fadeAnimation: false,
+      zoomAnimation: false,
+      markerZoomAnimation: false
     });
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 20
+      maxZoom: 20,
+      keepBuffer: 8,
+      updateWhenIdle: false,
+      updateWhenZooming: false
     }).addTo(overviewMap);
 
     patchLayer = L.layerGroup().addTo(overviewMap);
@@ -239,6 +274,7 @@
     });
     map.on("move zoom resize moveend zoomend", scheduleSync);
     window.addEventListener("gwPatchesChanged", () => renderPatchLayer(true));
+    document.addEventListener("pointerdown", handleOutsidePointerDown, { capture: true });
 
     setTimeout(syncFromMainMap, 100);
   }
@@ -247,7 +283,7 @@
     expanded = show === true;
     document.getElementById("gwOverviewShell")?.classList.toggle("is-expanded", expanded);
     window.setTimeout(() => {
-      overviewMap?.invalidateSize?.({ animate: false });
+      overviewMap?.invalidateSize?.({ animate: false, pan: false });
       syncFromMainMap();
     }, 0);
   }
@@ -266,7 +302,11 @@
     const center = map.getCenter();
 
     // Keep the inset broader than the HUD while following the same zoom direction.
-    overviewMap.setView(center, getOverviewZoom(), { animate: false });
+    overviewMap.setView(center, getOverviewZoom(), {
+      animate: false,
+      pan: { animate: false },
+      zoom: { animate: false }
+    });
 
     // Still update the little rectangle from the main map bounds.
     // As the main map zooms in, this rectangle gets smaller.

@@ -1173,6 +1173,45 @@
     };
   }
 
+  function beginOptimisticQuest(quest) {
+    if (!quest?.id) return null;
+
+    quest.status = "active";
+    quest.startedAt = quest.startedAt || nowISO();
+    quest.pending = true;
+    quest._optimistic = true;
+
+    window.__gwState = window.__gwState || {};
+    window.__gwState.activeQuestId = quest.id;
+    window.refreshQuestBadge?.();
+
+    if (window.GridWildQuestLayer) {
+      window.GridWildQuestLayer.embark(quest);
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("gwQuestStartPending", {
+        detail: { quest }
+      })
+    );
+
+    return quest;
+  }
+
+  function clearOptimisticQuest(quest) {
+    if (!quest?._optimistic) return;
+    if (String(window.__gwState?.activeQuestId || "") !== String(quest.id || "")) return;
+
+    window.__gwState.activeQuestId = null;
+    window.GridWildQuestLayer?.clear?.();
+    window.refreshQuestBadge?.();
+    window.dispatchEvent(
+      new CustomEvent("gwQuestStartPendingCleared", {
+        detail: { quest }
+      })
+    );
+  }
+
   async function startQuestFromRecipe(recipe, options = {}) {
     const title = options.title || buildQuestTitle(recipe);
     const source = options.source || "manual";
@@ -1189,6 +1228,11 @@
     if (Number.isFinite(rewardXP) && rewardXP > 0) {
       quest.pointValue = Math.round(rewardXP);
     }
+
+    const optimisticQuest =
+      options.optimisticEmbark === true && options.autoEmbark === true
+        ? beginOptimisticQuest(quest)
+        : null;
 
     try {
       const result = await window.GridWildAPI.createQuest({
@@ -1224,6 +1268,7 @@
 
       return normalized;
     } catch (err) {
+      clearOptimisticQuest(optimisticQuest);
       console.error("DB quest create failed:", err);
       alert(`Could not create quest: ${err.message}`);
       return null;

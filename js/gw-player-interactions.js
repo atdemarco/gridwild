@@ -5,6 +5,8 @@
 
 (function () {
   const POLL_INTERVAL_MS = 12000;
+  const QUEST_ASSIGNMENTS_KEY = "gw_inbox_quest_assignments_v1";
+  const QUEST_ASSIGNMENT_MUTES_KEY = "gw_inbox_muted_quest_assignments_v1";
 
   let stylesInjected = false;
   let hudRoot = null;
@@ -15,7 +17,9 @@
   let state = {
     notifications: [],
     conversations: [],
-    blocks: []
+    blocks: [],
+    questAssignments: loadQuestAssignments(),
+    mutedQuestAssignments: loadMutedQuestAssignments()
   };
 
   function esc(s) {
@@ -38,6 +42,61 @@
 
   function isSignedIn() {
     return Boolean(window.GridWildAPI?.getPlayerId?.() && window.GridWildAPI?.getSessionToken?.());
+  }
+
+  function storageKey(base) {
+    try {
+      const playerId = localStorage.getItem("gwPlayerId");
+      return playerId ? `${base}:${playerId}` : base;
+    } catch {
+      return base;
+    }
+  }
+
+  function loadStoredList(baseKey) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(storageKey(baseKey)) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function loadQuestAssignments() {
+    return loadStoredList(QUEST_ASSIGNMENTS_KEY).filter((row) => row?.id);
+  }
+
+  function saveQuestAssignments() {
+    try {
+      localStorage.setItem(
+        storageKey(QUEST_ASSIGNMENTS_KEY),
+        JSON.stringify(state.questAssignments || [])
+      );
+    } catch (err) {
+      console.warn("Could not save quest assignments:", err);
+    }
+  }
+
+  function loadMutedQuestAssignments() {
+    return loadStoredList(QUEST_ASSIGNMENT_MUTES_KEY).map(String).filter(Boolean);
+  }
+
+  function saveMutedQuestAssignments() {
+    try {
+      localStorage.setItem(
+        storageKey(QUEST_ASSIGNMENT_MUTES_KEY),
+        JSON.stringify(state.mutedQuestAssignments || [])
+      );
+    } catch (err) {
+      console.warn("Could not save muted quest assignments:", err);
+    }
+  }
+
+  function ensureLocalQuestState() {
+    if (!Array.isArray(state.questAssignments)) state.questAssignments = loadQuestAssignments();
+    if (!Array.isArray(state.mutedQuestAssignments)) {
+      state.mutedQuestAssignments = loadMutedQuestAssignments();
+    }
   }
 
   function myPlayerId() {
@@ -95,6 +154,18 @@
 
   function isTargetBlocked(targetId) {
     return state.blocks.some((row) => String(row.blocked_player_id) === String(targetId));
+  }
+
+  function isQuestAssignmentBlocked(row) {
+    const ids = [
+      row.sender_player_id,
+      row.payload?.senderPlayerId,
+      row.payload?.observerPlayerId,
+      row.payload?.playerId
+    ]
+      .map((id) => String(id || ""))
+      .filter(Boolean);
+    return ids.some(isTargetBlocked);
   }
 
   function conversationForTarget(targetId) {
@@ -257,6 +328,12 @@
         padding: 10px;
       }
 
+      .gw-player-inbox-item.is-quest-assignment {
+        border-color: rgba(117,230,164,0.26);
+        background:
+          linear-gradient(180deg, rgba(66,82,54,0.24), rgba(255,255,255,0.045));
+      }
+
       .gw-player-inbox-item-title,
       .gw-direct-chat-row-title {
         color: #f4e8cf;
@@ -278,6 +355,16 @@
         flex-wrap: wrap;
         gap: 7px;
         margin-top: 9px;
+      }
+
+      .gw-player-inbox-assignment-footer {
+        margin-top: 8px;
+        padding-top: 7px;
+        border-top: 1px solid rgba(240,209,138,0.12);
+        color: rgba(196,237,190,0.82);
+        font-size: 11px;
+        line-height: 1.25;
+        font-weight: 850;
       }
 
       .gw-player-inbox-action,
@@ -531,6 +618,14 @@
   }
 
   function notificationText(row) {
+    if (row.type === "quest_assignment") {
+      const patchName = row.payload?.patchName || "a subscribed Patch";
+      return [
+        row.title || "Quest assignment",
+        row.copy || row.body || `Unknown observations need IDs inside ${patchName}.`
+      ];
+    }
+
     const sender = playerName(row.sender);
     const recipient = playerName(row.recipient);
     const party = row.party?.name || row.payload?.party_name || "party";
@@ -553,7 +648,67 @@
     return ["Notification", "New player interaction."];
   }
 
+  function normalizeQuestAssignment(row) {
+    if (!row?.id) return null;
+    return {
+      ...row,
+      id: String(row.id),
+      type: "quest_assignment",
+      status: row.status || "available",
+      created_at: row.created_at || row.createdAt || new Date().toISOString(),
+      payload: row.payload && typeof row.payload === "object" ? row.payload : {}
+    };
+  }
+
+  function questAssignmentTime(row) {
+    const time = new Date(row.created_at || row.createdAt || 0).getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function visibleQuestAssignments() {
+    ensureLocalQuestState();
+    const muted = new Set((state.mutedQuestAssignments || []).map(String));
+    return (state.questAssignments || [])
+      .filter((row) => row?.id && !muted.has(String(row.id)) && !isQuestAssignmentBlocked(row))
+      .sort((a, b) => questAssignmentTime(b) - questAssignmentTime(a));
+  }
+
+  function inboxNotifications() {
+    const rows = [...visibleQuestAssignments(), ...(state.notifications || [])];
+    return rows.sort((a, b) => questAssignmentTime(b) - questAssignmentTime(a));
+  }
+
+  function questAssignmentFooter(row) {
+    if (row.type !== "quest_assignment") return "";
+    const payload = row.payload || {};
+    const count = Number(payload.unknownCount || payload.observationCount || 0);
+    const taxon = payload.taxonLabel || "Any life";
+    const patch = payload.patchName || "subscribed Patch";
+    const countLabel = count
+      ? `${count} unknown observation${count === 1 ? "" : "s"}`
+      : "Unknown observations";
+    return `
+      <div class="gw-player-inbox-assignment-footer">
+        Quest assignment - ${esc(countLabel)} - ${esc(taxon)} - ${esc(patch)}
+      </div>
+    `;
+  }
+
   function renderNotificationActions(row) {
+    if (row.type === "quest_assignment") {
+      return `
+        <button class="gw-player-inbox-action" type="button" data-gw-quest-assignment-action="start" data-assignment-id="${esc(row.id)}">
+          Start
+        </button>
+        <button class="gw-player-inbox-action" type="button" data-gw-quest-assignment-action="patch" data-assignment-id="${esc(row.id)}">
+          Patch
+        </button>
+        <button class="gw-player-inbox-action is-danger" type="button" data-gw-quest-assignment-action="mute" data-assignment-id="${esc(row.id)}">
+          Mute
+        </button>
+      `;
+    }
+
     if (row.status === "declined") {
       return `
         <button class="gw-player-inbox-action" type="button" data-gw-interaction-response="dismiss" data-interaction-id="${esc(row.id)}">
@@ -601,9 +756,10 @@
   function renderNotification(row) {
     const [title, copy] = notificationText(row);
     return `
-      <div class="gw-player-inbox-item">
+      <div class="gw-player-inbox-item ${row.type === "quest_assignment" ? "is-quest-assignment" : ""}">
         <div class="gw-player-inbox-item-title">${esc(title)}</div>
         <div class="gw-player-inbox-item-copy">${esc(copy)}</div>
+        ${questAssignmentFooter(row)}
         <div class="gw-player-inbox-actions">
           ${renderNotificationActions(row)}
         </div>
@@ -624,7 +780,8 @@
 
   function renderHud() {
     const root = ensureHud();
-    const count = state.notifications.length;
+    const rows = inboxNotifications();
+    const count = rows.length;
     const hidden = !isSignedIn() && count === 0;
     root.classList.toggle("is-hidden", hidden);
     root.classList.toggle("is-open", inboxOpen);
@@ -642,10 +799,10 @@
         <div class="gw-player-inbox-list">
           ${
             count
-              ? state.notifications.map(renderNotification).join("")
+              ? rows.map(renderNotification).join("")
               : `<div class="gw-player-inbox-item">
                 <div class="gw-player-inbox-item-title">Inbox clear</div>
-                <div class="gw-player-inbox-item-copy">Chat and party requests will appear here.</div>
+                <div class="gw-player-inbox-item-copy">Chat, party, and quest assignments will appear here.</div>
               </div>`
           }
         </div>
@@ -689,6 +846,91 @@
     }
   }
 
+  function removeQuestAssignment(id, options = {}) {
+    ensureLocalQuestState();
+    const targetId = String(id || "");
+    if (!targetId) return;
+
+    state.questAssignments = (state.questAssignments || []).filter(
+      (row) => String(row.id) !== targetId
+    );
+    if (options.mute === true && !state.mutedQuestAssignments.includes(targetId)) {
+      state.mutedQuestAssignments.push(targetId);
+      saveMutedQuestAssignments();
+    }
+    saveQuestAssignments();
+    renderHud();
+    window.dispatchEvent(
+      new CustomEvent("gwQuestAssignmentsChanged", {
+        detail: { assignments: visibleQuestAssignments() }
+      })
+    );
+  }
+
+  async function handleQuestAssignmentAction(button) {
+    const id = button.dataset.assignmentId;
+    const action = button.dataset.gwQuestAssignmentAction;
+    if (!id || !action) return;
+
+    ensureLocalQuestState();
+    const row = (state.questAssignments || []).find((item) => String(item.id) === String(id));
+    if (!row) return;
+
+    if (action === "patch") {
+      const patchId = row.payload?.patchId;
+      if (patchId && window.GridWildPatches?.openPatchDetail) {
+        window.GridWildPatches.openPatchDetail(patchId);
+      } else {
+        toast("That Patch is not available locally.");
+      }
+      return;
+    }
+
+    if (action === "mute") {
+      removeQuestAssignment(id, { mute: true });
+      toast("Quest assignment muted.");
+      return;
+    }
+
+    if (action !== "start") return;
+
+    const recipe = row.payload?.recipe;
+    if (!recipe || !window.GridWildQuests?.startQuestFromRecipe) {
+      toast("Quest tools are still loading.");
+      return;
+    }
+
+    button.disabled = true;
+    try {
+      const quest = await window.GridWildQuests.startQuestFromRecipe(recipe, {
+        title: row.payload?.questTitle || row.title || "Identify Unknowns",
+        description:
+          row.payload?.questDescription ||
+          row.body ||
+          row.copy ||
+          "Identify unknown observations inside a subscribed Patch.",
+        source: "patch_subscription",
+        autoEmbark: true,
+        optimisticEmbark: true,
+        openStatus: false
+      });
+
+      if (quest) {
+        removeQuestAssignment(id);
+        toast("Quest assignment accepted.");
+        if (window.GridWildIdentify?.openIdentifyDialog) {
+          window.GridWildIdentify.openIdentifyDialog(quest);
+        }
+      } else {
+        button.disabled = false;
+      }
+    } catch (err) {
+      console.warn("Could not start quest assignment:", err);
+      toast(err?.message || "Could not start that quest.");
+      button.disabled = false;
+    }
+  }
+
   function bindHud(root = hudRoot) {
     if (!root) return;
 
@@ -704,6 +946,10 @@
 
     root.querySelectorAll("[data-gw-interaction-response]").forEach((button) => {
       button.addEventListener("click", () => handleNotificationResponse(button));
+    });
+
+    root.querySelectorAll("[data-gw-quest-assignment-action]").forEach((button) => {
+      button.addEventListener("click", () => handleQuestAssignmentAction(button));
     });
   }
 
@@ -828,10 +1074,59 @@
     bindMessagesSection(document);
   }
 
+  function setQuestAssignments(assignments = [], options = {}) {
+    ensureLocalQuestState();
+    const muted = new Set((state.mutedQuestAssignments || []).map(String));
+    const base = options.replace === true ? [] : state.questAssignments || [];
+    const byId = new Map(
+      base
+        .map(normalizeQuestAssignment)
+        .filter(Boolean)
+        .map((row) => [String(row.id), row])
+    );
+
+    (assignments || [])
+      .map(normalizeQuestAssignment)
+      .filter(Boolean)
+      .forEach((row) => {
+        if (muted.has(String(row.id))) return;
+        byId.set(String(row.id), {
+          ...byId.get(String(row.id)),
+          ...row
+        });
+      });
+
+    state.questAssignments = Array.from(byId.values())
+      .sort((a, b) => questAssignmentTime(b) - questAssignmentTime(a))
+      .slice(0, 30);
+    saveQuestAssignments();
+    renderHud();
+    window.dispatchEvent(
+      new CustomEvent("gwQuestAssignmentsChanged", {
+        detail: { assignments: visibleQuestAssignments() }
+      })
+    );
+    return visibleQuestAssignments();
+  }
+
+  function getQuestAssignments() {
+    return visibleQuestAssignments();
+  }
+
   async function refresh(options = {}) {
     if (refreshInFlight) return state;
+    ensureLocalQuestState();
+    const questAssignments = state.questAssignments || [];
+    const mutedQuestAssignments = state.mutedQuestAssignments || [];
+
     if (!isSignedIn() || !window.GridWildAPI?.getPlayerInteractions) {
-      state = { notifications: [], conversations: [], blocks: [] };
+      state = {
+        notifications: [],
+        conversations: [],
+        blocks: [],
+        questAssignments,
+        mutedQuestAssignments
+      };
       renderHud();
       updateMessagesSection();
       window.dispatchEvent(new CustomEvent("gwPlayerInteractionsChanged", { detail: state }));
@@ -844,7 +1139,9 @@
       state = {
         notifications: result?.notifications || [],
         conversations: result?.conversations || [],
-        blocks: result?.blocks || []
+        blocks: result?.blocks || [],
+        questAssignments,
+        mutedQuestAssignments
       };
       renderHud();
       updateMessagesSection();
@@ -876,7 +1173,13 @@
 
   window.addEventListener("gwBootstrapReady", startPolling);
   window.addEventListener("gwAccountChanged", () => {
-    state = { notifications: [], conversations: [], blocks: [] };
+    state = {
+      notifications: [],
+      conversations: [],
+      blocks: [],
+      questAssignments: loadQuestAssignments(),
+      mutedQuestAssignments: loadMutedQuestAssignments()
+    };
     renderHud();
     updateMessagesSection();
     refresh({ quiet: true });
@@ -898,10 +1201,13 @@
     bindAvatarActions,
     bindMessagesSection,
     closeDirectChat,
+    getQuestAssignments,
     openDirectChat,
     refresh,
     renderAvatarActionsHtml,
     renderMessagesSectionHtml,
+    removeQuestAssignment,
+    setQuestAssignments,
     startPolling,
     stopPolling
   };

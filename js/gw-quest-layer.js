@@ -303,6 +303,7 @@
       }
 
       .gw-active-quest-chip-main {
+        order: 0;
         min-width: 0;
         flex: 1 1 auto;
       }
@@ -325,6 +326,7 @@
       }
 
       .gw-active-quest-collapse-btn {
+        order: 4;
         flex: 0 0 auto;
         width: 24px;
         height: 24px;
@@ -353,6 +355,7 @@
       }
 
       .gw-active-quest-evidence-btn {
+        order: 3;
         flex: 0 0 auto;
         width: 30px;
         height: 30px;
@@ -381,6 +384,7 @@
       }
 
       .gw-active-quest-abandon-btn {
+        order: 2;
         flex: 0 0 auto;
         width: 30px;
         height: 30px;
@@ -510,6 +514,7 @@
       }
 
       .gw-active-quest-distance {
+        order: 1;
         flex: 0 0 auto;
         min-width: 58px;
         text-align: right;
@@ -1134,7 +1139,11 @@
   function collapseIconSvg(collapsed) {
     return collapsed
       ? `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"></path></svg>`
-      : `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 6-6 6 6 6"></path></svg>`;
+      : `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="5" y="6" width="14" height="12" rx="2"></rect>
+          <path d="M5 10h14"></path>
+          <path d="M10 15h4"></path>
+        </svg>`;
   }
 
   function syncHudCollapsed() {

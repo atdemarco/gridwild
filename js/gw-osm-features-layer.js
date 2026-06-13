@@ -28,6 +28,7 @@
   let fetchTimer = null;
   let lastFetchKey = null;
   let fetchInFlight = false;
+  let fetchInFlightMeta = null;
   let fetchRequestedWhileInFlight = false;
   let lastFetchStartedAt = 0;
   let lastFetchScheduleZoom = null;
@@ -38,6 +39,7 @@
   let overpassDisabledUntil = 0;
   let cachedFeatureBounds = null;
   let cachedParksBounds = null;
+  let cachedParksProfile = null;
 
   let features = {
     trails: [],
@@ -64,6 +66,11 @@
   const MIN_ZOOM = 15;
   const CLOSE_DETAIL_MIN_ZOOM = 18;
   const LEAN_QUERY_BOUNDS_PAD_RATIO = 0.5;
+  const DETAIL_QUERY_BOUNDS_PAD_RATIO = 1.15;
+  const PARKS_QUERY_BOUNDS_PAD_RATIO = 0.65;
+  const LEAN_EDGE_REFETCH_PAD_RATIO = 0.16;
+  const DETAIL_EDGE_REFETCH_PAD_RATIO = 0.24;
+  const PARKS_EDGE_REFETCH_PAD_RATIO = 0.18;
   const LOCAL_CACHE_KEY = "gridwild.osmFeatures.cache.v4";
   const LOCAL_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   const LOCAL_CACHE_MAX_ENTRIES = 12;
@@ -155,10 +162,34 @@
     return map.getBounds().pad(LEAN_QUERY_BOUNDS_PAD_RATIO);
   }
 
+  function getDetailQueryBounds() {
+    return map.getBounds().pad(DETAIL_QUERY_BOUNDS_PAD_RATIO);
+  }
+
+  function getParksQueryBoundsForCurrentView() {
+    return map.getBounds().pad(PARKS_QUERY_BOUNDS_PAD_RATIO);
+  }
+
   function getQueryBoundsForProfile(profile = currentQueryProfile()) {
     const queryProfile = normalizeQueryProfile(profile);
     if (queryProfile === QUERY_PROFILE_LEAN) return getLeanQueryBounds();
+    if (queryProfile === QUERY_PROFILE_DETAIL) return getDetailQueryBounds();
     return map.getBounds();
+  }
+
+  function getCoverageBoundsForProfile(profile = currentQueryProfile()) {
+    const queryProfile = normalizeQueryProfile(profile);
+    const currentBounds = map.getBounds();
+    if (queryProfile === QUERY_PROFILE_DETAIL) {
+      return currentBounds.pad(DETAIL_EDGE_REFETCH_PAD_RATIO);
+    }
+    if (queryProfile === QUERY_PROFILE_LEAN) {
+      return currentBounds.pad(LEAN_EDGE_REFETCH_PAD_RATIO);
+    }
+    if (isParksOnlyQueryProfile(queryProfile)) {
+      return currentBounds.pad(PARKS_EDGE_REFETCH_PAD_RATIO);
+    }
+    return currentBounds;
   }
 
   function boundsToBboxString(b) {
@@ -201,6 +232,40 @@
     );
   }
 
+  function profileCanSatisfyCoverage(requestedProfile, candidateProfile) {
+    if (!candidateProfile) return false;
+    const requested = normalizeQueryProfile(requestedProfile);
+    const candidate = normalizeQueryProfile(candidateProfile);
+    if (requested === candidate) return true;
+    if (requested === QUERY_PROFILE_LEAN && candidate === QUERY_PROFILE_DETAIL) return true;
+    if (requested === QUERY_PROFILE_PARKS && !isParksOnlyQueryProfile(candidate)) return true;
+    if (requested === QUERY_PROFILE_PARKS && candidate === QUERY_PROFILE_PATCH_VIEW) return true;
+    return false;
+  }
+
+  function inFlightCovers(bounds, profile) {
+    return (
+      fetchInFlightMeta &&
+      profileCanSatisfyCoverage(profile, fetchInFlightMeta.profile) &&
+      boundsContain(fetchInFlightMeta.bounds, bounds)
+    );
+  }
+
+  function beginFetchInFlight(key, bounds, profile) {
+    fetchInFlight = true;
+    fetchInFlightMeta = {
+      key,
+      bounds,
+      profile: normalizeQueryProfile(profile),
+      startedAt: Date.now()
+    };
+  }
+
+  function endFetchInFlight(key) {
+    fetchInFlight = false;
+    if (!key || fetchInFlightMeta?.key === key) fetchInFlightMeta = null;
+  }
+
   function serializeBounds(bounds) {
     if (!bounds) return null;
     return {
@@ -225,19 +290,26 @@
     return L.latLngBounds(L.latLng(bounds.south, bounds.west), L.latLng(bounds.north, bounds.east));
   }
 
-  function hasCachedCoverage(profile = currentQueryProfile()) {
+  function hasCachedCoverage(profile = currentQueryProfile(), coverageBounds = null) {
+    const requestedBounds = coverageBounds || getCoverageBoundsForProfile(profile);
     return (
-      normalizeQueryProfile(cachedFeatureProfile) === normalizeQueryProfile(profile) &&
-      boundsContain(cachedFeatureBounds, map.getBounds())
+      profileCanSatisfyCoverage(profile, cachedFeatureProfile) &&
+      boundsContain(cachedFeatureBounds, requestedBounds)
+    );
+  }
+
+  function hasActiveParksCoverage(bounds, profile = QUERY_PROFILE_PARKS) {
+    return (
+      (profileCanSatisfyCoverage(profile, cachedFeatureProfile) &&
+        boundsContain(cachedFeatureBounds, bounds)) ||
+      (profileCanSatisfyCoverage(profile, cachedParksProfile) &&
+        boundsContain(cachedParksBounds, bounds))
     );
   }
 
   function hasParksCoverageForCurrentView() {
-    const currentBounds = map.getBounds();
-    return (
-      boundsContain(cachedFeatureBounds, currentBounds) ||
-      boundsContain(cachedParksBounds, currentBounds)
-    );
+    const currentBounds = getCoverageBoundsForProfile(QUERY_PROFILE_PARKS);
+    return hasActiveParksCoverage(currentBounds, QUERY_PROFILE_PARKS);
   }
 
   function featureCounts(featureSet = features) {
@@ -540,9 +612,9 @@
     }
   }
 
-  function loadLocalCoverageForCurrentView(profile = currentQueryProfile()) {
+  function loadLocalCoverageForCurrentView(profile = currentQueryProfile(), coverageBounds = null) {
     const requestedProfile = normalizeQueryProfile(profile);
-    const currentBounds = map.getBounds();
+    const currentBounds = coverageBounds || getCoverageBoundsForProfile(requestedProfile);
     const entries = readLocalCacheEntries();
     const match = entries
       .map((entry, index) => ({
@@ -553,7 +625,7 @@
       }))
       .filter(
         (candidate) =>
-          candidate.queryProfile === requestedProfile &&
+          profileCanSatisfyCoverage(requestedProfile, candidate.queryProfile) &&
           boundsContain(candidate.bounds, currentBounds)
       )
       .sort((a, b) => Number(b.entry.savedAt || 0) - Number(a.entry.savedAt || 0))[0];
@@ -564,6 +636,7 @@
     cachedFeatureBounds = match.bounds;
     cachedFeatureProfile = match.queryProfile;
     cachedParksBounds = match.bounds;
+    cachedParksProfile = match.queryProfile;
     lastFetchKey = match.entry.fetchKey || boundsToFetchKey(match.bounds, match.queryProfile);
     entries[match.index] = {
       ...match.entry,
@@ -594,7 +667,7 @@
       .filter((candidate) => {
         if (!boundsContain(candidate.bounds, currentBounds)) return false;
         if (!requestedProfile) return true;
-        return candidate.queryProfile === requestedProfile;
+        return profileCanSatisfyCoverage(requestedProfile, candidate.queryProfile);
       })
       .sort((a, b) => {
         const aFullFeatureCache = isParksOnlyQueryProfile(a.queryProfile) ? 0 : 1;
@@ -611,11 +684,13 @@
     if (isParksOnlyQueryProfile(match.queryProfile)) {
       mergeParksIntoActiveFeatures(hydrated);
       cachedParksBounds = match.bounds;
+      cachedParksProfile = match.queryProfile;
     } else {
       features = hydrated;
       cachedFeatureBounds = match.bounds;
       cachedFeatureProfile = match.queryProfile;
       cachedParksBounds = match.bounds;
+      cachedParksProfile = match.queryProfile;
     }
     lastFetchKey = match.entry.fetchKey || boundsToFetchKey(match.bounds, match.queryProfile);
     entries[match.index] = {
@@ -667,7 +742,7 @@
   }
 
   function buildCloseDetailOverpassClauses(bbox) {
-    // Close-detail clauses use the live FOV, not the buffered context superchunk.
+    // Close-detail clauses are only included at high zoom; their bbox is still envelope-buffered.
     return `
         way["building"](${bbox});
     `;
@@ -962,11 +1037,7 @@
       options.profile || (options.broad ? QUERY_PROFILE_PATCH_VIEW : QUERY_PROFILE_PARKS)
     );
 
-    if (
-      queryProfile !== QUERY_PROFILE_PATCH_VIEW &&
-      (boundsContain(cachedFeatureBounds, queryBounds) ||
-        boundsContain(cachedParksBounds, queryBounds))
-    ) {
+    if (hasActiveParksCoverage(queryBounds, queryProfile)) {
       scheduleRender();
       return false;
     }
@@ -981,6 +1052,7 @@
     }
 
     if (fetchInFlight) {
+      if (inFlightCovers(queryBounds, queryProfile)) return false;
       fetchRequestedWhileInFlight = true;
       return false;
     }
@@ -995,8 +1067,8 @@
     const key = boundsToFetchKey(queryBounds, queryProfile);
     if (key === lastFetchKey) return false;
 
-    fetchInFlight = true;
     lastFetchStartedAt = now;
+    beginFetchInFlight(key, queryBounds, queryProfile);
     showFetchToast();
 
     try {
@@ -1029,6 +1101,7 @@
       mergeParksIntoActiveFeatures(parkFeatures);
       lastFetchKey = key;
       cachedParksBounds = queryBounds;
+      cachedParksProfile = queryProfile;
       saveLocalCoverage(key, queryBounds, parkFeatures, queryProfile, { rawCounts });
 
       logOsmFeatureCounts("parks-fetch", parkFeatures, {
@@ -1043,7 +1116,7 @@
       console.warn("GridWild OSM parks fetch failed:", err);
       return false;
     } finally {
-      fetchInFlight = false;
+      endFetchInFlight(key);
       if (fetchRequestedWhileInFlight) {
         fetchRequestedWhileInFlight = false;
         scheduleFetch(fetchDelayForCurrentMotionState());
@@ -1057,28 +1130,32 @@
       return false;
     }
 
-    return await fetchParksForBounds(map.getBounds(), {
+    return await fetchParksForBounds(getParksQueryBoundsForCurrentView(), {
       profile: QUERY_PROFILE_PARKS
     });
   }
 
   async function fetchFeatures() {
     if ((window.__gwState?.showOsmFeatures ?? true) === false) return;
+    const queryProfile = currentQueryProfile();
+    const coverageBounds = getCoverageBoundsForProfile(queryProfile);
+    const queryBounds = getQueryBoundsForProfile(queryProfile);
+
     if (fetchInFlight) {
+      if (inFlightCovers(coverageBounds, queryProfile)) return;
       fetchRequestedWhileInFlight = true;
       return;
     }
-    const queryProfile = currentQueryProfile();
 
     const now = Date.now();
     if (now < overpassDisabledUntil) return;
 
-    if (hasCachedCoverage(queryProfile)) {
+    if (hasCachedCoverage(queryProfile, coverageBounds)) {
       scheduleRender();
       return;
     }
 
-    if (loadLocalCoverageForCurrentView(queryProfile)) {
+    if (loadLocalCoverageForCurrentView(queryProfile, coverageBounds)) {
       return;
     }
 
@@ -1093,12 +1170,11 @@
       return;
     }
 
-    const queryBounds = getQueryBoundsForProfile(queryProfile);
     const key = boundsToFetchKey(queryBounds, queryProfile);
     if (key === lastFetchKey) return;
 
-    fetchInFlight = true;
     lastFetchStartedAt = now;
+    beginFetchInFlight(key, queryBounds, queryProfile);
     showFetchToast();
 
     try {
@@ -1130,6 +1206,7 @@
       cachedFeatureBounds = queryBounds;
       cachedFeatureProfile = queryProfile;
       cachedParksBounds = queryBounds;
+      cachedParksProfile = queryProfile;
       saveLocalCoverage(key, queryBounds, features, queryProfile, { rawCounts });
 
       logOsmFeatureCounts("fetch", features, {
@@ -1142,7 +1219,7 @@
     } catch (err) {
       console.warn("GridWild OSM feature fetch failed:", err);
     } finally {
-      fetchInFlight = false;
+      endFetchInFlight(key);
       if (fetchRequestedWhileInFlight) {
         fetchRequestedWhileInFlight = false;
         scheduleFetch(fetchDelayForCurrentMotionState());
@@ -1474,10 +1551,12 @@
     getCacheStatus() {
       const bounds = cachedFeatureBounds;
       const queryProfile = currentQueryProfile();
+      const coverageBounds = getCoverageBoundsForProfile(queryProfile);
       return {
-        hasCoverage: hasCachedCoverage(queryProfile),
+        hasCoverage: hasCachedCoverage(queryProfile, coverageBounds),
         queryProfile,
         cachedFeatureProfile,
+        cachedParksProfile,
         cachedParksBounds: cachedParksBounds
           ? {
               south: cachedParksBounds.getSouth(),
@@ -1487,7 +1566,24 @@
             }
           : null,
         fetchInFlight,
+        fetchInFlightProfile: fetchInFlightMeta?.profile || null,
+        fetchInFlightBounds: fetchInFlightMeta?.bounds
+          ? {
+              south: fetchInFlightMeta.bounds.getSouth(),
+              west: fetchInFlightMeta.bounds.getWest(),
+              north: fetchInFlightMeta.bounds.getNorth(),
+              east: fetchInFlightMeta.bounds.getEast()
+            }
+          : null,
         overpassCooldownMs: Math.max(0, overpassDisabledUntil - Date.now()),
+        coverageBounds: coverageBounds
+          ? {
+              south: coverageBounds.getSouth(),
+              west: coverageBounds.getWest(),
+              north: coverageBounds.getNorth(),
+              east: coverageBounds.getEast()
+            }
+          : null,
         bounds: bounds
           ? {
               south: bounds.getSouth(),

@@ -23,6 +23,22 @@
     return window.GridWildPlayableTaxonomy || null;
   }
 
+  function shouldAvoidSearchAutofocus() {
+    return (
+      window.matchMedia?.("(pointer: coarse), (max-width: 760px)")?.matches ||
+      window.innerWidth <= 760
+    );
+  }
+
+  function focusInitialExplorerTarget(root) {
+    if (shouldAvoidSearchAutofocus()) {
+      root.querySelector("#gwTaxonomyExplorerClose")?.focus({ preventScroll: true });
+      return;
+    }
+
+    root.querySelector("#gwTaxonomyExplorerSearch")?.focus();
+  }
+
   function esc(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -1524,7 +1540,7 @@
     });
 
     renderResults(root, profiles, generatedTaxaManifest, scoredTaxaManifest);
-    root.querySelector("#gwTaxonomyExplorerSearch")?.focus();
+    focusInitialExplorerTarget(root);
   }
 
   window.GridWildPlayableTaxonomyExplorer = {

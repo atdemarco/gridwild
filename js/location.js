@@ -128,10 +128,11 @@ const LOCK_PAN_BREAK_THRESHOLD_PX = 44;
 const LOCK_VIEW_ANIMATION_SECONDS = 0.9;
 
 const GPS_GOOD_THRESHOLD_M = 20;
-const MAP_HEADING_ROTATION_ENABLED = false;
+const MAP_HEADING_ROTATION_ENABLED = true;
 
 let mapHeadingDeg = 0;
 let mapHeadingRaf = null;
+let mapHeadingTransformApplied = false;
 
 function normalizeLockZoomMode(mode) {
   return mode === "wide" ? "wide" : "close";
@@ -399,7 +400,6 @@ function disableLocationLock() {
   setLockZoomMode("close");
   showGridWildToast("Follow lock disabled");
   window.__gwState.suspendAutoCenterUntil = Number.POSITIVE_INFINITY;
-  stopCompassTracking();
   applyMapRotation(0);
 
   const cb = document.getElementById("toggleLockLocation");
@@ -586,7 +586,6 @@ function shouldPreferCompassSource(source) {
 }
 
 function applyCompassHeading(headingDeg, source = "unknown") {
-  if (!window.__gwState?.lockToLocation) return;
   if (!Number.isFinite(headingDeg)) return;
   if (!shouldPreferCompassSource(source)) return;
 
@@ -636,7 +635,6 @@ function handleDeviceOrientation(event) {
 
 function updateHeadingFromGps(headingDeg, speed) {
   if (compassListenersAttached) return;
-  if (!window.__gwState?.lockToLocation) return;
   if (!Number.isFinite(Number(headingDeg))) return;
 
   const metersPerSecond = Number(speed);
@@ -683,17 +681,6 @@ async function requestCompassPermission() {
 async function startCompassTracking(options = {}) {
   const { requestPermission = false } = options;
 
-  if (!MAP_HEADING_ROTATION_ENABLED) {
-    stopCompassTracking();
-    compassPermissionState = "disabled";
-    return false;
-  }
-
-  if (!window.__gwState?.lockToLocation) {
-    stopCompassTracking();
-    return false;
-  }
-
   if (!("DeviceOrientationEvent" in window)) {
     compassPermissionState = "unsupported";
     return false;
@@ -723,8 +710,11 @@ function syncCompassTracking(options = {}) {
     startCompassTracking(options);
     applyMapRotation(lastHeading ?? 0);
   } else {
-    stopCompassTracking();
+    if (compassPermissionState === "granted" || compassListenersAttached) {
+      startCompassTracking({ requestPermission: false });
+    }
     applyMapRotation(0);
+    updateUserMarkerHeading(lastHeading ?? 0);
   }
 }
 
@@ -752,17 +742,21 @@ function setMapPaneHeadingTransform() {
   const mapPane = map.getPane("mapPane");
   if (!mapPane) return;
 
+  const rotationDeg = window.__gwState?.lockToLocation ? -mapHeadingDeg : 0;
+  const shouldRotate = Math.abs(rotationDeg) > 0.01;
+  if (!shouldRotate && !mapHeadingTransformApplied) return;
+
   const pos = getMapPanePosition(mapPane);
   const size = map.getSize();
   const originX = size.x / 2 - pos.x;
   const originY = size.y / 2 - pos.y;
-  const rotationDeg = window.__gwState?.lockToLocation ? -mapHeadingDeg : 0;
 
   // Leaflet owns the pane translation; GridWild appends heading rotation only.
-  mapPane.style.transformOrigin = `${originX}px ${originY}px`;
-  mapPane.style.transform = rotationDeg
+  mapPane.style.transformOrigin = shouldRotate ? `${originX}px ${originY}px` : "";
+  mapPane.style.transform = shouldRotate
     ? `translate3d(${pos.x}px, ${pos.y}px, 0) rotate(${rotationDeg}deg)`
     : `translate3d(${pos.x}px, ${pos.y}px, 0)`;
+  mapHeadingTransformApplied = shouldRotate;
 }
 
 function scheduleMapHeadingTransform() {
@@ -785,6 +779,7 @@ function scheduleMapHeadingTransform() {
 function applyMapRotation(headingDeg = 0) {
   if (!MAP_HEADING_ROTATION_ENABLED) {
     mapHeadingDeg = 0;
+    mapHeadingTransformApplied = false;
     return;
   }
 

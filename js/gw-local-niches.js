@@ -9819,8 +9819,13 @@
 
     return `
       <div class="gw-quest-modal gw-niche-detail">
-        <div class="gw-quest-modal-title ${home ? "is-home-niche" : ""} ${bookmarked ? "is-bookmarked-niche" : ""}">
-          ${esc(displayNicheTitle(niche))}
+        <div class="gw-niche-detail-header">
+          <div class="gw-quest-modal-title ${home ? "is-home-niche" : ""} ${bookmarked ? "is-bookmarked-niche" : ""}">
+            ${esc(displayNicheTitle(niche))}
+          </div>
+          <button class="gw-niche-detail-close" id="gwNicheHeaderCloseBtn" type="button" aria-label="Close niche detail" title="Close">
+            &times;
+          </button>
         </div>
         <div class="gw-quest-modal-subtitle">${esc(niche.description || reasonText(niche))}</div>
 
@@ -9952,7 +9957,7 @@
 
   function bindNicheDetail(root, niche) {
     root.addEventListener("click", (evt) => {
-      if (evt.target === root || evt.target.closest("#gwNicheCloseBtn")) {
+      if (evt.target === root || evt.target.closest("#gwNicheCloseBtn, #gwNicheHeaderCloseBtn")) {
         root.remove();
         drawNicheLayer();
         renderIntoPage();
@@ -11613,6 +11618,42 @@
       .gw-niche-detail .gw-quest-modal-title.is-home-niche.is-bookmarked-niche {
         color: #fff0a1;
         text-shadow: 0 0 12px rgba(255,230,111,0.34);
+      }
+
+      .gw-niche-detail-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 10px;
+      }
+
+      .gw-niche-detail-header .gw-quest-modal-title {
+        min-width: 0;
+        padding-right: 2px;
+      }
+
+      .gw-niche-detail-close {
+        appearance: none;
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border: 1px solid rgba(240,209,138,0.35);
+        border-radius: 999px;
+        background: rgba(255,255,255,0.08);
+        color: #f0d18a;
+        cursor: pointer;
+        flex: 0 0 auto;
+        font-size: 18px;
+        font-weight: 950;
+        line-height: 1;
+      }
+
+      .gw-niche-detail-close:hover,
+      .gw-niche-detail-close:focus-visible {
+        border-color: rgba(240,209,138,0.68);
+        background: rgba(240,209,138,0.16);
+        outline: none;
       }
 
       .gw-niche-home-mark {

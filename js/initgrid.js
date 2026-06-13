@@ -11,14 +11,7 @@ function shouldShowSmallText() {
 window.shouldShowSmallText = shouldShowSmallText;
 
 function getCurrentUserCellIndices() {
-  if (typeof lastFix === "undefined" || !lastFix) return null;
-
-  const p = map.options.crs.project(L.latLng(lastFix.latitude, lastFix.longitude));
-
-  return {
-    ix: Math.floor(p.x / GRID_SIZE_M),
-    iy: Math.floor(p.y / GRID_SIZE_M)
-  };
+  return getCurrentUserFineCell();
 }
 
 // 100x100 ft grid overlay + heat-tinted tiles
@@ -405,7 +398,7 @@ function drawShimmerOverlayForCell(sw, ne, metrics) {
 const CENTER_MACRO_SIZE_CELLS = 3;
 const CENTER_MACRO_SIZE_M = GRID_SIZE_M * CENTER_MACRO_SIZE_CELLS;
 
-function getCenterFineCell() {
+function getMapCenterFineCell() {
   const c = map.getCenter();
   const p = map.options.crs.project(c);
   return {
@@ -414,10 +407,51 @@ function getCenterFineCell() {
   };
 }
 
+function getCenterFineCell() {
+  if (window.__gwState?.lockToLocation === true) {
+    return getCurrentUserFineCell() || getMapCenterFineCell();
+  }
+
+  return getMapCenterFineCell();
+}
+
+function getCurrentUserFineCell() {
+  const loc =
+    window.__gwLastUserLocation ||
+    (typeof lastFix !== "undefined" && lastFix
+      ? { lat: lastFix.latitude, lng: lastFix.longitude }
+      : null);
+  const lat = Number(loc?.lat);
+  const lng = Number(loc?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  const p = map.options.crs.project(L.latLng(lat, lng));
+  return {
+    ix: Math.floor(p.x / GRID_SIZE_M),
+    iy: Math.floor(p.y / GRID_SIZE_M)
+  };
+}
+
+function getVisualGridFineCell() {
+  if (window.__gwState?.lockToLocation === true) {
+    return getCurrentUserFineCell() || getCenterFineCell();
+  }
+
+  return getCenterFineCell();
+}
+
 function getCenterMacroAnchor() {
   const { ix, iy } = getCenterFineCell();
 
   // Anchor the macro block so the user’s current fine cell is the middle of a 3x3 block
+  return {
+    ix0: ix - 1,
+    iy0: iy - 1
+  };
+}
+
+function getVisualGridMacroAnchor() {
+  const { ix, iy } = getVisualGridFineCell();
   return {
     ix0: ix - 1,
     iy0: iy - 1
@@ -3601,7 +3635,7 @@ window.updateGridHeatmap = function (results) {
 function updateGridLines() {
   gridLineLayer.clearLayers();
 
-  const { ix0, iy0 } = getCenterMacroAnchor();
+  const { ix0, iy0 } = getVisualGridMacroAnchor();
   const { sw, ne } = macroCellBoundsLL(ix0, iy0);
 
   // Draw only ONE big square = the central 3x3 block
@@ -6047,7 +6081,7 @@ function updateStaticGridHeatOLD() {
 function updateImportantGridLines() {
   gridLineLayer.clearLayers();
 
-  const center = getCenterFineCell();
+  const center = getVisualGridFineCell();
 
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
@@ -6602,6 +6636,8 @@ window.handleUserPositionUpdate = async function (lat, lng, force = false) {
     if (typeof window.maybeRefreshDynamicINat === "function") {
       window.maybeRefreshDynamicINat(false, cellKey);
     }
+  } else if (state.lockToLocation === true) {
+    updateGridLines();
   }
 };
 

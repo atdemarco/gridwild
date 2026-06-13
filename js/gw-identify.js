@@ -271,7 +271,9 @@
   }
 
   function buildUnknownsUrl(options = {}) {
-    const target = patchPolygonTargetForQuest(options.quest || activeQuest);
+    const quest = options.quest || activeQuest;
+    const recipe = quest?.recipe || quest || {};
+    const target = patchPolygonTargetForQuest(quest);
     const fix =
       target && Number.isFinite(Number(target.lat)) && Number.isFinite(Number(target.lng))
         ? { lat: Number(target.lat), lng: Number(target.lng), source: "patch" }
@@ -294,6 +296,12 @@
     url.searchParams.set("radius", String(radiusKm));
     url.searchParams.set("geoprivacy", "open");
     url.searchParams.set("taxon_geoprivacy", "open");
+    if (recipe.iconicTaxon && recipe.iconicTaxon !== "Any") {
+      url.searchParams.set("iconic_taxa", recipe.iconicTaxon);
+    }
+    if (recipe.target?.taxonId) {
+      url.searchParams.set("taxon_id", String(recipe.target.taxonId));
+    }
 
     return url;
   }

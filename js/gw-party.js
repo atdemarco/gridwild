@@ -170,7 +170,8 @@
       lat: Number(mapLatLng?.lat || fallbackCenter?.lat || 38.911325),
       lng: Number(mapLatLng?.lng || fallbackCenter?.lng || -77.076678),
       createdAt: p.created_at || new Date().toISOString(),
-      dbBacked: true
+      dbBacked: true,
+      pending: Boolean(p.pending || p._optimistic)
     };
   }
 
@@ -2848,7 +2849,10 @@
       }
     );
 
-    marker.on("click", () => openPartyCover(p.id));
+    marker.on("click", () => {
+      if (p.pending) return;
+      openPartyCover(p.id);
+    });
     marker.addTo(layer);
   }
 
@@ -3103,6 +3107,10 @@
     const evidenceCount = Math.max(Number(party.progress || 0), getSharedPartyProgress(party.id));
     const target = Math.max(1, Number(party.target || 1));
     const pct = Math.max(0, Math.min(100, (evidenceCount / target) * 100));
+    const pending = Boolean(party.pending || String(party.id || "").startsWith("pending_party_"));
+    const partySubline = pending
+      ? `Starting online party...`
+      : `${evidenceCount}/${target} counted &middot; ${getPartyDurationLabel(party)} &middot; ${formatDistance(getRouteDistanceMeters(route))}`;
 
     let hud = existing;
     if (!hud) {
@@ -3112,15 +3120,17 @@
       document.body.appendChild(hud);
     }
 
+    hud.classList.toggle("is-pending", pending);
     hud.innerHTML = `
-    <button class="gw-active-party-main" id="gwActivePartyOpenBtn" type="button">
+    <button class="gw-active-party-main" id="gwActivePartyOpenBtn" type="button" ${pending ? "disabled" : ""}>
       <div class="gw-active-party-topline">
         <span class="gw-active-party-dot">🎉</span>
         <span class="gw-active-party-title">${esc(party.title || "Active Party")}</span>
+        ${pending ? `<span class="gw-active-party-status">Starting</span>` : ""}
       </div>
 
       <div class="gw-active-party-sub">
-        ${evidenceCount}/${target} counted · ${getPartyDurationLabel(party)} · ${formatDistance(getRouteDistanceMeters(route))}
+        ${partySubline}
       </div>
 
       <div class="gw-active-party-bar">
@@ -3130,12 +3140,13 @@
 
     <div class="gw-active-party-actions">
       <button class="gw-active-party-btn" id="gwActivePartyCollapseBtn" type="button" aria-label="Minimize party banner" title="Minimize party banner">Hide</button>
-      <button class="gw-active-party-btn" id="gwActivePartyRecapBtn" type="button">Recap</button>
-      <button class="gw-active-party-btn danger" id="gwActivePartyEndBtn" type="button">End</button>
+      <button class="gw-active-party-btn" id="gwActivePartyRecapBtn" type="button" ${pending ? "disabled" : ""}>Recap</button>
+      <button class="gw-active-party-btn danger" id="gwActivePartyEndBtn" type="button" ${pending ? "disabled" : ""}>End</button>
     </div>
   `;
 
     hud.querySelector("#gwActivePartyOpenBtn")?.addEventListener("click", () => {
+      if (pending) return;
       openPartyCover(party.id);
     });
 
@@ -3144,10 +3155,12 @@
     });
 
     hud.querySelector("#gwActivePartyRecapBtn")?.addEventListener("click", () => {
+      if (pending) return;
       openPartyRecap(party.id);
     });
 
     hud.querySelector("#gwActivePartyEndBtn")?.addEventListener("click", () => {
+      if (pending) return;
       endParty(party.id);
     });
   }
@@ -3694,6 +3707,11 @@
         inset 0 1px 0 rgba(255,255,255,0.05);
     }
 
+    .gw-active-party-main:disabled {
+    opacity: 1;
+    cursor: wait;
+    }
+
     .gw-active-party-topline {
     display: flex;
     align-items: center;
@@ -3713,6 +3731,19 @@
     color: #fff2c8;
     font-size: 13px;
     font-weight: 950;
+    }
+
+    .gw-active-party-status {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    padding: 2px 6px;
+    background: rgba(240,209,138,0.16);
+    border: 1px solid rgba(240,209,138,0.34);
+    color: #f0d18a;
+    font-size: 9px;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     }
 
     .gw-active-party-sub {
@@ -3738,6 +3769,16 @@
     background: linear-gradient(90deg, rgba(140,110,54,0.95), rgba(240,209,138,0.98));
     }
 
+    .gw-active-party-hud.is-pending .gw-active-party-bar > div {
+    width: 38% !important;
+    animation: gwPartyPendingBar 1.1s ease-in-out infinite alternate;
+    }
+
+    @keyframes gwPartyPendingBar {
+    from { transform: translateX(-24%); opacity: 0.62; }
+    to { transform: translateX(190%); opacity: 1; }
+    }
+
     .gw-active-party-actions {
     display: grid;
     gap: 6px;
@@ -3755,6 +3796,11 @@
     text-transform: uppercase;
     letter-spacing: 0.35px;
     box-shadow: 0 8px 20px rgba(0,0,0,0.32);
+    }
+
+    .gw-active-party-btn:disabled {
+    opacity: 0.55;
+    cursor: wait;
     }
 
     .gw-active-party-btn.danger {

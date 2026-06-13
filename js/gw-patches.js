@@ -6,6 +6,7 @@
   const HOME_PATCH_KEY = "gw_home_patch_id_v1";
   const PATCH_VISIBLE_KEY = "gw_patch_layer_visible_v1";
   const PANE = "gwPatchPane";
+  const LABEL_PANE = "gwPatchLabelPane";
   const INAT_PROJECT_RESULT_LIMIT = 12;
   const INAT_PROJECT_SEARCH_PAGE_SIZE = 24;
   const INAT_PROJECT_GEOMETRY_CHECK_LIMIT = 18;
@@ -36,6 +37,30 @@
   const PATCH_LABEL_VIEWPORT_PADDING_PX = 14;
   const PATCH_LABEL_SELECTED_LIFT_PX = 16;
   const PATCH_LABEL_DEFAULT_LIFT_PX = 3;
+  const PATCH_GROUP_DICE_THRESHOLD = 0.82;
+  const PATCH_GROUP_SAMPLE_STEPS = 22;
+  const PATCH_GROUP_YEAR_DICE_THRESHOLD = 0.04;
+  const PATCH_GROUP_YEAR_COVERAGE_THRESHOLD = 0.08;
+  const PATCH_GROUP_MIN_INTERSECTION_M2 = 35;
+  const PATCH_SUBSCRIPTION_POLL_MS = 10 * 60 * 1000;
+  const PATCH_SUBSCRIPTION_INITIAL_DELAY_MS = 4500;
+  const PATCH_SUBSCRIPTION_SCAN_LIMIT = 6;
+  const PATCH_SUBSCRIPTION_PER_PAGE = 40;
+  const PATCH_SUBSCRIPTION_SEEN_LIMIT = 160;
+  const PATCH_SUBSCRIPTION_ICONIC_TAXA = [
+    "Any",
+    "Plantae",
+    "Animalia",
+    "Fungi",
+    "Insecta",
+    "Arachnida",
+    "Aves",
+    "Mammalia",
+    "Reptilia",
+    "Amphibia",
+    "Actinopterygii",
+    "Mollusca"
+  ];
   const PATCH_BOUNDARY_THEMES = {
     default: {
       lineColor: "#ffd85a",
@@ -75,6 +100,7 @@
 
   const projectBoundaryCache = new Map();
   const placeGeometryCache = new Map();
+  const patchSubscriptionFetches = new Map();
 
   const state = {
     patches: loadPatches(),
@@ -92,7 +118,11 @@
     patchHoldStart: null,
     labelUpdateRaf: null,
     suppressPatchInfoUntil: 0,
-    suppressHudActionMenuUntil: 0
+    suppressHudActionMenuUntil: 0,
+    subscriptionPollTimer: null,
+    subscriptionScanTimer: null,
+    subscriptionScanInFlight: false,
+    subscriptionScanPending: false
   };
 
   function esc(value) {
@@ -122,6 +152,15 @@
     }
   }
 
+  function shortHash(value) {
+    const raw = String(value || "");
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+      hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash).toString(36);
+  }
+
   function plainClone(value) {
     if (!value) return value;
     try {
@@ -131,12 +170,48 @@
     }
   }
 
+  function withoutPatchGroupingFields(patch) {
+    if (!patch || typeof patch !== "object") return patch;
+    const clone = { ...patch };
+    delete clone.child_patches;
+    delete clone.group_overlap;
+    delete clone.group_parent_id;
+    delete clone.group_parent_title;
+    delete clone.group_reason;
+    delete clone.is_child_patch;
+    return clone;
+  }
+
   function isINatProjectPatch(patch) {
     return (
       patch?.source === "inat_project" ||
       patch?.metadata?.imported_from === "inat_project" ||
       /iNaturalist/i.test(String(patch?.source_label || ""))
     );
+  }
+
+  function isOsmPatch(patch) {
+    return (
+      patch?.source === "osm" ||
+      patch?.metadata?.imported_from === "osm" ||
+      patch?.metadata?.osm_id != null ||
+      /^OSM\b/i.test(String(patch?.source_label || ""))
+    );
+  }
+
+  function isYearINatProjectPatch(patch) {
+    if (!isINatProjectPatch(patch)) return false;
+    const project = patch?.metadata?.project || {};
+    const haystack = [
+      patch?.name,
+      patch?.title,
+      patch?.source_id,
+      patch?.source_url,
+      project?.title,
+      project?.name,
+      project?.slug
+    ].join(" ");
+    return /\b(?:19|20)\d{2}\b/.test(haystack);
   }
 
   function patchBoundaryTheme(patch) {
@@ -409,6 +484,56 @@
     return `${(n / 1000).toFixed(n < 10000 ? 1 : 0)} km`;
   }
 
+  function normalizePatchSubscription(subscription = {}) {
+    const rawIconic = String(subscription.iconicTaxon || subscription.iconic_taxon || "Any");
+    const iconicTaxon = PATCH_SUBSCRIPTION_ICONIC_TAXA.includes(rawIconic) ? rawIconic : "Any";
+    const rawTaxonId = String(subscription.taxonId || subscription.taxon_id || "").trim();
+    const taxonId = /^\d+$/.test(rawTaxonId) ? rawTaxonId : "";
+    const seenObservationIds = Array.isArray(subscription.seenObservationIds)
+      ? subscription.seenObservationIds.map(String).filter(Boolean)
+      : [];
+
+    return {
+      enabled: subscription.enabled === true,
+      iconicTaxon,
+      taxonId,
+      taxonLabel: String(subscription.taxonLabel || subscription.taxon_label || "").trim(),
+      lastCheckedAt: subscription.lastCheckedAt || subscription.last_checked_at || null,
+      lastAssignmentAt: subscription.lastAssignmentAt || subscription.last_assignment_at || null,
+      lastUnknownCount: Math.max(0, Number(subscription.lastUnknownCount) || 0),
+      lastError: String(subscription.lastError || "").trim(),
+      seenObservationIds: seenObservationIds.slice(-PATCH_SUBSCRIPTION_SEEN_LIMIT)
+    };
+  }
+
+  function patchSubscription(patch) {
+    return normalizePatchSubscription(patch?.subscription || {});
+  }
+
+  function isPatchSubscribed(patch) {
+    return patchSubscription(patch).enabled === true;
+  }
+
+  function patchSubscriptionTaxonLabel(subscription = {}) {
+    const sub = normalizePatchSubscription(subscription);
+    if (sub.taxonLabel) return sub.taxonLabel;
+    if (sub.taxonId) return `Taxon ${sub.taxonId}`;
+    if (sub.iconicTaxon && sub.iconicTaxon !== "Any") return sub.iconicTaxon;
+    return "Any life";
+  }
+
+  function formatPatchSubscriptionTime(value) {
+    if (!value) return "Not checked yet";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Not checked yet";
+    return date.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  }
+
   function centroidForPoints(points = []) {
     const valid = points
       .map((p) => ({ lat: Number(p.lat), lng: Number(p.lng) }))
@@ -432,6 +557,26 @@
       .flat()
       .map((p) => ({ lat: Number(p.lat), lng: Number(p.lng) }))
       .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  }
+
+  function bboxForRings(rings = []) {
+    const points = validRingPoints(rings);
+    if (!points.length) return null;
+
+    return points.reduce(
+      (bounds, point) => ({
+        minLat: Math.min(bounds.minLat, point.lat),
+        maxLat: Math.max(bounds.maxLat, point.lat),
+        minLng: Math.min(bounds.minLng, point.lng),
+        maxLng: Math.max(bounds.maxLng, point.lng)
+      }),
+      {
+        minLat: Infinity,
+        maxLat: -Infinity,
+        minLng: Infinity,
+        maxLng: -Infinity
+      }
+    );
   }
 
   function patchCellBounds(rings = []) {
@@ -735,6 +880,297 @@
     return quest;
   }
 
+  function observationPoint(obs) {
+    const coords = obs?.geojson?.coordinates;
+    if (Array.isArray(coords) && coords.length >= 2) {
+      const lng = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+
+    const location = String(obs?.location || "");
+    if (location.includes(",")) {
+      const [lat, lng] = location.split(",").map(Number);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+
+    const lat = Number(obs?.latitude || obs?.lat);
+    const lng = Number(obs?.longitude || obs?.lng);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  }
+
+  function normalizeSubscriptionUnknown(obs) {
+    const point = observationPoint(obs);
+    if (!point || obs?.id == null) return null;
+    const taxon = obs.taxon || {};
+    return {
+      id: String(obs.id),
+      lat: point.lat,
+      lng: point.lng,
+      observedAt: obs.observed_on || obs.time_observed_at || null,
+      createdAt: obs.created_at || null,
+      taxonName: taxon.preferred_common_name || taxon.name || "Unknown",
+      userLogin: obs.user?.login || "",
+      url: obs.uri || `https://www.inaturalist.org/observations/${obs.id}`
+    };
+  }
+
+  function patchSubscriptionFetchKey(patch, subscription, bbox) {
+    const sub = normalizePatchSubscription(subscription);
+    return [
+      patch?.id || "",
+      sub.iconicTaxon || "Any",
+      sub.taxonId || "",
+      Number(bbox.minLat).toFixed(5),
+      Number(bbox.minLng).toFixed(5),
+      Number(bbox.maxLat).toFixed(5),
+      Number(bbox.maxLng).toFixed(5)
+    ].join(":");
+  }
+
+  async function fetchPatchSubscriptionUnknowns(patch, subscription = {}, options = {}) {
+    const rings = patchRings(patch);
+    const bbox = bboxForRings(rings);
+    if (!bbox) return [];
+
+    const sub = normalizePatchSubscription(subscription);
+    const key = patchSubscriptionFetchKey(patch, sub, bbox);
+    if (!options.force && patchSubscriptionFetches.has(key)) {
+      return patchSubscriptionFetches.get(key);
+    }
+
+    const promise = (async () => {
+      const url = new URL("https://api.inaturalist.org/v1/observations");
+      url.searchParams.set("identified", "false");
+      url.searchParams.set("photos", "true");
+      url.searchParams.set("geo", "true");
+      url.searchParams.set("quality_grade", "needs_id");
+      url.searchParams.set("captive", "false");
+      url.searchParams.set("order_by", "created_at");
+      url.searchParams.set("order", "desc");
+      url.searchParams.set(
+        "per_page",
+        String(Math.min(80, Math.max(1, Number(options.perPage) || PATCH_SUBSCRIPTION_PER_PAGE)))
+      );
+      url.searchParams.set("nelat", String(bbox.maxLat));
+      url.searchParams.set("nelng", String(bbox.maxLng));
+      url.searchParams.set("swlat", String(bbox.minLat));
+      url.searchParams.set("swlng", String(bbox.minLng));
+      url.searchParams.set("geoprivacy", "open");
+      url.searchParams.set("taxon_geoprivacy", "open");
+      if (sub.iconicTaxon && sub.iconicTaxon !== "Any") {
+        url.searchParams.set("iconic_taxa", sub.iconicTaxon);
+      }
+      if (sub.taxonId) url.searchParams.set("taxon_id", sub.taxonId);
+
+      const resp = await fetch(url.toString());
+      if (!resp.ok) throw new Error(`iNaturalist unknowns request failed: HTTP ${resp.status}`);
+      const data = await resp.json();
+      const results = Array.isArray(data?.results) ? data.results : [];
+      return results
+        .map(normalizeSubscriptionUnknown)
+        .filter(Boolean)
+        .filter((obs) => pointInRings(obs, rings));
+    })().finally(() => {
+      patchSubscriptionFetches.delete(key);
+    });
+
+    patchSubscriptionFetches.set(key, promise);
+    return promise;
+  }
+
+  function patchSubscriptionQuestRecipe(patch, subscription, unknowns = []) {
+    const recipe = patchIdentifyQuestRecipe(patch);
+    if (!recipe) return null;
+
+    const sub = normalizePatchSubscription(subscription);
+    const observationIds = unknowns.map((obs) => String(obs.id)).filter(Boolean);
+    const quantity = Math.max(1, Math.min(5, observationIds.length || unknowns.length || 1));
+
+    return {
+      ...recipe,
+      iconicTaxon: sub.iconicTaxon || "Any",
+      quantity,
+      target: {
+        ...(recipe.target || {}),
+        kind: "patch_subscription_unknowns",
+        subscriptionId: `${patch.id}:${sub.iconicTaxon || "Any"}:${sub.taxonId || ""}`,
+        taxonId: sub.taxonId || "",
+        taxonLabel: patchSubscriptionTaxonLabel(sub),
+        unknownCount: unknowns.length,
+        observationIds,
+        generatedAt: new Date().toISOString()
+      }
+    };
+  }
+
+  function patchSubscriptionAssignment(patch, subscription, unknowns = []) {
+    const recipe = patchSubscriptionQuestRecipe(patch, subscription, unknowns);
+    if (!recipe) return null;
+
+    const sub = normalizePatchSubscription(subscription);
+    const ids = unknowns.map((obs) => obs.id).filter(Boolean);
+    const taxonLabel = patchSubscriptionTaxonLabel(sub);
+    const patchName = patchTitle(patch);
+    const count = unknowns.length;
+    const countLabel = `${count} unknown observation${count === 1 ? "" : "s"}`;
+    const id = `patch_sub_${shortHash(
+      `${patch.id}|${sub.iconicTaxon}|${sub.taxonId}|${ids.slice(0, 12).join(",")}`
+    )}`;
+
+    return {
+      id,
+      type: "quest_assignment",
+      title: `Identify Unknowns: ${patchName}`,
+      copy: `${countLabel} need IDs inside ${patchName}.`,
+      created_at: new Date().toISOString(),
+      payload: {
+        patchId: patch.id,
+        patchName,
+        taxonLabel,
+        unknownCount: count,
+        observationIds: ids,
+        questTitle: `Identify Unknowns: ${patchName}`,
+        questDescription: `Add identifications to ${countLabel} inside ${patchName}.`,
+        recipe
+      }
+    };
+  }
+
+  function deliverPatchQuestAssignments(assignments = []) {
+    const rows = assignments.filter(Boolean);
+    if (!rows.length) return;
+
+    if (window.GridWildPlayerInteractions?.setQuestAssignments) {
+      window.GridWildPlayerInteractions.setQuestAssignments(rows);
+    } else {
+      window.setTimeout(() => {
+        window.GridWildPlayerInteractions?.setQuestAssignments?.(rows);
+      }, 1200);
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("gwPatchSubscriptionQuestAssignments", {
+        detail: { assignments: rows }
+      })
+    );
+  }
+
+  async function checkPatchSubscriptionNow(patchId, options = {}) {
+    const patch = getPatch(patchId);
+    if (!patch) return null;
+    const sub = patchSubscription(patch);
+    if (!sub.enabled) return null;
+
+    const checkedAt = new Date().toISOString();
+    try {
+      const unknowns = await fetchPatchSubscriptionUnknowns(patch, sub, {
+        force: options.force === true
+      });
+      const seen = new Set(sub.seenObservationIds || []);
+      const unseen = unknowns.filter((obs) => !seen.has(String(obs.id)));
+      const assignmentUnknowns = unseen.length ? unseen : options.force ? unknowns : [];
+      const nextSeen = Array.from(
+        new Set([...Array.from(seen), ...unknowns.map((obs) => String(obs.id))])
+      ).slice(-PATCH_SUBSCRIPTION_SEEN_LIMIT);
+      const assignment = assignmentUnknowns.length
+        ? patchSubscriptionAssignment(patch, sub, assignmentUnknowns)
+        : null;
+
+      writePatchSubscription(
+        patch.id,
+        {
+          ...sub,
+          lastCheckedAt: checkedAt,
+          lastAssignmentAt: assignment ? checkedAt : sub.lastAssignmentAt,
+          lastUnknownCount: unknowns.length,
+          lastError: "",
+          seenObservationIds: nextSeen
+        },
+        { render: false, schedule: false }
+      );
+
+      if (assignment) {
+        deliverPatchQuestAssignments([assignment]);
+        if (options.toastResult) toast("Quest assignment added to your HUD Inbox.");
+      } else if (options.toastResult) {
+        toast(unknowns.length ? "No new unknowns for this subscription." : "No unknowns found.");
+      }
+
+      return { unknowns, assignment };
+    } catch (err) {
+      console.warn("Could not check patch subscription:", err);
+      writePatchSubscription(
+        patch.id,
+        {
+          ...sub,
+          lastCheckedAt: checkedAt,
+          lastError: err?.message || "Could not check subscription"
+        },
+        { render: false, schedule: false }
+      );
+      if (options.toastResult) toast(err?.message || "Could not check subscription.");
+      return null;
+    }
+  }
+
+  async function scanPatchSubscriptions(options = {}) {
+    if (state.subscriptionScanInFlight) {
+      state.subscriptionScanPending = true;
+      return;
+    }
+
+    const now = Date.now();
+    const candidates = subscribedPatches()
+      .map((patch) => ({ patch, subscription: patchSubscription(patch) }))
+      .filter(({ subscription }) => {
+        if (options.force) return true;
+        const last = subscription.lastCheckedAt
+          ? new Date(subscription.lastCheckedAt).getTime()
+          : 0;
+        return !last || now - last >= PATCH_SUBSCRIPTION_POLL_MS * 0.85;
+      })
+      .slice(0, PATCH_SUBSCRIPTION_SCAN_LIMIT);
+
+    if (!candidates.length) return;
+
+    state.subscriptionScanInFlight = true;
+    try {
+      for (const { patch } of candidates) {
+        await checkPatchSubscriptionNow(patch.id, { force: options.force === true });
+      }
+    } finally {
+      state.subscriptionScanInFlight = false;
+      if (state.subscriptionScanPending) {
+        state.subscriptionScanPending = false;
+        schedulePatchSubscriptionScan(1500);
+      }
+    }
+  }
+
+  function schedulePatchSubscriptionScan(
+    delayMs = PATCH_SUBSCRIPTION_INITIAL_DELAY_MS,
+    options = {}
+  ) {
+    if (state.subscriptionScanTimer) window.clearTimeout(state.subscriptionScanTimer);
+    state.subscriptionScanTimer = window.setTimeout(
+      () => {
+        state.subscriptionScanTimer = null;
+        scanPatchSubscriptions(options);
+      },
+      Math.max(0, Number(delayMs) || 0)
+    );
+  }
+
+  function startPatchSubscriptionPolling() {
+    schedulePatchSubscriptionScan(PATCH_SUBSCRIPTION_INITIAL_DELAY_MS);
+    if (state.subscriptionPollTimer) return;
+    state.subscriptionPollTimer = window.setInterval(
+      () => scanPatchSubscriptions({ quiet: true }),
+      PATCH_SUBSCRIPTION_POLL_MS
+    );
+  }
+
   function patchCompleteness(patch, rings = patchRings(patch)) {
     const bounds = patchCellBounds(rings);
     if (!bounds) return { total: 0, observed: 0, percent: 0, sampled: false };
@@ -925,6 +1361,298 @@
     return (Array.isArray(rings) ? rings : []).some((ring) => ringIntersectsBounds(ring, bounds));
   }
 
+  function rawBoundsFromRings(rings = []) {
+    const points = validRingPoints(rings);
+    if (!points.length) return null;
+
+    return {
+      south: Math.min(...points.map((point) => point.lat)),
+      north: Math.max(...points.map((point) => point.lat)),
+      west: Math.min(...points.map((point) => point.lng)),
+      east: Math.max(...points.map((point) => point.lng))
+    };
+  }
+
+  function rawBoundsIntersect(a, b) {
+    if (!a || !b) return false;
+    return a.west <= b.east && a.east >= b.west && a.south <= b.north && a.north >= b.south;
+  }
+
+  function rawBoundsIntersection(a, b) {
+    if (!rawBoundsIntersect(a, b)) return null;
+    const box = {
+      south: Math.max(a.south, b.south),
+      north: Math.min(a.north, b.north),
+      west: Math.max(a.west, b.west),
+      east: Math.min(a.east, b.east)
+    };
+    if (box.north <= box.south || box.east <= box.west) return null;
+    return box;
+  }
+
+  function rawBoundsAreaM2(bounds) {
+    if (!bounds) return 0;
+    const sw = { lat: bounds.south, lng: bounds.west };
+    const se = { lat: bounds.south, lng: bounds.east };
+    const nw = { lat: bounds.north, lng: bounds.west };
+    const ne = { lat: bounds.north, lng: bounds.east };
+    const widthM = Math.max(distanceM(sw, se), distanceM(nw, ne));
+    const heightM = Math.max(distanceM(sw, nw), distanceM(se, ne));
+    const area = widthM * heightM;
+    return Number.isFinite(area) && area > 0 ? area : 0;
+  }
+
+  function ringAreaM2(ring = []) {
+    const points = validRingPoints([ring]);
+    if (points.length < 3) return 0;
+    const origin = centroidForPoints(points) || points[0];
+    const projected = points.map((point) => localMetersFromLatLng(point, origin));
+    let area = 0;
+    for (let i = 0; i < projected.length; i++) {
+      const a = projected[i];
+      const b = projected[(i + 1) % projected.length];
+      area += a.x * b.y - b.x * a.y;
+    }
+    return Math.abs(area) / 2;
+  }
+
+  function ringsAreaM2(rings = []) {
+    return (Array.isArray(rings) ? rings : []).reduce((sum, ring) => sum + ringAreaM2(ring), 0);
+  }
+
+  function patchOverlapMetrics(a, b) {
+    const ringsA = patchRings(a).filter((ring) => Array.isArray(ring) && ring.length >= 3);
+    const ringsB = patchRings(b).filter((ring) => Array.isArray(ring) && ring.length >= 3);
+    const boundsA = rawBoundsFromRings(ringsA);
+    const boundsB = rawBoundsFromRings(ringsB);
+    const intersectionBounds = rawBoundsIntersection(boundsA, boundsB);
+    const areaA = ringsAreaM2(ringsA);
+    const areaB = ringsAreaM2(ringsB);
+
+    if (!intersectionBounds || areaA <= 0 || areaB <= 0) {
+      return {
+        dice: 0,
+        coverageA: 0,
+        coverageB: 0,
+        intersectionAreaM2: 0,
+        areaA,
+        areaB
+      };
+    }
+
+    const steps = PATCH_GROUP_SAMPLE_STEPS;
+    let both = 0;
+    const latSpan = intersectionBounds.north - intersectionBounds.south;
+    const lngSpan = intersectionBounds.east - intersectionBounds.west;
+
+    for (let y = 0; y < steps; y++) {
+      const lat = intersectionBounds.south + ((y + 0.5) / steps) * latSpan;
+      for (let x = 0; x < steps; x++) {
+        const lng = intersectionBounds.west + ((x + 0.5) / steps) * lngSpan;
+        const point = { lat, lng };
+        if (pointInRings(point, ringsA) && pointInRings(point, ringsB)) both++;
+      }
+    }
+
+    const intersectionAreaM2 = rawBoundsAreaM2(intersectionBounds) * (both / (steps * steps));
+    const dice = intersectionAreaM2 > 0 ? (2 * intersectionAreaM2) / (areaA + areaB) : 0;
+    return {
+      dice: Math.max(0, Math.min(1, dice)),
+      coverageA: areaA > 0 ? Math.max(0, Math.min(1, intersectionAreaM2 / areaA)) : 0,
+      coverageB: areaB > 0 ? Math.max(0, Math.min(1, intersectionAreaM2 / areaB)) : 0,
+      intersectionAreaM2,
+      areaA,
+      areaB
+    };
+  }
+
+  function meaningfulYearProjectOverlap(metrics, childCoverage) {
+    return (
+      Number(metrics?.intersectionAreaM2 || 0) >= PATCH_GROUP_MIN_INTERSECTION_M2 &&
+      (Number(metrics?.dice || 0) >= PATCH_GROUP_YEAR_DICE_THRESHOLD ||
+        Number(childCoverage || 0) >= PATCH_GROUP_YEAR_COVERAGE_THRESHOLD)
+    );
+  }
+
+  function patchParentScore(patch, areaM2) {
+    return (
+      (patch?.id === state.homePatchId ? 1000 : 0) +
+      (patch?.candidate ? 0 : 120) +
+      (isOsmPatch(patch) ? 40 : 0) +
+      (isYearINatProjectPatch(patch) ? -45 : 0) +
+      Math.min(60, Math.log10(Math.max(1, Number(areaM2) || 1)) * 12)
+    );
+  }
+
+  function defaultPatchParentPair(a, b, metrics) {
+    const scoreA = patchParentScore(a, metrics.areaA);
+    const scoreB = patchParentScore(b, metrics.areaB);
+    if (scoreA > scoreB) return { parent: a, child: b };
+    if (scoreB > scoreA) return { parent: b, child: a };
+    return String(a.id) <= String(b.id) ? { parent: a, child: b } : { parent: b, child: a };
+  }
+
+  function patchGroupEdge(a, b) {
+    const metrics = patchOverlapMetrics(a, b);
+    const aYear = isYearINatProjectPatch(a);
+    const bYear = isYearINatProjectPatch(b);
+
+    if (aYear && !bYear && meaningfulYearProjectOverlap(metrics, metrics.coverageA)) {
+      return {
+        parentId: b.id,
+        childId: a.id,
+        priority: 30,
+        reason: "year_project",
+        childCoverage: metrics.coverageA,
+        parentCoverage: metrics.coverageB,
+        metrics
+      };
+    }
+
+    if (bYear && !aYear && meaningfulYearProjectOverlap(metrics, metrics.coverageB)) {
+      return {
+        parentId: a.id,
+        childId: b.id,
+        priority: 30,
+        reason: "year_project",
+        childCoverage: metrics.coverageB,
+        parentCoverage: metrics.coverageA,
+        metrics
+      };
+    }
+
+    if (metrics.dice < PATCH_GROUP_DICE_THRESHOLD) return null;
+
+    if (isINatProjectPatch(a) && isOsmPatch(b)) {
+      return {
+        parentId: b.id,
+        childId: a.id,
+        priority: 20,
+        reason: "osm_parent",
+        childCoverage: metrics.coverageA,
+        parentCoverage: metrics.coverageB,
+        metrics
+      };
+    }
+
+    if (isINatProjectPatch(b) && isOsmPatch(a)) {
+      return {
+        parentId: a.id,
+        childId: b.id,
+        priority: 20,
+        reason: "osm_parent",
+        childCoverage: metrics.coverageB,
+        parentCoverage: metrics.coverageA,
+        metrics
+      };
+    }
+
+    const { parent, child } = defaultPatchParentPair(a, b, metrics);
+    const childIsA = String(child.id) === String(a.id);
+    return {
+      parentId: parent.id,
+      childId: child.id,
+      priority: 10,
+      reason: "high_dice",
+      childCoverage: childIsA ? metrics.coverageA : metrics.coverageB,
+      parentCoverage: childIsA ? metrics.coverageB : metrics.coverageA,
+      metrics
+    };
+  }
+
+  function groupPatchRows(rows = []) {
+    const patches = [];
+    const byId = new Map();
+
+    (Array.isArray(rows) ? rows : []).forEach((patch) => {
+      if (!patch?.id || byId.has(String(patch.id))) return;
+      const row = {
+        ...patch,
+        child_patches: [],
+        group_parent_id: null,
+        group_parent_title: null,
+        group_reason: null,
+        group_overlap: null,
+        is_child_patch: false
+      };
+      byId.set(String(row.id), row);
+      patches.push(row);
+    });
+
+    if (patches.length < 2) return patches;
+
+    const edges = [];
+    for (let i = 0; i < patches.length; i++) {
+      for (let j = i + 1; j < patches.length; j++) {
+        const edge = patchGroupEdge(patches[i], patches[j]);
+        if (edge) edges.push(edge);
+      }
+    }
+
+    edges.sort(
+      (a, b) =>
+        b.priority - a.priority ||
+        Number(b.metrics?.dice || 0) - Number(a.metrics?.dice || 0) ||
+        Number(b.metrics?.intersectionAreaM2 || 0) - Number(a.metrics?.intersectionAreaM2 || 0)
+    );
+
+    const parentByChild = new Map();
+    const edgeByChild = new Map();
+
+    function rootOf(id) {
+      let root = String(id || "");
+      const seen = new Set();
+      while (parentByChild.has(root) && !seen.has(root)) {
+        seen.add(root);
+        root = parentByChild.get(root);
+      }
+      return root;
+    }
+
+    edges.forEach((edge) => {
+      const parentId = String(edge.parentId || "");
+      const childId = String(edge.childId || "");
+      if (!parentId || !childId || parentId === childId || parentByChild.has(childId)) return;
+      const parentRoot = rootOf(parentId);
+      if (!parentRoot || parentRoot === childId) return;
+      parentByChild.set(childId, parentRoot);
+      edgeByChild.set(childId, edge);
+    });
+
+    patches.forEach((patch) => {
+      const id = String(patch.id);
+      const parentId = parentByChild.has(id) ? rootOf(id) : null;
+      if (!parentId || parentId === id) return;
+
+      const parent = byId.get(parentId);
+      const edge = edgeByChild.get(id);
+      if (!parent) return;
+
+      patch.is_child_patch = true;
+      patch.group_parent_id = parentId;
+      patch.group_parent_title = patchTitle(parent);
+      patch.group_reason = edge?.reason || "grouped";
+      patch.group_overlap = edge
+        ? {
+            ...(edge.metrics || {}),
+            childCoverage: edge.childCoverage,
+            parentCoverage: edge.parentCoverage
+          }
+        : null;
+      parent.child_patches.push(patch);
+    });
+
+    patches.forEach((patch) => {
+      patch.child_patches.sort(
+        (a, b) =>
+          Number(b.group_overlap?.dice || 0) - Number(a.group_overlap?.dice || 0) ||
+          patchTitle(a).localeCompare(patchTitle(b))
+      );
+    });
+
+    return patches.filter((patch) => !patch.is_child_patch);
+  }
+
   function parseINatNearbyPlaces(data) {
     const raw = data?.results;
     const groups = Array.isArray(raw)
@@ -1068,6 +1796,7 @@
     clone.boundary = boundary;
     clone.updated_at = new Date().toISOString();
     clone.is_home_patch = clone.id === state.homePatchId;
+    if (clone.subscription) clone.subscription = normalizePatchSubscription(clone.subscription);
 
     if (!clone.survey_geometry) {
       clone.survey_geometry = surveyGeometryForPatch(clone);
@@ -1107,9 +1836,10 @@
   }
 
   function upsertPatch(rawPatch, options = {}) {
+    const cleanPatch = withoutPatchGroupingFields(rawPatch) || {};
     const patch = withDerivedPatchFields({
-      ...rawPatch,
-      saved_at: rawPatch.saved_at || new Date().toISOString()
+      ...cleanPatch,
+      saved_at: cleanPatch.saved_at || new Date().toISOString()
     });
     if (!patch) return null;
 
@@ -1161,6 +1891,39 @@
     return state.homePatchId ? getPatch(state.homePatchId) : null;
   }
 
+  function writePatchSubscription(id, subscription, options = {}) {
+    const idx = state.patches.findIndex((patch) => String(patch.id) === String(id));
+    if (idx < 0) return null;
+
+    const next = normalizePatchSubscription(subscription);
+    state.patches[idx] = withDerivedPatchFields({
+      ...state.patches[idx],
+      subscription: next
+    });
+    savePatches();
+    if (options.render !== false) render();
+    if (next.enabled && options.schedule !== false) schedulePatchSubscriptionScan(900);
+    return getPatch(id);
+  }
+
+  function setPatchSubscription(id, subscription) {
+    const patch = getPatch(id);
+    if (!patch) return null;
+    const previous = patchSubscription(patch);
+    return writePatchSubscription(
+      id,
+      {
+        ...previous,
+        ...subscription
+      },
+      { render: true, schedule: true }
+    );
+  }
+
+  function subscribedPatches() {
+    return state.patches.filter(isPatchSubscribed);
+  }
+
   function patchesWithDistance() {
     const origin = locationOrigin();
     return state.patches
@@ -1200,6 +1963,11 @@
       map.getPane(PANE).style.zIndex = 758;
       map.getPane(PANE).style.pointerEvents = "auto";
     }
+    if (!map.getPane(LABEL_PANE)) {
+      map.createPane(LABEL_PANE);
+    }
+    map.getPane(LABEL_PANE).style.zIndex = 793;
+    map.getPane(LABEL_PANE).style.pointerEvents = "none";
 
     if (!state.layer) {
       state.layer = L.layerGroup([], { pane: PANE }).addTo(map);
@@ -1222,12 +1990,33 @@
         filter: drop-shadow(0 0 5px rgba(125,223,255,0.52));
       }
 
+      .gw-patch-boundary.gw-patch-boundary-child {
+        filter: drop-shadow(0 0 4px rgba(255,216,90,0.42));
+      }
+
+      .gw-patch-boundary.gw-patch-boundary-inat.gw-patch-boundary-child {
+        filter: drop-shadow(0 0 4px rgba(125,223,255,0.52));
+      }
+
       .gw-patch-hud-label {
+        position: relative;
+        isolation: isolate;
         width: 158px;
         pointer-events: none;
         transform: translateY(-2px);
         filter: drop-shadow(0 5px 12px rgba(0,0,0,0.42));
         transition: transform 140ms ease, filter 140ms ease;
+      }
+
+      .gw-patch-hud-label::before {
+        content: "";
+        position: absolute;
+        inset: -4px -5px -5px;
+        z-index: -1;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(22,19,16,0.94);
+        box-shadow: 0 0 0 1px var(--gw-patch-theme-ring, rgba(255,216,90,0.30)), 0 8px 18px rgba(0,0,0,0.30);
       }
 
       .gw-patch-hud-label.is-selected {
@@ -1421,20 +2210,33 @@
     });
   }
 
-  function patchBoundaryBaseStyle(patch, home) {
+  function patchBoundaryBaseStyle(patch, home, options = {}) {
     const theme = patchBoundaryTheme(patch);
+    const child = options.child === true || patch?.is_child_patch === true;
     return {
       color: theme.lineColor,
-      opacity: 0.96,
-      weight: home ? 4 : 3.5,
+      opacity: child ? 0.92 : 0.96,
+      weight: child ? 1.7 : home ? 4 : 3.5,
       fillColor: theme.fillColor,
-      fillOpacity: home ? theme.homeFillOpacity : theme.fillOpacity,
-      dashArray: home ? "" : "9 6"
+      fillOpacity: child ? 0 : home ? theme.homeFillOpacity : theme.fillOpacity,
+      dashArray: child ? "4 5" : home ? "" : "9 6"
     };
   }
 
-  function patchBoundarySelectedStyle(patch, home) {
-    const base = patchBoundaryBaseStyle(patch, home);
+  function patchBoundarySelectedStyle(patch, home, options = {}) {
+    const base = patchBoundaryBaseStyle(patch, home, options);
+    const child = options.child === true || patch?.is_child_patch === true;
+    if (child) {
+      return {
+        ...base,
+        color: "#050505",
+        opacity: 1,
+        weight: 2.8,
+        fillOpacity: 0,
+        dashArray: "3 4"
+      };
+    }
+
     return {
       ...base,
       color: "#050505",
@@ -1446,7 +2248,10 @@
 
   function setPatchLayerSelectionStyle(layer) {
     if (!layer?._gwPatchId || !layer.setStyle) return;
-    const selected = String(layer._gwPatchId) === String(state.selectedPatchId || "");
+    const selectedId = String(state.selectedPatchId || "");
+    const selected =
+      String(layer._gwPatchId) === selectedId ||
+      (!!layer._gwPatchGroupParentId && String(layer._gwPatchGroupParentId) === selectedId);
     layer.setStyle(selected ? layer._gwPatchSelectedStyle : layer._gwPatchBaseStyle);
   }
 
@@ -1498,10 +2303,16 @@
     window.GridWildHerePanel.scheduleRefresh?.(10);
   }
 
+  function patchSelectionTarget(patch) {
+    if (!patch?.group_parent_id) return patch;
+    return findGroupedPatchRow(patch.group_parent_id) || getPatch(patch.group_parent_id) || patch;
+  }
+
   function selectPatch(patch) {
     if (!patch?.id) return;
-    selectPatchHudLabel(patch.id);
-    raiseHereForSelectedPatch(patch);
+    const target = patchSelectionTarget(patch);
+    selectPatchHudLabel(target?.id || patch.id);
+    raiseHereForSelectedPatch(target || patch);
   }
 
   function selectPatchHudLabel(patchId) {
@@ -1570,6 +2381,7 @@
   }
 
   function openPatchQuestTypeMenu(patch, anchor = {}) {
+    patch = patchSelectionTarget(patch);
     if (!patch?.id) return;
     const x = Number(anchor.clientX ?? anchor.left) || Math.round(window.innerWidth / 2);
     const y = Number(anchor.clientY ?? anchor.top) || Math.round(window.innerHeight / 2);
@@ -1625,6 +2437,7 @@
   }
 
   function openPatchActionMenu(patch, evt = {}) {
+    patch = patchSelectionTarget(patch);
     if (!patch?.id) return;
     suppressHudActionMenu();
     if (evt?.originalEvent && window.L?.DomEvent?.stop) L.DomEvent.stop(evt.originalEvent);
@@ -1735,26 +2548,33 @@
     });
   }
 
-  function addPatchPolygon(patch, points, home) {
+  function addPatchPolygon(patch, points, home, options = {}) {
     if (!Array.isArray(points) || points.length < 3) return;
     const layer = state.layer;
     const theme = patchBoundaryTheme(patch);
-    const selected = String(patch.id) === String(state.selectedPatchId || "");
-    const baseStyle = patchBoundaryBaseStyle(patch, home);
-    const selectedStyle = patchBoundarySelectedStyle(patch, home);
-    L.polygon(
-      points.map((p) => [p.lat, p.lng]),
-      {
-        pane: PANE,
-        color: theme.glowColor,
-        opacity: 0.22,
-        weight: home ? 11 : 9,
-        fillOpacity: 0,
-        interactive: false,
-        bubblingMouseEvents: false,
-        className: `gw-patch-boundary-glow ${theme.glowClassName}`
-      }
-    ).addTo(layer);
+    const child = options.child === true || patch?.is_child_patch === true;
+    const groupParentId = patch.group_parent_id || options.parent?.id || null;
+    const selectedId = String(state.selectedPatchId || "");
+    const selected =
+      String(patch.id) === selectedId || (!!groupParentId && String(groupParentId) === selectedId);
+    const baseStyle = patchBoundaryBaseStyle(patch, home, { child });
+    const selectedStyle = patchBoundarySelectedStyle(patch, home, { child });
+
+    if (!child) {
+      L.polygon(
+        points.map((p) => [p.lat, p.lng]),
+        {
+          pane: PANE,
+          color: theme.glowColor,
+          opacity: 0.22,
+          weight: home ? 11 : 9,
+          fillOpacity: 0,
+          interactive: false,
+          bubblingMouseEvents: false,
+          className: `gw-patch-boundary-glow ${theme.glowClassName}`
+        }
+      ).addTo(layer);
+    }
 
     const target = L.polygon(
       points.map((p) => [p.lat, p.lng]),
@@ -1763,11 +2583,12 @@
         ...(selected ? selectedStyle : baseStyle),
         interactive: true,
         bubblingMouseEvents: false,
-        className: `gw-patch-boundary ${theme.className}`
+        className: `gw-patch-boundary ${theme.className}${child ? " gw-patch-boundary-child" : ""}`
       }
     ).addTo(layer);
 
     target._gwPatchId = patch.id;
+    target._gwPatchGroupParentId = groupParentId;
     target._gwPatchBaseStyle = baseStyle;
     target._gwPatchSelectedStyle = selectedStyle;
 
@@ -1806,10 +2627,11 @@
     if (!targetLayer) return;
 
     const marker = L.marker(latlng, {
-      pane: PANE,
+      pane: LABEL_PANE,
       interactive: false,
       keyboard: false,
       bubblingMouseEvents: false,
+      zIndexOffset: selected ? 1400 : 900,
       icon: L.divIcon({
         className: "",
         html: `
@@ -1841,6 +2663,7 @@
   function updatePatchLabelMarker(marker) {
     if (!marker?._gwPatchLabel || !marker.setLatLng) return;
     const selected = String(marker._gwPatchId || "") === String(state.selectedPatchId || "");
+    marker.setZIndexOffset?.(selected ? 1400 : 900);
     const latlng = patchLabelLatLngForViewport(
       marker._gwPatchLabelPreferredLatLng,
       marker._gwPatchLabelRings,
@@ -2024,6 +2847,88 @@
       .filter((patch) => patchIntersectsBounds(patch, bounds));
   }
 
+  function popupGroupingRows() {
+    return mergePatchRows([
+      ...patchesWithDistance(),
+      ...(Array.isArray(state.peekRows) ? state.peekRows : [])
+    ]);
+  }
+
+  function findGroupedPatchRow(id) {
+    const targetId = String(id || "");
+    if (!targetId) return null;
+
+    const grouped = groupPatchRows(popupGroupingRows());
+    for (const patch of grouped) {
+      if (String(patch.id) === targetId) return patch;
+      const child = (patch.child_patches || []).find((row) => String(row.id) === targetId);
+      if (child) return child;
+    }
+
+    return (
+      getPatch(targetId) || state.peekRows.find((patch) => String(patch.id) === targetId) || null
+    );
+  }
+
+  function groupedPatchForPopup(patch) {
+    const grouped = findGroupedPatchRow(patch?.id);
+    if (grouped) return grouped;
+    return {
+      ...patch,
+      child_patches: Array.isArray(patch?.child_patches) ? patch.child_patches : []
+    };
+  }
+
+  function patchGroupReasonLabel(child) {
+    if (child?.group_reason === "year_project") return "seasonal project";
+    if (child?.group_reason === "osm_parent") return "iNat/OSM overlap";
+    return "high overlap";
+  }
+
+  function patchGroupMetricLabel(child) {
+    const metrics = child?.group_overlap || {};
+    const dice = Number(metrics.dice || 0);
+    const coverage = Number(metrics.childCoverage || 0);
+    if (child?.group_reason === "year_project" && coverage > dice) {
+      return `${Math.round(Math.max(0, Math.min(1, coverage)) * 100)}% child overlap`;
+    }
+    return `Dice ${Math.round(Math.max(0, Math.min(1, dice)) * 100)}%`;
+  }
+
+  function renderPatchChildrenList(patch) {
+    const children = Array.isArray(patch?.child_patches) ? patch.child_patches : [];
+    if (!children.length) return "";
+
+    return `
+      <div class="gw-patch-child-list">
+        <div class="gw-patch-child-list-title">Grouped Patches</div>
+        ${children
+          .map((child) => {
+            const theme = patchBoundaryTheme(child);
+            return `
+              <div class="gw-patch-child-row" style="--gw-patch-child-color:${esc(theme.lineColor)};">
+                <span class="gw-patch-child-swatch" aria-hidden="true"></span>
+                <span class="gw-patch-child-main">
+                  <b>${esc(patchTitle(child))}</b>
+                  <small>${esc(child.source_label || child.source || "Patch")} / ${esc(patchGroupReasonLabel(child))} / ${esc(patchGroupMetricLabel(child))}</small>
+                </span>
+                <button class="gw-mini-btn" data-gw-open-child-patch="${esc(child.id)}" type="button">Open</button>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+  }
+
+  function openPatchChildFromPopup(id, root, latlng = null) {
+    const child = findGroupedPatchRow(id);
+    if (!child?.id) return;
+    root?.remove();
+    if (getPatch(child.id)) openPatchDetail(child.id, latlng);
+    else openPatchPeekInfo(child, latlng);
+  }
+
   function openPatchPeekInfo(patch, latlng = null) {
     if (!patch?.id) return;
     if (getPatch(patch.id)) {
@@ -2031,6 +2936,7 @@
       return;
     }
 
+    const displayPatch = groupedPatchForPopup(patch);
     injectFieldModalStyles();
     document
       .querySelectorAll(".gw-quest-modal-backdrop.gw-patch-peek-backdrop")
@@ -2040,14 +2946,15 @@
     root.className = "gw-quest-modal-backdrop gw-patch-peek-backdrop";
     root.innerHTML = `
       <div class="gw-quest-modal">
-        <div class="gw-quest-modal-title">${esc(patchTitle(patch))}</div>
+        <div class="gw-quest-modal-title">${esc(patchTitle(displayPatch))}</div>
         <div class="gw-quest-modal-subtitle">
-          ${esc(patch.source_label || "OSM patch boundary")}
+          ${esc(displayPatch.source_label || "OSM patch boundary")}
         </div>
         <div class="gw-quest-status-grid">
-          <div class="gw-quest-status-line"><span>Distance</span><span>${esc(formatDistance(patch.distance_m ?? distanceM(locationOrigin(), patch.centroid)))}</span></div>
-          <div class="gw-quest-status-line"><span>Source</span><span>${esc(patch.source_label || patch.source || "OSM")}</span></div>
+          <div class="gw-quest-status-line"><span>Distance</span><span>${esc(formatDistance(displayPatch.distance_m ?? distanceM(locationOrigin(), displayPatch.centroid)))}</span></div>
+          <div class="gw-quest-status-line"><span>Source</span><span>${esc(displayPatch.source_label || displayPatch.source || "OSM")}</span></div>
         </div>
+        ${renderPatchChildrenList(displayPatch)}
         <div class="gw-quest-actions gw-quest-actions-four">
           <button class="gw-quest-btn secondary" id="gwPatchPeekCloseBtn" type="button">Close</button>
           <button class="gw-quest-btn secondary" id="gwPatchPeekMapBtn" type="button">Map</button>
@@ -2059,19 +2966,24 @@
 
     document.body.appendChild(root);
     root.onclick = (evt) => {
+      const childBtn = evt.target.closest("[data-gw-open-child-patch]");
+      if (childBtn) {
+        openPatchChildFromPopup(childBtn.dataset.gwOpenChildPatch, root, latlng);
+        return;
+      }
       if (evt.target === root || evt.target.closest("#gwPatchPeekCloseBtn")) root.remove();
     };
-    root.querySelector("#gwPatchPeekMapBtn").onclick = () => focusPatchObject(patch);
+    root.querySelector("#gwPatchPeekMapBtn").onclick = () => focusPatchObject(displayPatch);
     root.querySelector("#gwPatchPeekBookmarkBtn").onclick = () => {
-      upsertPatch(patch);
+      upsertPatch(displayPatch);
       root.remove();
-      openPatchDetail(patch.id, latlng);
+      openPatchDetail(displayPatch.id, latlng);
     };
     root.querySelector("#gwPatchPeekHomeBtn").onclick = () => {
-      upsertPatch(patch);
-      setHomePatch(patch.id);
+      upsertPatch(displayPatch);
+      setHomePatch(displayPatch.id);
       root.remove();
-      openPatchDetail(patch.id, latlng);
+      openPatchDetail(displayPatch.id, latlng);
     };
   }
 
@@ -2083,24 +2995,41 @@
     state.peekRows = Array.isArray(rows) ? rows : [];
     let count = 0;
 
-    rows.forEach((patch) => {
+    function addPeekPatchPolygon(patch, options = {}) {
       const theme = patchBoundaryTheme(patch);
-      const selected = String(patch.id) === String(state.selectedPatchId || "");
+      const child = options.child === true || patch?.is_child_patch === true;
+      const groupParentId = patch.group_parent_id || options.parent?.id || null;
+      const selectedId = String(state.selectedPatchId || "");
+      const selected =
+        String(patch.id) === selectedId ||
+        (!!groupParentId && String(groupParentId) === selectedId);
       const baseStyle = {
-        color: theme.glowColor,
-        opacity: 0.98,
-        weight: 4,
+        color: child ? theme.lineColor : theme.glowColor,
+        opacity: child ? 0.92 : 0.98,
+        weight: child ? 1.8 : 4,
         fillColor: patch.candidate ? theme.candidateFillColor : theme.fillColor,
-        fillOpacity: patch.candidate ? theme.candidateFillOpacity : theme.peekFillOpacity,
-        dashArray: patch.candidate ? "10 6" : ""
+        fillOpacity: child
+          ? 0
+          : patch.candidate
+            ? theme.candidateFillOpacity
+            : theme.peekFillOpacity,
+        dashArray: child ? "4 5" : patch.candidate ? "10 6" : ""
       };
-      const selectedStyle = {
-        ...baseStyle,
-        color: "#050505",
-        opacity: 1,
-        weight: 5,
-        dashArray: ""
-      };
+      const selectedStyle = child
+        ? {
+            ...baseStyle,
+            color: "#050505",
+            opacity: 1,
+            weight: 3,
+            dashArray: "3 4"
+          }
+        : {
+            ...baseStyle,
+            color: "#050505",
+            opacity: 1,
+            weight: 5,
+            dashArray: ""
+          };
       patchRings(patch).forEach((ring) => {
         if (!Array.isArray(ring) || ring.length < 3) return;
         count++;
@@ -2111,11 +3040,12 @@
             ...(selected ? selectedStyle : baseStyle),
             interactive: true,
             bubblingMouseEvents: false,
-            className: `gw-patch-peek-outline ${theme.peekClassName}`
+            className: `gw-patch-peek-outline ${theme.peekClassName}${child ? " gw-patch-boundary-child" : ""}`
           }
         ).addTo(peekLayer);
 
         polygon._gwPatchId = patch.id;
+        polygon._gwPatchGroupParentId = groupParentId;
         polygon._gwPatchBaseStyle = baseStyle;
         polygon._gwPatchSelectedStyle = selectedStyle;
 
@@ -2135,7 +3065,14 @@
         });
         bindPatchLongHold(polygon, patch);
       });
+    }
 
+    groupPatchRows(state.peekRows).forEach((patch) => {
+      const selected = String(patch.id) === String(state.selectedPatchId || "");
+      addPeekPatchPolygon(patch);
+      (patch.child_patches || []).forEach((child) =>
+        addPeekPatchPolygon(child, { child: true, parent: patch })
+      );
       if (selected && !getPatch(patch.id)) {
         addPatchCompletenessLabel(patch, patchRings(patch), {
           layer: peekLayer,
@@ -2272,11 +3209,17 @@
     layer.clearLayers();
     if (!state.layerVisible) return;
 
-    patchesWithDistance().forEach((patch) => {
+    groupPatchRows(patchesWithDistance()).forEach((patch) => {
       const home = patch.id === state.homePatchId;
       const rings = patchRings(patch);
 
       rings.forEach((ring) => addPatchPolygon(patch, ring, home));
+      (patch.child_patches || []).forEach((child) => {
+        const childHome = child.id === state.homePatchId;
+        patchRings(child).forEach((ring) =>
+          addPatchPolygon(child, ring, childHome, { child: true, parent: patch })
+        );
+      });
       addPatchCompletenessLabel(patch, rings);
     });
   }
@@ -2345,10 +3288,186 @@
     });
   }
 
+  function injectPatchSubscriptionStyles() {
+    if (document.getElementById("gwPatchSubscriptionStyles")) return;
+    const style = document.createElement("style");
+    style.id = "gwPatchSubscriptionStyles";
+    style.textContent = `
+      .gw-patch-subscription-card {
+        margin: 10px 0 2px;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(240,209,138,0.16);
+        background: rgba(255,255,255,0.045);
+      }
+
+      .gw-patch-subscription-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #f4e8cf;
+        font-size: 13px;
+        font-weight: 950;
+      }
+
+      .gw-patch-subscription-toggle input {
+        width: 16px;
+        height: 16px;
+        accent-color: #75e6a4;
+      }
+
+      .gw-patch-subscription-settings {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 9px;
+      }
+
+      .gw-patch-subscription-settings[hidden] {
+        display: none;
+      }
+
+      .gw-patch-subscription-field {
+        display: grid;
+        gap: 4px;
+        color: rgba(239,230,211,0.68);
+        font-size: 11px;
+        font-weight: 850;
+      }
+
+      .gw-patch-subscription-field select,
+      .gw-patch-subscription-field input {
+        min-width: 0;
+        min-height: 32px;
+        border-radius: 8px;
+        border: 1px solid rgba(240,209,138,0.20);
+        background: rgba(20,17,15,0.78);
+        color: #f4e8cf;
+        padding: 6px 8px;
+        font: inherit;
+      }
+
+      .gw-patch-subscription-status {
+        grid-column: 1 / -1;
+        color: rgba(239,230,211,0.62);
+        font-size: 11px;
+        line-height: 1.3;
+      }
+
+      .gw-patch-subscription-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+
+      @media (max-width: 520px) {
+        .gw-patch-subscription-settings {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function renderPatchSubscriptionControls(patch) {
+    const sub = patchSubscription(patch);
+    const enabled = sub.enabled === true;
+    const status = sub.lastError
+      ? `Last check: ${formatPatchSubscriptionTime(sub.lastCheckedAt)} - ${sub.lastError}`
+      : `Last check: ${formatPatchSubscriptionTime(sub.lastCheckedAt)} - ${sub.lastUnknownCount} unknown${sub.lastUnknownCount === 1 ? "" : "s"}`;
+
+    return `
+      <div class="gw-patch-subscription-card">
+        <label class="gw-patch-subscription-toggle">
+          <input id="gwPatchSubscriptionEnabled" type="checkbox" ${enabled ? "checked" : ""}>
+          <span>Subscribe</span>
+        </label>
+        <div class="gw-patch-subscription-settings" data-gw-patch-subscription-settings ${enabled ? "" : "hidden"}>
+          <label class="gw-patch-subscription-field">
+            <span>Kingdom</span>
+            <select id="gwPatchSubscriptionIconicTaxon">
+              ${PATCH_SUBSCRIPTION_ICONIC_TAXA.map(
+                (taxon) => `
+                  <option value="${esc(taxon)}" ${sub.iconicTaxon === taxon ? "selected" : ""}>
+                    ${esc(taxon === "Any" ? "Any life" : taxon)}
+                  </option>
+                `
+              ).join("")}
+            </select>
+          </label>
+          <label class="gw-patch-subscription-field">
+            <span>Taxon ID</span>
+            <input id="gwPatchSubscriptionTaxonId" type="text" inputmode="numeric" pattern="[0-9]*" value="${esc(sub.taxonId)}" placeholder="optional">
+          </label>
+          <div class="gw-patch-subscription-status">${esc(status)}</div>
+          <div class="gw-patch-subscription-actions">
+            <button class="gw-quest-btn secondary" id="gwPatchSubscriptionSaveBtn" type="button">Save</button>
+            <button class="gw-quest-btn secondary" id="gwPatchSubscriptionCheckBtn" type="button">Check now</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function patchSubscriptionFormValues(root) {
+    const enabled = root.querySelector("#gwPatchSubscriptionEnabled")?.checked === true;
+    const iconicTaxon = root.querySelector("#gwPatchSubscriptionIconicTaxon")?.value || "Any";
+    const taxonId = String(root.querySelector("#gwPatchSubscriptionTaxonId")?.value || "").trim();
+    return {
+      enabled,
+      iconicTaxon: PATCH_SUBSCRIPTION_ICONIC_TAXA.includes(iconicTaxon) ? iconicTaxon : "Any",
+      taxonId,
+      taxonLabel: taxonId ? `Taxon ${taxonId}` : ""
+    };
+  }
+
+  function bindPatchSubscriptionControls(root, id, latlng = null) {
+    const checkbox = root.querySelector("#gwPatchSubscriptionEnabled");
+    const settings = root.querySelector("[data-gw-patch-subscription-settings]");
+    const saveBtn = root.querySelector("#gwPatchSubscriptionSaveBtn");
+    const checkBtn = root.querySelector("#gwPatchSubscriptionCheckBtn");
+    if (!checkbox) return;
+
+    const saveFromForm = (options = {}) => {
+      const values = patchSubscriptionFormValues(root);
+      if (settings) settings.hidden = !values.enabled;
+      const saved = setPatchSubscription(id, values);
+      if (!options.silent) {
+        toast(values.enabled ? "Patch subscription saved." : "Patch subscription off.");
+      }
+      return saved;
+    };
+
+    checkbox.addEventListener("change", () => {
+      saveFromForm();
+    });
+
+    saveBtn?.addEventListener("click", () => {
+      saveFromForm();
+      root.remove();
+      openPatchDetail(id, latlng);
+    });
+
+    checkBtn?.addEventListener("click", async () => {
+      const saved = saveFromForm({ silent: true });
+      if (!isPatchSubscribed(saved)) {
+        toast("Subscribe before checking.");
+        return;
+      }
+      checkBtn.disabled = true;
+      await checkPatchSubscriptionNow(id, { force: true, toastResult: true });
+      root.remove();
+      openPatchDetail(id, latlng);
+    });
+  }
+
   function openPatchDetail(id, latlng = null) {
     const patch = getPatch(id);
     if (!patch) return;
+    const displayPatch = groupedPatchForPopup(patch);
     const home = patch.id === state.homePatchId;
+    injectPatchSubscriptionStyles();
 
     document
       .querySelectorAll(".gw-quest-modal-backdrop.gw-patch-detail-backdrop")
@@ -2357,16 +3476,18 @@
     root.className = "gw-quest-modal-backdrop gw-patch-detail-backdrop";
     root.innerHTML = `
       <div class="gw-quest-modal">
-        <div class="gw-quest-modal-title">${esc(patchTitle(patch))}</div>
+        <div class="gw-quest-modal-title">${esc(patchTitle(displayPatch))}</div>
         <div class="gw-quest-modal-subtitle">
-          ${esc(patch.source_label || patch.source || "Patch")}
+          ${esc(displayPatch.source_label || displayPatch.source || "Patch")}
           ${home ? `<span class="gw-quest-pill" style="margin-left:6px;">Home patch</span>` : ""}
         </div>
         <div class="gw-quest-status-grid">
-          <div class="gw-quest-status-line"><span>Boundary</span><span>${esc(boundaryLabel(patch))}</span></div>
-          <div class="gw-quest-status-line"><span>Distance</span><span>${esc(formatDistance(distanceM(locationOrigin(), patch.centroid)))}</span></div>
-          <div class="gw-quest-status-line"><span>Source</span><span>${esc(patch.source_label || patch.source || "manual")}</span></div>
+          <div class="gw-quest-status-line"><span>Boundary</span><span>${esc(boundaryLabel(displayPatch))}</span></div>
+          <div class="gw-quest-status-line"><span>Distance</span><span>${esc(formatDistance(distanceM(locationOrigin(), displayPatch.centroid)))}</span></div>
+          <div class="gw-quest-status-line"><span>Source</span><span>${esc(displayPatch.source_label || displayPatch.source || "manual")}</span></div>
         </div>
+        ${renderPatchChildrenList(displayPatch)}
+        ${renderPatchSubscriptionControls(patch)}
         <div class="gw-quest-actions gw-quest-actions-four">
           <button class="gw-quest-btn secondary" id="gwPatchCloseBtn" type="button">Close</button>
           <button class="gw-quest-btn secondary" id="gwPatchMapBtn" type="button">Map</button>
@@ -2379,6 +3500,11 @@
 
     document.body.appendChild(root);
     root.onclick = (evt) => {
+      const childBtn = evt.target.closest("[data-gw-open-child-patch]");
+      if (childBtn) {
+        openPatchChildFromPopup(childBtn.dataset.gwOpenChildPatch, root, latlng);
+        return;
+      }
       if (evt.target === root) root.remove();
     };
     root.querySelector("#gwPatchCloseBtn").onclick = () => root.remove();
@@ -2401,6 +3527,7 @@
       removePatch(id);
       root.remove();
     };
+    bindPatchSubscriptionControls(root, id, latlng);
 
     if (latlng && window.L) {
       setTimeout(() => {
@@ -2750,6 +3877,7 @@
         </span>
         <span class="gw-field-selector-actions">
           ${patch.is_home_patch ? `<span class="gw-quest-pill">Home</span>` : `<button class="gw-mini-btn" data-gw-home-patch="${esc(patch.id)}" type="button">Make Home</button>`}
+          ${isPatchSubscribed(patch) ? `<span class="gw-quest-pill">Subscribed</span>` : ""}
           <button class="gw-mini-btn" data-gw-map-patch="${esc(patch.id)}" type="button">Map</button>
           <button class="gw-mini-btn" data-gw-open-patch="${esc(patch.id)}" type="button">Open</button>
         </span>
@@ -2807,6 +3935,66 @@
         flex-wrap: wrap;
         justify-content: flex-end;
         gap: 6px;
+      }
+
+      .gw-patch-child-list {
+        display: grid;
+        gap: 6px;
+        margin: 12px 0 4px;
+        padding: 9px;
+        border: 1px solid rgba(240,209,138,0.16);
+        border-radius: 8px;
+        background: rgba(20,17,15,0.42);
+      }
+
+      .gw-patch-child-list-title {
+        color: #f0d18a;
+        font-size: 10.5px;
+        font-weight: 950;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .gw-patch-child-row {
+        display: grid;
+        grid-template-columns: 12px minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .gw-patch-child-swatch {
+        width: 10px;
+        height: 10px;
+        border: 2px solid var(--gw-patch-child-color, #ffd85a);
+        border-radius: 999px;
+        box-shadow: 0 0 8px var(--gw-patch-child-color, #ffd85a);
+      }
+
+      .gw-patch-child-main {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .gw-patch-child-main b,
+      .gw-patch-child-main small {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .gw-patch-child-main b {
+        color: #fff7df;
+        font-size: 11.5px;
+        line-height: 1.1;
+      }
+
+      .gw-patch-child-main small {
+        color: rgba(239,230,211,0.66);
+        font-size: 10px;
+        line-height: 1.15;
+        font-weight: 750;
       }
 
       .gw-field-load-tabs {
@@ -3499,7 +4687,13 @@
     window.addEventListener("gridwild:staticheatloaded", render);
     window.addEventListener("gridwild:filterschange", render);
     window.addEventListener("gridwild:heatchange", render);
-    window.addEventListener("gwBootstrapReady", render);
+    window.addEventListener("gwBootstrapReady", () => {
+      render();
+      startPatchSubscriptionPolling();
+    });
+    window.addEventListener("gwPatchesChanged", () => {
+      if (subscribedPatches().length) schedulePatchSubscriptionScan(2500);
+    });
     window.map?.on?.("move", requestPatchLabelPositionUpdate);
     window.map?.on?.("moveend", updatePatchLabelPositions);
     window.map?.on?.("zoomend", render);
@@ -3514,10 +4708,17 @@
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closePatchActionMenu();
     });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && subscribedPatches().length) {
+        schedulePatchSubscriptionScan(800);
+      }
+    });
     window.map?.on?.("movestart zoomstart", closePatchActionMenu);
+    startPatchSubscriptionPolling();
   }
 
   window.GridWildPatches = {
+    checkPatchSubscriptionNow,
     focusPatch,
     formatDistance,
     getHomePatch,
@@ -3541,6 +4742,7 @@
     removePatch,
     render,
     setHomePatch,
+    setPatchSubscription,
     setVisible,
     toggleVisible,
     unsetHomePatch,

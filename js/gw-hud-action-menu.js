@@ -30,6 +30,18 @@
     }
   }
 
+  function hapticFeedback(pattern = 18) {
+    if (window.__gwState?.hapticsEnabled === false) return false;
+    if (typeof navigator === "undefined") return false;
+    if (!("vibrate" in navigator)) return false;
+
+    try {
+      return navigator.vibrate(pattern);
+    } catch {
+      return false;
+    }
+  }
+
   function injectStyles() {
     if (stylesInjected || document.getElementById("gwHudActionMenuStyles")) {
       stylesInjected = true;
@@ -402,7 +414,12 @@
     if (hasActiveParty()) return;
 
     try {
-      await window.GridWildPartyLive?.createDbPartyFromLegacyForm?.({
+      if (!window.GridWildPartyLive?.createDbPartyFromLegacyForm) {
+        toast("Party service unavailable.");
+        return;
+      }
+
+      const form = {
         name: "Party of 1",
         title: "Party of 1",
         mode: "live",
@@ -419,7 +436,12 @@
           source: "avatar"
         },
         locationLabel: "Current avatar location"
-      });
+      };
+
+      toast("Starting Party of 1...");
+      hapticFeedback([34, 24, 42]);
+
+      await window.GridWildPartyLive.createDbPartyFromLegacyForm(form, { optimistic: true });
       window.GridWildPartyLive?.refreshPartySheet?.();
       window.GridWildParty?.refreshMapBeacon?.();
       toast("Party of 1 started.");
@@ -570,15 +592,23 @@
       quantity: 1
     };
 
+    toast("Starting 9x9 grid quest...");
+    hapticFeedback(24);
+
     const quest = await window.GridWildQuests.startQuestFromRecipe(recipe, {
       title: "Help Fill Grid: 9x9",
       description: `Observe one organism in each marked unobserved GridWild square within the selected 9x9 grid. ${targetInfo.cells.length} of ${targetInfo.totalSquares} squares are marked for this run.`,
       source: "manual",
       autoEmbark: true,
+      optimisticEmbark: true,
       openStatus: false
     });
 
-    if (quest) toast("9x9 grid quest started.");
+    if (quest) {
+      toast("9x9 grid quest started.");
+    } else {
+      toast("Could not start 9x9 grid quest.");
+    }
   }
 
   function openCustomQuestBuilder(context) {
