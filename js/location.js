@@ -116,11 +116,13 @@ let compassPermissionState = "unknown";
 let compassDeniedToastShown = false;
 let compassPreferredSource = null;
 let lastCompassAcceptedAt = 0;
+let compassSourceSeenAt = {};
 
 const COMPASS_HEADING_SMOOTHING = 0.18;
 const COMPASS_HEADING_DEADBAND_DEG = 2.5;
 const COMPASS_HEADING_MIN_UPDATE_MS = 80;
-const COMPASS_SOURCE_STALE_MS = 1200;
+const COMPASS_SOURCE_ACTIVE_MS = 4500;
+const COMPASS_SOURCE_DECISION_LOG_LIMIT = 80;
 const LOCK_ZOOM_CLOSE = 19;
 const LOCK_ZOOM_WIDE = 17;
 const LOCK_PROGRAMMATIC_MOVE_GRACE_MS = 900;
@@ -686,29 +688,105 @@ function headingDeltaDeg(a, b) {
   return Math.abs(((normalizeHeading(a) - normalizeHeading(b) + 540) % 360) - 180);
 }
 
-function shouldPreferCompassSource(source) {
+function compassSourceRank(source) {
+  if (source === "webkitCompassHeading") return 4;
+  if (source === "deviceorientationabsolute") return 3;
+  if (source === "deviceorientation") return 2;
+  if (source === "gps") return 1;
+  return 0;
+}
+
+function markCompassSourceSeen(source, now = Date.now()) {
+  compassSourceSeenAt = {
+    ...compassSourceSeenAt,
+    [String(source || "unknown")]: now
+  };
+  window.__gwCompassSourceSeenAt = { ...compassSourceSeenAt };
+}
+
+function recentCompassSources(now = Date.now()) {
+  return Object.entries(compassSourceSeenAt)
+    .filter(([, seenAt]) => now - Number(seenAt) <= COMPASS_SOURCE_ACTIVE_MS)
+    .sort((a, b) => {
+      const rankDelta = compassSourceRank(b[0]) - compassSourceRank(a[0]);
+      return rankDelta || Number(b[1]) - Number(a[1]);
+    });
+}
+
+function bestRecentCompassSource(now = Date.now()) {
+  return recentCompassSources(now)[0]?.[0] || null;
+}
+
+function logCompassSourceDecision(source, headingDeg, decision, reason) {
+  window.__gwCompassSourceDecisions = Array.isArray(window.__gwCompassSourceDecisions)
+    ? window.__gwCompassSourceDecisions
+    : [];
+
+  const entry = {
+    at: Date.now(),
+    source: String(source || "unknown"),
+    heading: normalizeHeading(Number(headingDeg) || 0),
+    preferredSource: compassPreferredSource,
+    bestRecentSource: bestRecentCompassSource(),
+    decision,
+    reason
+  };
+
+  window.__gwCompassSourceDecisions.push(entry);
+  if (window.__gwCompassSourceDecisions.length > COMPASS_SOURCE_DECISION_LOG_LIMIT) {
+    window.__gwCompassSourceDecisions.splice(
+      0,
+      window.__gwCompassSourceDecisions.length - COMPASS_SOURCE_DECISION_LOG_LIMIT
+    );
+  }
+
+  if (window.__gwDebugCompassCamera === true) {
+    console.debug("[GridWild compass source]", entry);
+  }
+}
+
+function shouldPreferCompassSource(source, now = Date.now()) {
   if (!compassPreferredSource) return true;
   if (source === compassPreferredSource) return true;
 
+  const bestRecentSource = bestRecentCompassSource(now);
+  const sourceRank = compassSourceRank(source);
+  const preferredRank = compassSourceRank(compassPreferredSource);
+  const preferredSeenAt = Number(compassSourceSeenAt[compassPreferredSource] || 0);
+  const preferredIsActive = now - preferredSeenAt <= COMPASS_SOURCE_ACTIVE_MS;
+
   // iOS Safari's webkitCompassHeading is the least ambiguous source when present.
-  if (source === "webkitCompassHeading") return true;
-  if (Date.now() - lastCompassAcceptedAt > COMPASS_SOURCE_STALE_MS) return true;
+  if (source === "webkitCompassHeading" && sourceRank >= preferredRank) return true;
+  if (bestRecentSource && source !== bestRecentSource) return false;
+  if (sourceRank > preferredRank) return true;
+  if (!preferredIsActive) return true;
 
   return false;
 }
 
 function applyCompassHeading(headingDeg, source = "unknown") {
   if (!Number.isFinite(headingDeg)) return;
-  if (!shouldPreferCompassSource(source)) return;
 
   const now = Date.now();
+  markCompassSourceSeen(source, now);
+  if (!shouldPreferCompassSource(source, now)) {
+    logCompassSourceDecision(source, headingDeg, "ignored", "preferred-source-active");
+    return;
+  }
+
   const normalizedHeading = normalizeHeading(headingDeg);
   const lastAcceptedHeading = Number.isFinite(lastHeading) ? lastHeading : null;
 
   if (lastAcceptedHeading !== null) {
     const delta = headingDeltaDeg(normalizedHeading, lastAcceptedHeading);
-    if (delta < COMPASS_HEADING_DEADBAND_DEG) return;
-    if (now - lastCompassAcceptedAt < COMPASS_HEADING_MIN_UPDATE_MS) return;
+    if (delta < COMPASS_HEADING_DEADBAND_DEG) {
+      logCompassSourceDecision(source, normalizedHeading, "ignored", "deadband");
+      return;
+    }
+    if (now - lastCompassAcceptedAt < COMPASS_HEADING_MIN_UPDATE_MS) {
+      logCompassSourceDecision(source, normalizedHeading, "ignored", "min-update-interval");
+      return;
+    }
   }
 
   compassPreferredSource = source;
@@ -716,6 +794,7 @@ function applyCompassHeading(headingDeg, source = "unknown") {
   lastHeading = smoothHeading(normalizedHeading);
   window.__gwCompassHeading = lastHeading;
   window.__gwCompassSource = source;
+  logCompassSourceDecision(source, normalizedHeading, "accepted", "heading-update");
   updateUserMarkerHeading(lastHeading);
   applyMapRotation(lastHeading, { source });
 }
@@ -934,6 +1013,8 @@ function getCompassState() {
     targetMode: targetCompassOrientationMode(),
     transition: orientationTransition,
     cameraBearing: cameraBearingForMode(),
+    sourceSeenAt: { ...compassSourceSeenAt },
+    sourceDecisions: (window.__gwCompassSourceDecisions || []).slice(-12),
     cameraWrites: (window.__gwCompassCameraWrites || []).slice(-12)
   };
 }
@@ -949,14 +1030,7 @@ function getMapPanePosition(mapPane) {
 
 function getHeadingTransformOrigin(pos) {
   const size = map.getSize();
-  let containerPoint = L.point(size.x / 2, size.y / 2);
-  const loc = lastFix || window.__gwLastUserLocation;
-  const lat = Number(loc?.latitude ?? loc?.lat);
-  const lng = Number(loc?.longitude ?? loc?.lng);
-
-  if (shouldUseMapBearingOrientation() && Number.isFinite(lat) && Number.isFinite(lng)) {
-    containerPoint = map.latLngToContainerPoint([lat, lng]);
-  }
+  const containerPoint = L.point(size.x / 2, size.y / 2);
 
   return {
     x: containerPoint.x - pos.x,
@@ -987,6 +1061,11 @@ function setMapPaneHeadingTransform() {
 
 function scheduleMapHeadingTransform() {
   if (!MAP_HEADING_ROTATION_ENABLED) return;
+  if (shouldUseMapBearingOrientation()) {
+    setMapPaneHeadingTransform();
+    return;
+  }
+
   if (mapHeadingRaf) return;
 
   const run = () => {
