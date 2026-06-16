@@ -35,6 +35,19 @@
     return window.__gwState?.player?.display_name || window.__gwUser?.username || "You";
   }
 
+  function isOnlineGameplayReady() {
+    return window.GridWildOnline?.isReady?.() === true || window.__gwState?.bootstrapReady === true;
+  }
+
+  function currentPartySnapshot() {
+    return {
+      party: window.__gwState?.party || null,
+      members: window.__gwState?.partyMembers || [],
+      events: window.__gwState?.partyEvents || [],
+      evidence: window.__gwState?.partyEvidence || []
+    };
+  }
+
   function dispatchActivePartyChanged(id, extra = {}) {
     window.dispatchEvent(
       new CustomEvent("gwActivePartyChanged", {
@@ -57,9 +70,13 @@
       window.__gwState.partyRoutePartyId = null;
     }
 
-    window.GridWildAPI?.setActiveParty?.(id || null).catch((err) => {
-      console.warn("Could not sync active party state:", err);
-    });
+    if (isOnlineGameplayReady()) {
+      window.GridWildAPI?.setActiveParty?.(id || null).catch((err) => {
+        if (!window.GridWildOnline?.isUnavailableError?.(err)) {
+          console.warn("Could not sync active party state:", err);
+        }
+      });
+    }
 
     dispatchActivePartyChanged(window.__gwState.activePartyId);
   }
@@ -251,12 +268,11 @@
     try {
       const activeId = getActivePartyId();
       if (isOptimisticPartyId(activeId)) {
-        return {
-          party: window.__gwState?.party || null,
-          members: window.__gwState?.partyMembers || [],
-          events: window.__gwState?.partyEvents || [],
-          evidence: window.__gwState?.partyEvidence || []
-        };
+        return currentPartySnapshot();
+      }
+
+      if (!isOnlineGameplayReady()) {
+        return currentPartySnapshot();
       }
 
       const data = await window.GridWildAPI.getParty(activeId || null);
@@ -350,7 +366,10 @@
 
       return data;
     } catch (err) {
-      if (!/GridWild login expired on this device/i.test(err?.message || "")) {
+      if (
+        !window.GridWildOnline?.isUnavailableError?.(err) &&
+        !/GridWild login expired on this device/i.test(err?.message || "")
+      ) {
         console.error("Failed to load party:", err);
       }
       return null;
@@ -544,6 +563,7 @@
 
   function startPartyPolling() {
     stopPartyPolling();
+    if (!isOnlineGameplayReady()) return;
 
     partyPollTimer = setInterval(async () => {
       await loadParty();
@@ -560,6 +580,7 @@
 
   function startCoverPolling(partyId) {
     stopCoverPolling();
+    if (!isOnlineGameplayReady()) return;
 
     window.__gwPartyCoverPollTimer = setInterval(async () => {
       await loadParty();

@@ -374,6 +374,7 @@ function buildTopLevelAssets(manifest) {
     { manifestKey: "served_taxonomy_policy_file", label: "served taxonomy policy" },
     { manifestKey: "coarse_pyramid_manifest_file", label: "coarse pyramid manifest" },
     { manifestKey: "coarse_pyramid_summary_file", label: "coarse pyramid summary" },
+    { manifestKey: "pmtiles_shard_manifest_file", label: "PMTiles shard manifest" },
     { manifestKey: "pmtiles_file", label: "PMTiles" }
   ];
 
@@ -458,12 +459,28 @@ async function loadCoarsePyramidManifest(assetDir, manifest) {
   return readJson(localPath);
 }
 
+async function loadPMTilesShardManifest(assetDir, manifest) {
+  if (!manifest.pmtiles_shard_manifest_file) return null;
+  const file = normalizeAssetPath(manifest.pmtiles_shard_manifest_file);
+  const localPath = path.join(assetDir, file);
+  if (!(await fileExists(localPath))) return null;
+  return readJson(localPath);
+}
+
 function coarsePyramidTileFiles(coarseManifest) {
   const files = new Set();
   for (const level of coarseManifest?.levels || []) {
     for (const tile of level.tiles || []) {
       if (tile?.file) files.add(normalizeAssetPath(tile.file));
     }
+  }
+  return Array.from(files).sort();
+}
+
+function pmtilesShardFiles(shardManifest) {
+  const files = new Set();
+  for (const shard of shardManifest?.shards || []) {
+    if (shard?.file) files.add(normalizeAssetPath(shard.file));
   }
   return Array.from(files).sort();
 }
@@ -568,6 +585,8 @@ async function main() {
   }));
   const coarsePyramidManifest = await loadCoarsePyramidManifest(assetDir, manifest);
   const coarsePyramidFiles = coarsePyramidTileFiles(coarsePyramidManifest);
+  const pmtilesShardManifest = await loadPMTilesShardManifest(assetDir, manifest);
+  const pmtilesShardAssetFiles = pmtilesShardFiles(pmtilesShardManifest);
 
   for (const asset of topLevelAssets) {
     const file = assetFileFor(asset, manifest);
@@ -597,6 +616,10 @@ async function main() {
     await assertFileExists(path.join(assetDir, file), `coarse pyramid tile ${file}`);
   }
 
+  for (const file of pmtilesShardAssetFiles) {
+    await assertFileExists(path.join(assetDir, file), `PMTiles shard ${file}`);
+  }
+
   console.log("All referenced files are present.");
 
   if (dryRun) {
@@ -604,6 +627,7 @@ async function main() {
     console.log(`Top-level assets present: ${uploadableTopLevelAssets.length}`);
     console.log(`Superchunks present: ${normalizedSuperchunks.length}`);
     console.log(`Coarse pyramid tiles present: ${coarsePyramidFiles.length}`);
+    console.log(`PMTiles shards present: ${pmtilesShardAssetFiles.length}`);
     return;
   }
 
@@ -656,6 +680,18 @@ async function main() {
     });
   }
 
+  let uploadedPMTilesShards = 0;
+  if (pmtilesShardAssetFiles.length) {
+    console.log("Uploading PMTiles shards...");
+    uploadedPMTilesShards = await uploadAssetFileList({
+      uploader,
+      assetDir,
+      files: pmtilesShardAssetFiles,
+      buildPrefix,
+      label: "PMTiles shard"
+    });
+  }
+
   console.log("Upserting superchunk metadata...");
   const superchunkRows = normalizedSuperchunks.map((superchunk) =>
     buildSuperchunkRow(manifest, superchunk, buildPrefix)
@@ -673,6 +709,7 @@ async function main() {
     console.log("Publish complete.");
     console.log(`Superchunks uploaded: ${uploadedSuperchunks}`);
     console.log(`Coarse pyramid tiles uploaded: ${uploadedCoarsePyramidFiles}`);
+    console.log(`PMTiles shards uploaded: ${uploadedPMTilesShards}`);
     console.log(`Superchunk rows upserted: ${superchunkRows.length}`);
     console.log(`Staged build: ${manifest.build_id}`);
     return;
@@ -684,6 +721,7 @@ async function main() {
   console.log("Publish complete.");
   console.log(`Superchunks uploaded: ${uploadedSuperchunks}`);
   console.log(`Coarse pyramid tiles uploaded: ${uploadedCoarsePyramidFiles}`);
+  console.log(`PMTiles shards uploaded: ${uploadedPMTilesShards}`);
   console.log(`Superchunk rows upserted: ${superchunkRows.length}`);
   console.log(`Current build: ${manifest.build_id}`);
 }

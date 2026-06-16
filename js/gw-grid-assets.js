@@ -1,4 +1,7 @@
 (function () {
+  const DEFAULT_DIRECT_ASSET_BASE = "https://assets.gridwild.com";
+  const SUPABASE_CATALOG_TIMEOUT_MS = 5000;
+
   const LOCAL_URLS = {
     manifest: null,
     heat: "assets/dc_heat.csv",
@@ -10,7 +13,8 @@
     catalogPromise: null,
     catalog: null,
     manifestPromise: null,
-    coarsePyramidManifestPromise: null
+    coarsePyramidManifestPromise: null,
+    pmtilesShardManifestPromise: null
   };
 
   function trimTrailingSlash(value) {
@@ -27,6 +31,49 @@
     );
   }
 
+  function getConfigValue(queryKey, storageKey, globalKey) {
+    const params = new URLSearchParams(window.location.search);
+    return (
+      params.get(queryKey) || window.localStorage?.getItem(storageKey) || window[globalKey] || ""
+    );
+  }
+
+  function getDirectCatalogConfig() {
+    const buildId = getConfigValue(
+      "gwAssetBuild",
+      "GW_GRID_ASSET_BUILD_ID",
+      "GW_GRID_ASSET_BUILD_ID"
+    );
+    if (!buildId) return null;
+
+    const base =
+      getConfigValue("gwAssetBase", "GW_GRID_ASSET_BASE", "GW_GRID_ASSET_BASE") ||
+      DEFAULT_DIRECT_ASSET_BASE;
+
+    return {
+      buildId: String(buildId).trim(),
+      base: trimTrailingSlash(base)
+    };
+  }
+
+  function directCatalog(config) {
+    const buildRoot = `${config.base}/builds/${config.buildId}`;
+    return {
+      source: "direct-r2",
+      build: {
+        build_id: config.buildId,
+        asset_root: `builds/${config.buildId}`
+      },
+      urls: {
+        manifest: `${buildRoot}/manifest.json`,
+        heat: `${buildRoot}/dc_heat.csv`,
+        observerDictionary: `${buildRoot}/observer_dictionary.json`,
+        squareSummary: `${buildRoot}/squares_genus_summary.json`,
+        superchunkBase: `${buildRoot}/square_genera_superchunks`
+      }
+    };
+  }
+
   function localCatalog(reason) {
     return {
       source: "local",
@@ -37,9 +84,13 @@
   }
 
   async function fetchSupabaseCatalog() {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), SUPABASE_CATALOG_TIMEOUT_MS);
+
     const resp = await fetch("/.netlify/functions/get-grid-assets-build", {
-      headers: { accept: "application/json" }
-    });
+      headers: { accept: "application/json" },
+      signal: controller.signal
+    }).finally(() => window.clearTimeout(timeout));
 
     if (!resp.ok) {
       throw new Error(`Grid asset catalog request failed: HTTP ${resp.status}`);
@@ -69,6 +120,13 @@
         return state.catalog;
       }
 
+      const directConfig = getDirectCatalogConfig();
+      if (directConfig) {
+        state.catalog = directCatalog(directConfig);
+        console.info("GridWild assets loaded from direct CDN override.", state.catalog.build);
+        return state.catalog;
+      }
+
       try {
         state.catalog = await fetchSupabaseCatalog();
         console.info(`GridWild assets loaded from ${state.catalog.source}.`, state.catalog.build);
@@ -92,11 +150,31 @@
   async function fetchJson(url, label) {
     if (!url) return null;
 
-    const resp = await fetch(url);
+    const requestUrl = cacheBustedJsonUrl(url);
+    const resp = await fetch(requestUrl, { cache: "no-store" });
     if (!resp.ok) {
-      throw new Error(`Failed to load ${label}: HTTP ${resp.status} for ${url}`);
+      throw new Error(`Failed to load ${label}: HTTP ${resp.status} for ${requestUrl}`);
     }
     return resp.json();
+  }
+
+  function jsonCacheBuster() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("gwAssetVersion") || params.get("v") || "";
+  }
+
+  function cacheBustedJsonUrl(url) {
+    const buster = jsonCacheBuster();
+    if (!buster) return url;
+
+    try {
+      const parsed = new URL(url, window.location.href);
+      parsed.searchParams.set("gw_json_v", buster);
+      return parsed.href;
+    } catch {
+      const separator = String(url).includes("?") ? "&" : "?";
+      return `${url}${separator}gw_json_v=${encodeURIComponent(buster)}`;
+    }
   }
 
   async function assetRelativeUrl(relativePath) {
@@ -105,6 +183,18 @@
     const manifestUrl = catalog.urls.manifest;
     if (!manifestUrl) return null;
     return new URL(String(relativePath).replace(/^\/+/g, ""), manifestUrl).href;
+  }
+
+  function rangeFriendlyUrl(url) {
+    if (!url) return null;
+    try {
+      const parsed = new URL(url, window.location.href);
+      parsed.searchParams.set("gw_pmtiles_range", "1");
+      return parsed.href;
+    } catch {
+      const separator = String(url).includes("?") ? "&" : "?";
+      return `${url}${separator}gw_pmtiles_range=1`;
+    }
   }
 
   async function loadManifest() {
@@ -128,8 +218,62 @@
     return state.coarsePyramidManifestPromise;
   }
 
+  async function loadPMTilesShardManifest() {
+    if (state.pmtilesShardManifestPromise) return state.pmtilesShardManifestPromise;
+    state.pmtilesShardManifestPromise = (async () => {
+      const manifest = await loadManifest();
+      const file = manifest?.pmtiles_shard_manifest_file;
+      if (!file) return null;
+      const url = await assetRelativeUrl(file);
+      return fetchJson(url, "GridWild PMTiles shard manifest");
+    })();
+    return state.pmtilesShardManifestPromise;
+  }
+
   async function coarsePyramidTileUrl(tileFile) {
     return assetRelativeUrl(tileFile);
+  }
+
+  async function pmtilesUrl() {
+    const manifest = await loadManifest();
+    if (manifest?.pmtiles_shard_manifest_file) return null;
+    return rangeFriendlyUrl(await assetRelativeUrl(manifest?.pmtiles_file));
+  }
+
+  async function pmtilesInfo() {
+    const manifest = await loadManifest();
+    if (manifest?.pmtiles_shard_manifest_file) {
+      return {
+        url: null,
+        file: null,
+        layer: manifest?.pmtiles_layer || "gridwild_cells",
+        payload: manifest?.pmtiles_payload || null,
+        mode: "spatial_shards"
+      };
+    }
+
+    const url = rangeFriendlyUrl(await assetRelativeUrl(manifest?.pmtiles_file));
+    return {
+      url,
+      file: manifest?.pmtiles_file || null,
+      layer: manifest?.pmtiles_layer || "gridwild_cells",
+      payload: manifest?.pmtiles_payload || null
+    };
+  }
+
+  async function pmtilesShardsInfo() {
+    const shardManifest = await loadPMTilesShardManifest();
+    if (!shardManifest?.shards?.length) return null;
+
+    return {
+      ...shardManifest,
+      shards: await Promise.all(
+        shardManifest.shards.map(async (shard) => ({
+          ...shard,
+          url: rangeFriendlyUrl(await assetRelativeUrl(shard.file))
+        }))
+      )
+    };
   }
 
   async function superchunkUrl(superIx, superIy) {
@@ -145,8 +289,16 @@
     assetRelativeUrl,
     loadManifest,
     loadCoarsePyramidManifest,
+    loadPMTilesShardManifest,
     coarsePyramidTileUrl,
+    pmtilesUrl,
+    pmtilesInfo,
+    pmtilesShardsInfo,
     superchunkUrl,
     localCatalog
+  };
+
+  window.GridWildAssets.hasDirectCatalogConfig = function hasDirectCatalogConfig() {
+    return Boolean(getDirectCatalogConfig());
   };
 })();

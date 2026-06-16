@@ -49,8 +49,12 @@
     );
   }
 
+  function isOnlineGameplayReady() {
+    return window.GridWildOnline?.isReady?.() === true || window.__gwState?.bootstrapReady === true;
+  }
+
   function shouldPublish() {
-    return !authBlocked && isSignedIn() && publishVisibility === "visible";
+    return !authBlocked && isOnlineGameplayReady() && isSignedIn() && publishVisibility === "visible";
   }
 
   function isPublishingVisible() {
@@ -450,7 +454,7 @@
   }
 
   async function pollNearby(options = {}) {
-    if (authBlocked || !isSignedIn()) {
+    if (authBlocked || !isOnlineGameplayReady() || !isSignedIn()) {
       stopPolling();
       clearLayer();
       return null;
@@ -487,7 +491,7 @@
   }
 
   function startPolling() {
-    if (pollTimer || authBlocked || !isSignedIn()) return;
+    if (pollTimer || authBlocked || !isOnlineGameplayReady() || !isSignedIn()) return;
 
     pollTimer = setInterval(() => {
       pollNearby();
@@ -515,6 +519,7 @@
   function statusText(extra = "") {
     if (extra) return extra;
     if (authBlocked) return "GridWild session expired. Log in again to use HUD presence.";
+    if (!isOnlineGameplayReady()) return "Online HUD presence will start after GridWild connects.";
     if (!isSignedIn()) return "Sign in to share and see live HUD players.";
     if (publishVisibility !== "visible") return "You are hidden from other players' HUDs.";
     if (!getLastKnownLocation()) return "Visible once GridWild gets your location.";
@@ -602,6 +607,12 @@
   }
 
   window.addEventListener("gwBootstrapReady", handleBootstrap);
+
+  window.addEventListener("gwBootstrapUnavailable", () => {
+    stopPolling();
+    clearLayer();
+    refreshSettingsStatus("Online HUD presence is unavailable while GridWild connects.");
+  });
 
   window.addEventListener("gwAccountChanged", () => {
     authBlocked = false;

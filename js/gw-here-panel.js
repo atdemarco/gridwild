@@ -38,7 +38,10 @@
   let hereMap3dEnabled = localStorage.getItem(HERE_MAP_3D_STORAGE_KEY) === "true";
   let hereMap3dExpanded = false;
   let hereMap3dYawOffsetDeg = 0;
+  let hereMap3dPitchDeg = 48;
+  let hereMap3dZoom = 1;
   let hereMap3dDrag = null;
+  const hereMap3dPointers = new Map();
   let hereListView = "common";
   let hereElevationCacheLoaded = false;
   let hereElevationFetchInFlight = false;
@@ -60,10 +63,35 @@
     progressPct: 0
   };
   const HERE_3D_CAMERA = {
-    pitchDeg: 48,
+    defaultPitchDeg: 48,
+    minPitchDeg: 16,
+    maxPitchDeg: 78,
+    minZoom: 0.55,
+    maxZoom: 2.65,
+    minEffectiveZoom: 0.22,
+    hudFovWideZoom: 17,
+    hudFovCloseZoom: 19,
+    baseViewCells: HERE_RADIUS_CELLS * 2 + 1,
+    maxAutoViewCells: 89,
+    detailRadiusCells: HERE_RADIUS_CELLS * 2.6,
+    expandedDetailRadiusCells: HERE_RADIUS_CELLS * 3.3,
+    linearDetailRadiusCells: HERE_RADIUS_CELLS * 2.9,
+    expandedLinearDetailRadiusCells: HERE_RADIUS_CELLS * 3.6,
     fovDeg: 52,
-    avatarScreenY: 0.76
+    yawDragDegPerPx: 0.45,
+    pitchDragDegPerPx: 0.32,
+    pinchYawDegPerPx: 0.34,
+    pinchPitchDegPerPx: 0.24,
+    wheelZoomPerPx: 0.0016
   };
+  const HERE_3D_PATCH_MAX_LABELS = 3;
+  const HERE_3D_PATCH_MAX_RING_POINTS = 140;
+  const HERE_3D_ROAD_MAX_LABELS = 5;
+  const HERE_3D_PLACE_MAX_LABELS = 6;
+  const HERE_3D_HABITAT_MAX_FEATURES = 42;
+  const HERE_3D_WATER_MAX_FEATURES = 48;
+  const HERE_3D_BARRIER_MAX_EDGES = 160;
+  const HERE_3D_GROUND_DETAIL_MAX_MARKS = 180;
 
   function gridApi() {
     return window.GridWildGrid;
@@ -222,11 +250,17 @@
           radial-gradient(circle at 50% 12%, rgba(240,209,138,0.10), transparent 42%),
           linear-gradient(180deg, rgba(13,18,17,0.78), rgba(6,8,8,0.92));
         touch-action: none;
+        overscroll-behavior: contain;
+        user-select: none;
         cursor: grab;
       }
 
       .gw-here-map.is-3d:active {
         cursor: grabbing;
+      }
+
+      .gw-here-map.is-3d svg {
+        pointer-events: none;
       }
 
       .gw-here-map.is-expanded {
@@ -1123,6 +1157,196 @@
       .filter((entry) => entry.cells.length);
   }
 
+  function patchTitle(patch) {
+    return patch?.name || patch?.title || patch?.metadata?.title || "Untitled patch";
+  }
+
+  function isINatPatch(patch) {
+    return (
+      patch?.source === "inat_project" ||
+      patch?.metadata?.imported_from === "inat_project" ||
+      /iNaturalist/i.test(String(patch?.source_label || ""))
+    );
+  }
+
+  function patch3dTheme(patch) {
+    if (isINatPatch(patch)) {
+      return {
+        line: "#7ddfff",
+        glow: "rgba(125,223,255,0.30)",
+        fill: "rgba(125,223,255,0.18)",
+        text: "#d8fbff"
+      };
+    }
+
+    return {
+      line: "#ffd85a",
+      glow: "rgba(255,216,90,0.28)",
+      fill: "rgba(255,216,90,0.17)",
+      text: "#fff0b8"
+    };
+  }
+
+  function normalizePatchRing(ring = []) {
+    return (Array.isArray(ring) ? ring : [])
+      .map((point) => ({
+        lat: Number(point?.lat ?? point?.[0]),
+        lng: Number(point?.lng ?? point?.lon ?? point?.[1])
+      }))
+      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+  }
+
+  function patchRings(patch) {
+    const rings = Array.isArray(patch?.geometry?.rings) ? patch.geometry.rings : [];
+    if (rings.length) return rings.map(normalizePatchRing).filter((ring) => ring.length >= 3);
+
+    const boundary = normalizePatchRing(patch?.boundary || patch?.survey_geometry?.boundary || []);
+    return boundary.length >= 3 ? [boundary] : [];
+  }
+
+  function downsampleRing(ring = [], maxPoints = HERE_3D_PATCH_MAX_RING_POINTS) {
+    if (!Array.isArray(ring) || ring.length <= maxPoints) return ring;
+    const stride = Math.ceil(ring.length / maxPoints);
+    return ring.filter((_, index) => index % stride === 0);
+  }
+
+  function gridBoundsForPoints(points = []) {
+    const valid = (Array.isArray(points) ? points : []).filter(
+      (point) => Number.isFinite(point?.ix) && Number.isFinite(point?.iy)
+    );
+    if (!valid.length) return null;
+
+    return {
+      minIx: Math.min(...valid.map((point) => point.ix)),
+      maxIx: Math.max(...valid.map((point) => point.ix)),
+      minIy: Math.min(...valid.map((point) => point.iy)),
+      maxIy: Math.max(...valid.map((point) => point.iy))
+    };
+  }
+
+  function boundsOverlap(a, b, pad = 0) {
+    if (!a || !b) return false;
+    return !(
+      a.maxIx < b.minIx - pad ||
+      a.minIx > b.maxIx + pad ||
+      a.maxIy < b.minIy - pad ||
+      a.minIy > b.maxIy + pad
+    );
+  }
+
+  function latLngBoundsForRings(rings = []) {
+    const points = (Array.isArray(rings) ? rings : [])
+      .flat()
+      .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng));
+    if (!points.length) return null;
+
+    return {
+      minLat: Math.min(...points.map((point) => point.lat)),
+      maxLat: Math.max(...points.map((point) => point.lat)),
+      minLng: Math.min(...points.map((point) => point.lng)),
+      maxLng: Math.max(...points.map((point) => point.lng))
+    };
+  }
+
+  function latLngBoundsOverlap(a, b, pad = 0) {
+    if (!a || !b) return false;
+    return !(
+      a.maxLat < b.minLat - pad ||
+      a.minLat > b.maxLat + pad ||
+      a.maxLng < b.minLng - pad ||
+      a.minLng > b.maxLng + pad
+    );
+  }
+
+  function hudLatLngBounds() {
+    const leafletMap = typeof map !== "undefined" ? map : window.map;
+    const bounds = leafletMap?.getBounds?.();
+    if (!bounds?.getSouthWest || !bounds?.getNorthEast) return null;
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    if (![sw.lat, ne.lat, sw.lng, ne.lng].every((value) => Number.isFinite(Number(value)))) {
+      return null;
+    }
+    return {
+      minLat: Number(sw.lat),
+      maxLat: Number(ne.lat),
+      minLng: Number(sw.lng),
+      maxLng: Number(ne.lng)
+    };
+  }
+
+  function centerForGridPoints(points = []) {
+    const valid = (Array.isArray(points) ? points : []).filter(
+      (point) => Number.isFinite(point?.ix) && Number.isFinite(point?.iy)
+    );
+    if (!valid.length) return null;
+
+    return {
+      ix: valid.reduce((sum, point) => sum + point.ix, 0) / valid.length,
+      iy: valid.reduce((sum, point) => sum + point.iy, 0) / valid.length
+    };
+  }
+
+  function patch3dStatsText(patch) {
+    const parts = [];
+    if (patch?.is_home_patch) parts.push("Home");
+
+    const source = patch?.source_label || patch?.source || "";
+    if (source && !parts.length) parts.push(source);
+
+    const distance = Number(patch?.distance_m);
+    if (Number.isFinite(distance)) {
+      parts.push(window.GridWildPatches?.formatDistance?.(distance) || `${Math.round(distance)} m`);
+    }
+
+    const unknowns = Number(patch?.subscription?.lastUnknownCount);
+    if (patch?.subscription?.enabled === true && Number.isFinite(unknowns)) {
+      parts.push(`${unknowns} unknown${unknowns === 1 ? "" : "s"}`);
+    }
+
+    const children = Array.isArray(patch?.child_patches) ? patch.child_patches.length : 0;
+    if (children > 0) parts.push(`${children} child${children === 1 ? "" : "ren"}`);
+
+    return parts.slice(0, 3).join(" / ") || "Patch";
+  }
+
+  function visiblePatch3dRows(renderBounds) {
+    if (window.GridWildPatches?.isVisible?.() === false) return [];
+    const api = gridApi();
+    const gridSizeM = Number(api?.gridSizeM) || 1;
+    const hudBounds = hudLatLngBounds();
+    const seen = new Set();
+
+    return (window.GridWildPatches?.getPatches?.() || [])
+      .filter((patch) => patch?.id && !seen.has(String(patch.id)) && seen.add(String(patch.id)))
+      .map((patch) => {
+        const latLngRings = patchRings(patch);
+        if (hudBounds && !latLngBoundsOverlap(latLngBoundsForRings(latLngRings), hudBounds)) {
+          return null;
+        }
+
+        const rings = latLngRings
+          .map((ring) =>
+            downsampleRing(ring)
+              .map((point) => latLngToGridPoint(point, gridSizeM))
+              .filter(Boolean)
+          )
+          .filter((ring) => ring.length >= 3);
+        const points = rings.flat();
+        const bounds = gridBoundsForPoints(points);
+        if (!bounds || !boundsOverlap(bounds, renderBounds, 1.2)) return null;
+        const center = centerForGridPoints(points);
+        if (!center) return null;
+        return {
+          patch,
+          rings,
+          bounds,
+          center
+        };
+      })
+      .filter(Boolean);
+  }
+
   function fogInfoForCell(key) {
     if (!(window.__gwState?.showFog ?? false)) return null;
     return window.GridWildFog?.getCellFogState?.(key) || null;
@@ -1259,8 +1483,178 @@
     return "service";
   }
 
+  function osmLinearFeatureName(tags = {}) {
+    return osmFeatureName(tags);
+  }
+
+  function osmFeatureName(tags = {}) {
+    const value =
+      tags.name ||
+      tags["name:en"] ||
+      tags.official_name ||
+      tags.loc_name ||
+      tags.alt_name ||
+      tags.ref ||
+      "";
+    return String(value).trim().replace(/\s+/g, " ");
+  }
+
+  function osmFlag(value) {
+    const text = String(value || "").toLowerCase();
+    return Boolean(text && text !== "no" && text !== "false" && text !== "0");
+  }
+
+  function osmLanduseClass(tags = {}) {
+    if (tags.building) return "building";
+    if (tags.natural === "water" || tags.waterway === "riverbank") return "water";
+    if (
+      tags.amenity === "grave_yard" ||
+      tags.historic === "cemetery" ||
+      tags.landuse === "cemetery"
+    )
+      return "cemetery";
+    if (tags.natural === "wetland") return "wetland";
+    if (tags.natural === "scrub" || tags.natural === "heath" || tags.natural === "shrubbery")
+      return "scrub";
+    if (
+      tags.landuse === "allotments" ||
+      tags.landuse === "orchard" ||
+      tags.landuse === "farmland" ||
+      tags.landuse === "farmyard" ||
+      tags.landuse === "vineyard" ||
+      tags.landuse === "plant_nursery" ||
+      tags.landuse === "greenhouse_horticulture"
+    ) {
+      return "cultivated";
+    }
+    if (tags.natural === "wood" || tags.landuse === "forest" || tags.landcover === "trees")
+      return "wood";
+    if (
+      tags.natural === "grassland" ||
+      tags.landuse === "grass" ||
+      tags.landuse === "meadow" ||
+      tags.landcover === "grass" ||
+      tags.landcover === "meadow" ||
+      tags.landcover === "flowerbed"
+    ) {
+      return "grass";
+    }
+    if (
+      tags.leisure === "park" ||
+      tags.leisure === "garden" ||
+      tags.leisure === "nature_reserve" ||
+      tags.boundary === "protected_area" ||
+      tags.boundary === "national_park" ||
+      tags.landuse === "recreation_ground" ||
+      tags.landuse === "village_green"
+    ) {
+      return "park";
+    }
+    return "other";
+  }
+
+  function osmHabitatTheme(tags = {}) {
+    const cls = osmLanduseClass(tags);
+    const themes = {
+      wood: {
+        fill: "rgba(42,115,70,0.20)",
+        stroke: "rgba(126,205,125,0.26)",
+        line: "rgba(140,217,132,0.34)"
+      },
+      park: {
+        fill: "rgba(84,139,78,0.17)",
+        stroke: "rgba(171,217,130,0.24)",
+        line: "rgba(179,220,139,0.30)"
+      },
+      grass: {
+        fill: "rgba(126,165,81,0.15)",
+        stroke: "rgba(204,223,135,0.20)",
+        line: "rgba(207,229,145,0.26)"
+      },
+      wetland: {
+        fill: "rgba(59,133,125,0.18)",
+        stroke: "rgba(123,222,199,0.26)",
+        line: "rgba(142,231,207,0.32)"
+      },
+      scrub: {
+        fill: "rgba(102,143,80,0.16)",
+        stroke: "rgba(178,205,120,0.20)",
+        line: "rgba(190,213,134,0.25)"
+      },
+      cultivated: {
+        fill: "rgba(146,132,70,0.14)",
+        stroke: "rgba(220,198,122,0.20)",
+        line: "rgba(226,203,131,0.25)"
+      },
+      cemetery: {
+        fill: "rgba(108,125,102,0.15)",
+        stroke: "rgba(202,212,187,0.22)",
+        line: "rgba(209,218,196,0.28)"
+      }
+    };
+    return (
+      themes[cls] || {
+        fill: "rgba(108,132,96,0.10)",
+        stroke: "rgba(198,216,174,0.14)",
+        line: "rgba(198,216,174,0.18)"
+      }
+    );
+  }
+
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, Number(value) || 0));
+  }
+
+  function oddCellSpan(value, min, max) {
+    const lo = Math.max(1, Math.round(Number(min) || 1));
+    const hi = Math.max(lo, Math.round(Number(max) || lo));
+    let span = Math.round(Number(value) || lo);
+    if (span % 2 === 0) span += 1;
+    if (span > hi) span = hi % 2 === 1 ? hi : hi - 1;
+    if (span < lo) span = lo % 2 === 1 ? lo : lo + 1;
+    return span;
+  }
+
+  function here3dHudFovState(selectedContext) {
+    const baseCells = HERE_3D_CAMERA.baseViewCells;
+    if (selectedContext) {
+      return {
+        spanCells: baseCells,
+        scale: 1,
+        expanded: false
+      };
+    }
+
+    const leafletMap = typeof map !== "undefined" ? map : window.map;
+    const zoom = Number(leafletMap?.getZoom?.());
+    const zoomRange = Math.max(0.1, HERE_3D_CAMERA.hudFovCloseZoom - HERE_3D_CAMERA.hudFovWideZoom);
+    const t = Number.isFinite(zoom)
+      ? clamp((HERE_3D_CAMERA.hudFovCloseZoom - zoom) / zoomRange, 0, 1)
+      : 0;
+    const spanCells = oddCellSpan(
+      baseCells + (HERE_3D_CAMERA.maxAutoViewCells - baseCells) * t,
+      baseCells,
+      HERE_3D_CAMERA.maxAutoViewCells
+    );
+
+    return {
+      spanCells,
+      scale: spanCells / baseCells,
+      expanded: spanCells > baseCells
+    };
+  }
+
+  function squareBoundsAround(bounds, spanCells) {
+    const span = oddCellSpan(spanCells, 1, HERE_3D_CAMERA.maxAutoViewCells);
+    const radius = (span - 1) / 2;
+    const cx = Math.round((Number(bounds.minIx) + Number(bounds.maxIx)) / 2);
+    const cy = Math.round((Number(bounds.minIy) + Number(bounds.maxIy)) / 2);
+    return {
+      minIx: cx - radius,
+      maxIx: cx + radius,
+      minIy: cy - radius,
+      maxIy: cy + radius
+    };
   }
 
   function loadHereElevationCache() {
@@ -1608,51 +2002,90 @@
     const api = gridApi();
     if (!api) return "";
 
-    const cells = api.cellsForBounds(bounds);
+    const hudFov = here3dHudFovState(selectedContext);
+    const renderBounds = hudFov.expanded ? squareBoundsAround(bounds, hudFov.spanCells) : bounds;
+    const cells = api.cellsForBounds(renderBounds);
     const selectedBounds = selectionBounds(selectedContext);
     const selectedKeys = selectionKeySet(selectedContext);
     const w = 220;
     const h = 150;
+    const gridSizeM = Number(api.gridSizeM) || 1;
+    const widthCells = renderBounds.maxIx - renderBounds.minIx + 1;
+    const heightCells = renderBounds.maxIy - renderBounds.minIy + 1;
     const userCell = api.currentUserCell?.();
     const centerCell = api.centerCell?.();
-    const cameraCell = inBounds(userCell) ? userCell : centerCell;
+    const cameraCell = orbitTargetCell();
     const heading = Number(window.GridWildCompass?.getState?.()?.heading);
     const headingDeg = (Number.isFinite(heading) ? heading : 0) + hereMap3dYawOffsetDeg;
     const headingRad = (headingDeg * Math.PI) / 180;
-    const pitchRad = (HERE_3D_CAMERA.pitchDeg * Math.PI) / 180;
+    const pitchDeg = clamp(
+      hereMap3dPitchDeg,
+      HERE_3D_CAMERA.minPitchDeg,
+      HERE_3D_CAMERA.maxPitchDeg
+    );
+    const pitchRad = (pitchDeg * Math.PI) / 180;
     const fovRad = (HERE_3D_CAMERA.fovDeg * Math.PI) / 180;
-    const avatarY = h * HERE_3D_CAMERA.avatarScreenY;
-    const focal = (w * 0.5) / Math.tan(fovRad / 2);
-    const cameraDepth = 5.8;
+    const targetScreenY = h * (hereMap3dExpanded ? 0.62 : 0.66);
+    const manualZoom = clamp(hereMap3dZoom, HERE_3D_CAMERA.minZoom, HERE_3D_CAMERA.maxZoom);
+    const zoom = clamp(
+      manualZoom / hudFov.scale,
+      HERE_3D_CAMERA.minEffectiveZoom,
+      HERE_3D_CAMERA.maxZoom
+    );
+    const focal = ((w * 0.5) / Math.tan(fovRad / 2)) * zoom;
+    const cameraDepth =
+      5.8 + Math.max(widthCells, heightCells) * 0.04 + Math.max(0, 1 - zoom) * 1.35;
 
     function inBounds(cellInfo) {
       return (
         cellInfo &&
-        cellInfo.ix >= bounds.minIx &&
-        cellInfo.ix <= bounds.maxIx &&
-        cellInfo.iy >= bounds.minIy &&
-        cellInfo.iy <= bounds.maxIy
+        cellInfo.ix >= renderBounds.minIx &&
+        cellInfo.ix <= renderBounds.maxIx &&
+        cellInfo.iy >= renderBounds.minIy &&
+        cellInfo.iy <= renderBounds.maxIy
       );
     }
 
-    const elevationModel = buildHereElevationModel(bounds, headingRad, cameraCell, centerCell);
+    function orbitTargetCell() {
+      if (selectedContext) {
+        return {
+          ix: (bounds.minIx + bounds.maxIx) / 2,
+          iy: (bounds.minIy + bounds.maxIy) / 2
+        };
+      }
+
+      if (inBounds(centerCell)) return centerCell;
+      if (inBounds(userCell)) return userCell;
+      return {
+        ix: (bounds.minIx + bounds.maxIx) / 2,
+        iy: (bounds.minIy + bounds.maxIy) / 2
+      };
+    }
+
+    const elevationModel = buildHereElevationModel(
+      renderBounds,
+      headingRad,
+      cameraCell,
+      centerCell
+    );
 
     function worldToCamera(ix, iy, z = 0) {
       const origin = cameraCell || {
-        ix: (bounds.minIx + bounds.maxIx) / 2,
-        iy: (bounds.minIy + bounds.maxIy) / 2
+        ix: (renderBounds.minIx + renderBounds.maxIx) / 2,
+        iy: (renderBounds.minIy + renderBounds.maxIy) / 2
       };
       const dx = ix - origin.ix;
       const dy = iy - origin.iy;
       const right = dx * Math.cos(headingRad) - dy * Math.sin(headingRad);
       const forward = dx * Math.sin(headingRad) + dy * Math.cos(headingRad);
-      const depth = cameraDepth + forward * Math.cos(pitchRad) - z * Math.sin(pitchRad);
+      const depth =
+        cameraDepth + forward * Math.cos(pitchRad) * 0.62 - z * Math.sin(pitchRad) * 0.5;
       const lift = forward * Math.sin(pitchRad) + z * Math.cos(pitchRad);
       return {
         right,
         forward,
         lift,
-        depth: Math.max(1.1, depth)
+        depth: Math.max(1.15, depth)
       };
     }
 
@@ -1661,7 +2094,7 @@
       const scale = focal / cam.depth;
       return {
         x: w / 2 + cam.right * scale * 0.72,
-        y: avatarY - cam.lift * scale * 0.34,
+        y: targetScreenY - cam.lift * scale * 0.34,
         scale,
         depth: cam.depth,
         forward: cam.forward
@@ -1706,6 +2139,30 @@
       return points.some((p) => p.x > -35 && p.x < w + 35 && p.y > -35 && p.y < h + 45);
     }
 
+    function distanceFromCamera(ix, iy) {
+      const origin = cameraCell || {
+        ix: (renderBounds.minIx + renderBounds.maxIx) / 2,
+        iy: (renderBounds.minIy + renderBounds.maxIy) / 2
+      };
+      return Math.hypot(ix - (origin.ix + 0.5), iy - (origin.iy + 0.5));
+    }
+
+    function isSlimCell(cell) {
+      if (!hudFov.expanded) return false;
+      const detailRadius = hereMap3dExpanded
+        ? HERE_3D_CAMERA.expandedDetailRadiusCells
+        : HERE_3D_CAMERA.detailRadiusCells;
+      return distanceFromCamera(Number(cell?.ix) + 0.5, Number(cell?.iy) + 0.5) > detailRadius;
+    }
+
+    function isSlimPoint(ix, iy) {
+      if (!hudFov.expanded) return false;
+      const detailRadius = hereMap3dExpanded
+        ? HERE_3D_CAMERA.expandedLinearDetailRadiusCells
+        : HERE_3D_CAMERA.linearDetailRadiusCells;
+      return distanceFromCamera(ix, iy) > detailRadius;
+    }
+
     const sorted = cells
       .slice()
       .sort(
@@ -1718,26 +2175,30 @@
     const maxCount = Math.max(...sorted.map((item) => Number(item.metrics?.count) || 0), 1);
     const osmByKey = new Map();
     for (const item of sorted) {
+      if (isSlimCell(item)) continue;
       const prior = window.GridWildOsmPriorsLayer?.getCell?.(item.ix, item.iy) || null;
       if (prior) osmByKey.set(item.key, prior.osm || null);
     }
+    const patchRows = visiblePatch3dRows(renderBounds);
+    const osmFeatures = window.GridWildOsmFeaturesLayer?.getFeatures?.() || {};
+    const roadLabelCandidates = [];
 
     function renderRaisedOsmLines() {
-      const source = window.GridWildOsmFeaturesLayer;
-      const features = source?.getFeatures?.() || {};
-      const gridSizeM = Number(api.gridSizeM) || 1;
       const groups = [];
 
       if ((window.__gwState?.showOsmRoads ?? true) !== false) {
-        groups.push({ kind: "road", features: features.roads || [] });
+        groups.push({ kind: "road", features: osmFeatures.roads || [] });
       }
       if ((window.__gwState?.showOsmTrails ?? true) !== false) {
-        groups.push({ kind: "trail", features: features.trails || [] });
+        groups.push({ kind: "trail", features: osmFeatures.trails || [] });
       }
 
       const segments = [];
+      const maxFeatures = hudFov.expanded ? 120 : 90;
+      const maxSegments = hudFov.expanded ? 240 : 180;
       for (const group of groups) {
-        for (const feature of group.features.slice(0, 90)) {
+        for (const feature of group.features.slice(0, maxFeatures)) {
+          const labelName = osmLinearFeatureName(feature.tags);
           const points = (feature.points || [])
             .map((point) => latLngToGridPoint(point, gridSizeM))
             .filter(Boolean);
@@ -1745,8 +2206,10 @@
 
           const cls = group.kind === "trail" ? "trail" : highwayClass(feature.tags);
           for (let i = 1; i < points.length; i++) {
-            const clipped = clipSegmentToCellBounds(points[i - 1], points[i], bounds);
+            const clipped = clipSegmentToCellBounds(points[i - 1], points[i], renderBounds);
             if (!clipped) continue;
+            if (isSlimPoint((clipped.a.ix + clipped.b.ix) / 2, (clipped.a.iy + clipped.b.iy) / 2))
+              continue;
 
             const lift = cls === "trail" ? 0.33 : cls === "major" ? 0.52 : 0.43;
             const groundA = project(
@@ -1777,29 +2240,428 @@
             const core = cls === "trail" ? "rgba(255,231,163,0.72)" : "rgba(239,222,194,0.50)";
             const dGround = `M${groundA.x.toFixed(1)} ${groundA.y.toFixed(1)} L${groundB.x.toFixed(1)} ${groundB.y.toFixed(1)}`;
             const dRaised = `M${raisedA.x.toFixed(1)} ${raisedA.y.toFixed(1)} L${raisedB.x.toFixed(1)} ${raisedB.y.toFixed(1)}`;
+            const screenLength = Math.hypot(raisedB.x - raisedA.x, raisedB.y - raisedA.y);
+            const isBridge = osmFlag(feature.tags?.bridge);
+            const isTunnel = osmFlag(feature.tags?.tunnel);
+            const crossingGlow =
+              isBridge || osmFlag(feature.tags?.ford) || osmFlag(feature.tags?.crossing);
+
+            if (labelName && screenLength >= Math.max(32, Math.min(78, labelName.length * 3.2))) {
+              roadLabelCandidates.push({
+                key: feature.id || `${group.kind}:${labelName}`,
+                name: labelName,
+                cls,
+                a: raisedA,
+                b: raisedB,
+                screenLength,
+                distance: distanceFromCamera(
+                  (clipped.a.ix + clipped.b.ix) / 2,
+                  (clipped.a.iy + clipped.b.iy) / 2
+                )
+              });
+            }
 
             segments.push({
               depth: (raisedA.forward + raisedB.forward) / 2,
               markup: `
                 <g data-layer="osm-${cls}">
                   <path d="${dGround}" fill="none" stroke="rgba(0,0,0,0.26)" stroke-width="${(width + 2.2).toFixed(1)}" stroke-linecap="round"></path>
+                  ${isTunnel ? `<path d="${dRaised}" fill="none" stroke="rgba(8,10,10,0.60)" stroke-width="${(width + 4.4).toFixed(1)}" stroke-linecap="round" stroke-dasharray="2.4 2.2"></path>` : ""}
                   <path d="${dRaised}" fill="none" stroke="rgba(255,231,163,0.18)" stroke-width="${(width + 3.1).toFixed(1)}" stroke-linecap="round"></path>
+                  ${isBridge ? `<path d="${dRaised}" fill="none" stroke="rgba(244,224,181,0.44)" stroke-width="${(width + 4).toFixed(1)}" stroke-linecap="round"></path>` : ""}
                   <path d="${dRaised}" fill="none" stroke="${stroke}" stroke-width="${width.toFixed(1)}" stroke-linecap="round"></path>
                   <path d="${dRaised}" fill="none" stroke="${core}" stroke-width="${Math.max(0.5, width * 0.34).toFixed(1)}" stroke-linecap="round"></path>
+                  ${crossingGlow ? `<path d="${dRaised}" fill="none" stroke="rgba(255,245,205,0.48)" stroke-width="0.8" stroke-linecap="round" stroke-dasharray="1.2 2"></path>` : ""}
                 </g>
               `
             });
 
-            if (segments.length >= 180) break;
+            if (segments.length >= maxSegments) break;
           }
-          if (segments.length >= 180) break;
+          if (segments.length >= maxSegments) break;
         }
-        if (segments.length >= 180) break;
+        if (segments.length >= maxSegments) break;
       }
 
       return segments
         .sort((a, b) => a.depth - b.depth)
         .map((segment) => segment.markup)
+        .join("");
+    }
+
+    function featureGridPoints(feature, maxPoints = 96) {
+      const raw = Array.isArray(feature?.points) ? feature.points : [];
+      if (!raw.length) return [];
+      const stride = Math.max(1, Math.ceil(raw.length / maxPoints));
+      return raw
+        .filter((_, index) => index % stride === 0 || index === raw.length - 1)
+        .map((point) => latLngToGridPoint(point, gridSizeM))
+        .filter(Boolean);
+    }
+
+    function terrainPoint(point, lift = 0.05) {
+      return project(point.ix, point.iy, terrainZAt(point.ix, point.iy, lift));
+    }
+
+    function terrainPolylineSegments(points, options = {}) {
+      const lift = Number(options.lift ?? 0.08);
+      const pad = Number(options.pad ?? 0.8);
+      const closed = options.closed === true;
+      const segments = [];
+      const count = closed ? points.length : points.length - 1;
+
+      for (let i = 0; i < count; i++) {
+        const a = points[i];
+        const b = points[(i + 1) % points.length];
+        if (Math.hypot(a.ix - b.ix, a.iy - b.iy) < 1e-6) continue;
+        const clipped = clipSegmentToCellBounds(a, b, renderBounds, pad);
+        if (!clipped) continue;
+        if (isSlimPoint((clipped.a.ix + clipped.b.ix) / 2, (clipped.a.iy + clipped.b.iy) / 2))
+          continue;
+
+        const pa = terrainPoint(clipped.a, lift);
+        const pb = terrainPoint(clipped.b, lift);
+        if (!isVisibleLine([pa, pb])) continue;
+        segments.push({
+          a: pa,
+          b: pb,
+          depth: (pa.forward + pb.forward) / 2,
+          d: `M${pa.x.toFixed(1)} ${pa.y.toFixed(1)} L${pb.x.toFixed(1)} ${pb.y.toFixed(1)}`
+        });
+      }
+
+      return segments;
+    }
+
+    function featurePolygonPoints(points, lift = 0.05) {
+      return points.map((point) => terrainPoint(point, lift));
+    }
+
+    function renderHabitatPolygons() {
+      if ((window.__gwState?.showOsmParks ?? true) === false) return "";
+
+      return (osmFeatures.parks || [])
+        .slice(0, HERE_3D_HABITAT_MAX_FEATURES)
+        .map((feature) => {
+          const points = featureGridPoints(feature, 88);
+          if (points.length < 2 || !boundsOverlap(gridBoundsForPoints(points), renderBounds, 1.5))
+            return "";
+
+          const theme = osmHabitatTheme(feature.tags);
+          const isTreeRow = feature.tags?.natural === "tree_row";
+          if (feature.closed && points.length >= 3) {
+            const poly = featurePolygonPoints(points, 0.035);
+            if (!isVisiblePoly(poly)) return "";
+            return `
+              <g data-layer="osm-habitat">
+                <polygon points="${pointsAttr(poly)}" fill="${theme.fill}" stroke="${theme.stroke}" stroke-width="0.55" stroke-linejoin="round"></polygon>
+              </g>
+            `;
+          }
+
+          const lines = terrainPolylineSegments(points, { lift: isTreeRow ? 0.18 : 0.1, pad: 1.2 });
+          if (!lines.length) return "";
+          return `
+            <g data-layer="osm-habitat-line">
+              ${lines
+                .map(
+                  (segment) =>
+                    `<path d="${segment.d}" fill="none" stroke="${theme.line}" stroke-width="${isTreeRow ? "1.35" : "0.85"}" stroke-linecap="round" stroke-dasharray="${isTreeRow ? "1.2 2.1" : "2.5 2.2"}"></path>`
+                )
+                .join("")}
+            </g>
+          `;
+        })
+        .join("");
+    }
+
+    function waterStrokeWidth(tags = {}) {
+      if (tags.waterway === "river" || tags.waterway === "canal") return 2.25;
+      if (tags.waterway === "ditch" || tags.waterway === "drain") return 0.95;
+      if (tags.waterway === "stream") return 1.35;
+      return 1.65;
+    }
+
+    function renderWaterFeatures() {
+      if ((window.__gwState?.showOsmWater ?? true) === false) return "";
+
+      return (osmFeatures.water || [])
+        .slice(0, HERE_3D_WATER_MAX_FEATURES)
+        .map((feature) => {
+          const points = featureGridPoints(feature, 100);
+          if (points.length < 2 || !boundsOverlap(gridBoundsForPoints(points), renderBounds, 1.6))
+            return "";
+
+          const width = waterStrokeWidth(feature.tags);
+          const closed = feature.closed && points.length >= 3;
+          const fill = closed
+            ? (() => {
+                const poly = featurePolygonPoints(points, 0.025);
+                if (!isVisiblePoly(poly)) return "";
+                return `<polygon points="${pointsAttr(poly)}" fill="rgba(43,108,143,0.24)" stroke="rgba(139,209,232,0.24)" stroke-width="0.6" stroke-linejoin="round"></polygon>`;
+              })()
+            : "";
+          const lines = terrainPolylineSegments(points, { lift: 0.12, pad: 1.4, closed });
+          if (!fill && !lines.length) return "";
+
+          return `
+            <g data-layer="osm-water">
+              ${fill}
+              ${lines
+                .map(
+                  (segment, index) => `
+                    <path d="${segment.d}" fill="none" stroke="rgba(20,52,69,0.52)" stroke-width="${(width + 1.6).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <path d="${segment.d}" fill="none" stroke="rgba(86,166,206,0.72)" stroke-width="${width.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"></path>
+                    ${index % 3 === 0 ? `<path d="${segment.d}" fill="none" stroke="rgba(217,247,255,0.36)" stroke-width="0.45" stroke-linecap="round" stroke-dasharray="3 5"></path>` : ""}
+                  `
+                )
+                .join("")}
+            </g>
+          `;
+        })
+        .join("");
+    }
+
+    function renderBarrierEdges() {
+      if ((window.__gwState?.showOsmRoads ?? true) === false) return "";
+
+      const edges = [];
+      const seen = new Set();
+      const sides = [
+        ["north", [0, 0], [1, 0]],
+        ["east", [1, 0], [1, 1]],
+        ["south", [0, 1], [1, 1]],
+        ["west", [0, 0], [0, 1]]
+      ];
+
+      for (const item of sorted) {
+        if (edges.length >= HERE_3D_BARRIER_MAX_EDGES) break;
+        if (isSlimCell(item)) continue;
+        const barrier = osmByKey.get(item.key)?.barrierBetweenNeighbors;
+        if (!barrier?.any) continue;
+
+        for (const [side, start, end] of sides) {
+          if (!barrier[side]) continue;
+          const a = { ix: item.ix + start[0], iy: item.iy + start[1] };
+          const b = { ix: item.ix + end[0], iy: item.iy + end[1] };
+          const edgeKey = [
+            Math.min(a.ix, b.ix).toFixed(2),
+            Math.min(a.iy, b.iy).toFixed(2),
+            Math.max(a.ix, b.ix).toFixed(2),
+            Math.max(a.iy, b.iy).toFixed(2)
+          ].join(":");
+          if (seen.has(edgeKey)) continue;
+          seen.add(edgeKey);
+
+          const pa = terrainPoint(a, 0.18);
+          const pb = terrainPoint(b, 0.18);
+          if (!isVisibleLine([pa, pb])) continue;
+          edges.push({
+            depth: (pa.forward + pb.forward) / 2,
+            d: `M${pa.x.toFixed(1)} ${pa.y.toFixed(1)} L${pb.x.toFixed(1)} ${pb.y.toFixed(1)}`
+          });
+          if (edges.length >= HERE_3D_BARRIER_MAX_EDGES) break;
+        }
+      }
+
+      if (!edges.length) return "";
+      return `
+        <g data-layer="osm-barriers">
+          ${edges
+            .sort((a, b) => a.depth - b.depth)
+            .map(
+              (edge) =>
+                `<path d="${edge.d}" fill="none" stroke="rgba(255,220,188,0.48)" stroke-width="0.75" stroke-linecap="round" stroke-dasharray="1.2 1.65"></path>`
+            )
+            .join("")}
+        </g>
+      `;
+    }
+
+    function renderGroundDetails() {
+      const marks = [];
+      for (const item of sorted) {
+        if (marks.length >= HERE_3D_GROUND_DETAIL_MAX_MARKS) break;
+        if (isSlimCell(item)) continue;
+        const osm = osmByKey.get(item.key);
+        const cls = osm?.landuseClass;
+        if (
+          ![
+            "park",
+            "grass",
+            "wetland",
+            "scrub",
+            "cultivated",
+            "cemetery",
+            "water",
+            "wood"
+          ].includes(cls)
+        )
+          continue;
+
+        const hash = stableHash(item.key);
+        if (hash % (hudFov.expanded ? 5 : 4) !== 0) continue;
+        const ox = ((hash % 17) / 16 - 0.5) * 0.42;
+        const oy = (((hash >> 4) % 17) / 16 - 0.5) * 0.42;
+        const p = project(
+          item.ix + 0.5 + ox,
+          item.iy + 0.5 + oy,
+          terrainZAt(item.ix + 0.5 + ox, item.iy + 0.5 + oy, 0.2)
+        );
+        if (p.x < -18 || p.x > w + 18 || p.y < -18 || p.y > h + 18) continue;
+        const s = Math.max(0.75, Math.min(2.4, p.scale * 0.055));
+
+        if (cls === "water") {
+          marks.push(
+            `<path d="M${(p.x - s * 2.2).toFixed(1)} ${(p.y + s * 0.2).toFixed(1)} Q${p.x.toFixed(1)} ${(p.y - s * 0.45).toFixed(1)} ${(p.x + s * 2.2).toFixed(1)} ${(p.y + s * 0.1).toFixed(1)}" fill="none" stroke="rgba(211,247,255,0.34)" stroke-width="0.55" stroke-linecap="round"></path>`
+          );
+        } else if (cls === "wetland") {
+          marks.push(
+            `<path d="M${(p.x - s).toFixed(1)} ${(p.y + s).toFixed(1)} L${(p.x - s * 0.5).toFixed(1)} ${(p.y - s * 1.4).toFixed(1)} M${p.x.toFixed(1)} ${(p.y + s * 0.9).toFixed(1)} L${(p.x + s * 0.15).toFixed(1)} ${(p.y - s * 1.6).toFixed(1)} M${(p.x + s).toFixed(1)} ${(p.y + s).toFixed(1)} L${(p.x + s * 0.5).toFixed(1)} ${(p.y - s * 1.2).toFixed(1)}" fill="none" stroke="rgba(165,223,178,0.44)" stroke-width="0.55" stroke-linecap="round"></path>`
+          );
+        } else if (cls === "cultivated") {
+          marks.push(
+            `<path d="M${(p.x - s * 2.1).toFixed(1)} ${(p.y - s * 0.5).toFixed(1)} L${(p.x + s * 2.1).toFixed(1)} ${(p.y - s * 0.1).toFixed(1)} M${(p.x - s * 1.7).toFixed(1)} ${(p.y + s * 0.65).toFixed(1)} L${(p.x + s * 1.7).toFixed(1)} ${(p.y + s * 0.25).toFixed(1)}" fill="none" stroke="rgba(221,200,125,0.30)" stroke-width="0.5" stroke-linecap="round"></path>`
+          );
+        } else if (cls === "cemetery") {
+          marks.push(
+            `<rect x="${(p.x - s * 0.55).toFixed(1)}" y="${(p.y - s * 0.95).toFixed(1)}" width="${(s * 1.1).toFixed(1)}" height="${(s * 1.65).toFixed(1)}" rx="${(s * 0.25).toFixed(1)}" fill="rgba(214,219,196,0.22)" stroke="rgba(232,235,215,0.32)" stroke-width="0.35"></rect>`
+          );
+        } else {
+          marks.push(
+            `<path d="M${(p.x - s * 1.2).toFixed(1)} ${(p.y + s * 0.8).toFixed(1)} L${p.x.toFixed(1)} ${(p.y - s * 1.1).toFixed(1)} L${(p.x + s * 1.15).toFixed(1)} ${(p.y + s * 0.75).toFixed(1)}" fill="none" stroke="${cls === "scrub" || cls === "wood" ? "rgba(153,211,126,0.34)" : "rgba(190,222,132,0.30)"}" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"></path>`
+          );
+        }
+      }
+
+      return marks.length ? `<g data-layer="osm-ground-detail">${marks.join("")}</g>` : "";
+    }
+
+    function groundTextAngle(ix, iy) {
+      const a = terrainPoint({ ix: ix - 0.45, iy }, 0.3);
+      const b = terrainPoint({ ix: ix + 0.45, iy }, 0.3);
+      let angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+      if (angle > 90 || angle < -90) angle += 180;
+      return angle;
+    }
+
+    function renderPlaceLabels() {
+      const candidates = [];
+      const seen = new Set();
+
+      function addCandidate(feature, kind, priority) {
+        const name = osmFeatureName(feature.tags);
+        const key = name.toLowerCase();
+        if (!name || seen.has(key)) return;
+        const points = featureGridPoints(feature, kind === "place" ? 2 : 80);
+        if (!points.length || !boundsOverlap(gridBoundsForPoints(points), renderBounds, 1.4))
+          return;
+        const center = kind === "place" ? points[0] : centerForGridPoints(points);
+        if (!center || isSlimPoint(center.ix, center.iy)) return;
+        const p = terrainPoint(center, 0.34);
+        if (p.x < -12 || p.x > w + 12 || p.y < -12 || p.y > h + 12) return;
+        seen.add(key);
+        candidates.push({
+          name,
+          kind,
+          center,
+          p,
+          priority,
+          score: priority - distanceFromCamera(center.ix, center.iy) * 1.1
+        });
+      }
+
+      (osmFeatures.places || [])
+        .slice(0, 30)
+        .forEach((feature) => addCandidate(feature, "place", 32));
+      (osmFeatures.water || [])
+        .filter((feature) => osmFeatureName(feature.tags))
+        .slice(0, 18)
+        .forEach((feature) => addCandidate(feature, "water", 24));
+      (osmFeatures.parks || [])
+        .filter((feature) => osmFeatureName(feature.tags))
+        .slice(0, 22)
+        .forEach((feature) => addCandidate(feature, "habitat", 22));
+
+      return candidates
+        .sort((a, b) => b.score - a.score)
+        .slice(0, HERE_3D_PLACE_MAX_LABELS)
+        .map((candidate) => {
+          const text = candidate.name.slice(0, 28);
+          const angle = groundTextAngle(candidate.center.ix, candidate.center.iy);
+          const fill =
+            candidate.kind === "water"
+              ? "rgba(211,245,255,0.72)"
+              : candidate.kind === "habitat"
+                ? "rgba(226,238,184,0.68)"
+                : "rgba(241,231,208,0.70)";
+          return `
+            <g data-layer="osm-place-label" aria-label="${esc(candidate.name)}">
+              <text x="${candidate.p.x.toFixed(1)}" y="${candidate.p.y.toFixed(1)}" transform="rotate(${angle.toFixed(1)} ${candidate.p.x.toFixed(1)} ${candidate.p.y.toFixed(1)})" text-anchor="middle" font-size="4.2" font-weight="820" fill="${fill}" stroke="rgba(7,9,9,0.72)" stroke-width="1.25" paint-order="stroke">${esc(text)}</text>
+            </g>
+          `;
+        })
+        .join("");
+    }
+
+    function roadLabelText(name, screenLength) {
+      const maxChars = Math.max(6, Math.min(24, Math.floor(screenLength / 4.1)));
+      if (name.length <= maxChars) return name;
+      return `${name.slice(0, Math.max(3, maxChars - 3)).trim()}...`;
+    }
+
+    function renderRoadLabels() {
+      if (!roadLabelCandidates.length) return "";
+
+      const byFeature = new Map();
+      roadLabelCandidates.forEach((candidate) => {
+        const classBonus =
+          candidate.cls === "major"
+            ? 24
+            : candidate.cls === "street"
+              ? 14
+              : candidate.cls === "trail"
+                ? 10
+                : 0;
+        const scored = {
+          ...candidate,
+          score: candidate.screenLength + classBonus - candidate.distance * 1.8
+        };
+        const current = byFeature.get(scored.key);
+        if (!current || scored.score > current.score) byFeature.set(scored.key, scored);
+      });
+
+      return Array.from(byFeature.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, HERE_3D_ROAD_MAX_LABELS)
+        .map((candidate, index) => {
+          const text = roadLabelText(candidate.name, candidate.screenLength);
+          if (!text) return "";
+
+          let start = candidate.a;
+          let end = candidate.b;
+          const angle = (Math.atan2(end.y - start.y, end.x - start.x) * 180) / Math.PI;
+          if (angle > 90 || angle < -90) {
+            start = candidate.b;
+            end = candidate.a;
+          }
+
+          const pathId = `gwHereRoadLabel_${stableHash(`${candidate.key}:${candidate.name}:${index}`)}`;
+          const fontSize = candidate.cls === "major" ? 4.8 : candidate.cls === "trail" ? 4.1 : 4.35;
+          const fill =
+            candidate.cls === "trail" ? "rgba(255,236,181,0.72)" : "rgba(240,226,204,0.68)";
+          const stroke = candidate.cls === "trail" ? "rgba(48,31,12,0.78)" : "rgba(7,8,8,0.72)";
+          const d = `M${start.x.toFixed(1)} ${start.y.toFixed(1)} L${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
+
+          return `
+            <g data-layer="osm-road-label" aria-label="${esc(candidate.name)}">
+              <path id="${pathId}" d="${d}" fill="none" stroke="none"></path>
+              <text dy="-1.2" text-anchor="middle" font-size="${fontSize}" font-weight="850" fill="${fill}" stroke="${stroke}" stroke-width="1.35" paint-order="stroke">
+                <textPath href="#${pathId}" startOffset="50%" text-anchor="middle">${esc(text)}</textPath>
+              </text>
+            </g>
+          `;
+        })
         .join("");
     }
 
@@ -1871,8 +2733,169 @@
         .join("");
     }
 
+    function patchLinePath(a, b, lift = 0.34) {
+      const pa = project(a.ix, a.iy, terrainZAt(a.ix, a.iy, lift));
+      const pb = project(b.ix, b.iy, terrainZAt(b.ix, b.iy, lift));
+      if (!isVisibleLine([pa, pb])) return "";
+      return `M${pa.x.toFixed(1)} ${pa.y.toFixed(1)} L${pb.x.toFixed(1)} ${pb.y.toFixed(1)}`;
+    }
+
+    function renderPatchOutlines() {
+      if (!patchRows.length) return "";
+
+      return patchRows
+        .map((row) => {
+          const theme = patch3dTheme(row.patch);
+          const home = row.patch?.is_home_patch === true;
+          const segments = [];
+
+          row.rings.forEach((ring) => {
+            for (let i = 0; i < ring.length; i++) {
+              const a = ring[i];
+              const b = ring[(i + 1) % ring.length];
+              const clipped = clipSegmentToCellBounds(a, b, renderBounds, 1.2);
+              if (!clipped) continue;
+              const d = patchLinePath(clipped.a, clipped.b, home ? 0.46 : 0.34);
+              if (d) segments.push(d);
+            }
+          });
+
+          if (!segments.length) return "";
+          const glowWidth = home ? 5.6 : 4.4;
+          const lineWidth = home ? 1.6 : 1.15;
+          const dash = home ? "" : ` stroke-dasharray="3.5 2.8"`;
+
+          return `
+            <g data-layer="patch-outline" aria-label="${esc(patchTitle(row.patch))}">
+              <path d="${segments.join(" ")}" fill="none" stroke="${theme.glow}" stroke-width="${glowWidth}" stroke-linecap="round" stroke-linejoin="round"></path>
+              <path d="${segments.join(" ")}" fill="none" stroke="${theme.line}" stroke-width="${lineWidth}" stroke-linecap="round" stroke-linejoin="round"${dash}></path>
+            </g>
+          `;
+        })
+        .join("");
+    }
+
+    function patchLabelEdge(row) {
+      const candidates = [];
+
+      row.rings.forEach((ring) => {
+        for (let i = 0; i < ring.length; i++) {
+          const clipped = clipSegmentToCellBounds(
+            ring[i],
+            ring[(i + 1) % ring.length],
+            renderBounds,
+            1.2
+          );
+          if (!clipped) continue;
+
+          const lift = row.patch?.is_home_patch ? 0.52 : 0.42;
+          const a = project(
+            clipped.a.ix,
+            clipped.a.iy,
+            terrainZAt(clipped.a.ix, clipped.a.iy, lift)
+          );
+          const b = project(
+            clipped.b.ix,
+            clipped.b.iy,
+            terrainZAt(clipped.b.ix, clipped.b.iy, lift)
+          );
+          if (!isVisibleLine([a, b])) continue;
+
+          const screenLength = Math.hypot(b.x - a.x, b.y - a.y);
+          if (screenLength < 18) continue;
+
+          const mid = {
+            ix: (clipped.a.ix + clipped.b.ix) / 2,
+            iy: (clipped.a.iy + clipped.b.iy) / 2
+          };
+          candidates.push({
+            a,
+            b,
+            mid,
+            screenLength,
+            distance: distanceFromCamera(mid.ix, mid.iy)
+          });
+        }
+      });
+
+      return candidates.sort(
+        (a, b) => a.distance - b.distance || b.screenLength - a.screenLength
+      )[0];
+    }
+
+    function renderPatchLabel(row, labelIndex) {
+      const title = patchTitle(row.patch);
+      const stats = patch3dStatsText(row.patch);
+      const theme = patch3dTheme(row.patch);
+      const edge = patchLabelEdge(row);
+      if (!edge) return "";
+
+      const dx = edge.b.x - edge.a.x;
+      const dy = edge.b.y - edge.a.y;
+      const screenLength = Math.max(1, Math.hypot(dx, dy));
+      const tx = dx / screenLength;
+      const ty = dy / screenLength;
+      let nx = -ty;
+      let ny = tx;
+      const midpoint = {
+        x: (edge.a.x + edge.b.x) / 2,
+        y: (edge.a.y + edge.b.y) / 2
+      };
+      const patchCenter = project(
+        row.center.ix,
+        row.center.iy,
+        terrainZAt(row.center.ix, row.center.iy, 0.44)
+      );
+      if ((patchCenter.x - midpoint.x) * nx + (patchCenter.y - midpoint.y) * ny > 0) {
+        nx *= -1;
+        ny *= -1;
+      }
+
+      const labelOffset = 8.5 + labelIndex * 2.2;
+      const textPoint = {
+        x: midpoint.x + nx * labelOffset,
+        y: midpoint.y + ny * labelOffset
+      };
+      const titleText = title.slice(0, Math.max(12, Math.min(30, Math.floor(screenLength / 3.7))));
+      const statsText = stats.slice(0, Math.max(10, Math.min(34, Math.floor(screenLength / 4.2))));
+      let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      if (angle > 90 || angle < -90) angle += 180;
+      const overA = {
+        x: midpoint.x - tx * Math.min(screenLength * 0.44, 52),
+        y: midpoint.y - ty * Math.min(screenLength * 0.44, 52)
+      };
+      const overB = {
+        x: midpoint.x + tx * Math.min(screenLength * 0.44, 52),
+        y: midpoint.y + ty * Math.min(screenLength * 0.44, 52)
+      };
+
+      return `
+        <g data-layer="patch-label" aria-label="${esc(`${title} ${stats}`)}">
+          <text x="${textPoint.x.toFixed(1)}" y="${(textPoint.y - 0.8).toFixed(1)}" transform="rotate(${angle.toFixed(1)} ${textPoint.x.toFixed(1)} ${textPoint.y.toFixed(1)})" text-anchor="middle" font-size="5.3" font-weight="950" fill="${theme.text}" stroke="rgba(6,8,8,0.78)" stroke-width="1.8" paint-order="stroke">${esc(titleText)}</text>
+          <text x="${textPoint.x.toFixed(1)}" y="${(textPoint.y + 5.3).toFixed(1)}" transform="rotate(${angle.toFixed(1)} ${textPoint.x.toFixed(1)} ${textPoint.y.toFixed(1)})" text-anchor="middle" font-size="4.1" font-weight="800" fill="rgba(239,230,211,0.68)" stroke="rgba(6,8,8,0.66)" stroke-width="1.35" paint-order="stroke">${esc(statsText)}</text>
+          <path d="M${overA.x.toFixed(1)} ${overA.y.toFixed(1)} L${overB.x.toFixed(1)} ${overB.y.toFixed(1)}" fill="none" stroke="${theme.glow}" stroke-width="4.4" stroke-linecap="round" opacity="0.34"></path>
+          <path d="M${overA.x.toFixed(1)} ${overA.y.toFixed(1)} L${overB.x.toFixed(1)} ${overB.y.toFixed(1)}" fill="none" stroke="${theme.line}" stroke-width="1.55" stroke-linecap="round"></path>
+        </g>
+      `;
+    }
+
+    function renderPatchLabels() {
+      if (!patchRows.length) return "";
+      return patchRows
+        .slice()
+        .sort(
+          (a, b) =>
+            distanceFromCamera(a.center.ix, a.center.iy) -
+            distanceFromCamera(b.center.ix, b.center.iy)
+        )
+        .slice(0, HERE_3D_PATCH_MAX_LABELS)
+        .map(renderPatchLabel)
+        .join("");
+    }
+
     const terrain = sorted
       .map((item) => {
+        const slim = isSlimCell(item);
         const count = Number(item.metrics?.count) || 0;
         const style = hereHeatStyleForCell(item, heatStats);
         const osm = osmByKey.get(item.key);
@@ -1891,21 +2914,27 @@
             : fog?.state === "surveyed"
               ? 0.12
               : 0;
-        const landTint =
-          {
-            building: "rgba(126,92,64,0.20)",
-            wood: "rgba(71,139,83,0.24)",
-            park: "rgba(88,157,84,0.18)",
-            grass: "rgba(126,174,83,0.16)",
-            water: "rgba(60,138,178,0.28)"
-          }[osm?.landuseClass] || "";
+        const landTint = slim
+          ? ""
+          : {
+              building: "rgba(126,92,64,0.20)",
+              wood: "rgba(71,139,83,0.24)",
+              park: "rgba(88,157,84,0.18)",
+              grass: "rgba(126,174,83,0.16)",
+              water: "rgba(60,138,178,0.28)",
+              wetland: "rgba(66,151,137,0.18)",
+              scrub: "rgba(116,151,79,0.15)",
+              cultivated: "rgba(158,139,71,0.13)",
+              cemetery: "rgba(125,139,114,0.14)"
+            }[osm?.landuseClass] || "";
         const elevationM = elevationModel.metersAt(item.ix + 0.5, item.iy + 0.5);
         const elevationDeltaM =
           Number.isFinite(elevationM) && Number.isFinite(elevationModel.baseM)
             ? elevationM - elevationModel.baseM
             : 0;
-        const elevationTint =
-          elevationDeltaM > 25
+        const elevationTint = slim
+          ? ""
+          : elevationDeltaM > 25
             ? `<polygon points="${pointsAttr(poly)}" fill="rgba(255,232,176,${clamp(elevationDeltaM / 1800, 0, 0.14).toFixed(3)})"></polygon>`
             : elevationDeltaM < -18
               ? `<polygon points="${pointsAttr(poly)}" fill="rgba(48,96,126,${clamp(Math.abs(elevationDeltaM) / 900, 0, 0.12).toFixed(3)})"></polygon>`
@@ -1916,7 +2945,7 @@
           <polygon points="${pointsAttr(poly)}" fill="${colorWithAlpha(fill, alpha)}" stroke="${selected ? "#ffe7a3" : "rgba(255,255,255,0.14)"}" stroke-width="${selected ? 1.2 : 0.35}"></polygon>
           ${elevationTint}
           ${landTint ? `<polygon points="${pointsAttr(poly)}" fill="${landTint}"></polygon>` : ""}
-          ${style.heatVisible && count > 0 ? `<polygon points="${pointsAttr(terrainCellPolygon(item.ix, item.iy, 0.04, Math.sqrt(count / maxCount) * 0.18))}" fill="rgba(255,255,255,0.05)"></polygon>` : ""}
+          ${!slim && style.heatVisible && count > 0 ? `<polygon points="${pointsAttr(terrainCellPolygon(item.ix, item.iy, 0.04, Math.sqrt(count / maxCount) * 0.18))}" fill="rgba(255,255,255,0.05)"></polygon>` : ""}
           ${fogAlpha ? `<polygon points="${pointsAttr(poly)}" fill="rgba(9,12,14,${fogAlpha})"></polygon>` : ""}
         </g>
       `;
@@ -1924,10 +2953,18 @@
       .join("");
 
     const osmLines = renderRaisedOsmLines();
+    const roadLabels = renderRoadLabels();
+    const habitatPolygons = renderHabitatPolygons();
+    const waterFeatures = renderWaterFeatures();
+    const barrierEdges = renderBarrierEdges();
+    const groundDetails = renderGroundDetails();
+    const placeLabels = renderPlaceLabels();
     const elevationRidges = renderElevationRidges();
+    const patchOutlines = renderPatchOutlines();
 
     const buildings = sorted
       .map((item) => {
+        if (isSlimCell(item)) return "";
         const osm = osmByKey.get(item.key);
         if (!osm?.insideBuilding) return "";
         const stories = 1 + (stableHash(item.key) % 3);
@@ -1946,6 +2983,7 @@
 
     const trees = sorted
       .map((item) => {
+        if (isSlimCell(item)) return "";
         const osm = osmByKey.get(item.key);
         if (!(osm?.landuseClass === "wood" || osm?.landuseClass === "park")) return "";
         if (stableHash(item.key) % 3 === 0) return "";
@@ -1965,12 +3003,13 @@
       })
       .join("");
 
-    const niches = overlappingNiches(bounds)
+    const niches = overlappingNiches(renderBounds)
       .slice(0, 4)
       .map((entry, index) => {
         const polys = entry.cells
           .slice(0, 90)
           .map((cell) => {
+            if (isSlimCell(cell)) return "";
             const poly = terrainCellPolygon(cell.ix, cell.iy, 0.02, 0.72 + index * 0.12);
             if (!isVisiblePoly(poly)) return "";
             return `<polygon points="${pointsAttr(poly)}" fill="rgba(118,231,191,0.13)" stroke="rgba(118,231,191,0.38)" stroke-width="0.5"></polygon>`;
@@ -1979,6 +3018,7 @@
         return `<g data-layer="niches">${polys}</g>`;
       })
       .join("");
+    const patchLabels = renderPatchLabels();
 
     const questTarget = activeQuestTarget();
     const questMarker =
@@ -1994,10 +3034,10 @@
               maxIy: Number(questTarget.iy) + Math.max(0, Number(questTarget.radiusCells) || 0)
             };
             if (
-              qBounds.maxIx < bounds.minIx ||
-              qBounds.minIx > bounds.maxIx ||
-              qBounds.maxIy < bounds.minIy ||
-              qBounds.minIy > bounds.maxIy
+              qBounds.maxIx < renderBounds.minIx ||
+              qBounds.minIx > renderBounds.maxIx ||
+              qBounds.maxIy < renderBounds.minIy ||
+              qBounds.minIy > renderBounds.maxIy
             ) {
               return "";
             }
@@ -2018,12 +3058,13 @@
           const ux = userCell.ix + 0.5;
           const uy = userCell.iy + 0.5;
           const p = project(ux, uy, terrainZAt(ux, uy, 1.05));
+          const ay = p.y;
           return `
         <g aria-label="Avatar in viewport">
-          <ellipse cx="${p.x}" cy="${avatarY + 10}" rx="6.4" ry="2.4" fill="rgba(0,0,0,0.34)"></ellipse>
-          <path d="M${p.x - 4.1} ${avatarY + 8.5} L${p.x - 2.5} ${avatarY + 1.4} L${p.x + 2.5} ${avatarY + 1.4} L${p.x + 4.1} ${avatarY + 8.5} Z" fill="#98e6c4" stroke="rgba(20,17,15,0.9)" stroke-width="0.9"></path>
-          <circle cx="${p.x}" cy="${avatarY - 2.1}" r="3.7" fill="#f0d18a" stroke="rgba(20,17,15,0.94)" stroke-width="1"></circle>
-          <path d="M${p.x} ${avatarY - 8.5} L${p.x + Math.sin(headingRad) * 7} ${avatarY - 2.5}" stroke="#ffe7a3" stroke-width="1.2" stroke-linecap="round"></path>
+          <ellipse cx="${p.x}" cy="${ay + 10}" rx="6.4" ry="2.4" fill="rgba(0,0,0,0.34)"></ellipse>
+          <path d="M${p.x - 4.1} ${ay + 8.5} L${p.x - 2.5} ${ay + 1.4} L${p.x + 2.5} ${ay + 1.4} L${p.x + 4.1} ${ay + 8.5} Z" fill="#98e6c4" stroke="rgba(20,17,15,0.9)" stroke-width="0.9"></path>
+          <circle cx="${p.x}" cy="${ay - 2.1}" r="3.7" fill="#f0d18a" stroke="rgba(20,17,15,0.94)" stroke-width="1"></circle>
+          <path d="M${p.x} ${ay - 8.5} L${p.x + Math.sin(headingRad) * 7} ${ay - 2.5}" stroke="#ffe7a3" stroke-width="1.2" stroke-linecap="round"></path>
         </g>
       `;
         })()
@@ -2056,10 +3097,18 @@
         <path d="M0 ${h * 0.34} C56 ${h * 0.2} 150 ${h * 0.2} ${w} ${h * 0.34} L${w} 0 L0 0 Z" fill="rgba(149,196,184,0.08)"></path>
         ${elevationRidges}
         ${terrain}
+        ${habitatPolygons}
+        ${waterFeatures}
+        ${groundDetails}
+        ${barrierEdges}
+        ${patchOutlines}
         ${osmLines}
         ${niches}
         ${buildings}
         ${trees}
+        ${roadLabels}
+        ${placeLabels}
+        ${patchLabels}
         ${questMarker}
         ${centerMarker}
         ${userAvatar}
@@ -2918,40 +3967,177 @@
     rerenderTaxaHud();
   }
 
+  function normalizeHere3dYaw(value) {
+    const yaw = (((Number(value) || 0) % 360) + 360) % 360;
+    return yaw > 180 ? yaw - 360 : yaw;
+  }
+
+  function setHere3dView(next = {}, delay = 10) {
+    if (Object.prototype.hasOwnProperty.call(next, "yaw")) {
+      hereMap3dYawOffsetDeg = normalizeHere3dYaw(next.yaw);
+    }
+    if (Object.prototype.hasOwnProperty.call(next, "pitch")) {
+      hereMap3dPitchDeg = clamp(next.pitch, HERE_3D_CAMERA.minPitchDeg, HERE_3D_CAMERA.maxPitchDeg);
+    }
+    if (Object.prototype.hasOwnProperty.call(next, "zoom")) {
+      hereMap3dZoom = clamp(next.zoom, HERE_3D_CAMERA.minZoom, HERE_3D_CAMERA.maxZoom);
+    }
+    scheduleRefresh(delay);
+  }
+
   function setHere3dYawOffset(value) {
-    hereMap3dYawOffsetDeg = (((Number(value) || 0) % 360) + 360) % 360;
-    if (hereMap3dYawOffsetDeg > 180) hereMap3dYawOffsetDeg -= 360;
-    scheduleRefresh(10);
+    setHere3dView({ yaw: value });
   }
 
   function rotateHere3d(delta) {
     setHere3dYawOffset(hereMap3dYawOffsetDeg + (Number(delta) || 0));
   }
 
+  function resetHere3dView() {
+    setHere3dView({
+      yaw: 0,
+      pitch: HERE_3D_CAMERA.defaultPitchDeg,
+      zoom: 1
+    });
+  }
+
+  function here3dGestureMetrics() {
+    const points = Array.from(hereMap3dPointers.values());
+    if (!points.length) return null;
+
+    if (points.length === 1) {
+      const point = points[0];
+      return {
+        pointCount: 1,
+        pointerId: point.pointerId,
+        x: point.x,
+        y: point.y,
+        midX: point.x,
+        midY: point.y,
+        distance: 1
+      };
+    }
+
+    const a = points[0];
+    const b = points[1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    return {
+      pointCount: points.length,
+      midX: (a.x + b.x) / 2,
+      midY: (a.y + b.y) / 2,
+      distance: Math.max(1, Math.hypot(dx, dy))
+    };
+  }
+
+  function beginHere3dGesture(mapEl) {
+    const metrics = here3dGestureMetrics();
+    if (!metrics) {
+      hereMap3dDrag = null;
+      return;
+    }
+
+    hereMap3dDrag = {
+      mapEl,
+      mode: metrics.pointCount >= 2 ? "pinch" : "rotate",
+      pointerId: metrics.pointerId,
+      startX: metrics.x,
+      startY: metrics.y,
+      startMidX: metrics.midX,
+      startMidY: metrics.midY,
+      startDistance: metrics.distance,
+      startYaw: hereMap3dYawOffsetDeg,
+      startPitch: hereMap3dPitchDeg,
+      startZoom: hereMap3dZoom
+    };
+  }
+
   function startHere3dDrag(evt) {
+    if (!hereMap3dEnabled) return;
+    if (evt.pointerType === "mouse" && evt.button !== 0) return;
+    const mapEl = evt.target.closest?.("#gwHereMap.is-3d");
+    if (!mapEl) return;
+    if (evt.target.closest?.("button, input, label")) return;
+
+    evt.preventDefault();
+    hereMap3dPointers.set(evt.pointerId, {
+      pointerId: evt.pointerId,
+      x: evt.clientX,
+      y: evt.clientY
+    });
+    mapEl.setPointerCapture?.(evt.pointerId);
+    beginHere3dGesture(mapEl);
+  }
+
+  function moveHere3dDrag(evt) {
+    if (!hereMap3dDrag || !hereMap3dPointers.has(evt.pointerId)) return;
+    evt.preventDefault();
+    hereMap3dPointers.set(evt.pointerId, {
+      pointerId: evt.pointerId,
+      x: evt.clientX,
+      y: evt.clientY
+    });
+
+    const metrics = here3dGestureMetrics();
+    if (!metrics) return;
+
+    if (hereMap3dDrag.mode === "pinch" && metrics.pointCount >= 2) {
+      const zoomFactor = metrics.distance / Math.max(1, hereMap3dDrag.startDistance);
+      setHere3dView({
+        yaw:
+          hereMap3dDrag.startYaw +
+          (metrics.midX - hereMap3dDrag.startMidX) * HERE_3D_CAMERA.pinchYawDegPerPx,
+        pitch:
+          hereMap3dDrag.startPitch +
+          (metrics.midY - hereMap3dDrag.startMidY) * HERE_3D_CAMERA.pinchPitchDegPerPx,
+        zoom: hereMap3dDrag.startZoom * zoomFactor
+      });
+      return;
+    }
+
+    if (hereMap3dDrag.mode === "pinch") {
+      beginHere3dGesture(hereMap3dDrag.mapEl);
+      return;
+    }
+
+    setHere3dView({
+      yaw:
+        hereMap3dDrag.startYaw +
+        (metrics.x - hereMap3dDrag.startX) * HERE_3D_CAMERA.yawDragDegPerPx,
+      pitch:
+        hereMap3dDrag.startPitch +
+        (metrics.y - hereMap3dDrag.startY) * HERE_3D_CAMERA.pitchDragDegPerPx
+    });
+  }
+
+  function endHere3dDrag(evt) {
+    if (!hereMap3dPointers.has(evt.pointerId)) return;
+    const mapEl = hereMap3dDrag?.mapEl || evt.target.closest?.("#gwHereMap.is-3d");
+    try {
+      mapEl?.releasePointerCapture?.(evt.pointerId);
+    } catch (err) {
+      // Pointer capture may already be released by the browser.
+    }
+
+    hereMap3dPointers.delete(evt.pointerId);
+    if (hereMap3dPointers.size) {
+      beginHere3dGesture(mapEl);
+      return;
+    }
+
+    hereMap3dDrag = null;
+    scheduleRefresh(120);
+  }
+
+  function handleHere3dWheel(evt) {
     if (!hereMap3dEnabled) return;
     const mapEl = evt.target.closest?.("#gwHereMap.is-3d");
     if (!mapEl) return;
     if (evt.target.closest?.("button, input, label")) return;
 
     evt.preventDefault();
-    hereMap3dDrag = {
-      pointerId: evt.pointerId,
-      startX: evt.clientX,
-      startYaw: hereMap3dYawOffsetDeg
-    };
-    mapEl.setPointerCapture?.(evt.pointerId);
-  }
-
-  function moveHere3dDrag(evt) {
-    if (!hereMap3dDrag || evt.pointerId !== hereMap3dDrag.pointerId) return;
-    setHere3dYawOffset(hereMap3dDrag.startYaw + (evt.clientX - hereMap3dDrag.startX) * 0.45);
-  }
-
-  function endHere3dDrag(evt) {
-    if (!hereMap3dDrag || evt.pointerId !== hereMap3dDrag.pointerId) return;
-    hereMap3dDrag = null;
-    scheduleRefresh(120);
+    const factor = Math.exp(-Number(evt.deltaY || 0) * HERE_3D_CAMERA.wheelZoomPerPx);
+    setHere3dView({ zoom: hereMap3dZoom * factor });
   }
 
   function bindHerePanelInteractions() {
@@ -3013,7 +4199,11 @@
       if (mapModeToggle) {
         evt.stopPropagation();
         hereMap3dEnabled = mapModeToggle.checked === true;
-        if (!hereMap3dEnabled) hereMap3dExpanded = false;
+        if (!hereMap3dEnabled) {
+          hereMap3dExpanded = false;
+          hereMap3dDrag = null;
+          hereMap3dPointers.clear();
+        }
         localStorage.setItem(HERE_MAP_3D_STORAGE_KEY, hereMap3dEnabled ? "true" : "false");
         scheduleRefresh(10);
         return;
@@ -3040,7 +4230,7 @@
       if (reset3d) {
         evt.preventDefault();
         evt.stopPropagation();
-        setHere3dYawOffset(0);
+        resetHere3dView();
         return;
       }
 
@@ -3081,6 +4271,46 @@
     panel.addEventListener("pointermove", moveHere3dDrag);
     panel.addEventListener("pointerup", endHere3dDrag);
     panel.addEventListener("pointercancel", endHere3dDrag);
+    panel.addEventListener("wheel", handleHere3dWheel, { passive: false });
+  }
+
+  let hereMapMotionRefreshTimer = null;
+  let hereMapMotionRefreshLastAt = 0;
+
+  function renderHereMapOnlyForCurrentView() {
+    const api = gridApi();
+    if (!api || !herePanelOpen || !hereMap3dEnabled) return;
+    if (window.GridWildSelectionTool?.getSelection?.()) return;
+
+    const mapEl = document.getElementById("gwHereMap");
+    if (!mapEl) return;
+
+    const bounds = api.centerAreaBounds(HERE_RADIUS_CELLS);
+    mapEl.classList.toggle("is-3d", hereMap3dEnabled);
+    mapEl.classList.toggle("is-expanded", hereMap3dEnabled && hereMap3dExpanded);
+    mapEl.innerHTML = renderHereMap(bounds, null);
+  }
+
+  function scheduleHereMapMotionRefresh() {
+    if (!herePanelOpen || !hereMap3dEnabled) return;
+    if (window.GridWildSelectionTool?.getSelection?.()) return;
+
+    const now = Date.now();
+    const waitMs = Math.max(0, 90 - (now - hereMapMotionRefreshLastAt));
+    if (waitMs === 0) {
+      clearTimeout(hereMapMotionRefreshTimer);
+      hereMapMotionRefreshTimer = null;
+      hereMapMotionRefreshLastAt = now;
+      renderHereMapOnlyForCurrentView();
+      return;
+    }
+
+    if (hereMapMotionRefreshTimer) return;
+    hereMapMotionRefreshTimer = setTimeout(() => {
+      hereMapMotionRefreshTimer = null;
+      hereMapMotionRefreshLastAt = Date.now();
+      renderHereMapOnlyForCurrentView();
+    }, waitMs);
   }
 
   async function refresh() {
@@ -3656,6 +4886,7 @@
       investigate.addEventListener("click", toggleHerePanel);
     }
 
+    map.on("move zoom", scheduleHereMapMotionRefresh);
     map.on("moveend zoomend resize", () => {
       if (!window.GridWildSelectionTool?.getSelection?.()) scheduleRefresh();
       else scheduleRefresh(200);
@@ -3663,6 +4894,8 @@
     window.addEventListener("gridwild:selectionchange", () => scheduleRefresh(10));
     window.addEventListener("gridwild:filterschange", () => scheduleRefresh(10));
     window.addEventListener("gridwild:heatchange", () => scheduleRefresh(10));
+    window.addEventListener("gridwild:patchviewchange", () => scheduleRefresh(10));
+    window.addEventListener("gwPatchesChanged", () => scheduleRefresh(40));
     window.addEventListener("gwOsmFeaturesUpdated", () => scheduleRefresh(40));
     window.addEventListener("gwRecentINatUpdated", () => scheduleRefresh(80));
     window.addEventListener("gwRecentINatProgress", (evt) =>

@@ -44,6 +44,8 @@ let gridHeatRaf = null;
 let gridHeatPendingRenderOptions = null;
 let gridHeatThrottleTimer = null;
 let gridHeatLastRenderAt = 0;
+let gridHeatRenderAttempt = 0;
+let gridHeatLastRenderState = null;
 let gridHeatCanvasTopLeft = L.point(0, 0);
 let gridHeatCanvasLayout = null;
 let gridHeatMeterTransform = null;
@@ -72,9 +74,21 @@ const COARSE_HEAT_BIN_PIXEL_OVERLAP = 0;
 const COARSE_HEAT_RICH_VIEW_CELL_BUDGET = 700;
 const COARSE_HEAT_RICH_VIEW_SUPERCHUNK_BUDGET = 32;
 const COARSE_HEAT_RICH_SUPERCHUNK_CONCURRENCY = 4;
+const COARSE_PYRAMID_NEW_TILE_BUDGET = 8;
 const COARSE_DATA_VERSION_DEBOUNCE_MS = 360;
 const COARSE_DATA_VERSION_MAX_WAIT_MS = 1200;
+const PMTILES_HEAT_MODULE_URLS = {
+  pmtiles: "https://cdn.jsdelivr.net/npm/pmtiles@3.2.1/+esm",
+  vectorTile: "https://cdn.jsdelivr.net/npm/@mapbox/vector-tile@1.3.1/+esm",
+  pbf: "https://cdn.jsdelivr.net/npm/pbf@3.3.0/+esm"
+};
+const PMTILES_HEAT_TILE_CACHE_MAX = 96;
+const PMTILES_HEAT_TILE_BUDGET = 72;
+const PMTILES_HEAT_STARTUP_GRACE_MS = 12000;
+const PMTILES_HEAT_NEW_TILE_BUDGET = 8;
+const PMTILES_HEAT_FEATURE_BUDGET = 45000;
 const FEET_PER_METER = 3.280839895;
+const GRIDWILD_BOOT_STARTED_AT = performance.now();
 
 window.GridWildCanvasPerf = (function (existing = {}) {
   const DEFAULT_BUFFER_PX = 128;
@@ -1495,6 +1509,34 @@ async function getGridAssetUrl(key, fallbackUrl) {
   return fallbackUrl;
 }
 
+function hasStaticHeatmapCounts() {
+  return window.__staticGridCounts instanceof Map && window.__staticGridCounts.size > 0;
+}
+
+function shouldDeferStaticHeatmapCsvForPMTiles(manifest) {
+  if (window.__gwState?.pmtilesHeatEnabled === false) return false;
+  return Boolean(manifest?.pmtiles_file || window.GridWildAssets?.hasDirectCatalogConfig?.());
+}
+
+let staticHeatmapCsvPromise = null;
+
+async function ensureStaticHeatmapCsvLoaded(reason = "fallback") {
+  if (hasStaticHeatmapCounts()) return window.__staticGridCounts;
+  if (staticHeatmapCsvPromise) return staticHeatmapCsvPromise;
+
+  staticHeatmapCsvPromise = (async () => {
+    const heatUrl = await getGridAssetUrl("heat", "assets/dc_heat.csv");
+    await loadStaticHeatmapCsv(heatUrl);
+    window.__gwStaticHeatDeferredForPMTiles = false;
+    return window.__staticGridCounts;
+  })().catch((err) => {
+    staticHeatmapCsvPromise = null;
+    throw new Error(`GridWild static heat CSV load failed during ${reason}: ${err.message}`);
+  });
+
+  return staticHeatmapCsvPromise;
+}
+
 async function loadGridWildStaticAssets() {
   beginRegularGridDataDownloadToast();
 
@@ -1515,18 +1557,27 @@ async function loadGridWildStaticAssets() {
   }
 
   try {
-    const heatUrl = await getGridAssetUrl("heat", "assets/dc_heat.csv");
-    await Promise.allSettled([loadObserverDictionary(), loadStaticHeatmapCsv(heatUrl)]).then(
-      (results) => {
-        const [observerResult, heatResult] = results;
-        if (observerResult.status === "rejected") {
-          console.warn("GridWild observer dictionary unavailable.", observerResult.reason);
-        }
-        if (heatResult.status === "rejected") {
-          console.warn("GridWild heat map unavailable.", heatResult.reason);
-        }
+    const manifest = await ensureGridWildAssetManifest();
+    const deferHeatCsv = shouldDeferStaticHeatmapCsvForPMTiles(manifest);
+    window.__gwStaticHeatDeferredForPMTiles = deferHeatCsv;
+
+    if (deferHeatCsv) {
+      window.GridWildPMTilesHeat?.ensureSource?.();
+    }
+
+    scheduleObserverDictionaryWarmLoad();
+
+    const jobs = [];
+    if (!deferHeatCsv) {
+      jobs.push(ensureStaticHeatmapCsvLoaded("startup"));
+    }
+
+    await Promise.allSettled(jobs).then((results) => {
+      const [heatResult] = results;
+      if (heatResult?.status === "rejected") {
+        console.warn("GridWild heat map unavailable.", heatResult.reason);
       }
-    );
+    });
   } finally {
     finishRegularGridDataDownloadToast();
   }
@@ -1546,7 +1597,7 @@ function ensureGridWildStaticAssetsLoaded() {
 }
 
 function scheduleGridWildStaticAssetsLoad(delay = 1000) {
-  if (window.__staticGridCounts instanceof Map && window.__staticGridCounts.size > 0) return;
+  if (hasStaticHeatmapCounts()) return;
   if (gridWildStaticAssetsPromise) return;
 
   const start = () => {
@@ -1564,7 +1615,26 @@ function scheduleGridWildStaticAssetsLoad(delay = 1000) {
 }
 
 window.ensureGridWildStaticAssetsLoaded = ensureGridWildStaticAssetsLoaded;
+window.ensureGridWildStaticHeatmapLoaded = ensureStaticHeatmapCsvLoaded;
 window.scheduleGridWildStaticAssetsLoad = scheduleGridWildStaticAssetsLoad;
+
+function scheduleObserverDictionaryWarmLoad(delay = 15000) {
+  if (window.__gwObserverDict || window.__gwObserverDictWarmQueued) return;
+  window.__gwObserverDictWarmQueued = true;
+
+  const start = () => {
+    loadObserverDictionary().catch((err) =>
+      console.warn("GridWild observer dictionary warm load unavailable.", err)
+    );
+  };
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(start, { timeout: Math.max(20000, delay + 5000) });
+    return;
+  }
+
+  window.setTimeout(start, delay);
+}
 
 async function loadObserverDictionary() {
   if (window.__gwObserverDict) return window.__gwObserverDict;
@@ -4844,6 +4914,17 @@ window.GridWildCoarsePyramid =
       return value === EMPTY_TILE ? null : value;
     }
 
+    function tileStatus(level, tileIx, tileIy) {
+      if (!level) return "missing";
+      const key = `${level.bin_size}:${tileIx}:${tileIy}`;
+      if (tileCache.has(key)) {
+        return tileCache.get(key) === EMPTY_TILE ? "empty" : "cached";
+      }
+      if (!level.tilesByKey?.has?.(`${tileIx},${tileIy}`)) return "empty";
+      if (tilePending.has(key)) return "pending";
+      return "missing";
+    }
+
     function tileFor(level, tileIx, tileIy, options = {}) {
       if (!level) return null;
       const key = `${level.bin_size}:${tileIx}:${tileIy}`;
@@ -4941,6 +5022,7 @@ window.GridWildCoarsePyramid =
       levelForBin,
       levels,
       isManifestPending,
+      tileStatus,
       tileFor,
       invalidate,
       recordRender,
@@ -4950,6 +5032,573 @@ window.GridWildCoarsePyramid =
 
 window.getGridWildCoarsePyramidStats = function getGridWildCoarsePyramidStats() {
   return window.GridWildCoarsePyramid?.stats?.() || null;
+};
+
+window.GridWildPMTilesHeat =
+  window.GridWildPMTilesHeat ||
+  (function () {
+    const EMPTY_TILE = Symbol("empty pmtiles tile");
+    let importsPromise = null;
+    let imports = null;
+    let importsFailed = false;
+    let sourcePromise = null;
+    let sourceInfo = null;
+    let sourceFailed = false;
+    let sourceError = null;
+    let shardInfo = undefined;
+    let shardInfoPromise = null;
+    let shardInfoFailed = false;
+    let shardInfoError = null;
+    const shardSources = new Map();
+    const shardSourcePending = new Map();
+    const shardSourceFailures = new Map();
+    const tileCache = new Map();
+    const tilePending = new Map();
+    let requestedTiles = 0;
+    let loadedTiles = 0;
+    let emptyTiles = 0;
+    let failedTiles = 0;
+    let decodedFeatures = 0;
+    let lastRender = null;
+
+    function scheduleHeatRender() {
+      if (typeof scheduleGridHeatCanvasRender === "function") {
+        scheduleGridHeatCanvasRender({ force: true });
+      }
+    }
+
+    function loadImports() {
+      if (imports) return Promise.resolve(imports);
+      if (importsFailed) return Promise.resolve(null);
+      if (importsPromise) return importsPromise;
+
+      importsPromise = Promise.all([
+        import(PMTILES_HEAT_MODULE_URLS.pmtiles),
+        import(PMTILES_HEAT_MODULE_URLS.vectorTile),
+        import(PMTILES_HEAT_MODULE_URLS.pbf)
+      ])
+        .then(([pmtilesModule, vectorTileModule, pbfModule]) => {
+          const PMTilesCtor = pmtilesModule.PMTiles || pmtilesModule.default?.PMTiles;
+          const VectorTileCtor =
+            vectorTileModule.VectorTile ||
+            vectorTileModule.default?.VectorTile ||
+            vectorTileModule.default;
+          const PbfCtor = pbfModule.default || pbfModule.Pbf || pbfModule;
+
+          if (!PMTilesCtor || !VectorTileCtor || !PbfCtor) {
+            throw new Error("PMTiles heat decoder modules did not expose expected constructors.");
+          }
+
+          imports = { PMTilesCtor, VectorTileCtor, PbfCtor };
+          return imports;
+        })
+        .catch((err) => {
+          importsFailed = true;
+          console.warn("GridWild PMTiles heat decoder unavailable.", err);
+          return null;
+        })
+        .finally(() => {
+          importsPromise = null;
+        });
+
+      return importsPromise;
+    }
+
+    function readHeaderZoom(header, keys, fallback) {
+      for (const key of keys) {
+        const value = Number(header?.[key]);
+        if (Number.isFinite(value)) return Math.round(value);
+      }
+      return fallback;
+    }
+
+    function makeRangeSource(url) {
+      async function cancelResponseBody(resp) {
+        try {
+          await resp.body?.cancel?.();
+        } catch {
+          // Best-effort guard against accidentally downloading a full PMTiles object.
+        }
+      }
+
+      return {
+        getKey() {
+          return url;
+        },
+
+        async getBytes(offset, length, signal, expectedEtag) {
+          const headers = new Headers();
+          const rangeHeader = `bytes=${offset}-${offset + length - 1}`;
+          headers.set("Range", rangeHeader);
+
+          const resp = await fetch(url, {
+            signal,
+            cache: "no-store",
+            mode: "cors",
+            headers
+          });
+
+          const contentLengthHeader = resp.headers.get("Content-Length");
+          const contentRangeHeader = resp.headers.get("Content-Range");
+          const contentLength = Number(contentLengthHeader);
+          const etag = resp.headers.get("ETag") || undefined;
+
+          if (resp.status >= 300) {
+            await cancelResponseBody(resp);
+            throw new Error(`PMTiles range request failed: HTTP ${resp.status}`);
+          }
+
+          if (expectedEtag && etag && etag !== expectedEtag) {
+            throw new Error("PMTiles range request returned a different ETag.");
+          }
+
+          if (resp.status === 200 && (!Number.isFinite(contentLength) || contentLength > length)) {
+            await cancelResponseBody(resp);
+            throw new Error(
+              `PMTiles range request returned full content: status=${resp.status}, range=${rangeHeader}, contentRange=${contentRangeHeader || "missing"}, contentLength=${contentLengthHeader || "missing"}, requested=${length}.`
+            );
+          }
+
+          return {
+            data: await resp.arrayBuffer(),
+            etag,
+            cacheControl: resp.headers.get("Cache-Control") || undefined,
+            expires: resp.headers.get("Expires") || undefined
+          };
+        }
+      };
+    }
+
+    async function openPMTilesSource(assetInfo, modules) {
+      const source = new modules.PMTilesCtor(makeRangeSource(assetInfo.url));
+      const header = await source.getHeader();
+      return {
+        ...assetInfo,
+        source,
+        header,
+        minZoom: readHeaderZoom(header, ["minZoom", "min_zoom", "minzoom"], 0),
+        maxZoom: readHeaderZoom(header, ["maxZoom", "max_zoom", "maxzoom"], 19),
+        layer: assetInfo.layer || "gridwild_cells",
+        modules
+      };
+    }
+
+    function ensureShardInfo() {
+      if (shardInfo !== undefined || shardInfoFailed) return shardInfo;
+      if (shardInfoPromise) return undefined;
+      if (!window.GridWildAssets?.pmtilesShardsInfo) {
+        shardInfo = null;
+        return shardInfo;
+      }
+
+      shardInfoPromise = window.GridWildAssets.pmtilesShardsInfo()
+        .then((info) => {
+          shardInfo = info?.shards?.length ? info : null;
+          return shardInfo;
+        })
+        .catch((err) => {
+          shardInfo = null;
+          shardInfoFailed = true;
+          shardInfoError = err?.message || String(err);
+          console.warn("GridWild PMTiles shard manifest unavailable.", err);
+          return null;
+        })
+        .finally(() => {
+          shardInfoPromise = null;
+          scheduleHeatRender();
+        });
+
+      return undefined;
+    }
+
+    function ensureShardSource(shard, modules) {
+      const id = shard?.id || shard?.file || shard?.url;
+      if (!id || !shard?.url) return null;
+      if (shardSources.has(id)) return shardSources.get(id);
+      if (shardSourceFailures.has(id)) return null;
+      if (shardSourcePending.has(id)) return null;
+
+      const assetInfo = {
+        ...shard,
+        id,
+        file: shard.file || null,
+        layer: shard.layer || shardInfo?.layer || "gridwild_cells",
+        payload: shard.payload || shardInfo?.payload || null
+      };
+
+      const job = openPMTilesSource(assetInfo, modules)
+        .then((info) => {
+          shardSources.set(id, info);
+          return info;
+        })
+        .catch((err) => {
+          shardSourceFailures.set(id, err?.message || String(err));
+          console.warn("GridWild PMTiles shard unavailable.", { shard: id, error: err });
+          return null;
+        })
+        .finally(() => {
+          shardSourcePending.delete(id);
+          scheduleHeatRender();
+        });
+
+      shardSourcePending.set(id, job);
+      return null;
+    }
+
+    function ensureSingleSource() {
+      if (sourceInfo || sourceFailed) return sourceInfo;
+      if (sourcePromise) return null;
+      if (!window.GridWildAssets?.pmtilesInfo) {
+        sourceFailed = true;
+        sourceError = "GridWildAssets.pmtilesInfo is unavailable.";
+        return null;
+      }
+
+      sourcePromise = (async () => {
+        const [assetInfo, modules] = await Promise.all([
+          window.GridWildAssets.pmtilesInfo(),
+          loadImports()
+        ]);
+        if (!modules) {
+          sourceFailed = true;
+          sourceError = "PMTiles decoder modules unavailable.";
+          return null;
+        }
+        if (!assetInfo?.url) {
+          sourceFailed = true;
+          sourceError = "PMTiles asset URL unavailable.";
+          console.warn("GridWild PMTiles heat source unavailable.", {
+            reason: sourceError,
+            assetInfo
+          });
+          return null;
+        }
+
+        sourceInfo = await openPMTilesSource({ ...assetInfo, id: "single" }, modules);
+        return sourceInfo;
+      })()
+        .catch((err) => {
+          sourceFailed = true;
+          sourceError = err?.message || String(err);
+          console.warn("GridWild PMTiles heat source unavailable.", err);
+          return null;
+        })
+        .finally(() => {
+          sourcePromise = null;
+          scheduleHeatRender();
+        });
+
+      return null;
+    }
+
+    function ensureSource() {
+      const shards = ensureShardInfo();
+      if (shards === undefined) return null;
+      if (shards?.shards?.length) return null;
+      return ensureSingleSource();
+    }
+
+    function warmShards() {
+      ensureShardInfo();
+    }
+
+    function touchTileCache(key, value) {
+      tileCache.set(key, value);
+      while (tileCache.size > PMTILES_HEAT_TILE_CACHE_MAX) {
+        const oldestKey = tileCache.keys().next().value;
+        tileCache.delete(oldestKey);
+      }
+    }
+
+    function readTileValue(value) {
+      return value === EMPTY_TILE ? null : value;
+    }
+
+    function bytesForPbf(data) {
+      if (!data) return null;
+      if (data instanceof Uint8Array) return data;
+      if (data instanceof ArrayBuffer) return new Uint8Array(data);
+      if (data.buffer instanceof ArrayBuffer) {
+        return new Uint8Array(data.buffer, data.byteOffset || 0, data.byteLength || undefined);
+      }
+      return null;
+    }
+
+    function decodeTile(data, z, x, y, info = sourceInfo) {
+      const bytes = bytesForPbf(data);
+      if (!bytes?.byteLength) return null;
+
+      const { VectorTileCtor, PbfCtor } = info.modules;
+      const vectorTile = new VectorTileCtor(new PbfCtor(bytes));
+      const layerName = vectorTile.layers?.[info.layer]
+        ? info.layer
+        : Object.keys(vectorTile.layers || {})[0];
+      const layer = layerName ? vectorTile.layers[layerName] : null;
+      if (!layer?.length) return null;
+
+      const features = [];
+      for (let i = 0; i < layer.length; i++) {
+        const feature = layer.feature(i);
+        if (feature?.properties) features.push(feature.properties);
+      }
+
+      decodedFeatures += features.length;
+      return { z, x, y, layerName, features };
+    }
+
+    function shardIntersectsView(shard) {
+      const bounds = shard?.bounds || shard?.bbox;
+      if (!bounds) return true;
+
+      const west = Number(bounds.west ?? bounds.min_lng ?? bounds[0]);
+      const south = Number(bounds.south ?? bounds.min_lat ?? bounds[1]);
+      const east = Number(bounds.east ?? bounds.max_lng ?? bounds[2]);
+      const north = Number(bounds.north ?? bounds.max_lat ?? bounds[3]);
+      if (![west, south, east, north].every(Number.isFinite)) return true;
+
+      const view = map.getBounds().pad(0.35);
+      return !(
+        east < view.getWest() ||
+        west > view.getEast() ||
+        north < view.getSouth() ||
+        south > view.getNorth()
+      );
+    }
+
+    function sourcesForView() {
+      const modules = imports || null;
+      if (!modules && !importsPromise) loadImports();
+
+      const shards = ensureShardInfo();
+      if (shards === undefined || (!modules && importsPromise)) {
+        return {
+          mode: "pending",
+          sources: [],
+          pending: 1,
+          failed: 0,
+          selectedShards: 0
+        };
+      }
+
+      if (shards?.shards?.length) {
+        const selected = shards.shards.filter(shardIntersectsView);
+        const sources = [];
+        let pending = modules ? 0 : selected.length;
+        let failed = 0;
+
+        if (modules) {
+          for (const shard of selected) {
+            const id = shard?.id || shard?.file || shard?.url;
+            const source = ensureShardSource(shard, modules);
+            if (source) {
+              sources.push(source);
+            } else if (id && shardSourceFailures.has(id)) {
+              failed += 1;
+            } else {
+              pending += 1;
+            }
+          }
+        }
+
+        return {
+          mode: "shards",
+          sources,
+          pending,
+          failed,
+          selectedShards: selected.length,
+          shardCount: shards.shards.length
+        };
+      }
+
+      const single = ensureSingleSource();
+      return {
+        mode: "single",
+        sources: single ? [single] : [],
+        pending: sourcePromise ? 1 : 0,
+        failed: sourceFailed ? 1 : 0,
+        selectedShards: 0,
+        shardCount: 0
+      };
+    }
+
+    function tileKey(info, z, x, y) {
+      return `${info?.id || info?.file || "single"}:${z}/${x}/${y}`;
+    }
+
+    function tileStatus(sourceOrZ, zOrX, xOrY, yOrOptions) {
+      const sourceArgIsInfo = sourceOrZ && typeof sourceOrZ === "object";
+      const info = sourceArgIsInfo ? sourceOrZ : ensureSource();
+      const z = sourceArgIsInfo ? zOrX : sourceOrZ;
+      const x = sourceArgIsInfo ? xOrY : zOrX;
+      const y = sourceArgIsInfo ? yOrOptions : xOrY;
+      if (!info?.source) return "missing";
+
+      const key = tileKey(info, z, x, y);
+      if (tileCache.has(key)) {
+        return tileCache.get(key) === EMPTY_TILE ? "empty" : "cached";
+      }
+      if (tilePending.has(key)) return "pending";
+      return "missing";
+    }
+
+    function tileFor(sourceOrZ, zOrX, xOrY, yOrOptions, maybeOptions = {}) {
+      const sourceArgIsInfo = sourceOrZ && typeof sourceOrZ === "object";
+      const info = sourceArgIsInfo ? sourceOrZ : ensureSource();
+      const z = sourceArgIsInfo ? zOrX : sourceOrZ;
+      const x = sourceArgIsInfo ? xOrY : zOrX;
+      const y = sourceArgIsInfo ? yOrOptions : xOrY;
+      const options = sourceArgIsInfo ? maybeOptions : yOrOptions || {};
+      if (!info?.source) return null;
+
+      const key = tileKey(info, z, x, y);
+      if (tileCache.has(key)) {
+        const cached = tileCache.get(key);
+        tileCache.delete(key);
+        tileCache.set(key, cached);
+        return readTileValue(cached);
+      }
+
+      if (tilePending.has(key)) return null;
+      if (options.fetch === false) return null;
+
+      requestedTiles++;
+      const job = info.source
+        .getZxy(z, x, y)
+        .then((result) => {
+          const tile = decodeTile(result?.data, z, x, y, info);
+          if (!tile?.features?.length) {
+            emptyTiles++;
+            touchTileCache(key, EMPTY_TILE);
+            return null;
+          }
+
+          loadedTiles++;
+          touchTileCache(key, tile);
+          return tile;
+        })
+        .catch((err) => {
+          failedTiles++;
+          console.warn("GridWild PMTiles heat tile unavailable.", err);
+          touchTileCache(key, EMPTY_TILE);
+          return null;
+        })
+        .finally(() => {
+          tilePending.delete(key);
+          scheduleHeatRender();
+        });
+
+      tilePending.set(key, job);
+      return null;
+    }
+
+    function recordRender(info) {
+      lastRender = {
+        ...(info || {}),
+        at: Date.now()
+      };
+    }
+
+    function invalidate(options = {}) {
+      tileCache.clear();
+      tilePending.clear();
+      requestedTiles = 0;
+      loadedTiles = 0;
+      emptyTiles = 0;
+      failedTiles = 0;
+      decodedFeatures = 0;
+      lastRender = null;
+
+      if (options.reloadSource === true) {
+        sourceInfo = null;
+        sourcePromise = null;
+        sourceFailed = false;
+        sourceError = null;
+        shardInfo = undefined;
+        shardInfoPromise = null;
+        shardInfoFailed = false;
+        shardInfoError = null;
+        shardSources.clear();
+        shardSourcePending.clear();
+        shardSourceFailures.clear();
+      }
+    }
+
+    function stats() {
+      if (shardInfo === undefined && !shardInfoPromise && !shardInfoFailed) {
+        ensureShardInfo();
+      }
+
+      return {
+        sourceLoaded: Boolean(sourceInfo) || shardSources.size > 0,
+        sourcePending: Boolean(sourcePromise) || Boolean(shardInfoPromise) || shardSourcePending.size > 0,
+        sourceFailed: sourceFailed || shardInfoFailed,
+        sourceError,
+        shardInfoLoaded: Boolean(shardInfo?.shards?.length),
+        shardInfoPending: Boolean(shardInfoPromise),
+        shardInfoFailed,
+        shardInfoError,
+        shardCount: shardInfo?.shards?.length || 0,
+        loadedShards: shardSources.size,
+        pendingShards: shardSourcePending.size,
+        failedShards: shardSourceFailures.size,
+        importsLoaded: Boolean(imports),
+        importsPending: Boolean(importsPromise),
+        importsFailed,
+        url: sourceInfo?.url || null,
+        file: sourceInfo?.file || null,
+        layer: sourceInfo?.layer || null,
+        payload: sourceInfo?.payload || null,
+        minZoom: sourceInfo?.minZoom ?? null,
+        maxZoom: sourceInfo?.maxZoom ?? null,
+        cachedTiles: tileCache.size,
+        pendingTiles: tilePending.size,
+        requestedTiles,
+        loadedTiles,
+        emptyTiles,
+        failedTiles,
+        decodedFeatures,
+        lastRender
+      };
+    }
+
+    return {
+      ensureSource,
+      warmShards,
+      sourcesForView,
+      tileStatus,
+      tileFor,
+      recordRender,
+      invalidate,
+      stats
+    };
+  })();
+
+window.getGridWildPMTilesHeatStats = function getGridWildPMTilesHeatStats() {
+  return window.GridWildPMTilesHeat?.stats?.() || null;
+};
+
+window.setTimeout(() => window.GridWildPMTilesHeat?.warmShards?.(), 0);
+
+window.getGridWildHeatDataStats = function getGridWildHeatDataStats() {
+  return {
+    staticHeatLoaded: hasStaticHeatmapCounts(),
+    staticHeatCells: hasStaticHeatmapCounts() ? window.__staticGridCounts.size : 0,
+    staticHeatPending: Boolean(staticHeatmapCsvPromise),
+    staticHeatDeferredForPMTiles: window.__gwStaticHeatDeferredForPMTiles === true,
+    render: {
+      attempts: gridHeatRenderAttempt,
+      scheduled: Boolean(gridHeatRaf),
+      throttled: Boolean(gridHeatThrottleTimer),
+      last: gridHeatLastRenderState
+    },
+    pmtiles: window.GridWildPMTilesHeat?.stats?.() || null,
+    coarse: window.GridWildCoarsePyramid?.stats?.() || null
+  };
+};
+
+window.forceGridWildHeatRender = function forceGridWildHeatRender() {
+  scheduleGridHeatCanvasRender({ force: true, reason: "manual-console" });
+  return window.getGridWildHeatDataStats();
 };
 
 function median(values) {
@@ -5502,7 +6151,6 @@ function canUsePrecomputedCoarseHeat() {
   if (!window.GridWildCoarsePyramid?.levelForBin) return false;
   if (window.GridWildMeOverlayFilter?.isActive?.()) return false;
   if (window.GridWildIconicOverlayFilter?.isActive?.()) return false;
-  if (window.GridWildPyriteLake?.isEnabled?.()) return false;
   return true;
 }
 
@@ -5668,6 +6316,15 @@ function renderPrecomputedCoarseHeatCanvas(options = {}) {
   if (!canUsePrecomputedCoarseHeat()) return null;
 
   const allowFetches = options.allowCoarseTileMisses !== false;
+  const requestedNewTileBudget = Number.parseInt(options.coarseNewTileBudget, 10);
+  let newTileBudget = allowFetches
+    ? Math.max(
+        0,
+        Number.isFinite(requestedNewTileBudget)
+          ? requestedNewTileBudget
+          : COARSE_PYRAMID_NEW_TILE_BUDGET
+      )
+    : 0;
   const requestedBinSize = getEffectiveCoarseHeatBinSize();
   const selected = selectPrecomputedCoarseLevel(requestedBinSize);
   if (selected.status === "pending") {
@@ -5707,14 +6364,38 @@ function renderPrecomputedCoarseHeatCanvas(options = {}) {
   const { level, binSize, view, range } = selected;
 
   const items = [];
+  let pendingTiles = 0;
+  let deferredTiles = 0;
+  let emptyTiles = 0;
+  let tileHits = 0;
+  let requestedMissingTiles = 0;
 
   for (let tileIx = range.startTileIx; tileIx <= range.endTileIx; tileIx++) {
     for (let tileIy = range.startTileIy; tileIy <= range.endTileIy; tileIy++) {
-      const tile = window.GridWildCoarsePyramid.tileFor(level, tileIx, tileIy, {
-        fetch: allowFetches
-      });
-      if (!tile) continue;
+      const status = window.GridWildCoarsePyramid.tileStatus?.(level, tileIx, tileIy) || "missing";
+      if (status === "empty") {
+        emptyTiles += 1;
+        continue;
+      }
 
+      const fetchTile = allowFetches && status === "missing" && newTileBudget > 0;
+      const tile = window.GridWildCoarsePyramid.tileFor(level, tileIx, tileIy, {
+        fetch: fetchTile
+      });
+      if (!tile) {
+        if (status === "pending" || fetchTile) {
+          pendingTiles += 1;
+        } else if (status === "missing") {
+          deferredTiles += 1;
+        }
+        if (fetchTile) {
+          newTileBudget -= 1;
+          requestedMissingTiles += 1;
+        }
+        continue;
+      }
+
+      tileHits += 1;
       for (const cell of tile.cells || []) {
         if (!precomputedCoarseCellInView(cell, view)) continue;
         const metrics = precomputedCoarseMetrics(cell);
@@ -5733,11 +6414,15 @@ function renderPrecomputedCoarseHeatCanvas(options = {}) {
 
   if (!items.length) {
     window.GridWildCoarsePyramid.recordRender?.({
-      status: "empty",
+      status: pendingTiles || deferredTiles ? "pending" : "empty",
       requestedBinSize,
       binSize,
       tileCount: range.tileCount,
-      pendingTiles: window.GridWildCoarsePyramid.stats?.()?.pendingTiles || 0
+      tileHits,
+      pendingTiles,
+      deferredTiles,
+      emptyTiles,
+      requestedMissingTiles
     });
     return 0;
   }
@@ -5773,6 +6458,11 @@ function renderPrecomputedCoarseHeatCanvas(options = {}) {
     painted,
     itemCount: items.length,
     tileCount: range.tileCount,
+    tileHits,
+    pendingTiles,
+    deferredTiles,
+    emptyTiles,
+    requestedMissingTiles,
     tileCols: range.tileCols,
     tileRows: range.tileRows
   });
@@ -6150,13 +6840,17 @@ function isGridHeatSettledEvent(evt) {
 
 function requestGridHeatCanvasFrame(options = {}) {
   const allowCoarseTileMisses = options.allowCoarseTileMisses !== false;
+  const allowPMTilesTileMisses = options.allowPMTilesTileMisses !== false;
 
   if (gridHeatRaf) {
-    if (allowCoarseTileMisses) {
+    if (allowCoarseTileMisses || !allowPMTilesTileMisses) {
       gridHeatPendingRenderOptions = {
         ...(gridHeatPendingRenderOptions || {}),
         ...options,
-        allowCoarseTileMisses: true
+        allowCoarseTileMisses:
+          Boolean(gridHeatPendingRenderOptions?.allowCoarseTileMisses) || allowCoarseTileMisses,
+        allowPMTilesTileMisses:
+          gridHeatPendingRenderOptions?.allowPMTilesTileMisses !== false && allowPMTilesTileMisses
       };
     }
     return;
@@ -6164,6 +6858,7 @@ function requestGridHeatCanvasFrame(options = {}) {
 
   gridHeatPendingRenderOptions = {
     allowCoarseTileMisses,
+    allowPMTilesTileMisses,
     reason: options.reason || null
   };
 
@@ -6186,6 +6881,7 @@ function scheduleGridHeatCanvasRender(evt) {
   if (evt?.type === "move") {
     requestGridHeatCanvasFrame({
       allowCoarseTileMisses: false,
+      allowPMTilesTileMisses: false,
       reason: "move-preview"
     });
     return;
@@ -6272,30 +6968,394 @@ function drawFineHeatItem(item, fogOn) {
   return true;
 }
 
+function canUsePMTilesHeat() {
+  if (window.__gwState?.pmtilesHeatEnabled === false) return false;
+  if (!window.GridWildPMTilesHeat?.tileFor) return false;
+  if (window.GridWildMeOverlayFilter?.isActive?.()) return false;
+  if (window.GridWildIconicOverlayFilter?.isActive?.()) return false;
+  if ((window.__gwState?.activeLens || "classic") !== "classic") return false;
+
+  const metric = window.__gwState?.heatMetric || "count";
+  return metric === "count" || metric === "species" || metric === "observers";
+}
+
+function getPMTilesHeatGateState() {
+  const metric = window.__gwState?.heatMetric || "count";
+  const activeLens = window.__gwState?.activeLens || "classic";
+  const reasons = [];
+
+  if (window.__gwState?.pmtilesHeatEnabled === false) reasons.push("pmtiles disabled");
+  if (!window.GridWildPMTilesHeat?.tileFor) reasons.push("pmtiles renderer unavailable");
+  if (window.GridWildMeOverlayFilter?.isActive?.()) reasons.push("me overlay active");
+  if (window.GridWildIconicOverlayFilter?.isActive?.()) reasons.push("iconic overlay active");
+  if (activeLens !== "classic") reasons.push(`active lens ${activeLens}`);
+  if (!(metric === "count" || metric === "species" || metric === "observers")) {
+    reasons.push(`unsupported metric ${metric}`);
+  }
+
+  return {
+    allowed: reasons.length === 0,
+    reasons,
+    activeLens,
+    metric,
+    meOverlayActive: Boolean(window.GridWildMeOverlayFilter?.isActive?.()),
+    iconicOverlayActive: Boolean(window.GridWildIconicOverlayFilter?.isActive?.()),
+    pyriteEnabled: Boolean(window.GridWildPyriteLake?.isEnabled?.())
+  };
+}
+
+function clampPMTilesTile(value, z) {
+  const max = Math.pow(2, z) - 1;
+  return Math.max(0, Math.min(max, Math.floor(value)));
+}
+
+function lngLatToPMTilesTile(lng, lat, z) {
+  const n = Math.pow(2, z);
+  const safeLat = Math.max(-85.05112878, Math.min(85.05112878, Number(lat) || 0));
+  const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
+  const latRad = (safeLat * Math.PI) / 180;
+  const x = ((safeLng + 180) / 360) * n;
+  const y = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
+  return {
+    x: clampPMTilesTile(x, z),
+    y: clampPMTilesTile(y, z)
+  };
+}
+
+function getPMTilesHeatZoom(info) {
+  const mapZoom = Math.round(Number(map.getZoom()) || 0);
+  const minZoom = Number.isFinite(info?.minZoom) ? info.minZoom : 0;
+  const maxZoom = Number.isFinite(info?.maxZoom) ? info.maxZoom : 19;
+  return Math.max(minZoom, Math.min(maxZoom, mapZoom));
+}
+
+function getPMTilesHeatTileRange(z) {
+  const bounds = map.getBounds().pad(0.25);
+  const nw = lngLatToPMTilesTile(bounds.getWest(), bounds.getNorth(), z);
+  const se = lngLatToPMTilesTile(bounds.getEast(), bounds.getSouth(), z);
+  const startX = Math.min(nw.x, se.x);
+  const endX = Math.max(nw.x, se.x);
+  const startY = Math.min(nw.y, se.y);
+  const endY = Math.max(nw.y, se.y);
+  const cols = Math.max(0, endX - startX + 1);
+  const rows = Math.max(0, endY - startY + 1);
+
+  return {
+    startX,
+    endX,
+    startY,
+    endY,
+    cols,
+    rows,
+    tileCount: cols * rows
+  };
+}
+
+function pmtilesHeatMetricsFromProperties(props) {
+  const ix = Math.round(Number(props?.ix));
+  const iy = Math.round(Number(props?.iy));
+  if (!Number.isFinite(ix) || !Number.isFinite(iy)) return null;
+
+  const count = Number(props.count) || 0;
+  if (count <= 0) return null;
+
+  const genera = Number(props.n_genera ?? props.genera ?? props.species) || 0;
+  const observers = Number(props.n_observers ?? props.observers) || 0;
+  const lastObserved = props.last_observed || null;
+  const medianLast10Observed = props.median_last10_observed || null;
+
+  return {
+    ix,
+    iy,
+    key: `${ix},${iy}`,
+    x: ix * GRID_SIZE_M,
+    y: iy * GRID_SIZE_M,
+    metrics: {
+      count,
+      total_count: count,
+      species: genera,
+      genera,
+      observers,
+      last_observed: lastObserved,
+      median_last10_observed: medianLast10Observed,
+      last_observed_ms: parseGridDateMs(lastObserved),
+      median_last10_observed_ms: parseGridDateMs(medianLast10Observed),
+      source: "pmtiles_fine_visual"
+    }
+  };
+}
+
+function drawPMTilesHeatItem(item, fogOn) {
+  const baseStyle = metricsToFill(item.metrics);
+  if (!baseStyle) return false;
+
+  const baseOpacity = Number(baseStyle.fillOpacity || 0.25);
+  const fog = coarseFogAdjustedOpacityForCell(item.key, baseOpacity, fogOn);
+  if (!fog.visible || fog.opacity <= 0) return false;
+
+  paintFineHeatMeterRect(
+    item.x,
+    item.y,
+    item.x + GRID_SIZE_M,
+    item.y + GRID_SIZE_M,
+    fog.opacity,
+    baseStyle.fillColor,
+    fog.documented
+  );
+  return true;
+}
+
+function renderPMTilesHeatCanvas(options = {}) {
+  if (!canUsePMTilesHeat()) return null;
+
+  const sourceSet = window.GridWildPMTilesHeat.sourcesForView?.();
+  const sources = sourceSet?.sources || [];
+  if (!sources.length) {
+    const stats = window.GridWildPMTilesHeat.stats?.() || {};
+    window.GridWildPMTilesHeat.recordRender?.({
+      status: stats.sourceFailed || stats.importsFailed ? "unavailable" : "pending",
+      mode: sourceSet?.mode || null,
+      pendingSources: sourceSet?.pending || 0,
+      selectedShards: sourceSet?.selectedShards || 0
+    });
+    return stats.sourceFailed || stats.importsFailed ? null : 0;
+  }
+
+  const sourceRanges = sources.map((source) => ({
+    source,
+    z: getPMTilesHeatZoom(source)
+  }));
+  for (const item of sourceRanges) {
+    item.range = getPMTilesHeatTileRange(item.z);
+  }
+  const totalTileCount = sourceRanges.reduce((sum, item) => sum + (item.range.tileCount || 0), 0);
+  if (!totalTileCount || totalTileCount > PMTILES_HEAT_TILE_BUDGET) {
+    window.GridWildPMTilesHeat.recordRender?.({
+      status: "overBudget",
+      reason: "tile budget",
+      mode: sourceSet?.mode || null,
+      sourceCount: sources.length,
+      selectedShards: sourceSet?.selectedShards || 0,
+      totalTileCount,
+      ranges: sourceRanges.map(({ source, z, range }) => ({
+        source: source.id || source.file || "single",
+        z,
+        range
+      }))
+    });
+    return null;
+  }
+
+  const allowFetches = options.allowPMTilesTileMisses !== false;
+  const startupElapsed = performance.now() - GRIDWILD_BOOT_STARTED_AT;
+  const startupGraceActive = startupElapsed < PMTILES_HEAT_STARTUP_GRACE_MS;
+  if (startupGraceActive && !window.__gwPMTilesStartupResumeTimer) {
+    window.__gwPMTilesStartupResumeTimer = window.setTimeout(() => {
+      window.__gwPMTilesStartupResumeTimer = null;
+      scheduleGridHeatCanvasRender({ force: true, reason: "pmtiles-startup-resume" });
+    }, Math.max(250, PMTILES_HEAT_STARTUP_GRACE_MS - startupElapsed + 50));
+  }
+  const requestedNewTileBudget = Number.parseInt(options.pmtilesNewTileBudget, 10);
+  let newTileBudget = startupGraceActive
+    ? 0
+    : Math.max(
+        0,
+        Number.isFinite(requestedNewTileBudget)
+          ? requestedNewTileBudget
+          : PMTILES_HEAT_NEW_TILE_BUDGET
+      );
+  const items = [];
+  const seenCells = new Set();
+  let pendingTiles = 0;
+  let deferredTiles = 0;
+  let emptyTiles = 0;
+  let tileHits = 0;
+  let featureCount = 0;
+  let requestedMissingTiles = 0;
+
+  for (const { source, z, range } of sourceRanges) {
+    for (let x = range.startX; x <= range.endX; x++) {
+      for (let y = range.startY; y <= range.endY; y++) {
+        const status = window.GridWildPMTilesHeat.tileStatus?.(source, z, x, y) || "missing";
+        if (status === "empty") {
+          emptyTiles += 1;
+          continue;
+        }
+
+        const fetchTile = allowFetches && status === "missing" && newTileBudget > 0;
+        const tile = window.GridWildPMTilesHeat.tileFor(source, z, x, y, {
+          fetch: fetchTile
+        });
+        if (!tile) {
+          if (status === "pending" || fetchTile) {
+            pendingTiles += 1;
+          } else if (status === "missing") {
+            deferredTiles += 1;
+          }
+          if (fetchTile) {
+            newTileBudget -= 1;
+            requestedMissingTiles += 1;
+          }
+          continue;
+        }
+
+        tileHits += 1;
+        for (const props of tile.features || []) {
+          featureCount += 1;
+          if (featureCount > PMTILES_HEAT_FEATURE_BUDGET) {
+            window.GridWildPMTilesHeat.recordRender?.({
+              status: "overBudget",
+              reason: "feature budget",
+              mode: sourceSet?.mode || null,
+              sourceCount: sources.length,
+              featureCount
+            });
+            return null;
+          }
+
+          const item = pmtilesHeatMetricsFromProperties(props);
+          if (!item || seenCells.has(item.key)) continue;
+          seenCells.add(item.key);
+
+          const heatValue = getHeatValueForCell(item.metrics);
+          if (heatValue <= 0) continue;
+          items.push({ ...item, heatValue });
+        }
+      }
+    }
+  }
+
+  if (!items.length) {
+    window.GridWildPMTilesHeat.recordRender?.({
+      status: pendingTiles || deferredTiles ? "pending" : "empty",
+      mode: sourceSet?.mode || null,
+      sourceCount: sources.length,
+      selectedShards: sourceSet?.selectedShards || 0,
+      totalTileCount,
+      tileHits,
+      pendingTiles,
+      deferredTiles,
+      emptyTiles,
+      requestedMissingTiles,
+      startupGraceActive
+    });
+    return 0;
+  }
+
+  const heatZStats = isHeatZThresholdEnabled()
+    ? buildZStats(items.map((item) => item.heatValue))
+    : null;
+  const heatMorphologyMask = isHeatMorphologyEnabled()
+    ? buildThresholdedHeatMorphologyMask(items, heatZStats)
+    : null;
+  const fogOn = window.__gwState?.showFog ?? false;
+  let painted = 0;
+
+  for (const item of items) {
+    if (
+      heatMorphologyMask
+        ? !heatMorphologyMask.has(item.key)
+        : !passesHeatZThreshold(item.heatValue, heatZStats)
+    ) {
+      continue;
+    }
+
+    if (drawPMTilesHeatItem(item, fogOn)) painted++;
+  }
+
+  gridHeatCtx.globalAlpha = 1;
+  window.GridWildPMTilesHeat.recordRender?.({
+    status: "painted",
+    mode: sourceSet?.mode || null,
+    sourceCount: sources.length,
+    selectedShards: sourceSet?.selectedShards || 0,
+    totalTileCount,
+    tileHits,
+    pendingTiles,
+    deferredTiles,
+    emptyTiles,
+    requestedMissingTiles,
+    startupGraceActive,
+    itemCount: items.length,
+    painted
+  });
+  return painted;
+}
+
 function renderGridHeatCanvas() {
   const renderOptions = gridHeatPendingRenderOptions || {};
   gridHeatPendingRenderOptions = null;
   gridHeatRaf = null;
   gridHeatLastRenderAt = performance.now();
+  gridHeatRenderAttempt += 1;
 
   ensureGridHeatCanvas();
   resizeGridHeatCanvas();
   syncCoarseHeatControls();
 
-  gridHeatCtx.clearRect(0, 0, gridHeatCanvasLayout.width, gridHeatCanvasLayout.height);
-
   const heatOn = window.__gwFilters?.showHeat ?? true;
-  if (!heatOn) return;
-
   const counts = window.__staticGridCounts;
   const pyriteEnabled = window.GridWildPyriteLake?.isEnabled?.() === true;
   const coarseHeatEnabled = isCoarseHeatEnabled();
-  if (!(counts instanceof Map) || (counts.size === 0 && !pyriteEnabled && !coarseHeatEnabled))
-    return;
+  const pmtilesGate = getPMTilesHeatGateState();
+  const pmtilesHeatEnabled = pmtilesGate.allowed;
+  const staticCountsReady = counts instanceof Map;
+  const hasStaticCounts = staticCountsReady && counts.size > 0;
 
-  if (coarseHeatEnabled) {
-    renderCoarseMedianHeatCanvas(renderOptions);
+  gridHeatLastRenderState = {
+    status: "entered",
+    attempt: gridHeatRenderAttempt,
+    at: Date.now(),
+    reason: renderOptions.reason || null,
+    heatOn,
+    canvasDisplay: gridHeatCanvas?.style?.display || "",
+    mapZoom: Number(map.getZoom?.()) || null,
+    coarseHeatEnabled,
+    pmtilesHeatEnabled,
+    pmtilesGate,
+    pyriteEnabled,
+    staticCountsReady,
+    staticCountSize: hasStaticCounts ? counts.size : 0,
+    staticHeatDeferredForPMTiles: window.__gwStaticHeatDeferredForPMTiles === true
+  };
+
+  if (!heatOn) {
+    gridHeatCtx.clearRect(0, 0, gridHeatCanvasLayout.width, gridHeatCanvasLayout.height);
+    gridHeatLastRenderState.status = "heat-off";
     return;
+  }
+
+  gridHeatCtx.clearRect(0, 0, gridHeatCanvasLayout.width, gridHeatCanvasLayout.height);
+
+  if (!hasStaticCounts && !pyriteEnabled && !coarseHeatEnabled && !pmtilesHeatEnabled) {
+    ensureStaticHeatmapCsvLoaded("heat fallback").catch((err) =>
+      console.warn("GridWild static heat fallback unavailable.", err)
+    );
+    gridHeatLastRenderState.status = "no-render-source";
+    return;
+  }
+
+  let coarsePainted = null;
+  if (coarseHeatEnabled) {
+    coarsePainted = renderCoarseMedianHeatCanvas(renderOptions);
+    gridHeatLastRenderState.status = "coarse";
+    gridHeatLastRenderState.painted = coarsePainted;
+    if (coarsePainted !== 0 || !pmtilesHeatEnabled) return;
+  }
+
+  if (pmtilesHeatEnabled) {
+    const pmtilesPainted = renderPMTilesHeatCanvas(renderOptions);
+    if (pmtilesPainted !== null) {
+      gridHeatLastRenderState.status = coarsePainted === 0 ? "coarse-pmtiles-fallback" : "pmtiles";
+      gridHeatLastRenderState.painted = pmtilesPainted;
+      if (coarsePainted === 0) gridHeatLastRenderState.coarsePainted = coarsePainted;
+      return;
+    }
+    if (!hasStaticCounts && !pyriteEnabled) {
+      gridHeatLastRenderState.status = "pmtiles-no-fallback";
+      gridHeatLastRenderState.painted = pmtilesPainted;
+      return;
+    }
   }
 
   const fogOn = window.__gwState?.showFog ?? false;
@@ -6325,6 +7385,7 @@ function renderGridHeatCanvas() {
   const heatMorphologyMask = heatMorphologyActive
     ? buildThresholdedHeatMorphologyMask(meHeatItems || regularHeatItems || [], heatZStats)
     : null;
+  let staticPainted = 0;
 
   if (meHeatActive) {
     for (const item of meHeatItems || meHeatEntries) {
@@ -6338,20 +7399,24 @@ function renderGridHeatCanvas() {
       )
         continue;
 
-      drawFineHeatItem(item, fogOn);
+      if (drawFineHeatItem(item, fogOn)) staticPainted++;
     }
 
     gridHeatCtx.globalAlpha = 1;
+    gridHeatLastRenderState.status = "static-me-overlay";
+    gridHeatLastRenderState.painted = staticPainted;
     return;
   }
 
   if (regularHeatItems) {
     for (const item of regularHeatItems) {
       if (heatMorphologyMask && !heatMorphologyMask.has(item.key)) continue;
-      drawFineHeatItem(item, fogOn);
+      if (drawFineHeatItem(item, fogOn)) staticPainted++;
     }
 
     gridHeatCtx.globalAlpha = 1;
+    gridHeatLastRenderState.status = "static-morphology";
+    gridHeatLastRenderState.painted = staticPainted;
     return;
   }
 
@@ -6418,10 +7483,13 @@ function renderGridHeatCanvas() {
         baseStyle.fillColor,
         fogOn && fogState?.state === "documented"
       );
+      staticPainted++;
     }
   }
 
   gridHeatCtx.globalAlpha = 1;
+  gridHeatLastRenderState.status = "static";
+  gridHeatLastRenderState.painted = staticPainted;
 }
 
 function renderCoarseMedianHeatCanvasDirect() {
@@ -6505,6 +7573,10 @@ function renderCoarseMedianHeatCanvasDirect() {
 function renderCoarseMedianHeatCanvas(options = {}) {
   const precomputedPainted = renderPrecomputedCoarseHeatCanvas(options);
   if (precomputedPainted !== null) return precomputedPainted;
+
+  if (!hasStaticHeatmapCounts() && window.__gwStaticHeatDeferredForPMTiles === true) {
+    return 0;
+  }
 
   if (options.allowCoarseTileMisses === false) {
     if (isHeatZThresholdEnabled() || isHeatMorphologyEnabled()) return 0;

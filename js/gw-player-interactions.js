@@ -44,6 +44,10 @@
     return Boolean(window.GridWildAPI?.getPlayerId?.() && window.GridWildAPI?.getSessionToken?.());
   }
 
+  function isOnlineGameplayReady() {
+    return window.GridWildOnline?.isReady?.() === true || window.__gwState?.bootstrapReady === true;
+  }
+
   function storageKey(base) {
     try {
       const playerId = localStorage.getItem("gwPlayerId");
@@ -1119,7 +1123,7 @@
     const questAssignments = state.questAssignments || [];
     const mutedQuestAssignments = state.mutedQuestAssignments || [];
 
-    if (!isSignedIn() || !window.GridWildAPI?.getPlayerInteractions) {
+    if (!isOnlineGameplayReady() || !isSignedIn() || !window.GridWildAPI?.getPlayerInteractions) {
       state = {
         notifications: [],
         conversations: [],
@@ -1188,14 +1192,8 @@
     window.GridWildAvatarInspection?.refreshOpen?.();
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") refresh({ quiet: true });
+    if (document.visibilityState === "visible" && refreshTimer) refresh({ quiet: true });
   });
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", startPolling, { once: true });
-  } else {
-    startPolling();
-  }
 
   window.GridWildPlayerInteractions = {
     bindAvatarActions,

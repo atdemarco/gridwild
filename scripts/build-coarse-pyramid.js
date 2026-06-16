@@ -5,7 +5,7 @@ const zlib = require("node:zlib");
 
 const DEFAULT_WORLD_DIR = "C:\\Users\\ad1470\\Desktop\\gridwild\\world";
 const DEFAULT_PRODUCT = "dc_va_served_v001";
-const DEFAULT_LEVELS = [2, 4, 6, 8, 10, 16, 32, 64];
+const DEFAULT_LEVELS = [16, 32, 64, 128];
 const DEFAULT_TILE_BINS = 32;
 const DEFAULT_TOP_TAXA = 16;
 const DEFAULT_TOP_OBSERVERS = 12;
@@ -151,12 +151,135 @@ async function readCsvRows(file, onRow) {
   return rowCount;
 }
 
+async function readCsv(file) {
+  const rows = [];
+  await readCsvRows(file, (row) => {
+    rows.push(row);
+  });
+  return rows;
+}
+
 function coarseAnchor(value, binSize) {
   return Math.floor(Number(value) / binSize) * binSize;
 }
 
 function cellKey(ix, iy) {
   return `${ix},${iy}`;
+}
+
+function superKey(superIx, superIy) {
+  return `${superIx},${superIy}`;
+}
+
+function superKeyFromRow(row) {
+  return {
+    ix: int(row.super_ix),
+    iy: int(row.super_iy),
+    key: superKey(int(row.super_ix), int(row.super_iy))
+  };
+}
+
+function compareSuperKeys(a, b) {
+  if (a.ix !== b.ix) return a.ix - b.ix;
+  return a.iy - b.iy;
+}
+
+class CsvSuperGroupCursor {
+  constructor(file) {
+    this.file = file;
+    this.stream = fs.createReadStream(file, { encoding: "utf8" });
+    this.rl = readline.createInterface({ input: this.stream, crlfDelay: Infinity });
+    this.iterator = this.rl[Symbol.asyncIterator]();
+    this.header = null;
+    this.pendingRow = null;
+    this.pendingGroup = null;
+    this.done = false;
+  }
+
+  async readRow() {
+    if (this.done) return null;
+    if (this.pendingRow) {
+      const row = this.pendingRow;
+      this.pendingRow = null;
+      return row;
+    }
+
+    for (;;) {
+      let next;
+      try {
+        next = await this.iterator.next();
+      } catch (err) {
+        if (err?.code === "ERR_USE_AFTER_CLOSE") {
+          this.done = true;
+          return null;
+        }
+        throw err;
+      }
+      if (next.done) {
+        this.done = true;
+        return null;
+      }
+
+      const line = String(next.value || "").replace(/\r$/, "");
+      if (!line.trim()) continue;
+
+      if (!this.header) {
+        this.header = parseCsvLine(line).map((name) => name.trim());
+        continue;
+      }
+
+      const fields = parseCsvLine(line);
+      const row = {};
+      this.header.forEach((name, index) => {
+        row[name] = fields[index] ?? "";
+      });
+      return row;
+    }
+  }
+
+  async readGroup() {
+    const first = await this.readRow();
+    if (!first) return null;
+
+    const key = superKeyFromRow(first);
+    const rows = [first];
+
+    for (;;) {
+      const row = await this.readRow();
+      if (!row) break;
+      const rowKey = superKeyFromRow(row);
+      if (rowKey.key !== key.key) {
+        this.pendingRow = row;
+        break;
+      }
+      rows.push(row);
+    }
+
+    return { key, rows };
+  }
+
+  async groupFor(expectedKey) {
+    for (;;) {
+      if (!this.pendingGroup) this.pendingGroup = await this.readGroup();
+      if (!this.pendingGroup) return [];
+
+      const cmp = compareSuperKeys(this.pendingGroup.key, expectedKey);
+      if (cmp < 0) {
+        this.pendingGroup = null;
+        continue;
+      }
+      if (cmp > 0) return [];
+
+      const rows = this.pendingGroup.rows;
+      this.pendingGroup = null;
+      return rows;
+    }
+  }
+
+  close() {
+    this.rl.close();
+    this.stream.destroy();
+  }
 }
 
 function addCount(map, key, count) {
@@ -361,6 +484,133 @@ function gzipBytes(file) {
   return zlib.gzipSync(fs.readFileSync(file), { level: 6 }).length;
 }
 
+class TileSetWriter {
+  constructor({ binSize, pyramidDir, manifest, options }) {
+    this.binSize = binSize;
+    this.pyramidDir = pyramidDir;
+    this.manifest = manifest;
+    this.options = options;
+    this.tileFineCells = binSize * options.tileBins;
+    this.levelDir = path.join(pyramidDir, `bin_${binSize}`);
+    this.tiles = new Map();
+    ensureDir(this.levelDir);
+  }
+
+  metaForTile(tileIx, tileIy) {
+    const key = `${tileIx},${tileIy}`;
+    if (this.tiles.has(key)) return this.tiles.get(key);
+
+    const relativeFile = path
+      .join(PYRAMID_DIR, `bin_${this.binSize}`, `tile_${tileIx}_${tileIy}.json`)
+      .replace(/\\/g, "/");
+    const absoluteFile = path.join(path.dirname(this.pyramidDir), relativeFile);
+    const meta = {
+      key,
+      tile_ix: tileIx,
+      tile_iy: tileIy,
+      file: relativeFile,
+      absoluteFile,
+      n_cells: 0,
+      observation_count: 0,
+      min_ix: Number.POSITIVE_INFINITY,
+      min_iy: Number.POSITIVE_INFINITY,
+      max_ix: Number.NEGATIVE_INFINITY,
+      max_iy: Number.NEGATIVE_INFINITY
+    };
+
+    ensureDir(path.dirname(absoluteFile));
+    fs.writeFileSync(
+      absoluteFile,
+      `${JSON.stringify({
+        schema_version: "coarse-pyramid-tile.v1",
+        build_id: this.manifest.build_id,
+        source_schema_version: this.manifest.schema_version,
+        bin_size: this.binSize,
+        tile_bins: this.options.tileBins,
+        tile_fine_cells: this.tileFineCells,
+        tile_ix: tileIx,
+        tile_iy: tileIy
+      }).replace(/}$/, ',"cells":[')}`
+    );
+
+    this.tiles.set(key, meta);
+    return meta;
+  }
+
+  appendCells(cells) {
+    const byTile = new Map();
+    for (const cell of cells) {
+      const key = tileKeyForCell(cell, this.tileFineCells);
+      if (!byTile.has(key)) byTile.set(key, []);
+      byTile.get(key).push(cell);
+    }
+
+    for (const [key, tileCells] of byTile.entries()) {
+      const [tileIx, tileIy] = key.split(",").map(Number);
+      const meta = this.metaForTile(tileIx, tileIy);
+      const prefix = meta.n_cells > 0 ? "," : "";
+      fs.appendFileSync(
+        meta.absoluteFile,
+        `${prefix}${tileCells.map((cell) => JSON.stringify(cell)).join(",")}`
+      );
+
+      for (const cell of tileCells) {
+        meta.n_cells += 1;
+        meta.observation_count += cell.total_count;
+        meta.min_ix = Math.min(meta.min_ix, cell.ix);
+        meta.min_iy = Math.min(meta.min_iy, cell.iy);
+        meta.max_ix = Math.max(meta.max_ix, cell.ix + this.binSize - 1);
+        meta.max_iy = Math.max(meta.max_iy, cell.iy + this.binSize - 1);
+      }
+    }
+  }
+
+  finalize() {
+    const tileManifest = [];
+    let totalBytes = 0;
+    let totalGzipBytes = 0;
+    let largestTileBytes = 0;
+    let largestTileFile = "";
+    let totalObservationCount = 0;
+
+    for (const meta of this.tiles.values()) {
+      fs.appendFileSync(meta.absoluteFile, `],"cell_count":${meta.n_cells}}\n`);
+      const bytes = fs.statSync(meta.absoluteFile).size;
+      const gzBytes = gzipBytes(meta.absoluteFile);
+      totalBytes += bytes;
+      totalGzipBytes += gzBytes;
+      totalObservationCount += meta.observation_count;
+      if (bytes > largestTileBytes) {
+        largestTileBytes = bytes;
+        largestTileFile = meta.file;
+      }
+
+      tileManifest.push({
+        tile_id: `bin_${this.binSize}_${meta.tile_ix}_${meta.tile_iy}`,
+        tile_ix: meta.tile_ix,
+        tile_iy: meta.tile_iy,
+        file: meta.file,
+        n_cells: meta.n_cells,
+        bbox_grid: [meta.min_ix, meta.min_iy, meta.max_ix, meta.max_iy],
+        observation_count: meta.observation_count,
+        bytes,
+        gzip_bytes: gzBytes
+      });
+    }
+
+    tileManifest.sort((a, b) => a.tile_ix - b.tile_ix || a.tile_iy - b.tile_iy);
+
+    return {
+      tileManifest,
+      totalBytes,
+      totalGzipBytes,
+      largestTileBytes,
+      largestTileFile,
+      totalObservationCount
+    };
+  }
+}
+
 function clearGeneratedPyramid(assetDir) {
   const target = path.resolve(assetDir, PYRAMID_DIR);
   const root = path.resolve(assetDir);
@@ -374,145 +624,120 @@ async function buildLevel({ binSize, stageDir, pyramidDir, manifest, options }) 
   const squareFile = path.join(stageDir, "square_summary.csv");
   const taxaFile = path.join(stageDir, "square_taxa.csv");
   const observersFile = path.join(stageDir, "square_observers.csv");
-  const cells = new Map();
-  const allowedFineKeys = options.limitSquares > 0 ? new Set() : null;
+  const superFile = path.join(stageDir, "superchunks.csv");
+  const superRows = await readCsv(superFile);
+  const squareCursor = new CsvSuperGroupCursor(squareFile);
+  const taxaCursor = new CsvSuperGroupCursor(taxaFile);
+  const observerCursor = new CsvSuperGroupCursor(observersFile);
+  const tileWriter = new TileSetWriter({ binSize, pyramidDir, manifest, options });
+  let levelCellCount = 0;
+  let remainingSquares = options.limitSquares > 0 ? options.limitSquares : Number.POSITIVE_INFINITY;
 
-  console.log(`Building coarse level ${binSize} from square summaries...`);
-  await readCsvRows(squareFile, (row, index) => {
-    if (options.limitSquares > 0 && index > options.limitSquares) return;
-    const ix = int(row.ix);
-    const iy = int(row.iy);
-    const fineKey = cellKey(ix, iy);
-    if (allowedFineKeys) allowedFineKeys.add(fineKey);
-    const cell = getCell(cells, ix, iy, binSize);
-    const count = int(row.count);
-    const nGenera = int(row.n_genera);
-    const nObservers = int(row.n_observers);
-    const nCaptive = int(row.n_captive);
-    const lastMs = parseDateMs(row.last_observed);
-    const medianMs = parseDateMs(row.median_last10_observed);
+  console.log(`Building coarse level ${binSize} by superchunk...`);
 
-    cell.nActiveSquares += 1;
-    cell.total_count += count;
-    cell.count_square_sum += count;
-    cell.square_taxa_sum += nGenera;
-    cell.observer_square_sum += nObservers;
-    cell.n_captive_sum += nCaptive;
-    cell.min_ix = Math.min(cell.min_ix, ix);
-    cell.min_iy = Math.min(cell.min_iy, iy);
-    cell.max_ix = Math.max(cell.max_ix, ix);
-    cell.max_iy = Math.max(cell.max_iy, iy);
-    cell.last_observed_ms = Math.max(cell.last_observed_ms, lastMs);
-    if (medianMs) {
-      cell.median_last10_observed_ms_sum += medianMs;
-      cell.median_last10_observed_ms_n += 1;
+  try {
+    for (const superRow of superRows) {
+      if (!(remainingSquares > 0)) break;
+
+      const expectedKey = superKeyFromRow(superRow);
+      let squareRows = await squareCursor.groupFor(expectedKey);
+      const taxaRows = await taxaCursor.groupFor(expectedKey);
+      const observerRows = await observerCursor.groupFor(expectedKey);
+
+      if (!squareRows.length) continue;
+      if (Number.isFinite(remainingSquares) && squareRows.length > remainingSquares) {
+        squareRows = squareRows.slice(0, remainingSquares);
+      }
+      remainingSquares -= squareRows.length;
+
+      const cells = new Map();
+      const allowedFineKeys = new Set();
+
+      for (const row of squareRows) {
+        const ix = int(row.ix);
+        const iy = int(row.iy);
+        const fineKey = cellKey(ix, iy);
+        allowedFineKeys.add(fineKey);
+        const cell = getCell(cells, ix, iy, binSize);
+        const count = int(row.count);
+        const nGenera = int(row.n_genera);
+        const nObservers = int(row.n_observers);
+        const nCaptive = int(row.n_captive);
+        const lastMs = parseDateMs(row.last_observed);
+        const medianMs = parseDateMs(row.median_last10_observed);
+
+        cell.nActiveSquares += 1;
+        cell.total_count += count;
+        cell.count_square_sum += count;
+        cell.square_taxa_sum += nGenera;
+        cell.observer_square_sum += nObservers;
+        cell.n_captive_sum += nCaptive;
+        cell.min_ix = Math.min(cell.min_ix, ix);
+        cell.min_iy = Math.min(cell.min_iy, iy);
+        cell.max_ix = Math.max(cell.max_ix, ix);
+        cell.max_iy = Math.max(cell.max_iy, iy);
+        cell.last_observed_ms = Math.max(cell.last_observed_ms, lastMs);
+        if (medianMs) {
+          cell.median_last10_observed_ms_sum += medianMs;
+          cell.median_last10_observed_ms_n += 1;
+        }
+      }
+
+      for (const row of taxaRows) {
+        const ix = int(row.ix);
+        const iy = int(row.iy);
+        if (!allowedFineKeys.has(cellKey(ix, iy))) continue;
+        const cell = cells.get(cellKey(coarseAnchor(ix, binSize), coarseAnchor(iy, binSize)));
+        if (!cell) continue;
+        const count = int(row.count);
+
+        cell.taxon_row_count += 1;
+        for (let i = 0; i < 12; i += 1) {
+          cell.month_totals[i] += int(row[`m${String(i + 1).padStart(2, "0")}`]);
+        }
+        addCount(cell.iconic_counts, row.iconic_taxon_name || "Unknown", count);
+        addCount(cell.served_rank_counts, row.served_rank || "taxon", count);
+        addCount(cell.policy_action_counts, row.policy_action || "unknown", count);
+        addCount(cell.playable_group_counts, row.playable_group_key || "unmapped", count);
+        updateTopTaxa(cell, row);
+      }
+
+      for (const row of observerRows) {
+        const ix = int(row.ix);
+        const iy = int(row.iy);
+        if (!allowedFineKeys.has(cellKey(ix, iy))) continue;
+        const cell = cells.get(cellKey(coarseAnchor(ix, binSize), coarseAnchor(iy, binSize)));
+        if (!cell) continue;
+        updateTopObserver(cell, row);
+      }
+
+      const finalized = Array.from(cells.values()).map((cell) => finalizeCell(cell, options));
+      levelCellCount += finalized.length;
+      tileWriter.appendCells(finalized);
     }
-  });
-
-  console.log(`Aggregating coarse level ${binSize} taxon summaries...`);
-  await readCsvRows(taxaFile, (row) => {
-    const ix = int(row.ix);
-    const iy = int(row.iy);
-    if (allowedFineKeys && !allowedFineKeys.has(cellKey(ix, iy))) return;
-    const cell = cells.get(cellKey(coarseAnchor(ix, binSize), coarseAnchor(iy, binSize)));
-    if (!cell) return;
-    const count = int(row.count);
-
-    cell.taxon_row_count += 1;
-    for (let i = 0; i < 12; i += 1) {
-      cell.month_totals[i] += int(row[`m${String(i + 1).padStart(2, "0")}`]);
-    }
-    addCount(cell.iconic_counts, row.iconic_taxon_name || "Unknown", count);
-    addCount(cell.served_rank_counts, row.served_rank || "taxon", count);
-    addCount(cell.policy_action_counts, row.policy_action || "unknown", count);
-    addCount(cell.playable_group_counts, row.playable_group_key || "unmapped", count);
-    updateTopTaxa(cell, row);
-  });
-
-  console.log(`Aggregating coarse level ${binSize} observer summaries...`);
-  await readCsvRows(observersFile, (row) => {
-    const ix = int(row.ix);
-    const iy = int(row.iy);
-    if (allowedFineKeys && !allowedFineKeys.has(cellKey(ix, iy))) return;
-    const cell = cells.get(cellKey(coarseAnchor(ix, binSize), coarseAnchor(iy, binSize)));
-    if (!cell) return;
-    updateTopObserver(cell, row);
-  });
-
-  const finalized = Array.from(cells.values()).map((cell) => finalizeCell(cell, options));
-  const tileFineCells = binSize * options.tileBins;
-  const tiles = new Map();
-  for (const cell of finalized) {
-    const key = tileKeyForCell(cell, tileFineCells);
-    if (!tiles.has(key)) tiles.set(key, []);
-    tiles.get(key).push(cell);
+  } finally {
+    squareCursor.close();
+    taxaCursor.close();
+    observerCursor.close();
   }
 
-  const levelDir = path.join(pyramidDir, `bin_${binSize}`);
-  ensureDir(levelDir);
-
-  const tileManifest = [];
-  let totalBytes = 0;
-  let totalGzipBytes = 0;
-  let largestTileBytes = 0;
-  let largestTileFile = "";
-
-  for (const [tileKey, tileCells] of tiles.entries()) {
-    const [tileIx, tileIy] = tileKey.split(",").map(Number);
-    tileCells.sort((a, b) => a.ix - b.ix || a.iy - b.iy);
-    const relativeFile = path
-      .join(PYRAMID_DIR, `bin_${binSize}`, `tile_${tileIx}_${tileIy}.json`)
-      .replace(/\\/g, "/");
-    const absoluteFile = path.join(path.dirname(pyramidDir), relativeFile);
-    const tile = {
-      schema_version: "coarse-pyramid-tile.v1",
-      build_id: manifest.build_id,
-      source_schema_version: manifest.schema_version,
-      bin_size: binSize,
-      tile_bins: options.tileBins,
-      tile_fine_cells: tileFineCells,
-      tile_ix: tileIx,
-      tile_iy: tileIy,
-      cell_count: tileCells.length,
-      cells: tileCells
-    };
-    writeJson(absoluteFile, tile);
-    const bytes = fs.statSync(absoluteFile).size;
-    const gzBytes = gzipBytes(absoluteFile);
-    totalBytes += bytes;
-    totalGzipBytes += gzBytes;
-    if (bytes > largestTileBytes) {
-      largestTileBytes = bytes;
-      largestTileFile = relativeFile;
-    }
-    tileManifest.push({
-      tile_id: `bin_${binSize}_${tileIx}_${tileIy}`,
-      tile_ix: tileIx,
-      tile_iy: tileIy,
-      file: relativeFile,
-      n_cells: tileCells.length,
-      bbox_grid: [
-        Math.min(...tileCells.map((cell) => cell.ix)),
-        Math.min(...tileCells.map((cell) => cell.iy)),
-        Math.max(...tileCells.map((cell) => cell.ix + binSize - 1)),
-        Math.max(...tileCells.map((cell) => cell.iy + binSize - 1))
-      ],
-      observation_count: tileCells.reduce((sum, cell) => sum + cell.total_count, 0),
-      bytes,
-      gzip_bytes: gzBytes
-    });
-  }
-
-  tileManifest.sort((a, b) => a.tile_ix - b.tile_ix || a.tile_iy - b.tile_iy);
+  const {
+    tileManifest,
+    totalBytes,
+    totalGzipBytes,
+    largestTileBytes,
+    largestTileFile,
+    totalObservationCount
+  } = tileWriter.finalize();
 
   return {
     bin_size: binSize,
     aggregation: "mean_display_plus_summary_totals",
     tile_bins: options.tileBins,
-    tile_fine_cells: tileFineCells,
-    n_cells: finalized.length,
+    tile_fine_cells: tileWriter.tileFineCells,
+    n_cells: levelCellCount,
     n_tiles: tileManifest.length,
-    total_observation_count: finalized.reduce((sum, cell) => sum + cell.total_count, 0),
+    total_observation_count: totalObservationCount,
     total_tile_bytes: totalBytes,
     total_tile_gzip_bytes: totalGzipBytes,
     average_tile_bytes: tileManifest.length ? Math.round(totalBytes / tileManifest.length) : 0,
@@ -608,6 +833,7 @@ async function main() {
 
   const requiredFiles = [
     path.join(sourceAssetDir, "manifest.json"),
+    path.join(stageDir, "superchunks.csv"),
     path.join(stageDir, "square_summary.csv"),
     path.join(stageDir, "square_taxa.csv"),
     path.join(stageDir, "square_observers.csv")

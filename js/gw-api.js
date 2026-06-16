@@ -14,7 +14,154 @@ async function gridWildApiErrorFromResponse(response) {
   return error;
 }
 
+const GRIDWILD_BOOTSTRAP_TIMEOUT_MS = 6500;
+const GRIDWILD_FUNCTION_TIMEOUT_MS = 10000;
+const GRIDWILD_ONLINE_COOLDOWN_MS = 45000;
+
 let gridWildBootstrapPromise = null;
+
+const gridWildOnlineState = (window.__gwOnlineState = window.__gwOnlineState || {
+  bootstrapReady: false,
+  bootstrapPending: false,
+  degraded: false,
+  unavailableUntil: 0,
+  lastError: null,
+  lastFailedFunction: null,
+  failures: 0
+});
+
+function serializeGridWildError(err) {
+  if (!err) return null;
+  return {
+    name: err.name || "Error",
+    message: err.message || String(err),
+    status: err.status || null,
+    at: Date.now()
+  };
+}
+
+function isTransientGridWildApiError(err) {
+  if (!err) return false;
+  if (err.name === "AbortError" || err.code === "GRIDWILD_API_TIMEOUT") return true;
+  if (err.status >= 500) return true;
+  return err instanceof TypeError;
+}
+
+function gridWildOnlineUnavailableError(functionName) {
+  const waitMs = Math.max(0, (Number(gridWildOnlineState.unavailableUntil) || 0) - Date.now());
+  const err = new Error(
+    `GridWild online gameplay is temporarily unavailable; skipped ${functionName}.`
+  );
+  err.code = "GRIDWILD_ONLINE_UNAVAILABLE";
+  err.onlineUnavailable = true;
+  err.retryAfterMs = waitMs;
+  return err;
+}
+
+function isGridWildOnlineReady() {
+  return (
+    gridWildOnlineState.bootstrapReady === true || window.__gwState?.bootstrapReady === true
+  );
+}
+
+function isGridWildOnlineCircuitOpen() {
+  return Date.now() < (Number(gridWildOnlineState.unavailableUntil) || 0);
+}
+
+function markGridWildOnlinePending() {
+  gridWildOnlineState.bootstrapPending = true;
+  if (!isGridWildOnlineCircuitOpen()) {
+    gridWildOnlineState.degraded = false;
+  }
+}
+
+function markGridWildOnlineReady() {
+  gridWildOnlineState.bootstrapReady = true;
+  gridWildOnlineState.bootstrapPending = false;
+  gridWildOnlineState.degraded = false;
+  gridWildOnlineState.unavailableUntil = 0;
+  gridWildOnlineState.lastError = null;
+  gridWildOnlineState.lastFailedFunction = null;
+  gridWildOnlineState.failures = 0;
+  window.__gwState = window.__gwState || {};
+  window.__gwState.bootstrapReady = true;
+  window.__gwState.onlineGameplayReady = true;
+}
+
+function markGridWildOnlineFailure(functionName, err) {
+  if (err?.gridWildOnlineFailureRecorded) return;
+  try {
+    err.gridWildOnlineFailureRecorded = true;
+  } catch {
+    // Some browser errors are immutable; duplicate failure bookkeeping is harmless.
+  }
+
+  gridWildOnlineState.bootstrapPending = false;
+  gridWildOnlineState.lastError = serializeGridWildError(err);
+  gridWildOnlineState.lastFailedFunction = functionName;
+
+  if (!isTransientGridWildApiError(err)) return;
+
+  gridWildOnlineState.bootstrapReady = false;
+  gridWildOnlineState.degraded = true;
+  gridWildOnlineState.failures = (Number(gridWildOnlineState.failures) || 0) + 1;
+  gridWildOnlineState.unavailableUntil = Date.now() + GRIDWILD_ONLINE_COOLDOWN_MS;
+  window.__gwState = window.__gwState || {};
+  window.__gwState.bootstrapReady = false;
+  window.__gwState.onlineGameplayReady = false;
+}
+
+function shouldRequireGridWildOnline(functionName, options = {}) {
+  if (functionName === "get-bootstrap") return false;
+  return options.requireOnline !== false;
+}
+
+function gridWildFunctionTimeoutMs(functionName, options = {}) {
+  if (options.timeoutMs === false || options.fetchOptions?.keepalive) return 0;
+  const explicit = Number(options.timeoutMs);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  return functionName === "get-bootstrap"
+    ? GRIDWILD_BOOTSTRAP_TIMEOUT_MS
+    : GRIDWILD_FUNCTION_TIMEOUT_MS;
+}
+
+async function fetchGridWildFunction(functionName, fetchOptions = {}, options = {}) {
+  const timeoutMs = gridWildFunctionTimeoutMs(functionName, options);
+  const controller =
+    timeoutMs > 0 && !fetchOptions.signal ? new AbortController() : null;
+  const timer = controller
+    ? window.setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+
+  try {
+    return await fetch(`/.netlify/functions/${functionName}`, {
+      ...fetchOptions,
+      ...(controller ? { signal: controller.signal } : {})
+    });
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      const timeoutError = new Error(`${functionName} timed out after ${timeoutMs}ms.`);
+      timeoutError.name = "AbortError";
+      timeoutError.code = "GRIDWILD_API_TIMEOUT";
+      throw timeoutError;
+    }
+    throw err;
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
+}
+
+window.GridWildOnline = window.GridWildOnline || {
+  isReady: isGridWildOnlineReady,
+  isDegraded: () => gridWildOnlineState.degraded === true,
+  isCircuitOpen: isGridWildOnlineCircuitOpen,
+  state: () => ({ ...gridWildOnlineState }),
+  canAutoStart: () => isGridWildOnlineReady() && !isGridWildOnlineCircuitOpen(),
+  isUnavailableError: (err) => err?.onlineUnavailable === true,
+  markPending: markGridWildOnlinePending,
+  markReady: markGridWildOnlineReady,
+  markFailure: markGridWildOnlineFailure
+};
 
 function gridWildApiBody(payload = {}) {
   const body = { ...(payload || {}) };
@@ -108,24 +255,50 @@ function gridWildReloginError(error) {
 }
 
 async function postFunction(name, payload = {}, options = {}) {
+  if (
+    name === "get-bootstrap" &&
+    isGridWildOnlineCircuitOpen() &&
+    options.force !== true
+  ) {
+    throw gridWildOnlineUnavailableError(name);
+  }
+
+  if (
+    shouldRequireGridWildOnline(name, options) &&
+    (!isGridWildOnlineReady() || isGridWildOnlineCircuitOpen())
+  ) {
+    throw gridWildOnlineUnavailableError(name);
+  }
+
   if (name !== "get-bootstrap" && options.ensurePlayerSession !== false) {
     await ensureGridWildPlayerSession();
   }
 
   const request = () =>
-    fetch(`/.netlify/functions/${name}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {})
+    fetchGridWildFunction(
+      name,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers || {})
+        },
+        body: gridWildApiBody(payload),
+        ...(options.fetchOptions || {})
       },
-      body: gridWildApiBody(payload),
-      ...(options.fetchOptions || {})
-    });
+      options
+    );
 
-  let res = await request();
+  let res;
+  try {
+    res = await request();
+  } catch (err) {
+    markGridWildOnlineFailure(name, err);
+    throw err;
+  }
   if (!res.ok) {
     const error = await gridWildApiErrorFromResponse(res);
+    markGridWildOnlineFailure(name, error);
     if (isInvalidGridWildAccountSession(error)) {
       markGridWildAccountSessionInvalid(error);
       if (
@@ -133,16 +306,27 @@ async function postFunction(name, payload = {}, options = {}) {
         options.retryInvalidAccountSession !== false &&
         !hasStoredGridWildAccount()
       ) {
-        res = await request();
+        try {
+          res = await request();
+        } catch (err) {
+          markGridWildOnlineFailure(name, err);
+          throw err;
+        }
         if (res.ok) return await res.json();
       }
       throw gridWildReloginError(error);
     }
     if (shouldRetryMissingPlayerSession(name, error, options)) {
       await ensureGridWildPlayerSession({ force: true });
-      res = await request();
+      try {
+        res = await request();
+      } catch (err) {
+        markGridWildOnlineFailure(name, err);
+        throw err;
+      }
       if (!res.ok) {
         const retryError = await gridWildApiErrorFromResponse(res);
+        markGridWildOnlineFailure(name, retryError);
         if (isInvalidGridWildAccountSession(retryError)) {
           markGridWildAccountSessionInvalid(retryError);
           throw gridWildReloginError(retryError);
@@ -165,18 +349,29 @@ function gridWildINatHeaders() {
 window.GridWildAPI = {
   async getBootstrap(options = {}) {
     if (gridWildBootstrapPromise && options.force !== true) return gridWildBootstrapPromise;
+    markGridWildOnlinePending();
 
     gridWildBootstrapPromise = postFunction(
       "get-bootstrap",
       { player_id: this.getPlayerId() },
-      { ensurePlayerSession: false, retryMissingSession: false }
+      {
+        ensurePlayerSession: false,
+        retryMissingSession: false,
+        force: options.force === true,
+        timeoutMs: options.timeoutMs
+      }
     )
       .then((data) => {
         if (options.applySession !== false) {
           if (data?.player?.id) this.setPlayerId(data.player.id);
           if (data?.player_session) this.setPlayerSession(data.player_session);
         }
+        markGridWildOnlineReady();
         return data;
+      })
+      .catch((err) => {
+        markGridWildOnlineFailure("get-bootstrap", err);
+        throw err;
       })
       .finally(() => {
         gridWildBootstrapPromise = null;

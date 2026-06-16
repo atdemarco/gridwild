@@ -16,6 +16,10 @@ window.__gwUser = window.__gwUser || {
     return document.getElementById(id);
   }
 
+  function isGridWildOnlineGameplayReady() {
+    return window.GridWildOnline?.isReady?.() === true || window.__gwState?.bootstrapReady === true;
+  }
+
   // --------------------------------------------------------------------------
   // Sheet body templates
   // --------------------------------------------------------------------------
@@ -1860,9 +1864,13 @@ window.__gwUser = window.__gwUser || {
     window.GridWildParty?.refreshMapBeacon?.();
     window.GridWildParty?.handleJoinFromUrl?.();
 
-    window.GridWildPartyLive?.loadParty?.().then(() => {
+    if (isGridWildOnlineGameplayReady()) {
+      window.GridWildPartyLive?.loadParty?.().then(() => {
+        window.GridWildPartyLive?.refreshPartySheet?.();
+      });
+    } else {
       window.GridWildPartyLive?.refreshPartySheet?.();
-    });
+    }
 
     window.GridWildPlaylists?.bindButtons?.(document);
     window.GridWildPlaylists?.renderSummary?.();
@@ -2370,15 +2378,21 @@ window.__gwUser = window.__gwUser || {
       window.GridWildAccount?.bindButtons?.(document);
       window.GridWildPresence?.bindSettings?.(document);
       window.GridWildPlayerInteractions?.bindMessagesSection?.(document);
-      window.GridWildPlayerInteractions?.refresh?.({ quiet: true });
+      if (isGridWildOnlineGameplayReady()) {
+        window.GridWildPlayerInteractions?.refresh?.({ quiet: true });
+      }
 
       window.GridWildParty?.bindSheetControls?.(document);
       window.GridWildParty?.refreshMapBeacon?.();
       window.GridWildParty?.handleJoinFromUrl?.();
 
-      window.GridWildPartyLive?.loadParty?.().then(() => {
+      if (isGridWildOnlineGameplayReady()) {
+        window.GridWildPartyLive?.loadParty?.().then(() => {
+          window.GridWildPartyLive?.refreshPartySheet?.();
+        });
+      } else {
         window.GridWildPartyLive?.refreshPartySheet?.();
-      });
+      }
 
       window.GridWildPlaylists?.bindButtons?.(document);
       window.GridWildPlaylists?.renderSummary?.();

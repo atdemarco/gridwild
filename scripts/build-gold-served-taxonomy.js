@@ -174,6 +174,176 @@ function readCsv(file) {
     });
 }
 
+function parseCsvLine(line) {
+  const out = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      out.push(field);
+      field = "";
+    } else {
+      field += ch;
+    }
+  }
+
+  out.push(field);
+  return out;
+}
+
+async function* readCsvRowsStream(file) {
+  let header = null;
+  let carry = "";
+
+  async function* emitLine(rawLine) {
+    const line = rawLine.replace(/\r$/, "");
+    if (!line.trim()) return;
+
+    if (!header) {
+      header = parseCsvLine(line).map((name) => name.trim());
+      return;
+    }
+
+    const fields = parseCsvLine(line);
+    const row = {};
+    header.forEach((name, index) => {
+      row[name] = fields[index] ?? "";
+    });
+    yield row;
+  }
+
+  const stream = fs.createReadStream(file, { encoding: "utf8", highWaterMark: 1024 * 1024 });
+  for await (const chunk of stream) {
+    carry += chunk;
+    const lines = carry.split("\n");
+    carry = lines.pop() || "";
+    for (const rawLine of lines) {
+      yield* emitLine(rawLine);
+    }
+  }
+
+  if (carry) {
+    yield* emitLine(carry);
+  }
+}
+
+function superKeyForValues(superIx, superIy) {
+  return `${int(superIx)}_${int(superIy)}`;
+}
+
+function superKeyForRow(row) {
+  return superKeyForValues(row.super_ix, row.super_iy);
+}
+
+function parseSuperKey(key) {
+  const [superIx, superIy] = String(key).split("_").map(Number);
+  return { superIx, superIy };
+}
+
+function compareSuperKeys(a, b) {
+  const left = parseSuperKey(a);
+  const right = parseSuperKey(b);
+  return left.superIx - right.superIx || left.superIy - right.superIy;
+}
+
+class CsvSuperGroupCursor {
+  constructor(file) {
+    this.file = file;
+    this.iterator = readCsvRowsStream(file)[Symbol.asyncIterator]();
+    this.pendingRow = null;
+    this.pendingGroup = null;
+    this.done = false;
+  }
+
+  async readNextGroup() {
+    if (this.done) return null;
+
+    let firstRow = this.pendingRow;
+    this.pendingRow = null;
+    if (!firstRow) {
+      const next = await this.iterator.next();
+      if (next.done) {
+        this.done = true;
+        return null;
+      }
+      firstRow = next.value;
+    }
+
+    const key = superKeyForRow(firstRow);
+    const rows = [firstRow];
+
+    while (true) {
+      const next = await this.iterator.next();
+      if (next.done) {
+        this.done = true;
+        break;
+      }
+      const rowKey = superKeyForRow(next.value);
+      if (rowKey !== key) {
+        this.pendingRow = next.value;
+        break;
+      }
+      rows.push(next.value);
+    }
+
+    return { key, rows };
+  }
+
+  async groupFor(targetKey) {
+    if (!this.pendingGroup) {
+      this.pendingGroup = await this.readNextGroup();
+    }
+
+    while (this.pendingGroup && compareSuperKeys(this.pendingGroup.key, targetKey) < 0) {
+      this.pendingGroup = await this.readNextGroup();
+    }
+
+    if (!this.pendingGroup || this.pendingGroup.key !== targetKey) {
+      return [];
+    }
+
+    const rows = this.pendingGroup.rows;
+    this.pendingGroup = null;
+    return rows;
+  }
+}
+
+class JsonArrayWriter {
+  constructor(file) {
+    ensureDir(path.dirname(file));
+    this.fd = fs.openSync(file, "w");
+    this.first = true;
+    fs.writeSync(this.fd, "[");
+  }
+
+  write(value) {
+    fs.writeSync(this.fd, `${this.first ? "" : ","}\n${JSON.stringify(value)}`);
+    this.first = false;
+  }
+
+  close() {
+    if (this.fd == null) return;
+    fs.writeSync(this.fd, "\n]\n");
+    fs.closeSync(this.fd);
+    this.fd = null;
+  }
+}
+
 function findDuckDb(args) {
   const candidates = [args.duckdb, process.env.DUCKDB_EXE, DEFAULT_DUCKDB_EXE, "duckdb"].filter(
     Boolean
@@ -763,7 +933,25 @@ function copyFileIfExists(from, to) {
   return true;
 }
 
-function packageServedGold({
+function assertStageFiles(stageDir) {
+  const files = [
+    "observer_dictionary.csv",
+    "superchunks.csv",
+    "square_summary.csv",
+    "square_taxa.csv",
+    "square_observers.csv",
+    "validation_metrics.csv",
+    "dc_heat.csv"
+  ];
+  for (const file of files) {
+    const absolute = path.join(stageDir, file);
+    if (!fs.existsSync(absolute)) {
+      throw new Error(`Missing stage file required for packaging: ${absolute}`);
+    }
+  }
+}
+
+async function packageServedGold({
   stageDir,
   outDir,
   region,
@@ -792,14 +980,7 @@ function packageServedGold({
 
   const observerRows = readCsv(path.join(stageDir, "observer_dictionary.csv"));
   const superRows = readCsv(path.join(stageDir, "superchunks.csv"));
-  const squareRows = readCsv(path.join(stageDir, "square_summary.csv"));
-  const taxaRows = readCsv(path.join(stageDir, "square_taxa.csv"));
-  const observerSquareRows = readCsv(path.join(stageDir, "square_observers.csv"));
   const validationRows = readCsv(path.join(stageDir, "validation_metrics.csv"));
-
-  const taxaBySquare = groupBySquare(taxaRows);
-  const observersBySquare = groupBySquare(observerSquareRows);
-  const squaresBySuper = rowsBySuperchunk(squareRows);
 
   const observerDict = {};
   for (const row of observerRows) {
@@ -807,49 +988,13 @@ function packageServedGold({
   }
   writeJson(path.join(outDir, "observer_dictionary.json"), observerDict);
 
-  const summary = squareRows.map((row) => ({
-    ix: int(row.ix),
-    iy: int(row.iy),
-    square_id: `${int(row.ix)}_${int(row.iy)}`,
-    n_genera: int(row.n_genera),
-    n_obs_with_genus: int(row.count)
-  }));
-  writeJson(path.join(outDir, "squares_genus_summary.json"), summary);
-
   const geojsonSeqPath = path.join(
     outDir,
     "pmtiles",
     `${region}_${version}_served_cells.geojsonseq`
   );
+  const summaryWriter = new JsonArrayWriter(path.join(outDir, "squares_genus_summary.json"));
   const geoFd = fs.openSync(geojsonSeqPath, "w");
-  try {
-    for (const square of squareRows) {
-      const ix = int(square.ix);
-      const iy = int(square.iy);
-      const properties = {
-        ix,
-        iy,
-        count: int(square.count),
-        n_genera: int(square.n_genera),
-        n_observers: int(square.n_observers),
-        last_observed: square.last_observed || "",
-        median_last10_observed: square.median_last10_observed || ""
-      };
-      fs.writeSync(
-        geoFd,
-        `${JSON.stringify({
-          type: "Feature",
-          properties,
-          geometry: {
-            type: "Polygon",
-            coordinates: cellPolygon(ix, iy, gridSizeM)
-          }
-        })}\n`
-      );
-    }
-  } finally {
-    fs.closeSync(geoFd);
-  }
 
   const superManifest = [];
   let jsonSuperchunkCount = 0;
@@ -861,131 +1006,173 @@ function packageServedGold({
   let topObserverViolationCount = 0;
   let totalObservationCount = 0;
   let servedTaxonRecordCount = 0;
+  let squareRowCount = 0;
 
-  for (const superRow of superRows) {
-    const superIx = int(superRow.super_ix);
-    const superIy = int(superRow.super_iy);
-    const superKey = `${superIx}_${superIy}`;
-    const members = squaresBySuper.get(superKey) || [];
-    const squares = {};
+  const squareCursor = new CsvSuperGroupCursor(path.join(stageDir, "square_summary.csv"));
+  const taxaCursor = new CsvSuperGroupCursor(path.join(stageDir, "square_taxa.csv"));
+  const observerSquareCursor = new CsvSuperGroupCursor(path.join(stageDir, "square_observers.csv"));
 
-    for (const square of members) {
-      const ix = int(square.ix);
-      const iy = int(square.iy);
-      const key = squareKey(ix, iy);
-      const sqKey = `${ix},${iy}`;
-      const squareCount = int(square.count);
-      totalObservationCount += squareCount;
+  try {
+    for (const superRow of superRows) {
+      const superIx = int(superRow.super_ix);
+      const superIy = int(superRow.super_iy);
+      const superKey = superKeyForValues(superIx, superIy);
+      const members = await squareCursor.groupFor(superKey);
+      const taxaBySquare = groupBySquare(await taxaCursor.groupFor(superKey));
+      const observersBySquare = groupBySquare(await observerSquareCursor.groupFor(superKey));
+      const squares = {};
 
-      const genera = (taxaBySquare.get(sqKey) || []).map((row) => {
-        const monthCounts = [
-          int(row.m01),
-          int(row.m02),
-          int(row.m03),
-          int(row.m04),
-          int(row.m05),
-          int(row.m06),
-          int(row.m07),
-          int(row.m08),
-          int(row.m09),
-          int(row.m10),
-          int(row.m11),
-          int(row.m12)
-        ];
-        const count = int(row.count);
-        const monthTotal = monthCounts.reduce((sum, value) => sum + value, 0);
-        if (monthTotal !== count) monthCountViolationCount += 1;
-        servedTaxonRecordCount += 1;
-        return {
-          iconic_taxon_name: row.iconic_taxon_name || "Unknown",
-          order_name: row.order_name || "Unknown",
-          family_name: row.family_name || "Unknown",
-          genus_name: row.genus_name || "Unknown",
-          served_rank: row.served_rank || "genus",
-          served_taxon_key: row.served_taxon_key || row.genus_name || "Unknown",
-          served_display_name: row.served_display_name || row.genus_name || "Unknown",
-          playable_group_key: row.playable_group_key || "unmapped",
-          playable_group_name: row.playable_group_name || "Unmapped Taxa",
-          policy_action: row.policy_action || "raw_genus",
-          original_policy_action: row.original_policy_action || row.policy_action || "raw_genus",
-          policy_match_rank: row.policy_match_rank || "raw_genus",
-          playability_score:
-            row.playability_score === "" ? null : numberValue(row.playability_score, null),
-          reason_codes: String(row.reason_codes || "")
-            .split("|")
-            .map((item) => item.trim())
-            .filter(Boolean),
-          raw_taxa_count: int(row.raw_taxa_count, 1),
-          count,
-          month_counts: monthCounts,
-          last_observed: row.last_observed || "",
-          median_last10_observed: row.median_last10_observed || ""
+      for (const square of members) {
+        const ix = int(square.ix);
+        const iy = int(square.iy);
+        const key = squareKey(ix, iy);
+        const sqKey = `${ix},${iy}`;
+        const squareCount = int(square.count);
+        totalObservationCount += squareCount;
+        squareRowCount += 1;
+
+        summaryWriter.write({
+          ix,
+          iy,
+          square_id: `${ix}_${iy}`,
+          n_genera: int(square.n_genera),
+          n_obs_with_genus: squareCount
+        });
+
+        const properties = {
+          ix,
+          iy,
+          count: squareCount,
+          n_genera: int(square.n_genera),
+          n_observers: int(square.n_observers),
+          last_observed: square.last_observed || "",
+          median_last10_observed: square.median_last10_observed || ""
         };
-      });
+        fs.writeSync(
+          geoFd,
+          `${JSON.stringify({
+            type: "Feature",
+            properties,
+            geometry: {
+              type: "Polygon",
+              coordinates: cellPolygon(ix, iy, gridSizeM)
+            }
+          })}\n`
+        );
 
-      const topObservers = (observersBySquare.get(sqKey) || []).map((row) => ({
-        observer_id: int(row.observer_id),
-        count: int(row.count),
-        species: int(row.species)
-      }));
-      if (topObservers.some((row) => row.count > squareCount)) topObserverViolationCount += 1;
+        const genera = (taxaBySquare.get(sqKey) || []).map((row) => {
+          const monthCounts = [
+            int(row.m01),
+            int(row.m02),
+            int(row.m03),
+            int(row.m04),
+            int(row.m05),
+            int(row.m06),
+            int(row.m07),
+            int(row.m08),
+            int(row.m09),
+            int(row.m10),
+            int(row.m11),
+            int(row.m12)
+          ];
+          const count = int(row.count);
+          const monthTotal = monthCounts.reduce((sum, value) => sum + value, 0);
+          if (monthTotal !== count) monthCountViolationCount += 1;
+          servedTaxonRecordCount += 1;
+          return {
+            iconic_taxon_name: row.iconic_taxon_name || "Unknown",
+            order_name: row.order_name || "Unknown",
+            family_name: row.family_name || "Unknown",
+            genus_name: row.genus_name || "Unknown",
+            served_rank: row.served_rank || "genus",
+            served_taxon_key: row.served_taxon_key || row.genus_name || "Unknown",
+            served_display_name: row.served_display_name || row.genus_name || "Unknown",
+            playable_group_key: row.playable_group_key || "unmapped",
+            playable_group_name: row.playable_group_name || "Unmapped Taxa",
+            policy_action: row.policy_action || "raw_genus",
+            original_policy_action: row.original_policy_action || row.policy_action || "raw_genus",
+            policy_match_rank: row.policy_match_rank || "raw_genus",
+            playability_score:
+              row.playability_score === "" ? null : numberValue(row.playability_score, null),
+            reason_codes: String(row.reason_codes || "")
+              .split("|")
+              .map((item) => item.trim())
+              .filter(Boolean),
+            raw_taxa_count: int(row.raw_taxa_count, 1),
+            count,
+            month_counts: monthCounts,
+            last_observed: row.last_observed || "",
+            median_last10_observed: row.median_last10_observed || ""
+          };
+        });
 
-      squares[key] = {
-        ix,
-        iy,
-        last_observed: square.last_observed || "",
-        median_last10_observed: square.median_last10_observed || "",
-        genera,
-        top_observers: topObservers
+        const topObservers = (observersBySquare.get(sqKey) || []).map((row) => ({
+          observer_id: int(row.observer_id),
+          count: int(row.count),
+          species: int(row.species)
+        }));
+        if (topObservers.some((row) => row.count > squareCount)) topObserverViolationCount += 1;
+
+        squares[key] = {
+          ix,
+          iy,
+          last_observed: square.last_observed || "",
+          median_last10_observed: square.median_last10_observed || "",
+          genera,
+          top_observers: topObservers
+        };
+      }
+
+      const superStruct = {
+        super_ix: superIx,
+        super_iy: superIy,
+        superchunk_size: superchunkSize,
+        taxonomy_levels: [
+          "playable_group_key",
+          "served_rank",
+          "served_taxon_key",
+          "served_display_name"
+        ],
+        legacy_taxonomy_levels: ["iconic_taxon_name", "order_name", "family_name", "genus_name"],
+        n_squares: members.length,
+        squares
       };
+      const superId = `super_${superIx}_${superIy}`;
+      const relativeFile = `square_genera_superchunks/${superId}.json`;
+      const absoluteFile = path.join(outDir, relativeFile);
+      writeJson(absoluteFile, superStruct);
+
+      const bytes = fs.statSync(absoluteFile).size;
+      const gzipBytes = zlib.gzipSync(fs.readFileSync(absoluteFile), { level: 6 }).length;
+      totalSuperchunkBytes += bytes;
+      totalSuperchunkGzipBytes += gzipBytes;
+      if (bytes > largestSuperchunkBytes) {
+        largestSuperchunkBytes = bytes;
+        largestSuperchunkFile = relativeFile;
+      }
+      jsonSuperchunkCount += 1;
+
+      superManifest.push({
+        superchunk_id: superId,
+        super_ix: superIx,
+        super_iy: superIy,
+        file: relativeFile,
+        n_squares: int(superRow.n_squares),
+        bbox_grid: [
+          int(superRow.min_ix),
+          int(superRow.min_iy),
+          int(superRow.max_ix),
+          int(superRow.max_iy)
+        ],
+        cell_count: int(superRow.n_squares),
+        observation_count: int(superRow.observation_count),
+        bytes,
+        gzip_bytes: gzipBytes
+      });
     }
-
-    const superStruct = {
-      super_ix: superIx,
-      super_iy: superIy,
-      superchunk_size: superchunkSize,
-      taxonomy_levels: [
-        "playable_group_key",
-        "served_rank",
-        "served_taxon_key",
-        "served_display_name"
-      ],
-      legacy_taxonomy_levels: ["iconic_taxon_name", "order_name", "family_name", "genus_name"],
-      n_squares: members.length,
-      squares
-    };
-    const superId = `super_${superIx}_${superIy}`;
-    const relativeFile = `square_genera_superchunks/${superId}.json`;
-    const absoluteFile = path.join(outDir, relativeFile);
-    writeJson(absoluteFile, superStruct);
-
-    const bytes = fs.statSync(absoluteFile).size;
-    const gzipBytes = zlib.gzipSync(fs.readFileSync(absoluteFile), { level: 6 }).length;
-    totalSuperchunkBytes += bytes;
-    totalSuperchunkGzipBytes += gzipBytes;
-    if (bytes > largestSuperchunkBytes) {
-      largestSuperchunkBytes = bytes;
-      largestSuperchunkFile = relativeFile;
-    }
-    jsonSuperchunkCount += 1;
-
-    superManifest.push({
-      superchunk_id: superId,
-      super_ix: superIx,
-      super_iy: superIy,
-      file: relativeFile,
-      n_squares: int(superRow.n_squares),
-      bbox_grid: [
-        int(superRow.min_ix),
-        int(superRow.min_iy),
-        int(superRow.max_ix),
-        int(superRow.max_iy)
-      ],
-      cell_count: int(superRow.n_squares),
-      observation_count: int(superRow.observation_count),
-      bytes,
-      gzip_bytes: gzipBytes
-    });
+  } finally {
+    summaryWriter.close();
+    fs.closeSync(geoFd);
   }
 
   const metrics = validationMetricMap(validationRows);
@@ -1011,7 +1198,7 @@ function packageServedGold({
     pmtiles_layer: "gridwild_cells",
     pmtiles_payload: "visual_metrics_only",
     n_observations: totalObservationCount,
-    n_squares: squareRows.length,
+    n_squares: squareRowCount,
     n_superchunks: superManifest.length,
     n_observers: observerRows.length,
     n_served_taxon_records: servedTaxonRecordCount,
@@ -1075,7 +1262,7 @@ function packageServedGold({
       manifest_references_existing_superchunks: superManifest.every((row) =>
         fs.existsSync(path.join(outDir, row.file))
       ),
-      heat_rows_equal_occupied_squares: int(metrics.occupied_20ft_squares) === squareRows.length,
+      heat_rows_equal_occupied_squares: int(metrics.occupied_20ft_squares) === squareRowCount,
       month_counts_sum_to_taxon_counts_violations: monthCountViolationCount,
       top_observer_count_violations: topObserverViolationCount,
       drop_rows_credit_parent: true,
@@ -1092,7 +1279,7 @@ function packageServedGold({
   writeJson(path.join(outDir, "validation_report.json"), validation);
 
   return {
-    squares: squareRows.length,
+    squares: squareRowCount,
     servedTaxonRecords: servedTaxonRecordCount,
     superchunks: superManifest.length,
     observers: observerRows.length,
@@ -1103,7 +1290,7 @@ function packageServedGold({
   };
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv);
   const worldDir = path.resolve(
     args["world-dir"] || process.env.GRIDWILD_WORLD_DIR || DEFAULT_WORLD_DIR
@@ -1166,7 +1353,7 @@ function main() {
   if (!fs.existsSync(scoredTaxonomyPath)) {
     throw new Error(`Scored taxonomy not found: ${scoredTaxonomyPath}`);
   }
-  if (!fs.existsSync(occurrenceInput)) {
+  if (!args["package-only"] && !fs.existsSync(occurrenceInput)) {
     throw new Error(`Occurrence input not found: ${occurrenceInput}`);
   }
 
@@ -1202,28 +1389,33 @@ function main() {
     "genus_name"
   ]);
 
-  const readExpr = occurrenceReadExpression(occurrenceInput);
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "gridwild-gold-served-"));
-  const dbFile = path.join(workDir, "served.duckdb");
-  const sqlFile = path.join(workDir, "build_served_gold.sql");
-  fs.writeFileSync(
-    sqlFile,
-    buildSql({
-      readExpr,
-      policyCsv,
-      stageDir,
-      args,
-      country,
-      states,
-      gridSizeM,
-      superchunkSize,
-      layer
-    })
-  );
+  if (args["package-only"]) {
+    assertStageFiles(stageDir);
+    console.log(`Packaging existing Gold stage without rerunning DuckDB: ${stageDir}`);
+  } else {
+    const readExpr = occurrenceReadExpression(occurrenceInput);
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "gridwild-gold-served-"));
+    const dbFile = path.join(workDir, "served.duckdb");
+    const sqlFile = path.join(workDir, "build_served_gold.sql");
+    fs.writeFileSync(
+      sqlFile,
+      buildSql({
+        readExpr,
+        policyCsv,
+        stageDir,
+        args,
+        country,
+        states,
+        gridSizeM,
+        superchunkSize,
+        layer
+      })
+    );
 
-  runDuckDb({ duckdbExe, dbFile, sqlFile });
+    runDuckDb({ duckdbExe, dbFile, sqlFile });
+  }
 
-  const packaged = packageServedGold({
+  const packaged = await packageServedGold({
     stageDir,
     outDir,
     region,
@@ -1259,7 +1451,10 @@ function main() {
 }
 
 try {
-  main();
+  main().catch((err) => {
+    console.error(err.stack || err.message);
+    process.exit(1);
+  });
 } catch (err) {
   console.error(err.stack || err.message);
   process.exit(1);
