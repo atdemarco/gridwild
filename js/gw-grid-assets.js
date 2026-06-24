@@ -14,6 +14,7 @@
     catalog: null,
     manifestPromise: null,
     coarsePyramidManifestPromise: null,
+    coarsePMTilesShardManifestPromise: null,
     pmtilesShardManifestPromise: null
   };
 
@@ -29,6 +30,22 @@
       window.GW_GRID_ASSET_MODE ||
       "auto"
     );
+  }
+
+  function isLocalAssetHost() {
+    const hostname = window.location.hostname;
+    return (
+      window.location.protocol === "file:" ||
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1"
+    );
+  }
+
+  function localFallbackAllowed(mode = getMode()) {
+    if (mode === "local") return true;
+    if (window.GW_ALLOW_LOCAL_GRID_ASSET_FALLBACK === true) return true;
+    return mode === "auto" && isLocalAssetHost();
   }
 
   function getConfigValue(queryKey, storageKey, globalKey) {
@@ -132,7 +149,11 @@
         console.info(`GridWild assets loaded from ${state.catalog.source}.`, state.catalog.build);
         return state.catalog;
       } catch (err) {
-        if (mode === "supabase") throw err;
+        if (mode === "supabase" || !localFallbackAllowed(mode)) {
+          console.warn("GridWild asset catalog unavailable; local fallback is disabled.", err);
+          state.catalogPromise = null;
+          throw err;
+        }
         console.warn("Falling back to local GridWild assets.", err);
         state.catalog = localCatalog(err.message);
         return state.catalog;
@@ -230,6 +251,18 @@
     return state.pmtilesShardManifestPromise;
   }
 
+  async function loadCoarsePMTilesShardManifest() {
+    if (state.coarsePMTilesShardManifestPromise) return state.coarsePMTilesShardManifestPromise;
+    state.coarsePMTilesShardManifestPromise = (async () => {
+      const manifest = await loadManifest();
+      const file = manifest?.coarse_pmtiles_shard_manifest_file;
+      if (!file) return null;
+      const url = await assetRelativeUrl(file);
+      return fetchJson(url, "GridWild coarse PMTiles shard manifest");
+    })();
+    return state.coarsePMTilesShardManifestPromise;
+  }
+
   async function coarsePyramidTileUrl(tileFile) {
     return assetRelativeUrl(tileFile);
   }
@@ -276,6 +309,21 @@
     };
   }
 
+  async function coarsePMTilesShardsInfo() {
+    const shardManifest = await loadCoarsePMTilesShardManifest();
+    if (!shardManifest?.shards?.length) return null;
+
+    return {
+      ...shardManifest,
+      shards: await Promise.all(
+        shardManifest.shards.map(async (shard) => ({
+          ...shard,
+          url: rangeFriendlyUrl(await assetRelativeUrl(shard.file))
+        }))
+      )
+    };
+  }
+
   async function superchunkUrl(superIx, superIy) {
     const catalog = await getCatalog();
     const base = trimTrailingSlash(catalog.urls.superchunkBase);
@@ -290,12 +338,15 @@
     loadManifest,
     loadCoarsePyramidManifest,
     loadPMTilesShardManifest,
+    loadCoarsePMTilesShardManifest,
     coarsePyramidTileUrl,
     pmtilesUrl,
     pmtilesInfo,
     pmtilesShardsInfo,
+    coarsePMTilesShardsInfo,
     superchunkUrl,
-    localCatalog
+    localCatalog,
+    localFallbackAllowed
   };
 
   window.GridWildAssets.hasDirectCatalogConfig = function hasDirectCatalogConfig() {

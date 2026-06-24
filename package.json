@@ -10,6 +10,7 @@
     "build:hybrid-occurrence-stage": "node scripts/build-hybrid-occurrence-stage.js",
     "build:inat-snapshot-stage": "node scripts/build-inat-snapshot-stage.js",
     "build:gold-served-taxonomy": "node scripts/build-gold-served-taxonomy.js",
+    "build:coarse-pmtiles": "node scripts/build-coarse-pmtiles-direct.js",
     "shard:pmtiles": "node scripts/shard-pmtiles-geojsonseq.js",
     "export:playable-taxonomy": "node scripts/export-playable-taxonomy.js",
     "generate:playable-taxa": "node scripts/generate-playable-taxa-gbif.js",

@@ -37,10 +37,13 @@
   ];
   let hereMap3dEnabled = localStorage.getItem(HERE_MAP_3D_STORAGE_KEY) === "true";
   let hereMap3dExpanded = false;
+  let hereMap3dImmersed = false;
   let hereMap3dYawOffsetDeg = 0;
   let hereMap3dPitchDeg = 48;
   let hereMap3dZoom = 1;
   let hereMap3dDrag = null;
+  let hereInsetPanDrag = null;
+  const hereInsetPointers = new Map();
   const hereMap3dPointers = new Map();
   let hereListView = "common";
   let hereElevationCacheLoaded = false;
@@ -49,6 +52,7 @@
   let hereElevationDisabledUntil = 0;
   let hereElevationLastFetchAt = 0;
   let hereElevationRetryDelayMs = HERE_ELEVATION_RETRY_BASE_MS;
+  let hereSkyRefreshTimer = null;
   const hereElevationCache = new Map();
   const hereElevationPending = new Map();
   const hereElevationRequestedAt = new Map();
@@ -90,8 +94,13 @@
   const HERE_3D_PLACE_MAX_LABELS = 6;
   const HERE_3D_HABITAT_MAX_FEATURES = 42;
   const HERE_3D_WATER_MAX_FEATURES = 48;
+  const HERE_3D_BUILDING_MAX_FEATURES = 96;
+  const HERE_3D_BUILDING_MAX_POINTS = 34;
   const HERE_3D_BARRIER_MAX_EDGES = 160;
   const HERE_3D_GROUND_DETAIL_MAX_MARKS = 180;
+  const HERE_SKY_REFRESH_MS = 1000 * 60;
+  const HERE_3D_OSM_MAX_REQUEST_CELLS =
+    HERE_3D_CAMERA.maxAutoViewCells * HERE_3D_CAMERA.maxAutoViewCells;
 
   function gridApi() {
     return window.GridWildGrid;
@@ -207,6 +216,122 @@
         background: rgba(8, 10, 9, 0.56);
       }
 
+      .gw-here-immersive-viewport {
+        position: fixed;
+        inset: 0;
+        z-index: 1188;
+        overflow: hidden;
+        pointer-events: auto;
+        background:
+          radial-gradient(circle at 50% 18%, rgba(240,209,138,0.12), transparent 42%),
+          linear-gradient(180deg, rgba(12,18,17,0.98), rgba(5,7,7,0.99));
+        touch-action: none;
+        overscroll-behavior: contain;
+        user-select: none;
+        cursor: grab;
+      }
+
+      .gw-here-immersive-viewport[hidden] {
+        display: none;
+      }
+
+      .gw-here-immersive-viewport:active {
+        cursor: grabbing;
+      }
+
+      .gw-here-immersive-viewport svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      body.gw-here-3d-immersed .gw-map-scale-hatch {
+        opacity: 0;
+      }
+
+      .gw-here-map.is-immersed-inset {
+        background:
+          radial-gradient(circle at 50% 50%, rgba(240,209,138,0.08), transparent 54%),
+          rgba(8, 10, 9, 0.62);
+        touch-action: none;
+        cursor: grab;
+      }
+
+      .gw-here-map.is-immersed-inset:active {
+        cursor: grabbing;
+      }
+
+      .gw-here-hud-mirror {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 50% 46%, rgba(118,231,191,0.08), transparent 48%),
+          linear-gradient(180deg, rgba(9,12,10,0.92), rgba(4,6,6,0.98));
+      }
+
+      .gw-here-hud-mirror-map {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+      }
+
+      .gw-here-hud-mirror-map svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .gw-here-hud-mirror::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.06), transparent 24%),
+          radial-gradient(circle at 50% 50%, transparent 55%, rgba(0,0,0,0.28) 100%);
+        box-shadow:
+          inset 0 0 0 1px rgba(255,231,163,0.08),
+          inset 0 0 22px rgba(0,0,0,0.30);
+      }
+
+      .gw-here-hud-mirror-reticle {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        z-index: 4;
+        width: 28px;
+        height: 28px;
+        margin: -14px 0 0 -14px;
+        border: 1px solid rgba(255,231,163,0.42);
+        border-radius: 999px;
+        pointer-events: none;
+        opacity: 0.86;
+      }
+
+      .gw-here-hud-mirror-reticle::before,
+      .gw-here-hud-mirror-reticle::after {
+        content: "";
+        position: absolute;
+        background: rgba(255,231,163,0.46);
+      }
+
+      .gw-here-hud-mirror-reticle::before {
+        left: 50%;
+        top: -5px;
+        bottom: -5px;
+        width: 1px;
+      }
+
+      .gw-here-hud-mirror-reticle::after {
+        top: 50%;
+        left: -5px;
+        right: -5px;
+        height: 1px;
+      }
+
       .gw-here-map-toggle {
         position: absolute;
         top: 5px;
@@ -301,6 +426,48 @@
 
       .gw-here-map.is-expanded .gw-here-map-expand {
         font-size: 16px;
+      }
+
+      .gw-here-map-immerse {
+        position: absolute;
+        top: 57px;
+        right: 5px;
+        z-index: 3;
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        border: 1px solid rgba(240,209,138,0.36);
+        background: rgba(20,17,15,0.82);
+        color: #f0d18a;
+        box-shadow: 0 5px 12px rgba(0,0,0,0.28);
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .gw-here-map-immerse svg {
+        width: 13px;
+        height: 13px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .gw-here-map-immerse.is-on {
+        color: #ffe7a3;
+        border-color: rgba(240,209,138,0.68);
+        background: rgba(59,45,24,0.90);
+        box-shadow:
+          0 5px 12px rgba(0,0,0,0.32),
+          inset 0 0 0 1px rgba(255,225,151,0.22),
+          0 0 12px rgba(240,209,138,0.18);
+      }
+
+      .gw-here-map.is-immersed-inset .gw-here-map-immerse {
+        top: 31px;
       }
 
       .gw-here-3d-controls {
@@ -946,6 +1113,40 @@
     return panel;
   }
 
+  function ensureImmersiveViewport() {
+    let viewport = document.getElementById("gwHereImmersiveViewport");
+    if (viewport) return viewport;
+
+    viewport = document.createElement("div");
+    viewport.className = "gw-here-immersive-viewport is-3d";
+    viewport.id = "gwHereImmersiveViewport";
+    viewport.setAttribute("aria-label", "Immersive 3D Here viewport");
+    viewport.hidden = true;
+    document.body.appendChild(viewport);
+    viewport.addEventListener("pointerdown", startHere3dDrag);
+    viewport.addEventListener("pointermove", moveHere3dDrag);
+    viewport.addEventListener("pointerup", endHere3dDrag);
+    viewport.addEventListener("pointercancel", endHere3dDrag);
+    viewport.addEventListener("wheel", handleHere3dWheel, { passive: false });
+    return viewport;
+  }
+
+  function hereInsetShows3d() {
+    return hereMap3dEnabled && !hereMap3dImmersed;
+  }
+
+  function hereUsesLarge3dFrame() {
+    return hereMap3dExpanded || hereMap3dImmersed;
+  }
+
+  function syncHereMapClasses(mapEl) {
+    if (!mapEl) return;
+    const insetShows3d = hereInsetShows3d();
+    mapEl.classList.toggle("is-3d", insetShows3d);
+    mapEl.classList.toggle("is-expanded", insetShows3d && hereMap3dExpanded);
+    mapEl.classList.toggle("is-immersed-inset", hereMap3dEnabled && hereMap3dImmersed);
+  }
+
   function arcPath(cx, cy, rOuter, rInner, startAngle, endAngle, explode = 0) {
     const mid = (startAngle + endAngle) / 2;
     const offX = Math.cos(mid) * explode;
@@ -1014,6 +1215,131 @@
     );
   }
 
+  function miniMapPointsForFeature(feature, bounds, cellSize, maxPoints = 90) {
+    const api = gridApi();
+    const gridSizeM = Number(api?.gridSizeM) || 1;
+    const points = (Array.isArray(feature?.points) ? feature.points : [])
+      .map((point) => latLngToGridPoint(point, gridSizeM))
+      .filter(Boolean);
+
+    if (points.length < 2) return null;
+    if (!boundsOverlap(gridBoundsForPoints(points), bounds, 2.5)) return null;
+
+    const stride = Math.max(1, Math.ceil(points.length / maxPoints));
+    const sampled = points.filter(
+      (_, index) => index % stride === 0 || index === points.length - 1
+    );
+    return sampled.map((point) => ({
+      x: (point.ix - bounds.minIx) * cellSize,
+      y: (bounds.maxIy + 1 - point.iy) * cellSize
+    }));
+  }
+
+  function miniMapPointsAttr(points = []) {
+    return points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  }
+
+  function renderMiniMapPolygon(feature, bounds, cellSize, attrs) {
+    const points = miniMapPointsForFeature(feature, bounds, cellSize);
+    if (!points || points.length < 3) return "";
+    return `<polygon points="${miniMapPointsAttr(points)}" ${attrs}></polygon>`;
+  }
+
+  function renderMiniMapPolyline(feature, bounds, cellSize, attrs) {
+    const points = miniMapPointsForFeature(feature, bounds, cellSize);
+    if (!points || points.length < 2) return "";
+    return `<polyline points="${miniMapPointsAttr(points)}" fill="none" ${attrs}></polyline>`;
+  }
+
+  function pushMiniMapFeatureLayer(target, featureList, maxRendered, renderFeature) {
+    let rendered = 0;
+    for (const feature of Array.isArray(featureList) ? featureList : []) {
+      const markup = renderFeature(feature);
+      if (!markup) continue;
+      target.push(markup);
+      rendered += 1;
+      if (rendered >= maxRendered) return;
+    }
+  }
+
+  function renderMiniMapOsm(bounds, cellSize) {
+    const features = window.GridWildOsmFeaturesLayer?.getFeatures?.() || {};
+    const showParks = window.__gwState?.showOsmParks ?? true;
+    const showWater = window.__gwState?.showOsmWater ?? true;
+    const showRoads = window.__gwState?.showOsmRoads ?? true;
+    const showTrails = window.__gwState?.showOsmTrails ?? true;
+    const showBuildings = window.__gwState?.showOsmBuildings ?? true;
+    const context = [];
+    const buildings = [];
+
+    if (showParks) {
+      pushMiniMapFeatureLayer(context, features.parks, 36, (feature) =>
+        renderMiniMapPolygon(
+          feature,
+          bounds,
+          cellSize,
+          'fill="rgba(78,92,74,0.20)" stroke="rgba(172,213,139,0.28)" stroke-width="1.1" stroke-linejoin="round"'
+        )
+      );
+    }
+
+    if (showWater) {
+      pushMiniMapFeatureLayer(context, features.water, 42, (feature) =>
+        feature.closed
+          ? renderMiniMapPolygon(
+              feature,
+              bounds,
+              cellSize,
+              'fill="rgba(72,108,138,0.28)" stroke="rgba(139,209,232,0.34)" stroke-width="1.2" stroke-linejoin="round"'
+            )
+          : renderMiniMapPolyline(
+              feature,
+              bounds,
+              cellSize,
+              'stroke="rgba(109,183,218,0.48)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
+            )
+      );
+    }
+
+    if (showRoads) {
+      pushMiniMapFeatureLayer(context, features.roads, 80, (feature) =>
+        renderMiniMapPolyline(
+          feature,
+          bounds,
+          cellSize,
+          'stroke="rgba(82,74,68,0.42)" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"'
+        )
+      );
+    }
+
+    if (showTrails) {
+      pushMiniMapFeatureLayer(context, features.trails, 80, (feature) =>
+        renderMiniMapPolyline(
+          feature,
+          bounds,
+          cellSize,
+          'stroke="rgba(194,176,135,0.56)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"'
+        )
+      );
+    }
+
+    if (showBuildings) {
+      pushMiniMapFeatureLayer(buildings, features.buildings, 90, (feature) =>
+        renderMiniMapPolygon(
+          feature,
+          bounds,
+          cellSize,
+          'fill="rgba(92,82,68,0.46)" stroke="rgba(229,206,166,0.30)" stroke-width="1.0" stroke-linejoin="round"'
+        )
+      );
+    }
+
+    return {
+      context: context.join(""),
+      buildings: buildings.join("")
+    };
+  }
+
   function renderMiniMap(bounds, selectedContext) {
     const api = gridApi();
     if (!api) return "";
@@ -1030,6 +1356,7 @@
     const selectedKeys = selectionKeySet(selectedContext);
     const userCell = api.currentUserCell?.();
     const centerCell = api.centerCell?.();
+    const osm = renderMiniMapOsm(bounds, cell);
 
     const rects = cells
       .map((item) => {
@@ -1081,11 +1408,30 @@
     return `
       <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Here minimap">
         <rect x="0" y="0" width="${w}" height="${h}" fill="rgba(7,9,8,0.58)"></rect>
+        ${osm.context}
         ${rects}
+        ${osm.buildings}
         ${selectionRect}
         ${markerFor(centerCell, "gw-here-center", "+", "#f0d18a")}
         ${markerFor(userCell, "gw-here-avatar", "A", "#98e6c4")}
       </svg>
+    `;
+  }
+
+  function hudMirrorBounds(bounds, selectedContext) {
+    if (selectedContext) return bounds;
+    const hudFov = here3dHudFovState(null);
+    return hudFov.expanded ? squareBoundsAround(bounds, hudFov.spanCells) : bounds;
+  }
+
+  function renderHudMirror(bounds, selectedContext) {
+    const mirrorBounds = hudMirrorBounds(bounds, selectedContext);
+
+    return `
+      <div class="gw-here-hud-mirror" aria-label="Top-down map thumbnail">
+        <div class="gw-here-hud-mirror-map">${renderMiniMap(mirrorBounds, selectedContext)}</div>
+        <div class="gw-here-hud-mirror-reticle" aria-hidden="true"></div>
+      </div>
     `;
   }
 
@@ -1605,6 +1951,278 @@
     return Math.max(min, Math.min(max, Number(value) || 0));
   }
 
+  function degToRad(value) {
+    return (Number(value) || 0) * (Math.PI / 180);
+  }
+
+  function radToDeg(value) {
+    return (Number(value) || 0) * (180 / Math.PI);
+  }
+
+  function normalizeDeg(value) {
+    return ((Number(value) || 0) % 360 + 360) % 360;
+  }
+
+  function signedAngleDeg(fromDeg, toDeg) {
+    return ((normalizeDeg(toDeg) - normalizeDeg(fromDeg) + 540) % 360) - 180;
+  }
+
+  function hereSkyLocation() {
+    const gps = window.__gwLastUserLocation || null;
+    const gpsLat = Number(gps?.lat);
+    const gpsLng = Number(gps?.lng);
+    if (Number.isFinite(gpsLat) && Number.isFinite(gpsLng)) {
+      return {
+        lat: gpsLat,
+        lng: gpsLng,
+        source: "gps"
+      };
+    }
+
+    const center = (typeof map !== "undefined" ? map : window.map)?.getCenter?.();
+    const lat = Number(center?.lat);
+    const lng = Number(center?.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return {
+        lat,
+        lng,
+        source: "map"
+      };
+    }
+
+    return {
+      lat: 0,
+      lng: 0,
+      source: "fallback"
+    };
+  }
+
+  function astroDays(date = new Date()) {
+    const time = Number(date?.getTime?.());
+    return (Number.isFinite(time) ? time : Date.now()) / 86400000 - 10957.5;
+  }
+
+  function rightAscension(eclipticLon, eclipticLat) {
+    const obliquity = degToRad(23.4397);
+    return Math.atan2(
+      Math.sin(eclipticLon) * Math.cos(obliquity) -
+        Math.tan(eclipticLat) * Math.sin(obliquity),
+      Math.cos(eclipticLon)
+    );
+  }
+
+  function declination(eclipticLon, eclipticLat) {
+    const obliquity = degToRad(23.4397);
+    return Math.asin(
+      Math.sin(eclipticLat) * Math.cos(obliquity) +
+        Math.cos(eclipticLat) * Math.sin(obliquity) * Math.sin(eclipticLon)
+    );
+  }
+
+  function siderealTime(days, longitudeDeg) {
+    const lw = degToRad(-longitudeDeg);
+    return degToRad(280.16 + 360.9856235 * days) - lw;
+  }
+
+  function horizontalPosition(equatorial, location, days) {
+    const phi = degToRad(location.lat);
+    const hourAngle = siderealTime(days, location.lng) - equatorial.ra;
+    const azimuthFromSouth = Math.atan2(
+      Math.sin(hourAngle),
+      Math.cos(hourAngle) * Math.sin(phi) - Math.tan(equatorial.dec) * Math.cos(phi)
+    );
+    const altitude = Math.asin(
+      Math.sin(phi) * Math.sin(equatorial.dec) +
+        Math.cos(phi) * Math.cos(equatorial.dec) * Math.cos(hourAngle)
+    );
+
+    return {
+      azimuthDeg: normalizeDeg(radToDeg(azimuthFromSouth + Math.PI)),
+      altitudeDeg: radToDeg(altitude)
+    };
+  }
+
+  function solarCoordinates(days) {
+    const meanAnomaly = degToRad(357.5291 + 0.98560028 * days);
+    const equation =
+      degToRad(1.9148) * Math.sin(meanAnomaly) +
+      degToRad(0.02) * Math.sin(2 * meanAnomaly) +
+      degToRad(0.0003) * Math.sin(3 * meanAnomaly);
+    const perihelion = degToRad(102.9372);
+    const eclipticLon = meanAnomaly + equation + perihelion + Math.PI;
+
+    return {
+      ra: rightAscension(eclipticLon, 0),
+      dec: declination(eclipticLon, 0),
+      eclipticLon
+    };
+  }
+
+  function lunarCoordinates(days) {
+    const meanLon = degToRad(218.316 + 13.176396 * days);
+    const meanAnomaly = degToRad(134.963 + 13.064993 * days);
+    const argumentLat = degToRad(93.272 + 13.22935 * days);
+    const eclipticLon = meanLon + degToRad(6.289) * Math.sin(meanAnomaly);
+    const eclipticLat = degToRad(5.128) * Math.sin(argumentLat);
+
+    return {
+      ra: rightAscension(eclipticLon, eclipticLat),
+      dec: declination(eclipticLon, eclipticLat),
+      eclipticLon,
+      eclipticLat
+    };
+  }
+
+  function hereSkyPhase(sunAltitudeDeg) {
+    if (sunAltitudeDeg >= 6) return "day";
+    if (sunAltitudeDeg >= -6) return "dusk";
+    if (sunAltitudeDeg >= -12) return "deep-dusk";
+    return "night";
+  }
+
+  function hereSkyTheme(phase, sunAltitudeDeg) {
+    const sunsetGlow = clamp((10 - Math.abs(sunAltitudeDeg)) / 12, 0, 1);
+    const nightFactor = clamp((-sunAltitudeDeg - 4) / 12, 0, 1);
+    const themes = {
+      day: {
+        top: "#5f9ec8",
+        mid: "#8fb8ce",
+        horizon: "#efd28a",
+        ground: "rgba(149,196,184,0.10)",
+        starOpacity: 0
+      },
+      dusk: {
+        top: "#263a5a",
+        mid: "#7c6b72",
+        horizon: "#df8656",
+        ground: "rgba(226,122,84,0.18)",
+        starOpacity: 0.08
+      },
+      "deep-dusk": {
+        top: "#111d34",
+        mid: "#303653",
+        horizon: "#9c5b5d",
+        ground: "rgba(184,92,105,0.13)",
+        starOpacity: 0.34
+      },
+      night: {
+        top: "#050a17",
+        mid: "#0d1630",
+        horizon: "#1b2437",
+        ground: "rgba(93,124,156,0.08)",
+        starOpacity: 0.72
+      }
+    };
+
+    return {
+      ...(themes[phase] || themes.day),
+      phase,
+      sunsetGlow,
+      nightFactor
+    };
+  }
+
+  function hereCelestialState(date = new Date(), location = hereSkyLocation()) {
+    const days = astroDays(date);
+    const sunCoords = solarCoordinates(days);
+    const moonCoords = lunarCoordinates(days);
+    const sun = horizontalPosition(sunCoords, location, days);
+    const moon = horizontalPosition(moonCoords, location, days);
+    const moonPhase = clamp(
+      (1 - Math.cos(moonCoords.eclipticLon - sunCoords.eclipticLon)) / 2,
+      0,
+      1
+    );
+    const phase = hereSkyPhase(sun.altitudeDeg);
+
+    return {
+      location,
+      phase,
+      theme: hereSkyTheme(phase, sun.altitudeDeg),
+      sun,
+      moon,
+      moonPhase
+    };
+  }
+
+  function hereSkyPoint(body, width, height, headingDeg) {
+    const delta = signedAngleDeg(headingDeg, body.azimuthDeg);
+    const horizonY = height * 0.48;
+    const topY = Math.max(6, height * 0.045);
+    const altitudeT = clamp((body.altitudeDeg + 8) / 88, 0, 1);
+
+    return {
+      x: clamp(width / 2 + (delta / 155) * width * 0.55, 8, width - 8),
+      y: horizonY - Math.pow(altitudeT, 0.76) * (horizonY - topY),
+      azimuthDeltaDeg: delta,
+      domeOpacity: clamp((190 - Math.abs(delta)) / 75, 0.28, 1)
+    };
+  }
+
+  function renderHereSkyStars(width, height, opacity) {
+    const alpha = clamp(opacity, 0, 1);
+    if (alpha <= 0.02) return "";
+
+    const count = Math.round(18 + alpha * 30);
+    const stars = [];
+    for (let i = 0; i < count; i++) {
+      const hx = stableHash(`sky-star-x:${i}`);
+      const hy = stableHash(`sky-star-y:${i}`);
+      const hr = stableHash(`sky-star-r:${i}`);
+      const x = ((hx % 1000) / 1000) * width;
+      const y = 5 + ((hy % 1000) / 1000) * height * 0.36;
+      const r = 0.22 + ((hr % 100) / 100) * 0.55;
+      stars.push(
+        `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(2)}" fill="rgba(245,241,219,${(alpha * (0.38 + (hr % 40) / 120)).toFixed(3)})"></circle>`
+      );
+    }
+    return `<g data-layer="sky-stars">${stars.join("")}</g>`;
+  }
+
+  function renderHereSky(width, height, headingDeg) {
+    const state = hereCelestialState();
+    const theme = state.theme;
+    const sunPoint = hereSkyPoint(state.sun, width, height, headingDeg);
+    const moonPoint = hereSkyPoint(state.moon, width, height, headingDeg);
+    const sunVisible = state.sun.altitudeDeg > -12;
+    const moonVisible = state.moon.altitudeDeg > -8;
+    const sunOpacity = clamp((state.sun.altitudeDeg + 12) / 18, 0, 1) * sunPoint.domeOpacity;
+    const moonOpacity =
+      clamp((state.moon.altitudeDeg + 8) / 14, 0, 1) *
+      (0.26 + theme.nightFactor * 0.58) *
+      moonPoint.domeOpacity;
+    const sunR = clamp(4.2 + sunOpacity * 2.6 + theme.sunsetGlow * 2.4, 4.2, 9.2);
+    const moonR = clamp(3.2 + theme.nightFactor * 2.2, 3.2, 6.2);
+    const glowX = sunPoint.x.toFixed(1);
+    const glowY = clamp(sunPoint.y, height * 0.18, height * 0.5).toFixed(1);
+    const moonLit = clamp(0.26 + state.moonPhase * 0.58, 0.26, 0.88);
+
+    return {
+      title: `${theme.phase} sky; sun ${state.sun.altitudeDeg.toFixed(1)} deg; moon ${state.moon.altitudeDeg.toFixed(1)} deg`,
+      defs: `
+          <linearGradient id="gwHereSkyGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="${theme.top}"></stop>
+            <stop offset="0.55" stop-color="${theme.mid}"></stop>
+            <stop offset="1" stop-color="${theme.horizon}"></stop>
+          </linearGradient>
+          <radialGradient id="gwHereSunsetGlow" cx="${glowX}" cy="${glowY}" r="${(height * 0.46).toFixed(1)}" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="rgba(255,193,104,${(0.48 + theme.sunsetGlow * 0.34).toFixed(3)})"></stop>
+            <stop offset="0.42" stop-color="rgba(224,103,82,${(0.20 + theme.sunsetGlow * 0.24).toFixed(3)})"></stop>
+            <stop offset="1" stop-color="rgba(224,103,82,0)"></stop>
+          </radialGradient>
+        `,
+      markup: `
+        <rect x="0" y="0" width="${width}" height="${height}" fill="url(#gwHereSkyGradient)"></rect>
+        <rect x="0" y="0" width="${width}" height="${height}" fill="rgba(6,8,8,${(theme.nightFactor * 0.2).toFixed(3)})"></rect>
+        ${theme.sunsetGlow > 0.02 ? `<circle cx="${glowX}" cy="${glowY}" r="${(height * 0.46).toFixed(1)}" fill="url(#gwHereSunsetGlow)" opacity="${theme.sunsetGlow.toFixed(3)}"></circle>` : ""}
+        ${renderHereSkyStars(width, height, theme.starOpacity)}
+        ${sunVisible ? `<g data-layer="sun" aria-label="Sun"><circle cx="${sunPoint.x.toFixed(1)}" cy="${sunPoint.y.toFixed(1)}" r="${(sunR * 2.6).toFixed(1)}" fill="rgba(255,201,99,${(0.12 * sunOpacity).toFixed(3)})"></circle><circle cx="${sunPoint.x.toFixed(1)}" cy="${sunPoint.y.toFixed(1)}" r="${sunR.toFixed(1)}" fill="rgba(255,220,129,${(0.84 * sunOpacity).toFixed(3)})" stroke="rgba(255,248,220,${(0.46 * sunOpacity).toFixed(3)})" stroke-width="0.7"></circle></g>` : ""}
+        ${moonVisible ? `<g data-layer="moon" aria-label="Moon" opacity="${moonOpacity.toFixed(3)}"><circle cx="${moonPoint.x.toFixed(1)}" cy="${moonPoint.y.toFixed(1)}" r="${moonR.toFixed(1)}" fill="rgba(232,236,218,${moonLit.toFixed(3)})" stroke="rgba(255,255,235,0.54)" stroke-width="0.55"></circle><circle cx="${(moonPoint.x + (state.moonPhase - 0.5) * moonR * 1.7).toFixed(1)}" cy="${moonPoint.y.toFixed(1)}" r="${(moonR * 0.92).toFixed(1)}" fill="${theme.top}" opacity="${(0.22 + (1 - state.moonPhase) * 0.26).toFixed(3)}"></circle></g>` : ""}
+        <path d="M0 ${height * 0.34} C${(width * 0.25).toFixed(1)} ${height * 0.2} ${(width * 0.68).toFixed(1)} ${height * 0.2} ${width} ${height * 0.34} L${width} 0 L0 0 Z" fill="${theme.ground}"></path>
+      `
+    };
+  }
+
   function oddCellSpan(value, min, max) {
     const lo = Math.max(1, Math.round(Number(min) || 1));
     const hi = Math.max(lo, Math.round(Number(max) || lo));
@@ -1655,6 +2273,11 @@
       minIy: cy - radius,
       maxIy: cy + radius
     };
+  }
+
+  function here3dRenderBoundsFor(bounds, selectedContext, hudFov = here3dHudFovState(selectedContext)) {
+    if (!bounds) return null;
+    return hudFov.expanded ? squareBoundsAround(bounds, hudFov.spanCells) : bounds;
   }
 
   function loadHereElevationCache() {
@@ -1918,8 +2541,9 @@
 
     const cos = Math.cos(headingRad);
     const sin = Math.sin(headingRad);
-    const ringDistances = hereMap3dExpanded ? [90, 220, 520, 1100] : [110, 300, 700];
-    const sampleCounts = hereMap3dExpanded ? [9, 11, 13, 15] : [7, 9, 11];
+    const largeFrame = hereUsesLarge3dFrame();
+    const ringDistances = largeFrame ? [90, 220, 520, 1100] : [110, 300, 700];
+    const sampleCounts = largeFrame ? [9, 11, 13, 15] : [7, 9, 11];
     const fovRad = (HERE_3D_CAMERA.fovDeg * Math.PI) / 180;
     const ridgeBands = [];
 
@@ -1998,17 +2622,29 @@
     };
   }
 
-  function renderHereViewport3d(bounds, selectedContext) {
+  function here3dFrameSize(immersive = false) {
+    if (!immersive) return { w: 220, h: 150 };
+
+    const viewportW = Math.max(1, Number(window.innerWidth) || 390);
+    const viewportH = Math.max(1, Number(window.innerHeight) || 720);
+    const aspect = viewportW / viewportH;
+    const shortSide = 260;
+    return aspect >= 1
+      ? { w: Math.round(shortSide * aspect), h: shortSide }
+      : { w: shortSide, h: Math.round(shortSide / Math.max(0.2, aspect)) };
+  }
+
+  function renderHereViewport3d(bounds, selectedContext, options = {}) {
     const api = gridApi();
     if (!api) return "";
 
+    const immersive = options.immersive === true;
     const hudFov = here3dHudFovState(selectedContext);
-    const renderBounds = hudFov.expanded ? squareBoundsAround(bounds, hudFov.spanCells) : bounds;
+    const renderBounds = here3dRenderBoundsFor(bounds, selectedContext, hudFov);
     const cells = api.cellsForBounds(renderBounds);
     const selectedBounds = selectionBounds(selectedContext);
     const selectedKeys = selectionKeySet(selectedContext);
-    const w = 220;
-    const h = 150;
+    const { w, h } = here3dFrameSize(immersive);
     const gridSizeM = Number(api.gridSizeM) || 1;
     const widthCells = renderBounds.maxIx - renderBounds.minIx + 1;
     const heightCells = renderBounds.maxIy - renderBounds.minIy + 1;
@@ -2018,6 +2654,7 @@
     const heading = Number(window.GridWildCompass?.getState?.()?.heading);
     const headingDeg = (Number.isFinite(heading) ? heading : 0) + hereMap3dYawOffsetDeg;
     const headingRad = (headingDeg * Math.PI) / 180;
+    const sky = renderHereSky(w, h, headingDeg);
     const pitchDeg = clamp(
       hereMap3dPitchDeg,
       HERE_3D_CAMERA.minPitchDeg,
@@ -2025,7 +2662,7 @@
     );
     const pitchRad = (pitchDeg * Math.PI) / 180;
     const fovRad = (HERE_3D_CAMERA.fovDeg * Math.PI) / 180;
-    const targetScreenY = h * (hereMap3dExpanded ? 0.62 : 0.66);
+    const targetScreenY = h * (hereUsesLarge3dFrame() ? 0.62 : 0.66);
     const manualZoom = clamp(hereMap3dZoom, HERE_3D_CAMERA.minZoom, HERE_3D_CAMERA.maxZoom);
     const zoom = clamp(
       manualZoom / hudFov.scale,
@@ -2149,7 +2786,7 @@
 
     function isSlimCell(cell) {
       if (!hudFov.expanded) return false;
-      const detailRadius = hereMap3dExpanded
+      const detailRadius = hereUsesLarge3dFrame()
         ? HERE_3D_CAMERA.expandedDetailRadiusCells
         : HERE_3D_CAMERA.detailRadiusCells;
       return distanceFromCamera(Number(cell?.ix) + 0.5, Number(cell?.iy) + 0.5) > detailRadius;
@@ -2157,7 +2794,7 @@
 
     function isSlimPoint(ix, iy) {
       if (!hudFov.expanded) return false;
-      const detailRadius = hereMap3dExpanded
+      const detailRadius = hereUsesLarge3dFrame()
         ? HERE_3D_CAMERA.expandedLinearDetailRadiusCells
         : HERE_3D_CAMERA.linearDetailRadiusCells;
       return distanceFromCamera(ix, iy) > detailRadius;
@@ -2335,6 +2972,135 @@
 
     function featurePolygonPoints(points, lift = 0.05) {
       return points.map((point) => terrainPoint(point, lift));
+    }
+
+    function featureGridRing(feature) {
+      const raw = Array.isArray(feature?.points) ? feature.points : [];
+      const ring = [];
+      for (const point of raw) {
+        const gridPoint = latLngToGridPoint(point, gridSizeM);
+        if (!gridPoint) continue;
+        const prev = ring[ring.length - 1];
+        if (prev && Math.hypot(prev.ix - gridPoint.ix, prev.iy - gridPoint.iy) < 1e-5) {
+          continue;
+        }
+        ring.push(gridPoint);
+      }
+
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+      if (first && last && Math.hypot(first.ix - last.ix, first.iy - last.iy) < 1e-5) {
+        ring.pop();
+      }
+      return ring;
+    }
+
+    function signedGridPolygonArea(points = []) {
+      if (!Array.isArray(points) || points.length < 3) return 0;
+      let area = 0;
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i];
+        const b = points[(i + 1) % points.length];
+        area += a.ix * b.iy - b.ix * a.iy;
+      }
+      return area / 2;
+    }
+
+    function buildingFootprintLift(points = [], areaCells = null) {
+      const area = Math.abs(Number(areaCells ?? signedGridPolygonArea(points)));
+      const bounds = gridBoundsForPoints(points);
+      const bboxArea =
+        bounds && Number.isFinite(bounds.minIx)
+          ? Math.max(0, bounds.maxIx - bounds.minIx) * Math.max(0, bounds.maxIy - bounds.minIy)
+          : 0;
+      const effectiveAreaCells = Math.max(area, bboxArea * 0.28, 0.35);
+      const footprintSideM = Math.sqrt(effectiveAreaCells) * gridSizeM;
+      const heightM = clamp(4.4 + footprintSideM * 0.24, 4.8, 24);
+      return clamp(heightM / gridSizeM, 0.78, 3.9);
+    }
+
+    function buildingWallFill(a, b, winding) {
+      const dx = b.ix - a.ix;
+      const dy = b.iy - a.iy;
+      const len = Math.max(1e-6, Math.hypot(dx, dy));
+      const nx = winding >= 0 ? dy / len : -dy / len;
+      const ny = winding >= 0 ? -dx / len : dx / len;
+      const lightX = Math.cos(headingRad - Math.PI * 0.62);
+      const lightY = Math.sin(headingRad - Math.PI * 0.62);
+      const light = clamp((nx * lightX + ny * lightY + 1) / 2, 0, 1);
+      const r = Math.round(82 + light * 38);
+      const g = Math.round(58 + light * 30);
+      const bChannel = Math.round(42 + light * 24);
+      return `rgba(${r},${g},${bChannel},${(0.58 + light * 0.14).toFixed(2)})`;
+    }
+
+    function renderBuildingExtrusions() {
+      if ((window.__gwState?.showOsmBuildings ?? true) === false) return "";
+
+      const maxRendered = hereUsesLarge3dFrame()
+        ? Math.round(HERE_3D_BUILDING_MAX_FEATURES * 1.35)
+        : HERE_3D_BUILDING_MAX_FEATURES;
+      const maxPoints = hereUsesLarge3dFrame()
+        ? Math.round(HERE_3D_BUILDING_MAX_POINTS * 1.35)
+        : HERE_3D_BUILDING_MAX_POINTS;
+      const rows = [];
+
+      for (const feature of Array.isArray(osmFeatures.buildings) ? osmFeatures.buildings : []) {
+        const rawRing = featureGridRing(feature);
+        if (rawRing.length < 3) continue;
+        const rawBounds = gridBoundsForPoints(rawRing);
+        if (!boundsOverlap(rawBounds, renderBounds, 1.1)) continue;
+
+        const center = centerForGridPoints(rawRing);
+        if (!center || isSlimPoint(center.ix, center.iy)) continue;
+
+        const areaSigned = signedGridPolygonArea(rawRing);
+        const areaCells = Math.abs(areaSigned);
+        if (areaCells < 0.04) continue;
+
+        const ring = downsampleRing(rawRing, maxPoints);
+        if (ring.length < 3) continue;
+
+        const lift = buildingFootprintLift(rawRing, areaCells);
+        const base = ring.map((point) => terrainPoint(point, 0.025));
+        const top = ring.map((point) => terrainPoint(point, lift));
+        if (!isVisiblePoly(base.concat(top))) continue;
+
+        const winding = Math.sign(areaSigned) || 1;
+        const walls = [];
+        for (let i = 0; i < ring.length; i++) {
+          const j = (i + 1) % ring.length;
+          if (Math.hypot(ring[i].ix - ring[j].ix, ring[i].iy - ring[j].iy) < 1e-4) continue;
+          const wall = [top[i], top[j], base[j], base[i]];
+          if (!isVisiblePoly(wall)) continue;
+          walls.push({
+            depth: (top[i].forward + top[j].forward + base[j].forward + base[i].forward) / 4,
+            markup: `<polygon points="${pointsAttr(wall)}" fill="${buildingWallFill(ring[i], ring[j], winding)}" stroke="rgba(45,35,27,0.18)" stroke-width="0.22" stroke-linejoin="round"></polygon>`
+          });
+        }
+
+        const name = osmFeatureName(feature.tags) || "OSM building";
+        rows.push({
+          depth: worldToCamera(center.ix, center.iy, terrainZAt(center.ix, center.iy, lift)).forward,
+          markup: `
+            <g data-layer="buildings" aria-label="${esc(name)}">
+              <polygon points="${pointsAttr(base)}" fill="rgba(0,0,0,0.14)"></polygon>
+              ${walls
+                .sort((a, b) => a.depth - b.depth)
+                .map((wall) => wall.markup)
+                .join("")}
+              <polygon points="${pointsAttr(top)}" fill="rgba(154,112,76,0.78)" stroke="rgba(255,226,181,0.42)" stroke-width="0.45" stroke-linejoin="round"></polygon>
+            </g>
+          `
+        });
+
+        if (rows.length >= maxRendered) break;
+      }
+
+      return rows
+        .sort((a, b) => a.depth - b.depth)
+        .map((row) => row.markup)
+        .join("");
     }
 
     function renderHabitatPolygons() {
@@ -2961,25 +3727,7 @@
     const placeLabels = renderPlaceLabels();
     const elevationRidges = renderElevationRidges();
     const patchOutlines = renderPatchOutlines();
-
-    const buildings = sorted
-      .map((item) => {
-        if (isSlimCell(item)) return "";
-        const osm = osmByKey.get(item.key);
-        if (!osm?.insideBuilding) return "";
-        const stories = 1 + (stableHash(item.key) % 3);
-        const top = terrainCellPolygon(item.ix, item.iy, 0.04, stories * 0.9);
-        const base = terrainCellPolygon(item.ix, item.iy);
-        if (!isVisiblePoly(top)) return "";
-        return `
-        <g data-layer="buildings">
-          <polygon points="${pointsAttr([top[0], top[1], base[1], base[0]])}" fill="rgba(89,67,52,0.72)"></polygon>
-          <polygon points="${pointsAttr([top[1], top[2], base[2], base[1]])}" fill="rgba(119,86,62,0.58)"></polygon>
-          <polygon points="${pointsAttr(top)}" fill="rgba(154,112,76,0.76)" stroke="rgba(255,226,181,0.36)" stroke-width="0.45"></polygon>
-        </g>
-      `;
-      })
-      .join("");
+    const buildings = renderBuildingExtrusions();
 
     const trees = sorted
       .map((item) => {
@@ -3057,14 +3805,28 @@
       ? (() => {
           const ux = userCell.ix + 0.5;
           const uy = userCell.iy + 0.5;
-          const p = project(ux, uy, terrainZAt(ux, uy, 1.05));
-          const ay = p.y;
+          const ground = project(ux, uy, terrainZAt(ux, uy, 0.02));
+          const avatarTop = project(ux, uy, terrainZAt(ux, uy, 3.02));
+          const projectedSixtyFeet = Math.hypot(avatarTop.x - ground.x, avatarTop.y - ground.y);
+          const size = clamp(projectedSixtyFeet, hereUsesLarge3dFrame() ? 9.5 : 8, hereUsesLarge3dFrame() ? 32 : 28);
+          const x = ground.x;
+          const ay = ground.y - size * 0.47;
+          const bodyBottom = ay + size * 0.47;
+          const bodyTop = ay + size * 0.08;
+          const headY = ay - size * 0.12;
+          const headR = size * 0.22;
+          const bodyHalfBottom = size * 0.24;
+          const bodyHalfTop = size * 0.15;
+          const shadowRx = size * 0.38;
+          const shadowRy = Math.max(1.5, size * 0.14);
+          const stroke = clamp(size * 0.055, 0.72, 1.5);
+          const headingLen = size * 0.42;
           return `
         <g aria-label="Avatar in viewport">
-          <ellipse cx="${p.x}" cy="${ay + 10}" rx="6.4" ry="2.4" fill="rgba(0,0,0,0.34)"></ellipse>
-          <path d="M${p.x - 4.1} ${ay + 8.5} L${p.x - 2.5} ${ay + 1.4} L${p.x + 2.5} ${ay + 1.4} L${p.x + 4.1} ${ay + 8.5} Z" fill="#98e6c4" stroke="rgba(20,17,15,0.9)" stroke-width="0.9"></path>
-          <circle cx="${p.x}" cy="${ay - 2.1}" r="3.7" fill="#f0d18a" stroke="rgba(20,17,15,0.94)" stroke-width="1"></circle>
-          <path d="M${p.x} ${ay - 8.5} L${p.x + Math.sin(headingRad) * 7} ${ay - 2.5}" stroke="#ffe7a3" stroke-width="1.2" stroke-linecap="round"></path>
+          <ellipse cx="${x.toFixed(1)}" cy="${(bodyBottom + size * 0.08).toFixed(1)}" rx="${shadowRx.toFixed(1)}" ry="${shadowRy.toFixed(1)}" fill="rgba(0,0,0,0.34)"></ellipse>
+          <path d="M${(x - bodyHalfBottom).toFixed(1)} ${bodyBottom.toFixed(1)} L${(x - bodyHalfTop).toFixed(1)} ${bodyTop.toFixed(1)} L${(x + bodyHalfTop).toFixed(1)} ${bodyTop.toFixed(1)} L${(x + bodyHalfBottom).toFixed(1)} ${bodyBottom.toFixed(1)} Z" fill="#98e6c4" stroke="rgba(20,17,15,0.9)" stroke-width="${stroke.toFixed(2)}"></path>
+          <circle cx="${x.toFixed(1)}" cy="${headY.toFixed(1)}" r="${headR.toFixed(1)}" fill="#f0d18a" stroke="rgba(20,17,15,0.94)" stroke-width="${Math.max(stroke, 0.85).toFixed(2)}"></circle>
+          <path d="M${x.toFixed(1)} ${(headY - size * 0.42).toFixed(1)} L${(x + Math.sin(headingRad) * headingLen).toFixed(1)} ${headY.toFixed(1)}" stroke="#ffe7a3" stroke-width="${clamp(size * 0.07, 0.9, 1.8).toFixed(2)}" stroke-linecap="round"></path>
         </g>
       `;
         })()
@@ -3081,8 +3843,9 @@
 
     return `
       <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Here 3D viewport">
-        <title>Here 3D viewport with Copernicus DEM GLO-90 elevation via Open-Meteo</title>
+        <title>Here 3D viewport with ${sky.title}</title>
         <defs>
+          ${sky.defs}
           <radialGradient id="gwHereViewportVignette" cx="50%" cy="54%" r="66%">
             <stop offset="58%" stop-color="rgba(6,8,8,0)"></stop>
             <stop offset="100%" stop-color="rgba(6,8,8,0.82)"></stop>
@@ -3093,8 +3856,7 @@
             <stop offset="1" stop-color="rgba(118,231,191,0.16)"></stop>
           </linearGradient>
         </defs>
-        <rect x="0" y="0" width="${w}" height="${h}" fill="rgba(6,8,8,0.58)"></rect>
-        <path d="M0 ${h * 0.34} C56 ${h * 0.2} 150 ${h * 0.2} ${w} ${h * 0.34} L${w} 0 L0 0 Z" fill="rgba(149,196,184,0.08)"></path>
+        ${sky.markup}
         ${elevationRidges}
         ${terrain}
         ${habitatPolygons}
@@ -3131,10 +3893,26 @@
     `;
   }
 
+  function renderImmersionIcon() {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M8.5 3.8H4v4.7"></path>
+        <path d="M4 3.8l6.4 6.4"></path>
+        <path d="M15.5 20.2H20v-4.7"></path>
+        <path d="M20 20.2l-6.4-6.4"></path>
+      </svg>
+    `;
+  }
+
   function renderHere3dControls() {
     if (!hereMap3dEnabled) return "";
+    const expandButton = hereMap3dImmersed
+      ? ""
+      : `<button class="gw-here-map-expand" type="button" data-here-3d-expand aria-label="${hereMap3dExpanded ? "Shrink 3D viewport" : "Expand 3D viewport"}" title="${hereMap3dExpanded ? "Shrink 3D viewport" : "Expand 3D viewport"}">${hereMap3dExpanded ? "−" : "+"}</button>`;
+    const immersionLabel = hereMap3dImmersed ? "Restore top-down HUD" : "Immerse 3D viewport";
     return `
-      <button class="gw-here-map-expand" type="button" data-here-3d-expand aria-label="${hereMap3dExpanded ? "Shrink 3D viewport" : "Expand 3D viewport"}" title="${hereMap3dExpanded ? "Shrink 3D viewport" : "Expand 3D viewport"}">${hereMap3dExpanded ? "−" : "+"}</button>
+      ${expandButton}
+      <button class="gw-here-map-immerse${hereMap3dImmersed ? " is-on" : ""}" type="button" data-here-3d-immerse aria-pressed="${hereMap3dImmersed ? "true" : "false"}" aria-label="${immersionLabel}" title="${immersionLabel}">${renderImmersionIcon()}</button>
       <div class="gw-here-3d-controls" aria-label="3D view rotation controls">
         <button class="gw-here-3d-control" type="button" data-here-3d-rotate="-22.5" aria-label="Rotate view left" title="Rotate left">‹</button>
         <button class="gw-here-3d-control" type="button" data-here-3d-reset aria-label="Reset 3D rotation" title="Reset rotation">•</button>
@@ -3144,9 +3922,11 @@
   }
 
   function renderHereMap(bounds, selectedContext) {
-    const view = hereMap3dEnabled
+    const view = hereInsetShows3d()
       ? renderHereViewport3d(bounds, selectedContext)
-      : renderMiniMap(bounds, selectedContext);
+      : hereMap3dImmersed
+        ? renderHudMirror(bounds, selectedContext)
+        : renderMiniMap(bounds, selectedContext);
     return `${view}${renderMapModeToggle()}${renderHere3dControls()}`;
   }
 
@@ -3583,6 +4363,22 @@
     );
   }
 
+  function requestHere3dOsmCoverage(bounds, selectedContext = null) {
+    if (!herePanelOpen || !hereMap3dEnabled) return;
+    const api = gridApi();
+    const renderBounds = here3dRenderBoundsFor(bounds, selectedContext);
+    if (!api || !renderBounds) return;
+    if (cellCountForBounds(renderBounds) > HERE_3D_OSM_MAX_REQUEST_CELLS) return;
+
+    const latLngBounds = api.boundsToLatLngBounds?.(renderBounds);
+    if (!latLngBounds?.isValid?.()) return;
+
+    window.GridWildOsmFeaturesLayer?.ensureDetailCoverage?.(latLngBounds, {
+      reason: "here-3d",
+      silent: true
+    });
+  }
+
   function centeredTaxaBounds(bounds, maxCells) {
     const count = cellCountForBounds(bounds);
     if (!bounds || count <= maxCells) return bounds;
@@ -3679,9 +4475,42 @@
       btn.setAttribute("aria-label", herePanelOpen ? "Close investigation" : "Investigate here");
       btn.title = herePanelOpen ? "Close investigation" : "Investigate";
     }
+    if (!herePanelOpen) syncHereImmersiveViewport();
+  }
+
+  function setHereMap3dImmersed(immersed, options = {}) {
+    const next = immersed === true && hereMap3dEnabled;
+    if (next) hereMap3dExpanded = false;
+    if (!next) {
+      hereMap3dDrag = null;
+      hereInsetPanDrag = null;
+      hereInsetPointers.clear();
+      hereMap3dPointers.clear();
+    }
+    hereMap3dImmersed = next;
+    if (!next) syncHereImmersiveViewport();
+    if (options.refresh !== false) scheduleRefresh(10);
+  }
+
+  function syncHereImmersiveViewport(bounds = null, selectedContext = null) {
+    const viewport = ensureImmersiveViewport();
+    const active = Boolean(herePanelOpen && hereMap3dEnabled && hereMap3dImmersed && bounds);
+    viewport.hidden = !active;
+    viewport.classList.toggle("is-3d", active);
+    document.body.classList.toggle("gw-here-3d-immersed", active);
+
+    if (!active) {
+      viewport.innerHTML = "";
+      return;
+    }
+
+    viewport.innerHTML = renderHereViewport3d(bounds, selectedContext, { immersive: true });
   }
 
   function setHerePanelOpen(open, options = {}) {
+    if (open !== true && hereMap3dImmersed) {
+      setHereMap3dImmersed(false, { refresh: false });
+    }
     herePanelOpen = open === true;
     syncHerePanelState();
     if (herePanelOpen && options.refresh !== false) {
@@ -4030,6 +4859,203 @@
     };
   }
 
+  function hereInsetPanViewportForEvent(evt) {
+    return evt.target.closest?.("#gwHereMap.is-immersed-inset") || null;
+  }
+
+  function hereLeafletMap() {
+    return typeof map !== "undefined" ? map : window.map;
+  }
+
+  function panMainMapFromInsetDelta(dx, dy, mapEl) {
+    const leafletMap = hereLeafletMap();
+    if (!leafletMap?.panBy) return;
+
+    const rect = mapEl?.getBoundingClientRect?.();
+    const size = leafletMap.getSize?.();
+    const scaleX =
+      Math.max(1, Number(size?.x) || window.innerWidth || 1) / Math.max(1, rect?.width || 1);
+    const scaleY =
+      Math.max(1, Number(size?.y) || window.innerHeight || 1) / Math.max(1, rect?.height || 1);
+
+    leafletMap.panBy([-(Number(dx) || 0) * scaleX, -(Number(dy) || 0) * scaleY], {
+      animate: false
+    });
+    scheduleHereMapMotionRefresh();
+  }
+
+  function snapMainMapZoomLevel(zoom) {
+    const leafletMap = hereLeafletMap();
+    const minZoom = Number(leafletMap?.getMinZoom?.());
+    const maxZoom = Number(leafletMap?.getMaxZoom?.());
+    const snap = Number(leafletMap?.options?.zoomSnap);
+    let next = Number(zoom);
+    if (!Number.isFinite(next)) next = Number(leafletMap?.getZoom?.()) || 0;
+
+    if (Number.isFinite(minZoom)) next = Math.max(minZoom, next);
+    if (Number.isFinite(maxZoom)) next = Math.min(maxZoom, next);
+    if (Number.isFinite(snap) && snap > 0) {
+      next = Math.round(next / snap) * snap;
+    }
+    return next;
+  }
+
+  function setMainMapZoomFromInset(zoom, delay = 10) {
+    const leafletMap = hereLeafletMap();
+    if (!leafletMap?.setZoom) return;
+    const nextZoom = snapMainMapZoomLevel(zoom);
+    if (!Number.isFinite(nextZoom)) return;
+    if (Math.abs(nextZoom - (Number(leafletMap.getZoom?.()) || 0)) < 0.001) return;
+
+    leafletMap.setZoom(nextZoom, { animate: false });
+    scheduleHereMapMotionRefresh();
+    scheduleRefresh(delay);
+  }
+
+  function hereInsetGestureMetrics() {
+    const points = Array.from(hereInsetPointers.values());
+    if (!points.length) return null;
+
+    if (points.length === 1) {
+      const point = points[0];
+      return {
+        pointCount: 1,
+        pointerId: point.pointerId,
+        x: point.x,
+        y: point.y,
+        midX: point.x,
+        midY: point.y,
+        distance: 1
+      };
+    }
+
+    const a = points[0];
+    const b = points[1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    return {
+      pointCount: points.length,
+      midX: (a.x + b.x) / 2,
+      midY: (a.y + b.y) / 2,
+      distance: Math.max(1, Math.hypot(dx, dy))
+    };
+  }
+
+  function beginHereInsetGesture(mapEl) {
+    const metrics = hereInsetGestureMetrics();
+    if (!metrics) {
+      hereInsetPanDrag = null;
+      return;
+    }
+
+    hereInsetPanDrag = {
+      mapEl,
+      mode: metrics.pointCount >= 2 ? "pinch" : "pan",
+      pointerId: metrics.pointerId,
+      x: metrics.x,
+      y: metrics.y,
+      startDistance: metrics.distance,
+      startZoom: Number(hereLeafletMap()?.getZoom?.()) || 0,
+      lastMidX: metrics.midX,
+      lastMidY: metrics.midY
+    };
+  }
+
+  function startHereInsetPan(evt) {
+    if (!hereMap3dImmersed) return;
+    if (evt.pointerType === "mouse" && evt.button !== 0) return;
+    const mapEl = hereInsetPanViewportForEvent(evt);
+    if (!mapEl) return;
+    if (evt.target.closest?.("button, input, label")) return;
+
+    evt.preventDefault();
+    evt.stopPropagation();
+    hereInsetPointers.set(evt.pointerId, {
+      pointerId: evt.pointerId,
+      x: evt.clientX,
+      y: evt.clientY
+    });
+    mapEl.setPointerCapture?.(evt.pointerId);
+    beginHereInsetGesture(mapEl);
+  }
+
+  function moveHereInsetPan(evt) {
+    if (!hereInsetPanDrag || !hereInsetPointers.has(evt.pointerId)) return;
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    hereInsetPointers.set(evt.pointerId, {
+      pointerId: evt.pointerId,
+      x: evt.clientX,
+      y: evt.clientY
+    });
+
+    const metrics = hereInsetGestureMetrics();
+    if (!metrics) return;
+
+    if (hereInsetPanDrag.mode === "pinch" && metrics.pointCount >= 2) {
+      const zoomDelta = Math.log2(metrics.distance / Math.max(1, hereInsetPanDrag.startDistance));
+      setMainMapZoomFromInset(hereInsetPanDrag.startZoom + zoomDelta, 0);
+      panMainMapFromInsetDelta(
+        metrics.midX - hereInsetPanDrag.lastMidX,
+        metrics.midY - hereInsetPanDrag.lastMidY,
+        hereInsetPanDrag.mapEl
+      );
+      hereInsetPanDrag.lastMidX = metrics.midX;
+      hereInsetPanDrag.lastMidY = metrics.midY;
+      return;
+    }
+
+    if (hereInsetPanDrag.mode === "pinch" || metrics.pointCount >= 2) {
+      beginHereInsetGesture(hereInsetPanDrag.mapEl);
+      return;
+    }
+
+    const dx = metrics.x - hereInsetPanDrag.x;
+    const dy = metrics.y - hereInsetPanDrag.y;
+    hereInsetPanDrag.x = metrics.x;
+    hereInsetPanDrag.y = metrics.y;
+    panMainMapFromInsetDelta(dx, dy, hereInsetPanDrag.mapEl);
+  }
+
+  function endHereInsetPan(evt) {
+    if (!hereInsetPointers.has(evt.pointerId)) return;
+    const mapEl = hereInsetPanDrag?.mapEl || hereInsetPanViewportForEvent(evt);
+    try {
+      mapEl?.releasePointerCapture?.(evt.pointerId);
+    } catch (err) {
+      // Pointer capture may already be released by the browser.
+    }
+
+    hereInsetPointers.delete(evt.pointerId);
+    if (hereInsetPointers.size) {
+      beginHereInsetGesture(mapEl);
+      return;
+    }
+
+    hereInsetPanDrag = null;
+    scheduleRefresh(80);
+  }
+
+  function handleHereInsetWheel(evt) {
+    if (!hereMap3dImmersed) return;
+    const mapEl = hereInsetPanViewportForEvent(evt);
+    if (!mapEl) return;
+    if (evt.target.closest?.("button, input, label")) return;
+
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    let deltaY = Number(evt.deltaY || 0);
+    if (evt.deltaMode === 1) deltaY *= 16;
+    if (evt.deltaMode === 2) deltaY *= window.innerHeight || 720;
+
+    const leafletMap = hereLeafletMap();
+    const wheelPxPerZoomLevel = Math.max(1, Number(leafletMap?.options?.wheelPxPerZoomLevel) || 60);
+    const currentZoom = Number(leafletMap?.getZoom?.()) || 0;
+    setMainMapZoomFromInset(currentZoom - deltaY / wheelPxPerZoomLevel, 0);
+  }
+
   function beginHere3dGesture(mapEl) {
     const metrics = here3dGestureMetrics();
     if (!metrics) {
@@ -4052,10 +5078,14 @@
     };
   }
 
+  function here3dViewportForEvent(evt) {
+    return evt.target.closest?.("#gwHereMap.is-3d, #gwHereImmersiveViewport.is-3d") || null;
+  }
+
   function startHere3dDrag(evt) {
     if (!hereMap3dEnabled) return;
     if (evt.pointerType === "mouse" && evt.button !== 0) return;
-    const mapEl = evt.target.closest?.("#gwHereMap.is-3d");
+    const mapEl = here3dViewportForEvent(evt);
     if (!mapEl) return;
     if (evt.target.closest?.("button, input, label")) return;
 
@@ -4112,7 +5142,7 @@
 
   function endHere3dDrag(evt) {
     if (!hereMap3dPointers.has(evt.pointerId)) return;
-    const mapEl = hereMap3dDrag?.mapEl || evt.target.closest?.("#gwHereMap.is-3d");
+    const mapEl = hereMap3dDrag?.mapEl || here3dViewportForEvent(evt);
     try {
       mapEl?.releasePointerCapture?.(evt.pointerId);
     } catch (err) {
@@ -4131,7 +5161,7 @@
 
   function handleHere3dWheel(evt) {
     if (!hereMap3dEnabled) return;
-    const mapEl = evt.target.closest?.("#gwHereMap.is-3d");
+    const mapEl = here3dViewportForEvent(evt);
     if (!mapEl) return;
     if (evt.target.closest?.("button, input, label")) return;
 
@@ -4201,8 +5231,7 @@
         hereMap3dEnabled = mapModeToggle.checked === true;
         if (!hereMap3dEnabled) {
           hereMap3dExpanded = false;
-          hereMap3dDrag = null;
-          hereMap3dPointers.clear();
+          setHereMap3dImmersed(false, { refresh: false });
         }
         localStorage.setItem(HERE_MAP_3D_STORAGE_KEY, hereMap3dEnabled ? "true" : "false");
         scheduleRefresh(10);
@@ -4215,6 +5244,14 @@
         evt.stopPropagation();
         hereMap3dExpanded = !hereMap3dExpanded;
         scheduleRefresh(10);
+        return;
+      }
+
+      const immerse3d = evt.target.closest?.("[data-here-3d-immerse]");
+      if (immerse3d) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        setHereMap3dImmersed(!hereMap3dImmersed);
         return;
       }
 
@@ -4271,6 +5308,11 @@
     panel.addEventListener("pointermove", moveHere3dDrag);
     panel.addEventListener("pointerup", endHere3dDrag);
     panel.addEventListener("pointercancel", endHere3dDrag);
+    panel.addEventListener("pointerdown", startHereInsetPan);
+    panel.addEventListener("pointermove", moveHereInsetPan);
+    panel.addEventListener("pointerup", endHereInsetPan);
+    panel.addEventListener("pointercancel", endHereInsetPan);
+    panel.addEventListener("wheel", handleHereInsetWheel, { passive: false });
     panel.addEventListener("wheel", handleHere3dWheel, { passive: false });
   }
 
@@ -4286,9 +5328,10 @@
     if (!mapEl) return;
 
     const bounds = api.centerAreaBounds(HERE_RADIUS_CELLS);
-    mapEl.classList.toggle("is-3d", hereMap3dEnabled);
-    mapEl.classList.toggle("is-expanded", hereMap3dEnabled && hereMap3dExpanded);
+    requestHere3dOsmCoverage(bounds, null);
+    syncHereMapClasses(mapEl);
     mapEl.innerHTML = renderHereMap(bounds, null);
+    syncHereImmersiveViewport(bounds, null);
   }
 
   function scheduleHereMapMotionRefresh() {
@@ -4323,6 +5366,7 @@
     const token = ++refreshToken;
     const selection = window.GridWildSelectionTool?.getSelection?.() || null;
     const bounds = selection?.bounds || api.centerAreaBounds(HERE_RADIUS_CELLS);
+    requestHere3dOsmCoverage(bounds, selection || null);
     const width = bounds.maxIx - bounds.minIx + 1;
     const height = bounds.maxIy - bounds.minIy + 1;
     const title = document.getElementById("gwHereTitle");
@@ -4358,9 +5402,9 @@
           : `${width} x ${height}`;
     }
     if (mapEl) {
-      mapEl.classList.toggle("is-3d", hereMap3dEnabled);
-      mapEl.classList.toggle("is-expanded", hereMap3dEnabled && hereMap3dExpanded);
+      syncHereMapClasses(mapEl);
       mapEl.innerHTML = renderHereMap(bounds, selection || null);
+      syncHereImmersiveViewport(bounds, selection || null);
     }
     if (statsEl) {
       statsEl.innerHTML = `
@@ -4541,12 +5585,12 @@
         })
         .map((cell) => {
           const key = `${cell.ix},${cell.iy}`;
-          const baseMetrics =
-            window.__richGridMetrics?.get?.(key) || window.__staticGridCounts?.get?.(key) || null;
           const metrics =
-            typeof window.getDisplayMetricsForCell === "function"
-              ? window.getDisplayMetricsForCell(cell.ix, cell.iy, baseMetrics || null)
-              : baseMetrics;
+            api?.metricsForCell?.(cell.ix, cell.iy) ||
+            window.getGridWildRuntimeMetricsForCell?.(cell.ix, cell.iy) ||
+            window.__richGridMetrics?.get?.(key) ||
+            window.__staticGridCounts?.get?.(key) ||
+            null;
           return {
             ...cell,
             key,
@@ -4865,6 +5909,7 @@
     injectStyles();
     ensureButton();
     ensurePanel();
+    ensureImmersiveViewport();
     bindHerePanelInteractions();
     syncHerePanelState();
 
@@ -4877,7 +5922,9 @@
       open: () => setHerePanelOpen(true),
       close: () => setHerePanelOpen(false),
       toggle: toggleHerePanel,
-      isOpen: () => herePanelOpen
+      isOpen: () => herePanelOpen,
+      setImmersed: (immersed) => setHereMap3dImmersed(immersed),
+      isImmersed: () => hereMap3dImmersed
     };
 
     const investigate = investigateButton();
@@ -4905,6 +5952,14 @@
     window.addEventListener("gwPyriteLakeProgress", (evt) =>
       setHerePyriteProgress(evt.detail || {})
     );
+    window.addEventListener("resize", () => {
+      if (hereMap3dImmersed) scheduleRefresh(20);
+    });
+    if (!hereSkyRefreshTimer) {
+      hereSkyRefreshTimer = setInterval(() => {
+        if (herePanelOpen && hereMap3dEnabled) scheduleRefresh(20);
+      }, HERE_SKY_REFRESH_MS);
+    }
     document.addEventListener("change", (evt) => {
       if (
         evt.target?.matches?.(

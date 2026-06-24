@@ -114,7 +114,7 @@
     // Keep local fallback mirror for now.
     localStorage.setItem(STORAGE_KEY, JSON.stringify(safeStore));
 
-    if (!window.GridWildAPI?.getPlayerId?.()) {
+    if (!window.GridWildAPI?.getPlayerId?.() || window.GridWildOnline?.isReady?.() !== true) {
       if (!pendingBootstrapSync) {
         pendingBootstrapSync = true;
         window.addEventListener(

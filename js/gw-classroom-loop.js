@@ -127,31 +127,12 @@
     { key: "reflect", label: "Reflect", title: "Calibrate confidence" }
   ];
 
-  const DESIGN_PROMPTS = [
-    {
-      id: "pack_source",
-      question: "Where should lesson packs come from first?",
-      options: ["Nearby common taxa", "Current quest target", "Recent personal observations"]
-    },
-    {
-      id: "gate_live",
-      question: "Should live iNat submission require field-mark evidence?",
-      options: ["Require 1-3 marks", "Prompt but allow skip", "No gate"]
-    },
-    {
-      id: "reward_shape",
-      question: "What should rewards favor most?",
-      options: ["Good evidence", "Correct broad rank", "Specific IDs"]
-    }
-  ];
-
   const state = {
     packId: PACKS[0].id,
     stage: "learn",
     exampleIndex: 0,
     revealed: false,
-    marked: {},
-    promptChoices: {}
+    marked: {}
   };
 
   let activeRoot = null;
@@ -283,8 +264,7 @@
       .gw-classloop-btn,
       .gw-classloop-stage,
       .gw-classloop-pack,
-      .gw-classloop-mark-btn,
-      .gw-classloop-choice {
+      .gw-classloop-mark-btn {
         border: 1px solid rgba(215,183,116,0.28);
         border-radius: 8px;
         color: #efe6d3;
@@ -308,7 +288,7 @@
 
       .gw-classloop-layout {
         display: grid;
-        grid-template-columns: minmax(250px, 0.36fr) minmax(0, 1fr) minmax(270px, 0.42fr);
+        grid-template-columns: minmax(250px, 0.36fr) minmax(0, 1fr);
         gap: 12px;
         align-items: start;
       }
@@ -344,8 +324,7 @@
       .gw-classloop-stage.is-active,
       .gw-classloop-btn.primary,
       .gw-classloop-pack.is-active,
-      .gw-classloop-mark-btn.is-seen,
-      .gw-classloop-choice.is-active {
+      .gw-classloop-mark-btn.is-seen {
         color: #10251d;
         background: #91d2f4;
         border-color: rgba(255,255,255,0.52);
@@ -369,16 +348,14 @@
 
       .gw-classloop-pack-list,
       .gw-classloop-card-list,
-      .gw-classloop-mark-list,
-      .gw-classloop-prompt-list {
+      .gw-classloop-mark-list {
         display: grid;
         gap: 8px;
         margin-top: 10px;
       }
 
       .gw-classloop-pack,
-      .gw-classloop-card,
-      .gw-classloop-prompt {
+      .gw-classloop-card {
         padding: 10px;
         border-radius: 10px;
         border: 1px solid rgba(255,255,255,0.09);
@@ -390,16 +367,14 @@
       }
 
       .gw-classloop-pack b,
-      .gw-classloop-card b,
-      .gw-classloop-prompt b {
+      .gw-classloop-card b {
         display: block;
         color: #efe6d3;
         font-size: 12px;
       }
 
       .gw-classloop-pack span,
-      .gw-classloop-card span,
-      .gw-classloop-prompt span {
+      .gw-classloop-card span {
         display: block;
         margin-top: 3px;
       }
@@ -426,8 +401,7 @@
       }
 
       .gw-classloop-mark-btn,
-      .gw-classloop-btn,
-      .gw-classloop-choice {
+      .gw-classloop-btn {
         min-height: 30px;
         padding: 6px 9px;
         font-size: 10px;
@@ -523,7 +497,6 @@
           <div class="gw-classloop-layout">
             ${renderPackPanel(pack)}
             ${renderMain(pack)}
-            ${renderDesignPanel()}
           </div>
         </div>
       </div>
@@ -722,46 +695,6 @@
     return `<button class="gw-classloop-mark-btn ${cls}" type="button" data-gw-classloop-mark="${esc(id)}" data-gw-classloop-mark-value="${esc(value)}">${esc(label)}</button>`;
   }
 
-  function renderDesignPanel() {
-    return `
-      <aside class="gw-classloop-panel">
-        <div class="gw-classloop-section-title">Design prompts</div>
-        <div class="gw-classloop-small">These are intentionally unresolved choices for you to react to.</div>
-        <div class="gw-classloop-prompt-list">
-          ${DESIGN_PROMPTS.map(
-            (prompt) => `
-            <div class="gw-classloop-prompt">
-              <b>${esc(prompt.question)}</b>
-              <div class="gw-classloop-actions">
-                ${prompt.options
-                  .map(
-                    (option) => `
-                  <button
-                    class="gw-classloop-choice ${state.promptChoices[prompt.id] === option ? "is-active" : ""}"
-                    type="button"
-                    data-gw-classloop-prompt="${esc(prompt.id)}"
-                    data-gw-classloop-choice="${esc(option)}"
-                  >
-                    ${esc(option)}
-                  </button>
-                `
-                  )
-                  .join("")}
-              </div>
-            </div>
-          `
-          ).join("")}
-        </div>
-        <div class="gw-classloop-card-list">
-          <div class="gw-classloop-card">
-            <b>Old Classroom</b>
-            <span class="gw-classloop-small">The previous Learn / Practice pane is still available from the Identify card.</span>
-          </div>
-        </div>
-      </aside>
-    `;
-  }
-
   function bind(root) {
     root.querySelector("[data-gw-classloop-close]")?.addEventListener("click", close);
 
@@ -807,12 +740,6 @@
       window.GridWildIdentify?.openIdentifyDialog?.();
     });
 
-    root.querySelectorAll("[data-gw-classloop-prompt]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        state.promptChoices[btn.dataset.gwClassloopPrompt] = btn.dataset.gwClassloopChoice || "";
-        render();
-      });
-    });
   }
 
   document.addEventListener("click", (evt) => {
@@ -832,8 +759,7 @@
     close,
     getState: () => ({
       ...state,
-      marked: { ...state.marked },
-      promptChoices: { ...state.promptChoices }
+      marked: { ...state.marked }
     })
   };
 })();

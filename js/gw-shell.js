@@ -48,6 +48,10 @@ function runGridWildIdleTask(callback, delay = 700) {
   window.setTimeout(callback, delay);
 }
 
+function runGridWildDelayedIdleTask(callback, delay = 700) {
+  window.setTimeout(() => runGridWildIdleTask(callback, 250), Math.max(0, delay));
+}
+
 const gwLazyScriptPromises = new Map();
 
 function loadGridWildScript(src) {
@@ -178,6 +182,136 @@ function dispatchGridWildBootstrapUnavailable(err) {
     })
   );
 }
+
+const GRIDWILD_ONLINE_BOOT_DELAY_MS = 2500;
+const GRIDWILD_ONLINE_BOOT_TIMEOUT_MS = 3500;
+let gwOnlineBootstrapPromise = null;
+let gwOnlineBootstrapScheduled = false;
+
+function applyGridWildBootstrapData(data) {
+  window.__gwState = window.__gwState || {};
+  window.__gwState.bootstrapReady = true;
+  window.__gwState.onlineGameplayReady = true;
+  window.__gwState.onlineBootstrapDeferred = false;
+  window.__gwState.player = data.player;
+  window.__gwState.quests = data.quests || window.__gwState.quests || [];
+  window.__gwState.questEvidence = (data.quests || window.__gwState.quests || []).flatMap(
+    (q) => q.quest_evidence || []
+  );
+  window.__gwState.questDataLoaded = Array.isArray(data.quests);
+
+  window.__gwState.activeQuestId = data.state?.active_quest_id || null;
+  window.__gwState.activePartyId = data.state?.active_party_id || null;
+
+  window.__gwState.surveys = data.surveys || window.__gwState.surveys || [];
+  window.__gwState.playerSurveys = data.player_surveys || window.__gwState.playerSurveys || [];
+  window.__gwState.surveyDataLoaded = Array.isArray(data.surveys);
+
+  window.__gwState.playerInventory = data.player_inventory || window.__gwState.playerInventory || [];
+  window.__gwState.playerEquipment =
+    data.player_equipment || window.__gwState.playerEquipment || null;
+
+  window.__gwState.playerAchievements =
+    data.player_achievements || window.__gwState.playerAchievements || [];
+  window.__gwState.identificationClaims =
+    data.identification_claims || window.__gwState.identificationClaims || [];
+  window.__gwState.playerDetailsLoaded = Array.isArray(data.player_inventory);
+  if (Array.isArray(data.identification_claims)) {
+    window.GridWildIdentificationEvidence?.mergeServerClaims?.(data.identification_claims || []);
+  }
+  window.__gwState.playerPresence = data.player_presence || window.__gwState.playerPresence || null;
+  window.__gwState.homeNicheId = data.home_niche_id || window.__gwState.homeNicheId || null;
+  window.__gwState.homeNiche = data.home_niche || window.__gwState.homeNiche || null;
+
+  window.GridWildAPI.setPlayerId(data.player.id);
+  if (data.player_session) {
+    window.GridWildAPI.setPlayerSession(data.player_session);
+  }
+  window.GridWildPlayerUI?.refreshPlayerUI?.();
+
+  window.GridWildAchievements?.refreshAchievementSummary?.();
+
+  window.GridWildEconomy?.refreshHud?.();
+  window.GridWildCharacter?.renderSummary?.();
+
+  window.dispatchEvent(
+    new CustomEvent("gwBootstrapReady", {
+      detail: { player: data.player, playerPresence: data.player_presence || null }
+    })
+  );
+
+  window.refreshQuestBadge?.();
+
+  runGridWildIdleTask(() => {
+    ensureGridWildLocalNichesLoaded().catch((err) =>
+      warnGridWildLoadFailure("Idle Local Niches load failed:", err)
+    );
+
+    if (window.__gwState.activePartyId) {
+      ensureGridWildPartyLoaded().catch((err) =>
+        warnGridWildLoadFailure("Idle Party module load failed:", err)
+      );
+    }
+
+    ensurePlayerBootstrapDetailsLoaded().catch((err) =>
+      warnGridWildLoadFailure("Idle player details load failed:", err)
+    );
+
+    if (window.__gwState.activeQuestId) {
+      ensureQuestDataLoaded().catch((err) => warnGridWildLoadFailure("Idle quest load failed:", err));
+    }
+  }, 900);
+}
+
+function startGridWildOnlineBootstrap(options = {}) {
+  if (gwOnlineBootstrapPromise && options.force !== true) return gwOnlineBootstrapPromise;
+
+  window.__gwState = window.__gwState || {};
+  window.__gwState.onlineBootstrapDeferred = false;
+  window.__gwState.onlineBootstrapStartedAt = Date.now();
+
+  gwOnlineBootstrapPromise = window.GridWildAPI.getBootstrap({
+    applySession: true,
+    force: options.force === true,
+    timeoutMs: options.timeoutMs || GRIDWILD_ONLINE_BOOT_TIMEOUT_MS
+  })
+    .then((data) => {
+      applyGridWildBootstrapData(data);
+      return data;
+    })
+    .catch((err) => {
+      if (!isGridWildReloginRequiredError(err) && err?.code !== "GRIDWILD_API_TIMEOUT") {
+        console.warn("Deferred online bootstrap unavailable:", err);
+      }
+      dispatchGridWildBootstrapUnavailable(err);
+      return null;
+    })
+    .finally(() => {
+      gwOnlineBootstrapPromise = null;
+    });
+
+  return gwOnlineBootstrapPromise;
+}
+
+function scheduleGridWildOnlineBootstrap() {
+  if (gwOnlineBootstrapScheduled) return;
+  gwOnlineBootstrapScheduled = true;
+
+  window.__gwState = window.__gwState || {};
+  window.__gwState.onlineBootstrapDeferred = true;
+
+  const afterPaint =
+    typeof window.requestAnimationFrame === "function"
+      ? (callback) => window.requestAnimationFrame(() => window.requestAnimationFrame(callback))
+      : (callback) => window.setTimeout(callback, 0);
+
+  afterPaint(() => {
+    runGridWildDelayedIdleTask(() => startGridWildOnlineBootstrap(), GRIDWILD_ONLINE_BOOT_DELAY_MS);
+  });
+}
+
+window.startGridWildOnlineBootstrap = startGridWildOnlineBootstrap;
+window.scheduleGridWildOnlineBootstrap = scheduleGridWildOnlineBootstrap;
 
 let gwPlayerDetailsPromise = null;
 async function ensurePlayerBootstrapDetailsLoaded(options = {}) {
@@ -1882,91 +2016,5 @@ recenterFab?.addEventListener("click", () => {
 // --------------------------------------------------------------------
 (function initGridWildMobileShell() {
   bootGridWildLocalMapShell();
-
-  window.GridWildAPI.getBootstrap()
-    .then((data) => {
-      window.__gwState = window.__gwState || {};
-      window.__gwState.bootstrapReady = true;
-      window.__gwState.onlineGameplayReady = true;
-      window.__gwState.player = data.player;
-      window.__gwState.quests = data.quests || window.__gwState.quests || [];
-      window.__gwState.questEvidence = (data.quests || window.__gwState.quests || []).flatMap(
-        (q) => q.quest_evidence || []
-      );
-      window.__gwState.questDataLoaded = Array.isArray(data.quests);
-
-      window.__gwState.activeQuestId = data.state?.active_quest_id || null;
-      window.__gwState.activePartyId = data.state?.active_party_id || null;
-
-      window.__gwState.surveys = data.surveys || window.__gwState.surveys || [];
-      window.__gwState.playerSurveys = data.player_surveys || window.__gwState.playerSurveys || [];
-      window.__gwState.surveyDataLoaded = Array.isArray(data.surveys);
-
-      window.__gwState.playerInventory =
-        data.player_inventory || window.__gwState.playerInventory || [];
-      window.__gwState.playerEquipment =
-        data.player_equipment || window.__gwState.playerEquipment || null;
-
-      window.__gwState.playerAchievements =
-        data.player_achievements || window.__gwState.playerAchievements || [];
-      window.__gwState.identificationClaims =
-        data.identification_claims || window.__gwState.identificationClaims || [];
-      window.__gwState.playerDetailsLoaded = Array.isArray(data.player_inventory);
-      if (Array.isArray(data.identification_claims)) {
-        window.GridWildIdentificationEvidence?.mergeServerClaims?.(
-          data.identification_claims || []
-        );
-      }
-      window.__gwState.playerPresence =
-        data.player_presence || window.__gwState.playerPresence || null;
-      window.__gwState.homeNicheId = data.home_niche_id || window.__gwState.homeNicheId || null;
-      window.__gwState.homeNiche = data.home_niche || window.__gwState.homeNiche || null;
-
-      window.GridWildAPI.setPlayerId(data.player.id);
-      if (data.player_session) {
-        window.GridWildAPI.setPlayerSession(data.player_session);
-      }
-      window.GridWildPlayerUI?.refreshPlayerUI?.();
-
-      window.GridWildAchievements?.refreshAchievementSummary?.();
-
-      window.GridWildEconomy?.refreshHud?.();
-      window.GridWildCharacter?.renderSummary?.();
-
-      window.dispatchEvent(
-        new CustomEvent("gwBootstrapReady", {
-          detail: { player: data.player, playerPresence: data.player_presence || null }
-        })
-      );
-
-      window.refreshQuestBadge?.();
-
-      runGridWildIdleTask(() => {
-        ensureGridWildLocalNichesLoaded().catch((err) =>
-          warnGridWildLoadFailure("Idle Local Niches load failed:", err)
-        );
-
-        if (window.__gwState.activePartyId) {
-          ensureGridWildPartyLoaded().catch((err) =>
-            warnGridWildLoadFailure("Idle Party module load failed:", err)
-          );
-        }
-
-        ensurePlayerBootstrapDetailsLoaded().catch((err) =>
-          warnGridWildLoadFailure("Idle player details load failed:", err)
-        );
-
-        if (window.__gwState.activeQuestId) {
-          ensureQuestDataLoaded().catch((err) =>
-            warnGridWildLoadFailure("Idle quest load failed:", err)
-          );
-        }
-      }, 900);
-    })
-    .catch((err) => {
-      if (!isGridWildReloginRequiredError(err)) {
-        console.error("Bootstrap failed:", err);
-      }
-      dispatchGridWildBootstrapUnavailable(err);
-    });
+  scheduleGridWildOnlineBootstrap();
 })();

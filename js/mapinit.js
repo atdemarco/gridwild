@@ -222,6 +222,11 @@ installGridWildViewportGestureGuard();
 const GRIDWILD_BASE_MAP_STORAGE_KEY = "gridwildBaseMap";
 const GRIDWILD_DAY_NIGHT_MODE_STORAGE_KEY = "gridwildDayNightMode";
 const GRIDWILD_MAP_VIEW_STORAGE_KEY = "gridwildMapView";
+const GRIDWILD_FALLBACK_MAP_VIEW = {
+  lat: 38.911325,
+  lng: -77.076678,
+  zoom: 19
+};
 
 function normalizeGridWildBaseMapChoice(value) {
   return value === "terrain" ? "terrain" : "street";
@@ -258,26 +263,6 @@ function readGridWildInitialMapLinkView() {
 }
 
 const GRIDWILD_INITIAL_MAP_LINK_VIEW = readGridWildInitialMapLinkView();
-
-function readSavedGridWildMapView() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(GRIDWILD_MAP_VIEW_STORAGE_KEY) || "null");
-    const lat = Number(raw?.lat);
-    const lng = Number(raw?.lng);
-    const zoom = Number(raw?.zoom);
-
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90) return null;
-    if (!Number.isFinite(lng) || lng < -180 || lng > 180) return null;
-
-    return {
-      lat,
-      lng,
-      zoom: Number.isFinite(zoom) ? Math.max(2, Math.min(22, zoom)) : 18
-    };
-  } catch {
-    return null;
-  }
-}
 
 function persistGridWildMapView() {
   try {
@@ -554,20 +539,16 @@ setGridWildBaseMap(window.__gwState.baseMap, { persist: false });
 setGridWildDayNightMode(window.__gwState.dayNightMode, { persist: false });
 
 // Default view (in case location fails)
-//map.setView([38.9072, -77.0369], 17); // DC fallback
-const GRIDWILD_SAVED_MAP_VIEW = readSavedGridWildMapView();
 if (GRIDWILD_INITIAL_MAP_LINK_VIEW) {
   map.setView(
     [GRIDWILD_INITIAL_MAP_LINK_VIEW.lat, GRIDWILD_INITIAL_MAP_LINK_VIEW.lng],
     GRIDWILD_INITIAL_MAP_LINK_VIEW.zoom
   );
-} else if (GRIDWILD_SAVED_MAP_VIEW) {
-  map.setView(
-    [GRIDWILD_SAVED_MAP_VIEW.lat, GRIDWILD_SAVED_MAP_VIEW.lng],
-    GRIDWILD_SAVED_MAP_VIEW.zoom
-  );
 } else {
-  map.setView([38.911325, -77.076678], 19); // GEORGETOWN POLLINATOR GARDEN HOME!
+  map.setView(
+    [GRIDWILD_FALLBACK_MAP_VIEW.lat, GRIDWILD_FALLBACK_MAP_VIEW.lng],
+    GRIDWILD_FALLBACK_MAP_VIEW.zoom
+  ); // GEORGETOWN POLLINATOR GARDEN HOME!
 }
 
 map.on("moveend zoomend", persistGridWildMapView);

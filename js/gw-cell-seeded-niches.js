@@ -104,6 +104,12 @@
 
   function displayMetricsForCell(ix, iy) {
     const key = cellKey(ix, iy);
+
+    if (typeof window.getGridWildRuntimeMetricsForCell === "function") {
+      const metrics = window.getGridWildRuntimeMetricsForCell(ix, iy);
+      if (metrics) return metrics;
+    }
+
     const raw =
       window.__richGridMetrics?.get?.(key) || window.__staticGridCounts?.get?.(key) || null;
 

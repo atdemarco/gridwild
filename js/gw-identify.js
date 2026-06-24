@@ -844,6 +844,9 @@
           embedded
             ? ""
             : `
+          <button class="gw-identify-foot-btn" type="button" data-gw-duo-classroom-open onclick="event.preventDefault(); event.stopPropagation(); window.GridWildDuoClassroom && window.GridWildDuoClassroom.open(); return false;">
+            Duo Classroom
+          </button>
           <button class="gw-identify-foot-btn" type="button" data-gw-classloop-open onclick="event.preventDefault(); event.stopPropagation(); window.GridWildClassroomLoop && window.GridWildClassroomLoop.open(); return false;">
             Classroom
           </button>
@@ -1041,6 +1044,9 @@
         <div class="gw-identify-sheet-actions">
           <button class="gw-mini-btn" type="button" data-gw-identify-open>
             Open Identify
+          </button>
+          <button class="gw-mini-btn" type="button" data-gw-duo-classroom-open onclick="event.preventDefault(); event.stopPropagation(); window.GridWildDuoClassroom && window.GridWildDuoClassroom.open(); return false;">
+            Duo Classroom
           </button>
           <button class="gw-mini-btn" type="button" data-gw-classloop-open onclick="event.preventDefault(); event.stopPropagation(); window.GridWildClassroomLoop && window.GridWildClassroomLoop.open(); return false;">
             Classroom

@@ -616,6 +616,12 @@
 
   function displayMetricsForCell(ix, iy) {
     const key = window.GridWildGrid?.cellKey?.(ix, iy) || `${ix},${iy}`;
+
+    if (typeof window.getGridWildRuntimeMetricsForCell === "function") {
+      const metrics = window.getGridWildRuntimeMetricsForCell(ix, iy);
+      if (metrics) return metrics;
+    }
+
     const baseMetrics =
       window.__richGridMetrics?.get?.(key) || window.__staticGridCounts?.get?.(key) || null;
 
@@ -627,9 +633,7 @@
   }
 
   function staticObservationCountForCell(ix, iy) {
-    const key = window.GridWildGrid?.cellKey?.(ix, iy) || `${ix},${iy}`;
-    const metrics =
-      window.__staticGridCounts instanceof Map ? window.__staticGridCounts.get(key) : null;
+    const metrics = displayMetricsForCell(ix, iy);
     return Number(metrics?.count) || 0;
   }
 

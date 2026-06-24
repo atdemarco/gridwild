@@ -30,6 +30,7 @@
   let fetchInFlight = false;
   let fetchInFlightMeta = null;
   let fetchRequestedWhileInFlight = false;
+  let detailCoverageTimer = null;
   let lastFetchStartedAt = 0;
   let lastFetchScheduleZoom = null;
   let zoomFetchSettleUntil = 0;
@@ -288,6 +289,34 @@
     }
 
     return L.latLngBounds(L.latLng(bounds.south, bounds.west), L.latLng(bounds.north, bounds.east));
+  }
+
+  function normalizeLatLngBounds(bounds) {
+    if (!bounds) return null;
+    if (
+      typeof bounds.getSouth === "function" &&
+      typeof bounds.getWest === "function" &&
+      typeof bounds.getNorth === "function" &&
+      typeof bounds.getEast === "function"
+    ) {
+      return bounds.isValid?.() === false ? null : bounds;
+    }
+
+    if (
+      Number.isFinite(bounds.south) &&
+      Number.isFinite(bounds.west) &&
+      Number.isFinite(bounds.north) &&
+      Number.isFinite(bounds.east)
+    ) {
+      return deserializeBounds(bounds);
+    }
+
+    try {
+      const latLngBounds = L.latLngBounds(bounds);
+      return latLngBounds?.isValid?.() === false ? null : latLngBounds;
+    } catch {
+      return null;
+    }
   }
 
   function hasCachedCoverage(profile = currentQueryProfile(), coverageBounds = null) {
@@ -1135,6 +1164,134 @@
     });
   }
 
+  function detailCoverageDelay(options = {}) {
+    const requested = Number(options.retryDelayMs);
+    if (Number.isFinite(requested)) return Math.max(FETCH_DEBOUNCE_MS, requested);
+    return fetchDelayForCurrentMotionState();
+  }
+
+  function scheduleDetailCoverage(bounds, options = {}, delayMs = FETCH_DEBOUNCE_MS) {
+    const normalized = normalizeLatLngBounds(bounds);
+    if (!normalized) return false;
+
+    clearTimeout(detailCoverageTimer);
+    detailCoverageTimer = setTimeout(() => {
+      detailCoverageTimer = null;
+      ensureDetailCoverage(normalized, { ...options, scheduled: true });
+    }, Math.max(0, Number(delayMs) || 0));
+    return true;
+  }
+
+  async function ensureDetailCoverage(bounds, options = {}) {
+    if ((window.__gwState?.showOsmFeatures ?? true) === false && options.ignoreVisibility !== true)
+      return false;
+
+    const sourceBounds = normalizeLatLngBounds(bounds);
+    if (!sourceBounds?.isValid?.()) return false;
+    clearTimeout(detailCoverageTimer);
+    detailCoverageTimer = null;
+
+    const bufferRatio = Number.isFinite(Number(options.bufferRatio))
+      ? Math.max(0, Math.min(DETAIL_QUERY_BOUNDS_PAD_RATIO, Number(options.bufferRatio)))
+      : DETAIL_QUERY_BOUNDS_PAD_RATIO;
+    const coverageRatio = Number.isFinite(Number(options.coverageBufferRatio))
+      ? Math.max(0, Math.min(bufferRatio, Number(options.coverageBufferRatio)))
+      : DETAIL_EDGE_REFETCH_PAD_RATIO;
+    const queryProfile = QUERY_PROFILE_DETAIL;
+    const queryBounds = bufferRatio > 0 ? sourceBounds.pad(bufferRatio) : sourceBounds;
+    const coverageBounds = coverageRatio > 0 ? sourceBounds.pad(coverageRatio) : sourceBounds;
+
+    if (hasCachedCoverage(queryProfile, coverageBounds)) {
+      scheduleRender();
+      return false;
+    }
+
+    if (loadLocalCoverageForCurrentView(queryProfile, coverageBounds)) {
+      return false;
+    }
+
+    if (fetchInFlight) {
+      if (inFlightCovers(coverageBounds, queryProfile)) return false;
+      scheduleDetailCoverage(sourceBounds, options, detailCoverageDelay(options));
+      return false;
+    }
+
+    const now = Date.now();
+    if (now < overpassDisabledUntil) return false;
+
+    const minIntervalMs = Number.isFinite(Number(options.minIntervalMs))
+      ? Math.max(0, Number(options.minIntervalMs))
+      : FETCH_MIN_INTERVAL_MS;
+    const sinceLastFetch = now - lastFetchStartedAt;
+    if (lastFetchStartedAt && sinceLastFetch < minIntervalMs) {
+      scheduleDetailCoverage(sourceBounds, options, minIntervalMs - sinceLastFetch);
+      return false;
+    }
+
+    if (options.ignoreMinZoom !== true && map.getZoom() < MIN_ZOOM) {
+      scheduleRender();
+      return false;
+    }
+
+    const key = boundsToFetchKey(queryBounds, queryProfile);
+    if (key === lastFetchKey) return false;
+
+    lastFetchStartedAt = now;
+    beginFetchInFlight(key, queryBounds, queryProfile);
+    if (options.silent !== true) showFetchToast();
+
+    try {
+      logOsmQueryIssued(queryProfile);
+      const resp = await fetch(OVERPASS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+        },
+        body: new URLSearchParams({
+          data: buildOverpassQuery(queryBounds, queryProfile)
+        })
+      });
+
+      if (!resp.ok) {
+        if (resp.status === 429) {
+          overpassDisabledUntil = Date.now() + OVERPASS_RATE_LIMIT_COOLDOWN_MS;
+          showFetchStatusToast("OSM data rate-limited; keeping current OSM cache");
+        } else {
+          overpassDisabledUntil = Date.now() + OVERPASS_ERROR_COOLDOWN_MS;
+        }
+        throw new Error(`Overpass HTTP ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      const rawCounts = rawOsmElementCounts(data);
+      features = parseFeatures(data);
+      lastFetchKey = key;
+      cachedFeatureBounds = queryBounds;
+      cachedFeatureProfile = queryProfile;
+      cachedParksBounds = queryBounds;
+      cachedParksProfile = queryProfile;
+      saveLocalCoverage(key, queryBounds, features, queryProfile, { rawCounts });
+
+      logOsmFeatureCounts(options.reason ? `fetch/${options.reason}` : "fetch", features, {
+        profile: queryProfile,
+        bounds: queryBounds,
+        rawCounts
+      });
+      publishFeaturesUpdated();
+      scheduleRender();
+      return true;
+    } catch (err) {
+      console.warn("GridWild OSM detail coverage fetch failed:", err);
+      return false;
+    } finally {
+      endFetchInFlight(key);
+      if (fetchRequestedWhileInFlight) {
+        fetchRequestedWhileInFlight = false;
+        scheduleFetch(fetchDelayForCurrentMotionState());
+      }
+    }
+  }
+
   async function fetchFeatures() {
     if ((window.__gwState?.showOsmFeatures ?? true) === false) return;
     const queryProfile = currentQueryProfile();
@@ -1488,6 +1645,7 @@
     render,
     scheduleRender,
     fetchFeatures,
+    ensureDetailCoverage,
     fetchParksForBounds,
     fetchParksForCurrentView,
     scheduleFetch,
@@ -1567,6 +1725,7 @@
           : null,
         fetchInFlight,
         fetchInFlightProfile: fetchInFlightMeta?.profile || null,
+        detailCoverageQueued: Boolean(detailCoverageTimer),
         fetchInFlightBounds: fetchInFlightMeta?.bounds
           ? {
               south: fetchInFlightMeta.bounds.getSouth(),

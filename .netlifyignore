@@ -1,0 +1,14 @@
+# Keep generated GridWild lake assets local or on the asset CDN.
+# Production should use the catalog/R2 path instead of stale repo fallbacks.
+assets/dc_heat.csv
+assets/genus_taxonomy_dictionary.json
+assets/observer_dictionary.json
+assets/squares_genus_summary.json
+assets/square_genera_chunks/
+assets/square_genera_superchunks/
+
+# Local generated taxonomy products are too large for deploy uploads.
+assets/playable_taxonomy/generated_playable_taxa.json
+assets/playable_taxonomy/scored_playable_taxa.json
+assets/playable_taxonomy/*.duckdb
+assets/playable_taxonomy/*.parquet
