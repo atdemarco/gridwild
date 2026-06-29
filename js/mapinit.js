@@ -664,15 +664,9 @@ function createGridWildBasemapRangeSource(url) {
         throw fatalRangeError;
       }
 
-      if (resp.status === 206 && !contentRangeHeader) {
-        throw new Error(
-          `Basemap PMTiles range response is missing Content-Range: range=${rangeHeader}, contentLength=${contentLengthHeader || "missing"}, requested=${length}.`
-        );
-      }
-
       if (resp.status !== 206 && resp.status !== 200) {
         throw new Error(
-          `Basemap PMTiles range request returned too much content: status=${resp.status}, range=${rangeHeader}, contentRange=${contentRangeHeader || "missing"}, contentLength=${contentLengthHeader}, requested=${length}.`
+          `Basemap PMTiles range request returned unexpected status: status=${resp.status}, range=${rangeHeader}, contentRange=${contentRangeHeader || "missing"}, contentLength=${contentLengthHeader || "missing"}, requested=${length}.`
         );
       }
 
