@@ -227,7 +227,9 @@ const GRIDWILD_OSM_BASEMAP_URL_STORAGE_KEY = "GRIDWILD_OSM_BASEMAP_URL";
 const GRIDWILD_OSM_BASEMAP_DEBUG_STORAGE_KEY = "GRIDWILD_OSM_BASEMAP_DEBUG";
 const GRIDWILD_OSM_BASEMAP_PMTILES_URL =
   "https://assets.gridwild.com/osm/protomaps/mid_atlantic_broad/gridwild_osm_protomaps_mid_atlantic_broad_v001_20260624/gridwild_osm_protomaps_mid_atlantic_broad_v001_20260624.pmtiles";
+const GRIDWILD_OSM_BASEMAP_PMTILES_MODULE_URL = "/vendor/pmtiles/pmtiles-3.2.1.esm.js";
 const GRIDWILD_OSM_BASEMAP_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const GRIDWILD_OSM_BASEMAP_FETCH_CACHE_MODE = "no-store";
 const GRIDWILD_OSM_BASEMAP_RETRY_DELAYS_MS = [80, 250, 700, 1600, 3200];
 const GRIDWILD_OSM_BASEMAP_BOUNDS = [
   [35.6, -83.8],
@@ -346,19 +348,27 @@ function writeGridWildLocalStorageValue(key, value) {
   } catch {}
 }
 
+function normalizeGridWildBasemapUrl(value) {
+  return String(value || "").trim();
+}
+
 function gridWildOsmBasemapUrlConfig() {
   const queryUrl = readGridWildBasemapParam("gwBasemapUrl");
-  if (String(queryUrl || "").trim()) {
-    return { url: String(queryUrl).trim(), source: "query" };
+  const normalizedQueryUrl = normalizeGridWildBasemapUrl(queryUrl);
+  if (normalizedQueryUrl) {
+    return { url: normalizedQueryUrl, source: "query" };
   }
 
-  if (String(window.GRIDWILD_OSM_BASEMAP_URL || "").trim()) {
-    return { url: String(window.GRIDWILD_OSM_BASEMAP_URL).trim(), source: "global" };
+  const globalUrl = normalizeGridWildBasemapUrl(window.GRIDWILD_OSM_BASEMAP_URL);
+  if (globalUrl) {
+    return { url: globalUrl, source: "global" };
   }
 
-  const storedUrl = readGridWildLocalStorageValue(GRIDWILD_OSM_BASEMAP_URL_STORAGE_KEY);
-  if (String(storedUrl || "").trim()) {
-    return { url: String(storedUrl).trim(), source: "localStorage" };
+  const storedUrl = normalizeGridWildBasemapUrl(
+    readGridWildLocalStorageValue(GRIDWILD_OSM_BASEMAP_URL_STORAGE_KEY)
+  );
+  if (storedUrl) {
+    return { url: storedUrl, source: "localStorage" };
   }
 
   return { url: GRIDWILD_OSM_BASEMAP_PMTILES_URL, source: "default" };
@@ -380,17 +390,86 @@ const gridWildBasemapStatus = {
   urlSource: gridWildInitialBasemapUrlConfig.source,
   defaultUrl: GRIDWILD_OSM_BASEMAP_PMTILES_URL,
   expectedCacheControl: GRIDWILD_OSM_BASEMAP_CACHE_CONTROL,
+  fetchCacheMode: GRIDWILD_OSM_BASEMAP_FETCH_CACHE_MODE,
+  rangeSource: "pending",
   attempts: 0,
   lastError: null,
   updatedAt: new Date().toISOString()
 };
 let gridWildBasemapRetryTimer = null;
 let gridWildBasemapRetryIndex = 0;
+let gridWildBasemapPMTilesCtor = null;
+let gridWildBasemapPMTilesCtorPromise = null;
+const gridWildBasemapPMTilesArchives = new Map();
+const gridWildBasemapByteServingFailures = new Map();
 
 function cloneGridWildBasemapStatus() {
   return {
     ...gridWildBasemapStatus
   };
+}
+
+function gridWildBasemapDebugEnabled() {
+  return (
+    gridWildTruthyParam(readGridWildBasemapParam("gwBasemapDebug")) ||
+    gridWildTruthyParam(readGridWildLocalStorageValue(GRIDWILD_OSM_BASEMAP_DEBUG_STORAGE_KEY)) ||
+    window.GRIDWILD_OSM_BASEMAP_DEBUG === true
+  );
+}
+
+function shortGridWildBasemapUrl(url) {
+  try {
+    const parsed = new URL(url, window.location.href);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    return parts.slice(-2).join("/") || parsed.hostname;
+  } catch {
+    return String(url || "").slice(-72);
+  }
+}
+
+function removeGridWildBasemapDebugBadge() {
+  document.getElementById("gwBasemapDebugBadge")?.remove();
+}
+
+function updateGridWildBasemapDebugBadge(status = gridWildBasemapStatus) {
+  if (!gridWildBasemapDebugEnabled()) {
+    removeGridWildBasemapDebugBadge();
+    return;
+  }
+
+  let badge = document.getElementById("gwBasemapDebugBadge");
+  if (!badge) {
+    badge = document.createElement("div");
+    badge.id = "gwBasemapDebugBadge";
+    badge.style.cssText = [
+      "position:fixed",
+      "left:12px",
+      "bottom:12px",
+      "z-index:12000",
+      "max-width:min(520px,calc(100vw - 24px))",
+      "padding:8px 10px",
+      "border:1px solid rgba(10,20,18,.22)",
+      "border-radius:6px",
+      "background:rgba(248,252,246,.94)",
+      "color:#173126",
+      "font:12px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace",
+      "box-shadow:0 8px 24px rgba(0,0,0,.16)",
+      "pointer-events:none"
+    ].join(";");
+    document.body.appendChild(badge);
+  }
+
+  const active = status.activeLayerUrl || status.url;
+  badge.textContent = [
+    `basemap=${status.activeBaseMap || window.__gwState?.baseMap || "street"}`,
+    `source=${status.source || "unknown"}`,
+    `urlSource=${status.urlSource || "unknown"}`,
+    `range=${status.rangeSource || "unknown"}`,
+    `cache=${status.fetchCacheMode || "unknown"}`,
+    `fallback=${status.fallback === true ? "yes" : "no"}`,
+    `reason=${status.reason || "unknown"}`,
+    shortGridWildBasemapUrl(active)
+  ].join(" | ");
 }
 
 function publishGridWildBasemapStatus(patch = {}) {
@@ -403,6 +482,13 @@ function publishGridWildBasemapStatus(patch = {}) {
     updatedAt: new Date().toISOString()
   });
 
+  document.documentElement.dataset.gwBasemapSource = gridWildBasemapStatus.source || "";
+  document.documentElement.dataset.gwBasemapUrlSource = gridWildBasemapStatus.urlSource || "";
+  document.documentElement.dataset.gwBasemapFallback = String(
+    gridWildBasemapStatus.fallback === true
+  );
+  updateGridWildBasemapDebugBadge(gridWildBasemapStatus);
+
   window.dispatchEvent(
     new CustomEvent("gridwild:basemapstatuschange", {
       detail: cloneGridWildBasemapStatus()
@@ -412,6 +498,244 @@ function publishGridWildBasemapStatus(patch = {}) {
 
 function describeGridWildBasemapError(error) {
   return error?.message || String(error || "");
+}
+
+function gridWildBasemapByteServingFailureFor(url) {
+  return gridWildBasemapByteServingFailures.get(normalizeGridWildBasemapUrl(url)) || null;
+}
+
+function recordGridWildBasemapByteServingFailure(url, error) {
+  const sourceUrl = normalizeGridWildBasemapUrl(url);
+  const message = describeGridWildBasemapError(error);
+  gridWildBasemapByteServingFailures.set(sourceUrl, message);
+  publishGridWildBasemapStatus({
+    source: "fallback",
+    ready: false,
+    fallback: true,
+    reason: "byte-serving-unavailable",
+    rangeSource: "gridwild-range-source",
+    activeLayerUrl: sourceUrl,
+    lastError: message
+  });
+  window.setTimeout(() => {
+    refreshGridWildBasemapLayers("byte-serving-unavailable", { force: true });
+  }, 0);
+  return error;
+}
+
+function retryGridWildOsmBasemap(reason = "retry") {
+  gridWildBasemapByteServingFailures.clear();
+  gridWildBasemapRetryIndex = 0;
+  refreshGridWildBasemapLayers(reason, { force: true });
+  return cloneGridWildBasemapStatus();
+}
+
+function gridWildBasemapFetchCacheMode() {
+  const requested = String(readGridWildBasemapParam("gwBasemapCache") || "")
+    .trim()
+    .toLowerCase();
+  if (["default", "force-cache", "no-cache", "no-store", "reload"].includes(requested)) {
+    return requested;
+  }
+  return GRIDWILD_OSM_BASEMAP_FETCH_CACHE_MODE;
+}
+
+function loadGridWildBasemapPMTilesCtor() {
+  if (gridWildBasemapPMTilesCtor) return Promise.resolve(gridWildBasemapPMTilesCtor);
+  if (gridWildBasemapPMTilesCtorPromise) return gridWildBasemapPMTilesCtorPromise;
+
+  publishGridWildBasemapStatus({
+    rangeSource: "loading-pmtiles-module",
+    fetchCacheMode: gridWildBasemapFetchCacheMode()
+  });
+
+  gridWildBasemapPMTilesCtorPromise = import(GRIDWILD_OSM_BASEMAP_PMTILES_MODULE_URL)
+    .then((module) => {
+      const PMTilesCtor = module.PMTiles || module.default?.PMTiles;
+      if (!PMTilesCtor) throw new Error("Basemap PMTiles module did not expose PMTiles.");
+      gridWildBasemapPMTilesCtor = PMTilesCtor;
+      return gridWildBasemapPMTilesCtor;
+    })
+    .catch((error) => {
+      publishGridWildBasemapStatus({
+        source: "fallback",
+        ready: false,
+        fallback: true,
+        reason: "pmtiles-module-failed",
+        rangeSource: "failed",
+        lastError: describeGridWildBasemapError(error)
+      });
+      throw error;
+    })
+    .finally(() => {
+      gridWildBasemapPMTilesCtorPromise = null;
+    });
+
+  return gridWildBasemapPMTilesCtorPromise;
+}
+
+function createGridWildBasemapRangeSource(url) {
+  const sourceUrl = normalizeGridWildBasemapUrl(url);
+  let fatalRangeError = null;
+
+  async function cancelResponseBody(resp) {
+    try {
+      await resp.body?.cancel?.();
+    } catch {
+      // Best-effort guard against accidentally downloading the whole basemap archive.
+    }
+  }
+
+  return {
+    getKey() {
+      return sourceUrl;
+    },
+
+    async getBytes(offset, length, signal, expectedEtag) {
+      if (fatalRangeError) throw fatalRangeError;
+
+      const headers = new window.Headers();
+      const rangeHeader = `bytes=${offset}-${offset + length - 1}`;
+      headers.set("Range", rangeHeader);
+
+      let resp;
+      try {
+        resp = await fetch(sourceUrl, {
+          signal,
+          cache: gridWildBasemapFetchCacheMode(),
+          mode: "cors",
+          headers
+        });
+      } catch (error) {
+        publishGridWildBasemapStatus({
+          ready: false,
+          fallback: false,
+          reason: "range-fetch-failed",
+          rangeSource: "gridwild-range-source",
+          lastError: describeGridWildBasemapError(error)
+        });
+        throw error;
+      }
+
+      const contentLengthHeader = resp.headers.get("Content-Length");
+      const contentRangeHeader = resp.headers.get("Content-Range");
+      const contentLength = Number(contentLengthHeader);
+      let etag = resp.headers.get("ETag") || undefined;
+      if (etag?.startsWith("W/")) etag = undefined;
+
+      if (resp.status >= 300) {
+        await cancelResponseBody(resp);
+        throw new Error(`Basemap PMTiles range request failed: HTTP ${resp.status}`);
+      }
+
+      if (expectedEtag && etag && etag !== expectedEtag) {
+        throw new Error("Basemap PMTiles range request returned a different ETag.");
+      }
+
+      if (Number.isFinite(contentLength) && contentLength > length) {
+        await cancelResponseBody(resp);
+        fatalRangeError = recordGridWildBasemapByteServingFailure(
+          sourceUrl,
+          new Error(
+            `Basemap PMTiles range request returned too much content: status=${resp.status}, range=${rangeHeader}, contentRange=${contentRangeHeader || "missing"}, contentLength=${contentLengthHeader}, requested=${length}.`
+          )
+        );
+        throw fatalRangeError;
+      }
+
+      if (resp.status === 200 && !Number.isFinite(contentLength)) {
+        await cancelResponseBody(resp);
+        fatalRangeError = recordGridWildBasemapByteServingFailure(
+          sourceUrl,
+          new Error(
+            `Basemap PMTiles range request returned full content without Content-Length: status=${resp.status}, range=${rangeHeader}, contentRange=${contentRangeHeader || "missing"}, requested=${length}.`
+          )
+        );
+        throw fatalRangeError;
+      }
+
+      if (resp.status === 200 && !contentRangeHeader && contentLength === length) {
+        fatalRangeError = recordGridWildBasemapByteServingFailure(
+          sourceUrl,
+          new Error(
+            `Basemap PMTiles range request returned HTTP 200 instead of 206 Partial Content: range=${rangeHeader}, contentLength=${contentLengthHeader}, requested=${length}.`
+          )
+        );
+        throw fatalRangeError;
+      }
+
+      if (resp.status === 206 && !contentRangeHeader) {
+        throw new Error(
+          `Basemap PMTiles range response is missing Content-Range: range=${rangeHeader}, contentLength=${contentLengthHeader || "missing"}, requested=${length}.`
+        );
+      }
+
+      if (resp.status !== 206 && resp.status !== 200) {
+        throw new Error(
+          `Basemap PMTiles range request returned too much content: status=${resp.status}, range=${rangeHeader}, contentRange=${contentRangeHeader || "missing"}, contentLength=${contentLengthHeader}, requested=${length}.`
+        );
+      }
+
+      return {
+        data: await resp.arrayBuffer(),
+        etag,
+        cacheControl: resp.headers.get("Cache-Control") || undefined,
+        expires: resp.headers.get("Expires") || undefined
+      };
+    }
+  };
+}
+
+function createGridWildBasemapPMTilesArchive(url) {
+  const sourceUrl = normalizeGridWildBasemapUrl(url);
+  const cached = gridWildBasemapPMTilesArchives.get(sourceUrl);
+  if (cached) return cached;
+
+  let archive = null;
+  let archivePromise = null;
+  const archiveLike = {
+    getKey() {
+      return sourceUrl;
+    },
+
+    async getHeader() {
+      const pmtiles = await ensureArchive();
+      return pmtiles.getHeader();
+    },
+
+    async getZxy(z, x, y, signal) {
+      const pmtiles = await ensureArchive();
+      return pmtiles.getZxy(z, x, y, signal);
+    }
+  };
+
+  async function ensureArchive() {
+    if (archive) return archive;
+    if (!archivePromise) {
+      archivePromise = loadGridWildBasemapPMTilesCtor()
+        .then((PMTilesCtor) => {
+          archive = new PMTilesCtor(createGridWildBasemapRangeSource(sourceUrl));
+          return archive;
+        })
+        .catch((error) => {
+          publishGridWildBasemapStatus({
+            ready: false,
+            fallback: false,
+            reason: "pmtiles-archive-failed",
+            rangeSource: "gridwild-range-source",
+            lastError: describeGridWildBasemapError(error)
+          });
+          throw error;
+        })
+        .finally(() => {
+          archivePromise = null;
+        });
+    }
+    return archivePromise;
+  }
+
+  gridWildBasemapPMTilesArchives.set(sourceUrl, archiveLike);
+  return archiveLike;
 }
 
 function gridWildBasemapSourceIsVector(source) {
@@ -653,6 +977,7 @@ window.GridWildUnits =
 function createBlankBaseLayer(source = "blank", reason = source) {
   const layer = L.layerGroup();
   layer.gridWildBasemapSource = source;
+  layer.gridWildBasemapUrl = null;
   layer.gridWildBasemapFallback = true;
   layer.gridWildBasemapReason = reason;
   return layer;
@@ -673,15 +998,39 @@ function createGridWildOsmBasemapLayer(options = {}) {
     return null;
   }
 
-  const url = gridWildOsmBasemapUrl();
+  const urlConfig = gridWildOsmBasemapUrlConfig();
+  const url = urlConfig.url;
   if (!url) return null;
+  const byteServingFailure = gridWildBasemapByteServingFailureFor(url);
+  if (byteServingFailure) {
+    const fallbackLayer = createBlankBaseLayer(
+      "byte-serving-unavailable",
+      "byte-serving-unavailable"
+    );
+    fallbackLayer.gridWildBaseMap = options.baseMap || "street";
+    fallbackLayer.gridWildBasemapUrl = url;
+    fallbackLayer.gridWildBasemapUrlSource = urlConfig.source;
+    publishGridWildBasemapStatus({
+      source: fallbackLayer.gridWildBasemapSource,
+      ready: false,
+      fallback: true,
+      reason: fallbackLayer.gridWildBasemapReason,
+      activeBaseMap: fallbackLayer.gridWildBaseMap,
+      activeLayerUrl: fallbackLayer.gridWildBasemapUrl,
+      activeLayerUrlSource: fallbackLayer.gridWildBasemapUrlSource,
+      rangeSource: "gridwild-range-source",
+      lastError: byteServingFailure
+    });
+    return fallbackLayer;
+  }
 
   const { baseMap, ...layerOptions } = options;
   let layer = null;
   try {
+    const pmtilesArchive = createGridWildBasemapPMTilesArchive(url);
     layer = window.protomapsL.leafletLayer({
       ...layerOptions,
-      url,
+      url: pmtilesArchive,
       flavor: layerOptions.flavor || "light",
       lang: layerOptions.lang || "en",
       maxDataZoom: 15,
@@ -707,6 +1056,7 @@ function createGridWildOsmBasemapLayer(options = {}) {
 
   layer.gridWildBasemapSource = "r2-pmtiles";
   layer.gridWildBasemapUrl = url;
+  layer.gridWildBasemapUrlSource = urlConfig.source;
   layer.gridWildBaseMap = baseMap || "street";
   layer.gridWildBasemapFallback = false;
   publishGridWildBasemapStatus({
@@ -714,6 +1064,11 @@ function createGridWildOsmBasemapLayer(options = {}) {
     ready: false,
     fallback: false,
     reason: "created",
+    activeBaseMap: layer.gridWildBaseMap,
+    activeLayerUrl: layer.gridWildBasemapUrl,
+    activeLayerUrlSource: layer.gridWildBasemapUrlSource,
+    fetchCacheMode: gridWildBasemapFetchCacheMode(),
+    rangeSource: "gridwild-range-source",
     lastError: null
   });
   return bindGridWildBasemapLayerStatus(layer);
@@ -774,21 +1129,27 @@ function replaceGridWildBaseLayer(key, nextLayer) {
   return wasActive;
 }
 
-function refreshGridWildBasemapLayers(reason = "refresh") {
+function gridWildBasemapLayerMatchesCurrentUrl(layer) {
+  if (isGridWildBasemapFallbackLayer(layer)) return false;
+  return normalizeGridWildBasemapUrl(layer?.gridWildBasemapUrl) === gridWildOsmBasemapUrl();
+}
+
+function refreshGridWildBasemapLayers(reason = "refresh", options = {}) {
   if (!gridWildVectorBasemapEnabled()) return false;
   if (!window.protomapsL?.leafletLayer) {
     scheduleGridWildBasemapRetry(reason);
     return false;
   }
 
+  const force = options.force === true;
   let replacedActiveLayer = false;
-  if (isGridWildBasemapFallbackLayer(streetBaseLayer)) {
+  if (force || !gridWildBasemapLayerMatchesCurrentUrl(streetBaseLayer)) {
     const nextStreetLayer = createGridWildOsmBasemapLayer({ flavor: "light", baseMap: "street" });
     replacedActiveLayer =
       replaceGridWildBaseLayer("street", nextStreetLayer) || replacedActiveLayer;
   }
 
-  if (isGridWildBasemapFallbackLayer(terrainBaseLayer)) {
+  if (force || !gridWildBasemapLayerMatchesCurrentUrl(terrainBaseLayer)) {
     const nextTerrainLayer = createGridWildOsmBasemapLayer({ flavor: "light", baseMap: "terrain" });
     if (nextTerrainLayer) nextTerrainLayer.gridWildBasemapSource = "r2-pmtiles-terrain";
     replacedActiveLayer =
@@ -798,6 +1159,16 @@ function refreshGridWildBasemapLayers(reason = "refresh") {
   const activeBaseMap = normalizeGridWildBaseMapChoice(window.__gwState?.baseMap || "street");
   if (replacedActiveLayer) {
     setGridWildBaseMap(activeBaseMap, { persist: false });
+  } else {
+    publishGridWildBasemapStatus({
+      reason,
+      activeBaseMap,
+      activeLayerUrl: currentGridWildBaseLayer?.gridWildBasemapUrl || null,
+      activeLayerUrlSource: currentGridWildBaseLayer?.gridWildBasemapUrlSource || null,
+      activeLayerFallback: currentGridWildBaseLayer?.gridWildBasemapFallback === true,
+      source: currentGridWildBaseLayer?.gridWildBasemapSource || "blank",
+      fallback: currentGridWildBaseLayer?.gridWildBasemapFallback === true
+    });
   }
 
   return replacedActiveLayer;
@@ -847,6 +1218,15 @@ function setGridWildBaseMap(choice, options = {}) {
   currentGridWildBaseLayer = nextLayer;
   window.__gwState = window.__gwState || {};
   window.__gwState.baseMap = baseMap;
+  publishGridWildBasemapStatus({
+    source: nextLayer.gridWildBasemapSource || "blank",
+    fallback: nextLayer.gridWildBasemapFallback === true,
+    reason: nextLayer.gridWildBasemapFallback === true ? nextLayer.gridWildBasemapReason : "active",
+    activeBaseMap: baseMap,
+    activeLayerUrl: nextLayer.gridWildBasemapUrl || null,
+    activeLayerUrlSource: nextLayer.gridWildBasemapUrlSource || null,
+    activeLayerFallback: nextLayer.gridWildBasemapFallback === true
+  });
 
   if (options.persist !== false) {
     persistGridWildBaseMapChoice(baseMap);
@@ -865,6 +1245,40 @@ function setGridWildBaseMap(choice, options = {}) {
   return baseMap;
 }
 
+function setGridWildOsmBasemapUrl(url, options = {}) {
+  const normalizedUrl = normalizeGridWildBasemapUrl(url);
+  if (options.persist !== false) {
+    writeGridWildLocalStorageValue(GRIDWILD_OSM_BASEMAP_URL_STORAGE_KEY, normalizedUrl);
+  }
+
+  if (options.runtime !== false) {
+    if (normalizedUrl) window.GRIDWILD_OSM_BASEMAP_URL = normalizedUrl;
+    else {
+      try {
+        delete window.GRIDWILD_OSM_BASEMAP_URL;
+      } catch {
+        window.GRIDWILD_OSM_BASEMAP_URL = "";
+      }
+    }
+  }
+
+  gridWildBasemapRetryIndex = 0;
+  refreshGridWildBasemapLayers(normalizedUrl ? "url-set" : "url-cleared", { force: true });
+  return cloneGridWildBasemapStatus();
+}
+
+function clearGridWildOsmBasemapUrl(options = {}) {
+  return setGridWildOsmBasemapUrl("", options);
+}
+
+function setGridWildBasemapDebug(enabled) {
+  const on = enabled === true;
+  writeGridWildLocalStorageValue(GRIDWILD_OSM_BASEMAP_DEBUG_STORAGE_KEY, on ? "1" : "");
+  window.GRIDWILD_OSM_BASEMAP_DEBUG = on;
+  updateGridWildBasemapDebugBadge(gridWildBasemapStatus);
+  return on;
+}
+
 window.createStreetBaseLayer = createStreetBaseLayer;
 window.createTerrainBaseLayer = createTerrainBaseLayer;
 window.createGridWildDefaultBaseLayer = createGridWildDefaultBaseLayer;
@@ -872,11 +1286,28 @@ window.createGridWildBlankBaseLayer = createBlankBaseLayer;
 window.createGridWildOsmBasemapLayer = createGridWildOsmBasemapLayer;
 window.GridWildOsmBasemap = {
   url: gridWildOsmBasemapUrl,
+  urlSource: () => gridWildOsmBasemapUrlConfig().source,
+  defaultUrl: () => GRIDWILD_OSM_BASEMAP_PMTILES_URL,
   bounds: () => GRIDWILD_OSM_BASEMAP_BOUNDS.map((point) => point.slice()),
   enabled: gridWildVectorBasemapEnabled,
+  activeLayer: () => ({
+    baseMap: window.__gwState?.baseMap || "street",
+    source: currentGridWildBaseLayer?.gridWildBasemapSource || "blank",
+    url: currentGridWildBaseLayer?.gridWildBasemapUrl || null,
+    urlSource: currentGridWildBaseLayer?.gridWildBasemapUrlSource || null,
+    fallback: currentGridWildBaseLayer?.gridWildBasemapFallback === true,
+    reason: currentGridWildBaseLayer?.gridWildBasemapReason || null
+  }),
+  clearUrl: clearGridWildOsmBasemapUrl,
   currentSource: () => currentGridWildBaseLayer?.gridWildBasemapSource || "blank",
+  debug: setGridWildBasemapDebug,
   expectedCacheControl: () => GRIDWILD_OSM_BASEMAP_CACHE_CONTROL,
+  fetchCacheMode: gridWildBasemapFetchCacheMode,
+  pmtilesModuleUrl: () => GRIDWILD_OSM_BASEMAP_PMTILES_MODULE_URL,
   refresh: refreshGridWildBasemapLayers,
+  rangeSource: () => "gridwild-range-source",
+  retry: retryGridWildOsmBasemap,
+  setUrl: setGridWildOsmBasemapUrl,
   status: cloneGridWildBasemapStatus
 };
 window.streetBaseLayer = streetBaseLayer;
