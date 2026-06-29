@@ -49,8 +49,26 @@ let gridHeatLastRenderState = null;
 let gridHeatCanvasTopLeft = L.point(0, 0);
 let gridHeatCanvasLayout = null;
 let gridHeatMeterTransform = null;
+const gridHeatMotionState = {
+  active: false,
+  type: null,
+  startedAt: 0,
+  settledAt: 0,
+  frozenAutoBinSize: null,
+  frozenEffectiveBinSize: null,
+  frozenPMTilesHeatZoom: null,
+  frozenPMTilesFineZ19: null,
+  skipNextUntypedRender: false
+};
+const coarseHeatAutoState = {
+  binSize: 0,
+  mapZoom: null,
+  changedAt: 0
+};
 const GRID_HEAT_INTERACTION_RENDER_INTERVAL_MS = 80;
+const GRID_HEAT_STALE_FRAME_MAX_MS = 9000;
 const COARSE_HEAT_AUTO_SCALE_PX = 118;
+const COARSE_HEAT_AUTO_HYSTERESIS_ZOOM_DELTA = 0.18;
 const COARSE_HEAT_AUTO_BIN_SIZES = [4, 8, 16, 32, 64];
 const COARSE_HEAT_AUTO_STEPS = [
   { scaleFt: 42240, binSize: 64 },
@@ -79,12 +97,16 @@ const COARSE_PYRAMID_NEW_TILE_BUDGET = 8;
 const COARSE_DATA_VERSION_DEBOUNCE_MS = 360;
 const COARSE_DATA_VERSION_MAX_WAIT_MS = 1200;
 const PMTILES_HEAT_MODULE_URLS = {
-  pmtiles: "https://cdn.jsdelivr.net/npm/pmtiles@3.2.1/+esm",
-  vectorTile: "https://cdn.jsdelivr.net/npm/@mapbox/vector-tile@1.3.1/+esm",
-  pbf: "https://cdn.jsdelivr.net/npm/pbf@3.3.0/+esm"
+  pmtiles: "/vendor/pmtiles/pmtiles-3.2.1.esm.js",
+  vectorTile: "/vendor/pmtiles/vector-tile-1.3.1.esm.js",
+  pbf: "/vendor/pmtiles/pbf-3.3.0.esm.js"
 };
-const PMTILES_HEAT_TILE_CACHE_MAX = 96;
+const PMTILES_HEAT_TILE_CACHE_MAX = 256;
 const PMTILES_HEAT_TILE_BUDGET = 72;
+const PMTILES_HEAT_TILE_PAD_RATIO = 0.25;
+const PMTILES_HEAT_FINE_Z19_MIN_MULTIPLIER = 2.75;
+const PMTILES_HEAT_FINE_Z19_TILE_BUDGET = 192;
+const PMTILES_HEAT_FINE_Z19_NEW_TILE_BUDGET = 96;
 const PMTILES_HEAT_STARTUP_GRACE_MS = 12000;
 const PMTILES_HEAT_NEW_TILE_BUDGET = 8;
 const PMTILES_HEAT_FEATURE_BUDGET = 45000;
@@ -273,6 +295,108 @@ function resizeGridHeatCanvas() {
   );
   gridHeatCanvasTopLeft = gridHeatCanvasLayout.topLeft;
   updateGridHeatMeterTransform();
+}
+
+function copyGridHeatCanvasLayout(layout = gridHeatCanvasLayout) {
+  if (!layout) return null;
+  return {
+    topLeft: {
+      x: Number(layout.topLeft?.x) || 0,
+      y: Number(layout.topLeft?.y) || 0
+    },
+    width: Number(layout.width) || 0,
+    height: Number(layout.height) || 0,
+    viewportWidth: Number(layout.viewportWidth) || 0,
+    viewportHeight: Number(layout.viewportHeight) || 0,
+    zoom: Number(layout.zoom)
+  };
+}
+
+function captureGridHeatStaleFrame() {
+  if (!gridHeatCanvas || !gridHeatCanvas.width || !gridHeatCanvas.height) return null;
+  if (gridHeatCanvas.style.display === "none") return null;
+
+  const priorPainted = Number(gridHeatLastRenderState?.painted) || 0;
+  const canCarryFrame =
+    priorPainted > 0 || gridHeatLastRenderState?.staleFrameRestored === true;
+  if (!canCarryFrame) return null;
+
+  const frame = document.createElement("canvas");
+  frame.width = gridHeatCanvas.width;
+  frame.height = gridHeatCanvas.height;
+  const frameCtx = frame.getContext("2d");
+  if (!frameCtx) return null;
+
+  frameCtx.drawImage(gridHeatCanvas, 0, 0);
+  return {
+    canvas: frame,
+    width: frame.width,
+    height: frame.height,
+    capturedAt: Date.now(),
+    layout: copyGridHeatCanvasLayout(),
+    previousStatus: gridHeatLastRenderState?.status || null,
+    previousPainted: priorPainted
+  };
+}
+
+function restoreGridHeatStaleFrame(frame, reason) {
+  if (!frame || !gridHeatCanvas || !gridHeatCtx) return false;
+  if (Date.now() - frame.capturedAt > GRID_HEAT_STALE_FRAME_MAX_MS) return false;
+  if (!gridHeatCanvas.width || !gridHeatCanvas.height) return false;
+
+  const currentLayout = copyGridHeatCanvasLayout();
+  let dx = 0;
+  let dy = 0;
+  let dw = gridHeatCanvas.width;
+  let dh = gridHeatCanvas.height;
+
+  if (frame.layout && currentLayout) {
+    if (frame.layout.zoom !== currentLayout.zoom) return false;
+
+    const dprX = currentLayout.width > 0 ? gridHeatCanvas.width / currentLayout.width : 1;
+    const dprY = currentLayout.height > 0 ? gridHeatCanvas.height / currentLayout.height : 1;
+    dx = Math.round((frame.layout.topLeft.x - currentLayout.topLeft.x) * dprX);
+    dy = Math.round((frame.layout.topLeft.y - currentLayout.topLeft.y) * dprY);
+    dw = Math.round(frame.layout.width * dprX);
+    dh = Math.round(frame.layout.height * dprY);
+
+    const overlaps =
+      dx < gridHeatCanvas.width &&
+      dy < gridHeatCanvas.height &&
+      dx + dw > 0 &&
+      dy + dh > 0;
+    if (!overlaps) return false;
+  }
+
+  gridHeatCtx.save();
+  gridHeatCtx.setTransform(1, 0, 0, 1, 0, 0);
+  gridHeatCtx.clearRect(0, 0, gridHeatCanvas.width, gridHeatCanvas.height);
+  gridHeatCtx.drawImage(
+    frame.canvas,
+    0,
+    0,
+    frame.width,
+    frame.height,
+    dx,
+    dy,
+    dw,
+    dh
+  );
+  gridHeatCtx.restore();
+
+  if (gridHeatLastRenderState) {
+    gridHeatLastRenderState.staleFrameRestored = true;
+    gridHeatLastRenderState.staleFrameReason = reason;
+    gridHeatLastRenderState.staleFramePreviousStatus = frame.previousStatus;
+    gridHeatLastRenderState.staleFrameAgeMs = Date.now() - frame.capturedAt;
+    gridHeatLastRenderState.staleFrameOffset = { dx, dy, dw, dh };
+  }
+
+  return true;
+}
+
+function isGridHeatPendingOutcome(outcome) {
+  return ["pending", "overBudget", "missing", "unavailable"].includes(outcome?.status);
 }
 
 window.setShimmerVisible = function (show = true) {
@@ -1530,16 +1654,35 @@ function shouldDeferStaticHeatmapCsvForPMTiles(manifest) {
   if (window.__gwState?.pmtilesHeatEnabled === false) return false;
   return Boolean(
     manifest?.pmtiles_file ||
-      manifest?.pmtiles_shard_manifest_file ||
-      manifest?.coarse_pmtiles_shard_manifest_file ||
-      window.GridWildAssets?.hasDirectCatalogConfig?.()
+    manifest?.pmtiles_shard_manifest_file ||
+    manifest?.coarse_pmtiles_shard_manifest_file ||
+    window.GridWildAssets?.hasDirectCatalogConfig?.()
   );
+}
+
+function legacyStaticHeatCsvFallbackAllowed() {
+  const mode = String(window.GridWildAssets?.getMode?.() || "").toLowerCase();
+  return mode === "local-csv" || window.GW_ENABLE_LEGACY_HEAT_CSV_FALLBACK === true;
+}
+
+function shouldSkipLegacyStaticHeatCsv(manifest) {
+  if (manifest) return false;
+  return !legacyStaticHeatCsvFallbackAllowed();
 }
 
 let staticHeatmapCsvPromise = null;
 
-async function ensureStaticHeatmapCsvLoaded(reason = "fallback") {
+async function ensureStaticHeatmapCsvLoaded(reason = "fallback", options = {}) {
   if (hasStaticHeatmapCounts()) return window.__staticGridCounts;
+  if (
+    window.__gwStaticHeatCsvFallbackDisabled === true &&
+    options.forceLegacyFallback !== true &&
+    !legacyStaticHeatCsvFallbackAllowed()
+  ) {
+    throw new Error(
+      "Legacy static heat CSV fallback is disabled until asset metadata is available."
+    );
+  }
   if (staticHeatmapCsvPromise) return staticHeatmapCsvPromise;
 
   staticHeatmapCsvPromise = (async () => {
@@ -1553,6 +1696,35 @@ async function ensureStaticHeatmapCsvLoaded(reason = "fallback") {
   });
 
   return staticHeatmapCsvPromise;
+}
+
+function scheduleDelayedLegacyStaticHeatCsvFallback(delayMs = 4000) {
+  if (!legacyStaticHeatCsvFallbackAllowed()) return;
+  if (window.__gwStaticHeatCsvFallbackQueued || hasStaticHeatmapCounts()) return;
+  window.__gwStaticHeatCsvFallbackQueued = true;
+
+  const loadAfterBoot = () => {
+    window.setTimeout(
+      () => {
+        if (hasStaticHeatmapCounts()) return;
+        if (window.__gwStaticHeatDeferredForPMTiles === true) return;
+
+        window.__gwStaticHeatCsvFallbackDisabled = false;
+        ensureStaticHeatmapCsvLoaded("delayed local fallback", { forceLegacyFallback: true })
+          .then(() => {
+            if (typeof window.updateGrid === "function") window.updateGrid();
+          })
+          .catch((err) => console.warn("GridWild delayed static heat fallback unavailable.", err));
+      },
+      Math.max(0, Number(delayMs) || 0)
+    );
+  };
+
+  if (document.readyState === "complete") {
+    loadAfterBoot();
+  } else {
+    window.addEventListener("load", loadAfterBoot, { once: true });
+  }
 }
 
 async function loadGridWildStaticAssets() {
@@ -1577,7 +1749,9 @@ async function loadGridWildStaticAssets() {
   try {
     const manifest = await ensureGridWildAssetManifest();
     const deferHeatCsv = shouldDeferStaticHeatmapCsvForPMTiles(manifest);
+    const skipLegacyHeatCsv = shouldSkipLegacyStaticHeatCsv(manifest);
     window.__gwStaticHeatDeferredForPMTiles = deferHeatCsv;
+    window.__gwStaticHeatCsvFallbackDisabled = skipLegacyHeatCsv;
 
     if (deferHeatCsv) {
       window.GridWildPMTilesHeat?.ensureSource?.();
@@ -1586,8 +1760,12 @@ async function loadGridWildStaticAssets() {
     scheduleObserverDictionaryWarmLoad();
 
     const jobs = [];
-    if (!deferHeatCsv) {
+    if (!deferHeatCsv && !skipLegacyHeatCsv) {
       jobs.push(ensureStaticHeatmapCsvLoaded("startup"));
+    } else if (skipLegacyHeatCsv) {
+      console.info(
+        "GridWild legacy static heat CSV fallback disabled; waiting for served asset metadata."
+      );
     }
 
     await Promise.allSettled(jobs).then((results) => {
@@ -3902,6 +4080,8 @@ if (window.GridWildMapMotionQueue?.subscribe) {
 } else {
   map.on("move zoom resize viewreset zoomend moveend", scheduleGridHeatCanvasRender);
 }
+map.on("movestart zoomstart", beginGridHeatMotion);
+map.on("moveend zoomend", endGridHeatMotion);
 map.on("zoomend resize moveend", updateGrid);
 updateGrid();
 
@@ -4742,6 +4922,13 @@ function getCoarseHeatBinSize() {
 }
 
 function getEffectiveCoarseHeatBinSize() {
+  if (
+    gridHeatMotionState.active &&
+    Number.isFinite(gridHeatMotionState.frozenEffectiveBinSize)
+  ) {
+    return gridHeatMotionState.frozenEffectiveBinSize;
+  }
+
   return getAutoCoarseHeatBinSize() || getCoarseHeatBinSize();
 }
 
@@ -4765,7 +4952,34 @@ function normalizeAutoCoarseHeatBinSize(binSize) {
   );
 }
 
-function getAutoCoarseHeatBinSize() {
+function commitCoarseHeatAutoBinSize(binSize, mapZoom = Number(map.getZoom()) || 0) {
+  coarseHeatAutoState.binSize = Number.isFinite(binSize) ? binSize : 0;
+  coarseHeatAutoState.mapZoom = Number.isFinite(mapZoom) ? mapZoom : null;
+  coarseHeatAutoState.changedAt = Date.now();
+  return coarseHeatAutoState.binSize;
+}
+
+function applyCoarseHeatAutoHysteresis(binSize) {
+  const nextBinSize = Number.isFinite(binSize) ? binSize : 0;
+  const currentBinSize = Number.isFinite(coarseHeatAutoState.binSize)
+    ? coarseHeatAutoState.binSize
+    : 0;
+  const mapZoom = Number(map.getZoom()) || 0;
+
+  if (!currentBinSize || nextBinSize === currentBinSize) {
+    return commitCoarseHeatAutoBinSize(nextBinSize, mapZoom);
+  }
+
+  const lastZoom = Number(coarseHeatAutoState.mapZoom);
+  const zoomDelta = Number.isFinite(lastZoom) ? Math.abs(mapZoom - lastZoom) : Infinity;
+  if (zoomDelta < COARSE_HEAT_AUTO_HYSTERESIS_ZOOM_DELTA) {
+    return currentBinSize;
+  }
+
+  return commitCoarseHeatAutoBinSize(nextBinSize, mapZoom);
+}
+
+function computeAutoCoarseHeatBinSize() {
   const metersPerPixel = getHeatMapMetersPerPixel();
   const zoomMultiplier = getHeatMapZoomMultiplier();
   if (!(metersPerPixel > 0)) return 0;
@@ -4789,6 +5003,14 @@ function getAutoCoarseHeatBinSize() {
   }
 
   return 0;
+}
+
+function getAutoCoarseHeatBinSize() {
+  if (gridHeatMotionState.active && Number.isFinite(gridHeatMotionState.frozenAutoBinSize)) {
+    return gridHeatMotionState.frozenAutoBinSize;
+  }
+
+  return applyCoarseHeatAutoHysteresis(computeAutoCoarseHeatBinSize());
 }
 
 function shouldAutoCoarseHeat() {
@@ -5667,7 +5889,8 @@ window.GridWildPMTilesHeat =
 
       return {
         sourceLoaded: Boolean(sourceInfo) || shardSources.size > 0,
-        sourcePending: Boolean(sourcePromise) || Boolean(shardInfoPromise) || shardSourcePending.size > 0,
+        sourcePending:
+          Boolean(sourcePromise) || Boolean(shardInfoPromise) || shardSourcePending.size > 0,
         sourceFailed: sourceFailed || shardInfoFailed,
         sourceError,
         shardInfoLoaded: Boolean(shardInfo?.shards?.length),
@@ -5763,9 +5986,7 @@ window.GridWildCoarsePMTiles =
           const PbfCtor = pbfModule.default || pbfModule.Pbf || pbfModule;
 
           if (!PMTilesCtor || !VectorTileCtor || !PbfCtor) {
-            throw new Error(
-              "Coarse PMTiles decoder modules did not expose expected constructors."
-            );
+            throw new Error("Coarse PMTiles decoder modules did not expose expected constructors.");
           }
 
           imports = { PMTilesCtor, VectorTileCtor, PbfCtor };
@@ -6268,7 +6489,9 @@ function formatGridWildDebugZoomMultiplier() {
 }
 
 function getGridWildDebugScaleLabel() {
-  const hudLabel = String(document.getElementById("gwMapScaleHatchLabel")?.textContent || "").trim();
+  const hudLabel = String(
+    document.getElementById("gwMapScaleHatchLabel")?.textContent || ""
+  ).trim();
   if (hudLabel) return hudLabel;
 
   const scale = chooseGridWildDebugScaleDistance(getHeatMapMetersPerPixel());
@@ -6393,8 +6616,7 @@ function logGridWildZoomHeatDebug() {
   if (window.__gwState?.zoomHeatDebugEnabled === false) return;
 
   const debug = getGridWildZoomHeatDebug();
-  const painted =
-    Number(debug.render?.painted) || Number(debug.sourceDetail?.painted) || 0;
+  const painted = Number(debug.render?.painted) || Number(debug.sourceDetail?.painted) || 0;
   const pending =
     Number(debug.sourceDetail?.pendingTiles) ||
     Number(debug.stats?.fine?.pendingTiles) ||
@@ -7250,9 +7472,7 @@ function coarsePMTilesCellFromProperties(props, binSize) {
     policy_action_counts: parseGridWildJsonProp(props.policy_action_counts_json, {}),
     playable_group_counts: parseGridWildJsonProp(props.playable_group_counts_json, {}),
     top_taxa: Array.isArray(topTaxa) ? topTaxa.map(expandCoarsePMTilesTaxon) : [],
-    top_observers: Array.isArray(topObservers)
-      ? topObservers.map(expandCoarsePMTilesObserver)
-      : [],
+    top_observers: Array.isArray(topObservers) ? topObservers.map(expandCoarsePMTilesObserver) : [],
     source: "coarse_pmtiles_pyramid"
   };
 }
@@ -8043,6 +8263,66 @@ window.testDocumentCurrentCell = function () {
   console.log("Documented current cell:", key);
 };
 
+function gridHeatCanvasCoversCurrentViewport() {
+  return window.GridWildCanvasPerf?.canvasCoversViewport?.(gridHeatCanvasLayout) === true;
+}
+
+function beginGridHeatMotion(evt) {
+  const now = Date.now();
+  const mapZoom = Number(map.getZoom?.()) || 0;
+  const autoBinSize = getAutoCoarseHeatBinSize();
+
+  gridHeatMotionState.active = true;
+  gridHeatMotionState.type = evt?.type || "motion";
+  gridHeatMotionState.startedAt = now;
+  gridHeatMotionState.frozenAutoBinSize = autoBinSize;
+  gridHeatMotionState.frozenEffectiveBinSize = autoBinSize || getCoarseHeatBinSize();
+  gridHeatMotionState.frozenPMTilesHeatZoom = getPMTilesHeatZoom({ minZoom: 0, maxZoom: 19 });
+  gridHeatMotionState.frozenPMTilesFineZ19 = shouldUsePMTilesFineZ19(mapZoom);
+
+  if (gridHeatThrottleTimer) {
+    clearTimeout(gridHeatThrottleTimer);
+    gridHeatThrottleTimer = null;
+  }
+
+  gridHeatLastRenderState = {
+    ...(gridHeatLastRenderState || {}),
+    motionActive: true,
+    motionType: gridHeatMotionState.type,
+    motionStartedAt: now,
+    frozenAutoBinSize: gridHeatMotionState.frozenAutoBinSize,
+    frozenEffectiveBinSize: gridHeatMotionState.frozenEffectiveBinSize,
+    frozenPMTilesHeatZoom: gridHeatMotionState.frozenPMTilesHeatZoom
+  };
+}
+
+function endGridHeatMotion(evt) {
+  if (!gridHeatMotionState.active) return;
+
+  const now = Date.now();
+  gridHeatMotionState.active = false;
+  gridHeatMotionState.settledAt = now;
+
+  const coveredPanEnd = evt?.type === "moveend" && gridHeatCanvasCoversCurrentViewport();
+  gridHeatLastRenderState = {
+    ...(gridHeatLastRenderState || {}),
+    motionActive: false,
+    motionSettledAt: now,
+    motionEndType: evt?.type || null,
+    panEndRenderHeld: coveredPanEnd || undefined
+  };
+
+  if (coveredPanEnd) {
+    gridHeatMotionState.skipNextUntypedRender = true;
+    return;
+  }
+
+  scheduleGridHeatCanvasRender({
+    force: true,
+    reason: `${evt?.type || "motion"}-settled`
+  });
+}
+
 function isGridHeatInteractionEvent(evt) {
   return evt?.type === "move" || evt?.type === "zoom";
 }
@@ -8089,13 +8369,34 @@ function requestGridHeatCanvasFrame(options = {}) {
 }
 
 function scheduleGridHeatCanvasRender(evt) {
-  if (evt?.type === "move") {
+  if (evt?.type === "move" || evt?.type === "zoom") {
+    const previewType = evt.type;
     gridHeatLastRenderState = {
       ...(gridHeatLastRenderState || {}),
-      skippedMovePreview: true,
-      skippedMovePreviewAt: Date.now(),
+      skippedMotionPreview: previewType,
+      skippedMotionPreviewAt: Date.now(),
       canvasCoveredViewport:
         window.GridWildCanvasPerf?.canvasCoversViewport?.(gridHeatCanvasLayout) === true
+    };
+    return;
+  }
+
+  if (evt?.type === "moveend" && gridHeatCanvasCoversCurrentViewport()) {
+    gridHeatMotionState.skipNextUntypedRender = true;
+    gridHeatLastRenderState = {
+      ...(gridHeatLastRenderState || {}),
+      skippedCoveredMoveEndRefresh: true,
+      skippedCoveredMoveEndRefreshAt: Date.now()
+    };
+    return;
+  }
+
+  if (!evt && gridHeatMotionState.skipNextUntypedRender) {
+    gridHeatMotionState.skipNextUntypedRender = false;
+    gridHeatLastRenderState = {
+      ...(gridHeatLastRenderState || {}),
+      skippedCoveredMoveEndUpdateGridRefresh: true,
+      skippedCoveredMoveEndUpdateGridRefreshAt: Date.now()
     };
     return;
   }
@@ -8237,15 +8538,50 @@ function lngLatToPMTilesTile(lng, lat, z) {
   };
 }
 
-function getPMTilesHeatZoom(info) {
-  const mapZoom = Math.round(Number(map.getZoom()) || 0);
+function clampPMTilesHeatZoom(heatZoom, info) {
   const minZoom = Number.isFinite(info?.minZoom) ? info.minZoom : 0;
   const maxZoom = Number.isFinite(info?.maxZoom) ? info.maxZoom : 19;
-  return Math.max(minZoom, Math.min(maxZoom, mapZoom));
+  return Math.max(minZoom, Math.min(maxZoom, heatZoom));
+}
+
+function computePMTilesFineZ19Use(rawMapZoom = Number(map.getZoom()) || 0) {
+  const zoomMultiplier = Math.pow(2, Number(rawMapZoom) - 17);
+  return zoomMultiplier >= PMTILES_HEAT_FINE_Z19_MIN_MULTIPLIER && rawMapZoom < 19;
+}
+
+function shouldUsePMTilesFineZ19(rawMapZoom = Number(map.getZoom()) || 0) {
+  if (
+    gridHeatMotionState.active &&
+    typeof gridHeatMotionState.frozenPMTilesFineZ19 === "boolean"
+  ) {
+    return gridHeatMotionState.frozenPMTilesFineZ19;
+  }
+
+  return computePMTilesFineZ19Use(rawMapZoom);
+}
+
+function computePMTilesHeatZoom(rawMapZoom = Number(map.getZoom()) || 0) {
+  return shouldUsePMTilesFineZ19(rawMapZoom) ? 19 : Math.round(rawMapZoom);
+}
+
+function getPMTilesHeatZoom(info) {
+  if (
+    gridHeatMotionState.active &&
+    Number.isFinite(gridHeatMotionState.frozenPMTilesHeatZoom)
+  ) {
+    return clampPMTilesHeatZoom(gridHeatMotionState.frozenPMTilesHeatZoom, info);
+  }
+
+  return clampPMTilesHeatZoom(computePMTilesHeatZoom(), info);
+}
+
+function isPMTilesFineZ19MidBand(z) {
+  return Number(z) >= 19 && shouldUsePMTilesFineZ19();
 }
 
 function getPMTilesHeatTileRange(z) {
-  const bounds = map.getBounds().pad(0.25);
+  const padRatio = PMTILES_HEAT_TILE_PAD_RATIO;
+  const bounds = map.getBounds().pad(padRatio);
   const nw = lngLatToPMTilesTile(bounds.getWest(), bounds.getNorth(), z);
   const se = lngLatToPMTilesTile(bounds.getEast(), bounds.getSouth(), z);
   const startX = Math.min(nw.x, se.x);
@@ -8262,7 +8598,8 @@ function getPMTilesHeatTileRange(z) {
     endY,
     cols,
     rows,
-    tileCount: cols * rows
+    tileCount: cols * rows,
+    padRatio
   };
 }
 
@@ -8343,14 +8680,18 @@ function renderPMTilesHeatCanvas(options = {}) {
   for (const item of sourceRanges) {
     item.range = getPMTilesHeatTileRange(item.z);
   }
+  const fineZ19MidBand = sourceRanges.some((item) => isPMTilesFineZ19MidBand(item.z));
   const totalTileCount = sourceRanges.reduce((sum, item) => sum + (item.range.tileCount || 0), 0);
-  if (!totalTileCount || totalTileCount > PMTILES_HEAT_TILE_BUDGET) {
+  const tileBudget = fineZ19MidBand ? PMTILES_HEAT_FINE_Z19_TILE_BUDGET : PMTILES_HEAT_TILE_BUDGET;
+  if (!totalTileCount || totalTileCount > tileBudget) {
     window.GridWildPMTilesHeat.recordRender?.({
       status: "overBudget",
       reason: "tile budget",
       mode: sourceSet?.mode || null,
       sourceCount: sources.length,
       selectedShards: sourceSet?.selectedShards || 0,
+      fineZ19MidBand,
+      tileBudget,
       totalTileCount,
       ranges: sourceRanges.map(({ source, z, range }) => ({
         source: source.id || source.file || "single",
@@ -8368,19 +8709,23 @@ function renderPMTilesHeatCanvas(options = {}) {
     isCoarseHeatEnabled() || hasStaticHeatmapCounts() || window.GridWildPyriteLake?.isEnabled?.();
   const startupFetchDeferred = startupGraceActive && startupHasHeatFallback;
   if (startupFetchDeferred && !window.__gwPMTilesStartupResumeTimer) {
-    window.__gwPMTilesStartupResumeTimer = window.setTimeout(() => {
-      window.__gwPMTilesStartupResumeTimer = null;
-      scheduleGridHeatCanvasRender({ force: true, reason: "pmtiles-startup-resume" });
-    }, Math.max(250, PMTILES_HEAT_STARTUP_GRACE_MS - startupElapsed + 50));
+    window.__gwPMTilesStartupResumeTimer = window.setTimeout(
+      () => {
+        window.__gwPMTilesStartupResumeTimer = null;
+        scheduleGridHeatCanvasRender({ force: true, reason: "pmtiles-startup-resume" });
+      },
+      Math.max(250, PMTILES_HEAT_STARTUP_GRACE_MS - startupElapsed + 50)
+    );
   }
   const requestedNewTileBudget = Number.parseInt(options.pmtilesNewTileBudget, 10);
+  const defaultNewTileBudget = fineZ19MidBand
+    ? PMTILES_HEAT_FINE_Z19_NEW_TILE_BUDGET
+    : PMTILES_HEAT_NEW_TILE_BUDGET;
   let newTileBudget = startupFetchDeferred
     ? 0
     : Math.max(
         0,
-        Number.isFinite(requestedNewTileBudget)
-          ? requestedNewTileBudget
-          : PMTILES_HEAT_NEW_TILE_BUDGET
+        Number.isFinite(requestedNewTileBudget) ? requestedNewTileBudget : defaultNewTileBudget
       );
   const items = [];
   const seenCells = new Set();
@@ -8426,6 +8771,7 @@ function renderPMTilesHeatCanvas(options = {}) {
               reason: "feature budget",
               mode: sourceSet?.mode || null,
               sourceCount: sources.length,
+              fineZ19MidBand,
               featureCount
             });
             return null;
@@ -8444,12 +8790,37 @@ function renderPMTilesHeatCanvas(options = {}) {
     }
   }
 
+  if (fineZ19MidBand && (pendingTiles || deferredTiles || requestedMissingTiles)) {
+    window.GridWildPMTilesHeat.recordRender?.({
+      status: "pending",
+      reason: "fine z19 mid-band loading",
+      mode: sourceSet?.mode || null,
+      sourceCount: sources.length,
+      selectedShards: sourceSet?.selectedShards || 0,
+      fineZ19MidBand,
+      tileBudget,
+      totalTileCount,
+      tileHits,
+      pendingTiles,
+      deferredTiles,
+      emptyTiles,
+      requestedMissingTiles,
+      startupGraceActive,
+      startupFetchDeferred,
+      itemCount: items.length,
+      partialDrawHeld: true
+    });
+    return 0;
+  }
+
   if (!items.length) {
     window.GridWildPMTilesHeat.recordRender?.({
       status: pendingTiles || deferredTiles ? "pending" : "empty",
       mode: sourceSet?.mode || null,
       sourceCount: sources.length,
       selectedShards: sourceSet?.selectedShards || 0,
+      fineZ19MidBand,
+      tileBudget,
       totalTileCount,
       tileHits,
       pendingTiles,
@@ -8489,6 +8860,8 @@ function renderPMTilesHeatCanvas(options = {}) {
     mode: sourceSet?.mode || null,
     sourceCount: sources.length,
     selectedShards: sourceSet?.selectedShards || 0,
+    fineZ19MidBand,
+    tileBudget,
     totalTileCount,
     tileHits,
     pendingTiles,
@@ -8544,6 +8917,7 @@ function renderGridHeatCanvas() {
   gridHeatRenderAttempt += 1;
 
   ensureGridHeatCanvas();
+  const staleFrame = captureGridHeatStaleFrame();
   resizeGridHeatCanvas();
   syncCoarseHeatControls();
 
@@ -8586,6 +8960,7 @@ function renderGridHeatCanvas() {
       console.warn("GridWild static heat fallback unavailable.", err)
     );
     gridHeatLastRenderState.status = "no-render-source";
+    restoreGridHeatStaleFrame(staleFrame, "no-render-source");
     return;
   }
 
@@ -8596,25 +8971,45 @@ function renderGridHeatCanvas() {
     gridHeatLastRenderState.status = "coarse";
     gridHeatLastRenderState.painted = coarsePainted;
     gridHeatLastRenderState.coarseOutcome = coarseOutcome;
-    if (coarsePainted !== 0 || !pmtilesHeatEnabled) return;
+    if (coarsePainted !== 0 || !pmtilesHeatEnabled) {
+      if (
+        (coarsePainted === 0 || coarsePainted === null) &&
+        isGridHeatPendingOutcome(coarseOutcome)
+      ) {
+        gridHeatLastRenderState.status = `coarse-${coarseOutcome?.status || "pending"}`;
+        restoreGridHeatStaleFrame(staleFrame, gridHeatLastRenderState.status);
+      }
+      return;
+    }
     if (shouldHoldFineHeatForCoarsePyramid(coarsePainted)) {
       gridHeatLastRenderState.status = `coarse-${coarseOutcome?.status || "pending"}`;
       gridHeatLastRenderState.finePMTilesSkippedForCoarse = true;
+      if (isGridHeatPendingOutcome(coarseOutcome)) {
+        restoreGridHeatStaleFrame(staleFrame, gridHeatLastRenderState.status);
+      }
       return;
     }
   }
 
   if (pmtilesHeatEnabled) {
     const pmtilesPainted = renderPMTilesHeatCanvas(renderOptions);
+    const pmtilesOutcome = window.GridWildPMTilesHeat?.stats?.()?.lastRender || null;
     if (pmtilesPainted !== null) {
       gridHeatLastRenderState.status = coarsePainted === 0 ? "coarse-pmtiles-fallback" : "pmtiles";
       gridHeatLastRenderState.painted = pmtilesPainted;
+      gridHeatLastRenderState.pmtilesOutcome = pmtilesOutcome;
       if (coarsePainted === 0) gridHeatLastRenderState.coarsePainted = coarsePainted;
+      if (pmtilesPainted === 0 && isGridHeatPendingOutcome(pmtilesOutcome)) {
+        gridHeatLastRenderState.status = `${gridHeatLastRenderState.status}-${pmtilesOutcome?.status || "pending"}`;
+        restoreGridHeatStaleFrame(staleFrame, gridHeatLastRenderState.status);
+      }
       return;
     }
     if (!hasStaticCounts && !pyriteEnabled) {
       gridHeatLastRenderState.status = "pmtiles-no-fallback";
       gridHeatLastRenderState.painted = pmtilesPainted;
+      gridHeatLastRenderState.pmtilesOutcome = pmtilesOutcome;
+      restoreGridHeatStaleFrame(staleFrame, "pmtiles-no-fallback");
       return;
     }
   }

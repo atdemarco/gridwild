@@ -11,6 +11,7 @@
     "build:inat-snapshot-stage": "node scripts/build-inat-snapshot-stage.js",
     "build:gold-served-taxonomy": "node scripts/build-gold-served-taxonomy.js",
     "build:coarse-pmtiles": "node scripts/build-coarse-pmtiles-direct.js",
+    "build:osm-basemap": "node scripts/build-osm-basemap-mirror.js",
     "shard:pmtiles": "node scripts/shard-pmtiles-geojsonseq.js",
     "export:playable-taxonomy": "node scripts/export-playable-taxonomy.js",
     "generate:playable-taxa": "node scripts/generate-playable-taxa-gbif.js",

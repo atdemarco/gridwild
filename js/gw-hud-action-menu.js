@@ -261,15 +261,15 @@
     const items = [
       {
         id: "view-patch",
-        icon: "V",
-        label: "View Patch",
+        icon: "H",
+        label: "Patch Here",
         sub: "Reveal patch geometry at this point"
       },
       {
         id: "patches",
         icon: "P",
-        label: "Show Local Patches",
-        sub: "Peek saved and nearby patch boundaries"
+        label: "Patches in View",
+        sub: "Peek saved and nearby boundaries"
       }
     ];
 
@@ -730,12 +730,13 @@
     if (action === "view-patch") {
       const rows =
         (await window.GridWildPatches?.showPatchViewAtLatLng?.(context?.latlng, {
-          includeINatProjects: true
+          includeINatProjects: false,
+          debug: true
         })) || [];
       toast(
         rows.length
-          ? `Showing ${rows.length} patch${rows.length === 1 ? "" : "es"} at this point.`
-          : "No patch geometry found at this point."
+          ? `Showing ${rows.length} patch${rows.length === 1 ? "" : "es"} here.`
+          : "No patch geometry found here."
       );
       return;
     }
@@ -744,13 +745,13 @@
       const rows =
         (await window.GridWildPatches?.showLocalPatchHighlights?.({
           marginRatio: 0.08,
-          candidateLimit: 80,
-          includeINatProjects: true
+          includeINatProjects: true,
+          debug: true
         })) || [];
       toast(
         rows.length
-          ? `Showing ${rows.length} local patch${rows.length === 1 ? "" : "es"}.`
-          : "No local patches in view."
+          ? `Showing ${rows.length} patch${rows.length === 1 ? "" : "es"} in view.`
+          : "No patches in view."
       );
       return;
     }

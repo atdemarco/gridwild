@@ -41,6 +41,23 @@
   let cachedFeatureBounds = null;
   let cachedParksBounds = null;
   let cachedParksProfile = null;
+  let basemapBuildingFetchTimer = null;
+  let basemapBuildingFetchPromise = null;
+  let basemapBuildingFetchMeta = null;
+  let basemapBuildingSourceUrl = null;
+  let basemapBuildingSource = null;
+  let basemapBuildingImportsPromise = null;
+  let basemapBuildingBounds = null;
+  let basemapPmtilesFeatures = {
+    trails: [],
+    parks: [],
+    buildings: [],
+    water: [],
+    roads: [],
+    places: []
+  };
+  let basemapBuildingFeatures = [];
+  let basemapBuildingLastFetchKey = null;
 
   let features = {
     trails: [],
@@ -56,7 +73,6 @@
   const OSM_CONTEXT_Z = 405;
   const OSM_BUILDING_Z = 450;
 
-  const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
   const FETCH_DEBOUNCE_MS = 900;
   const ZOOM_FETCH_SETTLE_MS = 1600;
   const ZOOM_OUT_FETCH_SETTLE_MS = 2800;
@@ -79,6 +95,15 @@
   const QUERY_PROFILE_DETAIL = "detail";
   const QUERY_PROFILE_PARKS = "parks";
   const QUERY_PROFILE_PATCH_VIEW = "patch-view";
+  const BASEMAP_BUILDING_MODULE_URLS = {
+    pmtiles: "/vendor/pmtiles/pmtiles-3.2.1.esm.js",
+    vectorTile: "/vendor/pmtiles/vector-tile-1.3.1.esm.js",
+    pbf: "/vendor/pmtiles/pbf-3.3.0.esm.js"
+  };
+  const BASEMAP_BUILDING_TILE_Z = 15;
+  const BASEMAP_BUILDING_MAX_TILES = 96;
+  const BASEMAP_BUILDING_CACHE_MAX = 72;
+  const basemapBuildingTileCache = new Map();
 
   let listenersBound = false;
   let cachedFeatureProfile = null;
@@ -86,6 +111,10 @@
   function timeOsmVerbose(label, fn, detail = null) {
     const timer = window.GridWildVerboseConsole;
     return timer?.time ? timer.time(label, fn, detail) : fn();
+  }
+
+  function overpassEndpoint() {
+    return String(window.GridWildExternalServices?.getOsmEndpoint?.("overpass") || "").trim();
   }
 
   function ensurePane(name, zIndex) {
@@ -317,6 +346,524 @@
     } catch {
       return null;
     }
+  }
+
+  function clampTileIndex(value, z) {
+    const max = 2 ** z - 1;
+    return Math.max(0, Math.min(max, Math.floor(value)));
+  }
+
+  function lonToTileX(lon, z) {
+    return clampTileIndex(((Number(lon) + 180) / 360) * 2 ** z, z);
+  }
+
+  function latToTileY(lat, z) {
+    const clampedLat = Math.max(-85.05112878, Math.min(85.05112878, Number(lat)));
+    const latRad = (clampedLat * Math.PI) / 180;
+    return clampTileIndex(
+      ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * 2 ** z,
+      z
+    );
+  }
+
+  function tilePointToLatLng(tile, point, extent) {
+    const scale = 2 ** tile.z;
+    const x = (tile.x + point.x / extent) / scale;
+    const y = (tile.y + point.y / extent) / scale;
+    const lng = x * 360 - 180;
+    const lat = (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI;
+    return L.latLng(lat, lng);
+  }
+
+  function tileBounds(tile) {
+    const scale = 2 ** tile.z;
+    const west = (tile.x / scale) * 360 - 180;
+    const east = ((tile.x + 1) / scale) * 360 - 180;
+    const north = (Math.atan(Math.sinh(Math.PI * (1 - (2 * tile.y) / scale))) * 180) / Math.PI;
+    const south =
+      (Math.atan(Math.sinh(Math.PI * (1 - (2 * (tile.y + 1)) / scale))) * 180) / Math.PI;
+    return L.latLngBounds(L.latLng(south, west), L.latLng(north, east));
+  }
+
+  function boundsForTiles(tiles) {
+    let out = null;
+    for (const tile of tiles) {
+      const bounds = tileBounds(tile);
+      out = out ? out.extend(bounds) : bounds;
+    }
+    return out;
+  }
+
+  function basemapBuildingTilesForBounds(bounds, z = BASEMAP_BUILDING_TILE_Z) {
+    const normalized = normalizeLatLngBounds(bounds);
+    if (!normalized) return [];
+
+    const xMin = lonToTileX(normalized.getWest(), z);
+    const xMax = lonToTileX(normalized.getEast(), z);
+    const yMin = latToTileY(normalized.getNorth(), z);
+    const yMax = latToTileY(normalized.getSouth(), z);
+    const tiles = [];
+
+    for (let x = Math.min(xMin, xMax); x <= Math.max(xMin, xMax); x++) {
+      for (let y = Math.min(yMin, yMax); y <= Math.max(yMin, yMax); y++) {
+        tiles.push({ z, x, y });
+      }
+    }
+
+    return tiles;
+  }
+
+  function basemapBuildingFetchKey(tiles) {
+    return tiles.map((tile) => `${tile.z}/${tile.x}/${tile.y}`).join("|");
+  }
+
+  function basemapBuildingCoverageReady(bounds) {
+    return boundsContain(basemapBuildingBounds, normalizeLatLngBounds(bounds));
+  }
+
+  function basemapBuildingFetchCovers(bounds) {
+    return boundsContain(basemapBuildingFetchMeta?.bounds, normalizeLatLngBounds(bounds));
+  }
+
+  function basemapBuildingOverlayAllowed() {
+    if (window.GridWildOsmBasemap?.enabled?.() === false) return false;
+    return Boolean(window.GridWildOsmBasemap?.url?.());
+  }
+
+  async function ensureBasemapBuildingImports() {
+    if (basemapBuildingImportsPromise) return basemapBuildingImportsPromise;
+
+    basemapBuildingImportsPromise = Promise.all([
+      import(BASEMAP_BUILDING_MODULE_URLS.pmtiles),
+      import(BASEMAP_BUILDING_MODULE_URLS.vectorTile),
+      import(BASEMAP_BUILDING_MODULE_URLS.pbf)
+    ]).then(([pmtilesModule, vectorTileModule, pbfModule]) => {
+      const PMTilesCtor = pmtilesModule.PMTiles || pmtilesModule.default?.PMTiles;
+      const VectorTileCtor = vectorTileModule.VectorTile || vectorTileModule.default?.VectorTile;
+      const PbfCtor = pbfModule.default || pbfModule.Pbf || pbfModule;
+
+      if (!PMTilesCtor || !VectorTileCtor || !PbfCtor) {
+        throw new Error("Basemap building decoder modules did not expose expected constructors.");
+      }
+
+      return { PMTilesCtor, VectorTileCtor, PbfCtor };
+    });
+
+    return basemapBuildingImportsPromise;
+  }
+
+  async function getBasemapBuildingSource() {
+    const url = String(window.GridWildOsmBasemap?.url?.() || "").trim();
+    if (!url) return null;
+
+    if (basemapBuildingSource && basemapBuildingSourceUrl === url) {
+      return basemapBuildingSource;
+    }
+
+    const { PMTilesCtor } = await ensureBasemapBuildingImports();
+    basemapBuildingSourceUrl = url;
+    basemapBuildingSource = new PMTilesCtor(url);
+    basemapBuildingTileCache.clear();
+    basemapBuildingBounds = null;
+    basemapPmtilesFeatures = emptyFeatures();
+    basemapBuildingFeatures = [];
+    basemapBuildingLastFetchKey = null;
+    return basemapBuildingSource;
+  }
+
+  function rememberBasemapBuildingTile(key, featuresForTile) {
+    basemapBuildingTileCache.set(key, featuresForTile);
+
+    while (basemapBuildingTileCache.size > BASEMAP_BUILDING_CACHE_MAX) {
+      const oldest = basemapBuildingTileCache.keys().next().value;
+      basemapBuildingTileCache.delete(oldest);
+    }
+  }
+
+  function basemapFeatureGeometry(tile, layer, feature) {
+    const extent = Number(feature.extent || layer.extent || 4096);
+    if (!Number.isFinite(extent) || extent <= 0) return [];
+
+    return (feature.loadGeometry() || [])
+      .map((part) => ({
+        clippedToTile: basemapGeometryPartTouchesTileEdge(part, extent),
+        points: (part || [])
+          .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+          .map((point) => tilePointToLatLng(tile, point, extent))
+      }))
+      .filter((part) => part.points.length >= 1);
+  }
+
+  function basemapGeometryPartTouchesTileEdge(part, extent) {
+    const tolerance = Math.max(2, extent * 0.002);
+
+    return (part || []).some((point) => {
+      const x = Number(point?.x);
+      const y = Number(point?.y);
+      return (
+        Number.isFinite(x) &&
+        Number.isFinite(y) &&
+        (x <= tolerance || y <= tolerance || x >= extent - tolerance || y >= extent - tolerance)
+      );
+    });
+  }
+
+  function addBasemapFeature(
+    out,
+    kind,
+    tile,
+    layerName,
+    featureIndex,
+    partIndex,
+    tags,
+    points,
+    closed,
+    options = {}
+  ) {
+    if (!out[kind]) return;
+    if (kind === "places" ? points.length < 1 : points.length < 2) return;
+    if (
+      (kind === "buildings" || kind === "parks" || kind === "water") &&
+      closed &&
+      points.length < 3
+    )
+      return;
+
+    out[kind].push({
+      id: `basemap/${tile.z}/${tile.x}/${tile.y}/${layerName}/${featureIndex}/${partIndex}`,
+      tags,
+      points,
+      closed: !!closed,
+      clipped_to_tile: options.clippedToTile === true,
+      source: "basemap_pmtiles"
+    });
+  }
+
+  function roadKindFromBasemapProps(props = {}) {
+    const kind = String(props.kind || "");
+    const detail = String(props.kind_detail || "");
+    const pathDetails = new Set(["path", "footway", "cycleway", "bridleway", "track", "steps"]);
+
+    if (kind === "path" || pathDetails.has(detail)) return "trails";
+    if (
+      kind === "minor_road" ||
+      kind === "major_road" ||
+      kind === "highway" ||
+      ["residential", "service", "unclassified", "living_street", "road"].includes(detail)
+    ) {
+      return "roads";
+    }
+
+    return null;
+  }
+
+  function highwayTagFromBasemapProps(props = {}, kind) {
+    const detail = String(props.kind_detail || "");
+    const rawKind = String(props.kind || "");
+    if (detail) return detail;
+    if (kind === "trails") return "path";
+    if (rawKind === "highway") return "primary";
+    if (rawKind === "major_road") return "secondary";
+    if (rawKind === "minor_road") return "residential";
+    return "road";
+  }
+
+  function basemapNameTagsFromProps(props = {}) {
+    const out = {};
+    [
+      "name",
+      "name:en",
+      "official_name",
+      "short_name",
+      "loc_name",
+      "alt_name",
+      "gnis:feature_name",
+      "old_name"
+    ].forEach((key) => {
+      const value = props[key];
+      if (String(value || "").trim()) out[key] = value;
+    });
+    return out;
+  }
+
+  function landuseTagsFromBasemapKind(kind) {
+    if (["park", "garden", "nature_reserve", "golf_course", "playground"].includes(kind)) {
+      return { leisure: kind };
+    }
+    if (["protected_area", "national_park"].includes(kind)) return { boundary: kind };
+    if (["wood", "wetland", "scrub", "heath", "grassland"].includes(kind)) return { natural: kind };
+    if (kind === "forest") return { landuse: "forest" };
+    if (kind === "grass") return { landuse: "grass" };
+    if (["meadow", "recreation_ground", "allotments", "orchard", "cemetery"].includes(kind)) {
+      return { landuse: kind };
+    }
+    if (kind === "cemetery") return { landuse: "cemetery" };
+    return null;
+  }
+
+  function waterTagsFromBasemapKind(kind) {
+    if (["river", "stream", "canal", "ditch", "drain"].includes(kind)) {
+      return { waterway: kind };
+    }
+    return { natural: "water" };
+  }
+
+  function basemapTileFeatures(tile, tileData, decoders) {
+    const out = emptyFeatures();
+    if (!tileData?.data) return out;
+
+    const vectorTile = new decoders.VectorTileCtor(new decoders.PbfCtor(tileData.data));
+
+    const buildings = vectorTile.layers?.buildings;
+    if (buildings?.length) {
+      for (let featureIndex = 0; featureIndex < buildings.length; featureIndex++) {
+        const feature = buildings.feature(featureIndex);
+        const props = feature.properties || {};
+        if (!["building", "building_part"].includes(String(props.kind || ""))) continue;
+
+        basemapFeatureGeometry(tile, buildings, feature).forEach((part, partIndex) => {
+          addBasemapFeature(
+            out,
+            "buildings",
+            tile,
+            "buildings",
+            featureIndex,
+            partIndex,
+            {
+              building: props.kind === "building_part" ? "part" : "yes",
+              kind: props.kind || "building",
+              height: props.height ?? null,
+              min_height: props.min_height ?? null
+            },
+            part.points,
+            true,
+            { clippedToTile: part.clippedToTile }
+          );
+        });
+      }
+    }
+
+    const roads = vectorTile.layers?.roads;
+    if (roads?.length) {
+      for (let featureIndex = 0; featureIndex < roads.length; featureIndex++) {
+        const feature = roads.feature(featureIndex);
+        const props = feature.properties || {};
+        const kind = roadKindFromBasemapProps(props);
+        if (!kind) continue;
+
+        const highway = highwayTagFromBasemapProps(props, kind);
+        basemapFeatureGeometry(tile, roads, feature).forEach((part, partIndex) => {
+          addBasemapFeature(
+            out,
+            kind,
+            tile,
+            "roads",
+            featureIndex,
+            partIndex,
+            {
+              highway,
+              kind: props.kind || null,
+              kind_detail: props.kind_detail || null,
+              access: props.access || null,
+              service: props.service || null,
+              ...basemapNameTagsFromProps(props)
+            },
+            part.points,
+            false,
+            { clippedToTile: part.clippedToTile }
+          );
+        });
+      }
+    }
+
+    const water = vectorTile.layers?.water;
+    if (water?.length) {
+      for (let featureIndex = 0; featureIndex < water.length; featureIndex++) {
+        const feature = water.feature(featureIndex);
+        const props = feature.properties || {};
+        const kind = String(props.kind || props.kind_detail || "");
+        const closed = feature.type === 3;
+        basemapFeatureGeometry(tile, water, feature).forEach((part, partIndex) => {
+          addBasemapFeature(
+            out,
+            "water",
+            tile,
+            "water",
+            featureIndex,
+            partIndex,
+            {
+              ...waterTagsFromBasemapKind(kind),
+              kind: kind || null,
+              ...basemapNameTagsFromProps(props)
+            },
+            part.points,
+            closed,
+            { clippedToTile: part.clippedToTile }
+          );
+        });
+      }
+    }
+
+    for (const layerName of ["landuse", "landcover"]) {
+      const layer = vectorTile.layers?.[layerName];
+      if (!layer?.length) continue;
+
+      for (let featureIndex = 0; featureIndex < layer.length; featureIndex++) {
+        const feature = layer.feature(featureIndex);
+        const props = feature.properties || {};
+        const kind = String(props.kind || "");
+        const tags = landuseTagsFromBasemapKind(kind);
+        if (!tags) continue;
+
+        basemapFeatureGeometry(tile, layer, feature).forEach((part, partIndex) => {
+          addBasemapFeature(
+            out,
+            "parks",
+            tile,
+            layerName,
+            featureIndex,
+            partIndex,
+            { ...tags, kind, ...basemapNameTagsFromProps(props) },
+            part.points,
+            true,
+            { clippedToTile: part.clippedToTile }
+          );
+        });
+      }
+    }
+
+    const places = vectorTile.layers?.places;
+    if (places?.length) {
+      for (let featureIndex = 0; featureIndex < places.length; featureIndex++) {
+        const feature = places.feature(featureIndex);
+        const props = feature.properties || {};
+        const nameTags = basemapNameTagsFromProps(props);
+        const name = nameTags.name || nameTags["name:en"] || null;
+        if (!name) continue;
+
+        basemapFeatureGeometry(tile, places, feature).forEach((part, partIndex) => {
+          addBasemapFeature(
+            out,
+            "places",
+            tile,
+            "places",
+            featureIndex,
+            partIndex,
+            {
+              place: props.kind || "place",
+              kind: props.kind || null,
+              ...nameTags
+            },
+            part.points.slice(0, 1),
+            false,
+            { clippedToTile: part.clippedToTile }
+          );
+        });
+      }
+    }
+
+    return out;
+  }
+
+  async function fetchBasemapBuildingTile(source, tile, decoders) {
+    const key = `${tile.z}/${tile.x}/${tile.y}`;
+    if (basemapBuildingTileCache.has(key)) return basemapBuildingTileCache.get(key);
+
+    const tileData = await source.getZxy(tile.z, tile.x, tile.y);
+    const featuresForTile = basemapTileFeatures(tile, tileData, decoders);
+    rememberBasemapBuildingTile(key, featuresForTile);
+    return featuresForTile;
+  }
+
+  function scheduleBasemapBuildingFetch(delayMs = FETCH_DEBOUNCE_MS) {
+    if (!basemapBuildingOverlayAllowed()) return;
+    if (map.getZoom() < MIN_ZOOM) return;
+
+    clearTimeout(basemapBuildingFetchTimer);
+    basemapBuildingFetchTimer = setTimeout(
+      () => {
+        basemapBuildingFetchTimer = null;
+        fetchBasemapBuildingsForCurrentView().catch((err) => {
+          console.warn("GridWild basemap building overlay unavailable:", err);
+        });
+      },
+      Math.max(0, Number(delayMs) || 0)
+    );
+  }
+
+  async function fetchBasemapFeaturesForBounds(bounds, options = {}) {
+    if (!basemapBuildingOverlayAllowed()) return false;
+    if (options.ignoreMinZoom !== true && map.getZoom() < MIN_ZOOM) return false;
+
+    const queryProfile = normalizeQueryProfile(options.profile || currentQueryProfile());
+    const queryBounds = normalizeLatLngBounds(bounds);
+    const coverageBounds = normalizeLatLngBounds(options.coverageBounds || bounds);
+    if (!queryBounds) return false;
+
+    if (coverageBounds && basemapBuildingCoverageReady(coverageBounds)) {
+      scheduleRender();
+      return false;
+    }
+
+    const tiles = basemapBuildingTilesForBounds(queryBounds);
+    if (!tiles.length || tiles.length > BASEMAP_BUILDING_MAX_TILES) return false;
+
+    const fetchKey = basemapBuildingFetchKey(tiles);
+    const fetchBounds = boundsForTiles(tiles);
+    if (fetchKey === basemapBuildingLastFetchKey) return false;
+    if (basemapBuildingFetchPromise) {
+      if (basemapBuildingFetchCovers(queryBounds)) return basemapBuildingFetchPromise;
+      return basemapBuildingFetchPromise.then(() => fetchBasemapFeaturesForBounds(bounds, options));
+    }
+
+    basemapBuildingFetchMeta = {
+      key: fetchKey,
+      bounds: fetchBounds,
+      profile: queryProfile
+    };
+    basemapBuildingFetchPromise = (async () => {
+      const source = await getBasemapBuildingSource();
+      if (!source) return false;
+
+      const decoders = await ensureBasemapBuildingImports();
+      const tileFeatures = await Promise.all(
+        tiles.map((tile) => fetchBasemapBuildingTile(source, tile, decoders))
+      );
+      basemapPmtilesFeatures = tileFeatures.reduce((acc, featureSet) => {
+        for (const kind of Object.keys(acc)) {
+          acc[kind] = acc[kind].concat(featureSet?.[kind] || []);
+        }
+        return acc;
+      }, emptyFeatures());
+      basemapBuildingFeatures = basemapPmtilesFeatures.buildings;
+      basemapBuildingBounds = fetchBounds;
+      basemapBuildingLastFetchKey = fetchKey;
+
+      if (options.silent !== true) {
+        logOsmFeatureCounts("basemap-pmtiles", basemapPmtilesFeatures, {
+          profile: queryProfile,
+          bounds: basemapBuildingBounds
+        });
+      }
+
+      publishFeaturesUpdated();
+      scheduleRender();
+      return true;
+    })().finally(() => {
+      if (basemapBuildingFetchMeta?.key === fetchKey) basemapBuildingFetchMeta = null;
+      basemapBuildingFetchPromise = null;
+    });
+
+    return basemapBuildingFetchPromise;
+  }
+
+  async function fetchBasemapBuildingsForCurrentView(options = {}) {
+    const queryProfile = currentQueryProfile();
+    return fetchBasemapFeaturesForBounds(getQueryBoundsForProfile(queryProfile), {
+      ...options,
+      coverageBounds: getCoverageBoundsForProfile(queryProfile),
+      profile: queryProfile
+    });
   }
 
   function hasCachedCoverage(profile = currentQueryProfile(), coverageBounds = null) {
@@ -583,6 +1130,32 @@
     });
 
     return Array.from(byId.values());
+  }
+
+  function basemapFeatureUsableForHudPolygon(kind, feature) {
+    if (feature?.source !== "basemap_pmtiles" || feature.clipped_to_tile !== true) return true;
+    return !(kind === "parks" || (kind === "water" && feature.closed !== false));
+  }
+
+  function hudBasemapFeatures(kind, options = {}) {
+    const rows = basemapPmtilesFeatures[kind] || [];
+    if (options.includeClippedBasemapPolygons === true) return rows;
+    return rows.filter((feature) => basemapFeatureUsableForHudPolygon(kind, feature));
+  }
+
+  function activeBuildingFeatures() {
+    return mergeFeatureList(features.buildings || [], basemapBuildingFeatures || []);
+  }
+
+  function activeFeatureSet(options = {}) {
+    return {
+      trails: mergeFeatureList(features.trails || [], hudBasemapFeatures("trails", options)),
+      parks: mergeFeatureList(features.parks || [], hudBasemapFeatures("parks", options)),
+      buildings: activeBuildingFeatures(),
+      water: mergeFeatureList(features.water || [], hudBasemapFeatures("water", options)),
+      roads: mergeFeatureList(features.roads || [], hudBasemapFeatures("roads", options)),
+      places: mergeFeatureList(features.places || [], hudBasemapFeatures("places", options))
+    };
   }
 
   function mergeParksIntoActiveFeatures(parkFeatureSet) {
@@ -1080,6 +1653,13 @@
       return false;
     }
 
+    const endpoint = overpassEndpoint();
+    if (!endpoint) {
+      scheduleBasemapBuildingFetch();
+      scheduleRender();
+      return false;
+    }
+
     if (fetchInFlight) {
       if (inFlightCovers(queryBounds, queryProfile)) return false;
       fetchRequestedWhileInFlight = true;
@@ -1098,11 +1678,11 @@
 
     lastFetchStartedAt = now;
     beginFetchInFlight(key, queryBounds, queryProfile);
-    showFetchToast();
+    if (options.silent !== true) showFetchToast();
 
     try {
       logParksQueryIssued();
-      const resp = await fetch(OVERPASS_URL, {
+      const resp = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
@@ -1149,6 +1729,7 @@
       if (fetchRequestedWhileInFlight) {
         fetchRequestedWhileInFlight = false;
         scheduleFetch(fetchDelayForCurrentMotionState());
+        scheduleBasemapBuildingFetch(fetchDelayForCurrentMotionState());
       }
     }
   }
@@ -1175,10 +1756,13 @@
     if (!normalized) return false;
 
     clearTimeout(detailCoverageTimer);
-    detailCoverageTimer = setTimeout(() => {
-      detailCoverageTimer = null;
-      ensureDetailCoverage(normalized, { ...options, scheduled: true });
-    }, Math.max(0, Number(delayMs) || 0));
+    detailCoverageTimer = setTimeout(
+      () => {
+        detailCoverageTimer = null;
+        ensureDetailCoverage(normalized, { ...options, scheduled: true });
+      },
+      Math.max(0, Number(delayMs) || 0)
+    );
     return true;
   }
 
@@ -1207,6 +1791,15 @@
     }
 
     if (loadLocalCoverageForCurrentView(queryProfile, coverageBounds)) {
+      return false;
+    }
+
+    const endpoint = overpassEndpoint();
+    if (!endpoint) {
+      fetchBasemapBuildingsForCurrentView({ silent: true }).catch((err) => {
+        console.warn("GridWild basemap building overlay unavailable:", err);
+      });
+      scheduleRender();
       return false;
     }
 
@@ -1242,7 +1835,7 @@
 
     try {
       logOsmQueryIssued(queryProfile);
-      const resp = await fetch(OVERPASS_URL, {
+      const resp = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
@@ -1288,6 +1881,7 @@
       if (fetchRequestedWhileInFlight) {
         fetchRequestedWhileInFlight = false;
         scheduleFetch(fetchDelayForCurrentMotionState());
+        scheduleBasemapBuildingFetch(fetchDelayForCurrentMotionState());
       }
     }
   }
@@ -1316,6 +1910,15 @@
       return;
     }
 
+    const endpoint = overpassEndpoint();
+    if (!endpoint) {
+      fetchBasemapBuildingsForCurrentView({ silent: true }).catch((err) => {
+        console.warn("GridWild basemap building overlay unavailable:", err);
+      });
+      scheduleRender();
+      return;
+    }
+
     const sinceLastFetch = now - lastFetchStartedAt;
     if (lastFetchStartedAt && sinceLastFetch < FETCH_MIN_INTERVAL_MS) {
       scheduleFetch(FETCH_MIN_INTERVAL_MS - sinceLastFetch);
@@ -1336,7 +1939,7 @@
 
     try {
       logOsmQueryIssued(queryProfile);
-      const resp = await fetch(OVERPASS_URL, {
+      const resp = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
@@ -1380,6 +1983,7 @@
       if (fetchRequestedWhileInFlight) {
         fetchRequestedWhileInFlight = false;
         scheduleFetch(fetchDelayForCurrentMotionState());
+        scheduleBasemapBuildingFetch(fetchDelayForCurrentMotionState());
       }
     }
   }
@@ -1404,6 +2008,7 @@
       }
 
       scheduleFetch(fetchDelayForCurrentMotionState());
+      scheduleBasemapBuildingFetch(fetchDelayForCurrentMotionState());
     });
   }
 
@@ -1475,10 +2080,11 @@
     const showParks = window.__gwState?.showOsmParks ?? true;
     const showWater = window.__gwState?.showOsmWater ?? true;
     const showTrails = window.__gwState?.showOsmTrails ?? true;
+    const active = activeFeatureSet();
 
     // Habitat polygons: parks, woods, wetlands, gardens, orchards, cemeteries, etc.
     if (showParks) {
-      for (const f of features.parks) {
+      for (const f of active.parks) {
         drawPolygon(contextCtx, f, {
           //          fill: "rgba(72, 132, 82, 0.28)",
           //         stroke: "rgba(42, 94, 52, 0.45)",
@@ -1494,7 +2100,7 @@
 
     // Water
     if (showWater) {
-      for (const f of features.water) {
+      for (const f of active.water) {
         const style = {
           //  fill: "rgba(60, 140, 190, 0.34)",
           //    stroke: "rgba(45, 105, 155, 0.58)",
@@ -1515,7 +2121,7 @@
     }
 
     if (window.__gwState?.showOsmRoads ?? true) {
-      for (const f of features.roads) {
+      for (const f of active.roads) {
         drawLine(contextCtx, f, {
           stroke: "rgba(82, 74, 68, 0.34)",
           lineWidth: 2.0
@@ -1525,7 +2131,7 @@
 
     // Trails / paths
     if (showTrails) {
-      for (const f of features.trails) {
+      for (const f of active.trails) {
         drawLine(contextCtx, f, {
           //stroke: "rgba(255, 248, 214, 0.88)",
           // lineWidth: 2.8
@@ -1549,7 +2155,11 @@
     if (currentQueryProfile() !== QUERY_PROFILE_DETAIL) return;
     if (!showBuildings) return;
 
-    for (const f of features.buildings) {
+    if (!basemapBuildingCoverageReady(getCoverageBoundsForProfile(QUERY_PROFILE_DETAIL))) {
+      scheduleBasemapBuildingFetch();
+    }
+
+    for (const f of activeBuildingFeatures()) {
       drawPolygon(buildingCtx, f, {
         //    fill: "rgba(92, 82, 68, 0.58)",
         //      stroke: "rgba(255, 235, 190, 0.72)",
@@ -1648,6 +2258,9 @@
     ensureDetailCoverage,
     fetchParksForBounds,
     fetchParksForCurrentView,
+    fetchBasemapFeaturesForBounds,
+    fetchBasemapFeaturesForCurrentView: fetchBasemapBuildingsForCurrentView,
+    fetchBasemapBuildingsForCurrentView,
     scheduleFetch,
 
     setVisible(show) {
@@ -1656,6 +2269,7 @@
       window.__gwState.showOsmBuildings = !!show;
 
       clearTimeout(fetchTimer);
+      clearTimeout(basemapBuildingFetchTimer);
 
       if (!show) {
         if (contextCanvas) contextCanvas.style.display = "none";
@@ -1669,6 +2283,7 @@
       if (buildingCanvas) buildingCanvas.style.display = "block";
 
       scheduleFetch();
+      scheduleBasemapBuildingFetch();
       scheduleRender();
     },
 
@@ -1687,18 +2302,23 @@
       if (!stateKey) return;
 
       window.__gwState[stateKey] = !!show;
+      if (kind === "buildings" && show) scheduleBasemapBuildingFetch();
       scheduleRender();
     },
 
-    getFeatures() {
-      const includeCloseDetail = currentQueryProfile() === QUERY_PROFILE_DETAIL;
+    getFeatures(options = {}) {
+      const includeCloseDetail =
+        options.includeDetail === true || currentQueryProfile() === QUERY_PROFILE_DETAIL;
+      const active = activeFeatureSet({
+        includeClippedBasemapPolygons: options.includeClippedBasemapPolygons === true
+      });
       return {
-        trails: features.trails.slice(),
-        parks: features.parks.slice(),
-        buildings: includeCloseDetail ? features.buildings.slice() : [],
-        water: features.water.slice(),
-        roads: features.roads.slice(),
-        places: features.places.slice()
+        trails: active.trails,
+        parks: active.parks,
+        buildings: includeCloseDetail ? activeBuildingFeatures() : [],
+        water: active.water,
+        roads: active.roads,
+        places: active.places
       };
     },
 
@@ -1735,6 +2355,21 @@
             }
           : null,
         overpassCooldownMs: Math.max(0, overpassDisabledUntil - Date.now()),
+        basemapPmtiles: {
+          counts: featureCounts(basemapPmtilesFeatures),
+          count: basemapBuildingFeatures.length,
+          fetchInFlight: Boolean(basemapBuildingFetchPromise),
+          sourceUrl: basemapBuildingSourceUrl,
+          tileCacheSize: basemapBuildingTileCache.size,
+          coverageBounds: basemapBuildingBounds
+            ? {
+                south: basemapBuildingBounds.getSouth(),
+                west: basemapBuildingBounds.getWest(),
+                north: basemapBuildingBounds.getNorth(),
+                east: basemapBuildingBounds.getEast()
+              }
+            : null
+        },
         coverageBounds: coverageBounds
           ? {
               south: coverageBounds.getSouth(),
@@ -1751,7 +2386,7 @@
               east: bounds.getEast()
             }
           : null,
-        counts: featureCounts(features),
+        counts: featureCounts(activeFeatureSet()),
         localCacheEntries: readLocalCacheEntries().length
       };
     }
@@ -1760,6 +2395,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     ensureCanvas();
     scheduleFetch();
+    scheduleBasemapBuildingFetch();
     scheduleRender();
   });
 })();

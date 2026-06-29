@@ -1,7 +1,5 @@
 (function () {
   const STORAGE_KEY = "gw_saved_locations_v1";
-  const SEARCH_ENDPOINT = "https://nominatim.openstreetmap.org/search";
-  const REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
 
   let root = null;
   let pickerMap = null;
@@ -386,17 +384,25 @@
     document.head.appendChild(style);
   }
 
+  function osmServiceEndpoint(kind) {
+    return String(window.GridWildExternalServices?.getOsmEndpoint?.(kind) || "").trim();
+  }
+
   function geocodeUrl(query) {
+    const endpoint = osmServiceEndpoint("nominatimSearch");
+    if (!endpoint) return "";
     const params = new URLSearchParams({
       q: query,
       format: "jsonv2",
       addressdetails: "1",
       limit: "6"
     });
-    return `${SEARCH_ENDPOINT}?${params.toString()}`;
+    return `${endpoint}?${params.toString()}`;
   }
 
   function reverseUrl(lat, lng) {
+    const endpoint = osmServiceEndpoint("nominatimReverse");
+    if (!endpoint) return "";
     const params = new URLSearchParams({
       lat: String(lat),
       lon: String(lng),
@@ -404,7 +410,7 @@
       zoom: "16",
       addressdetails: "1"
     });
-    return `${REVERSE_ENDPOINT}?${params.toString()}`;
+    return `${endpoint}?${params.toString()}`;
   }
 
   function setStatus(message) {
@@ -475,7 +481,14 @@
     setStatus("Looking up locations...");
 
     try {
-      const response = await fetch(geocodeUrl(query), {
+      const url = geocodeUrl(query);
+      if (!url) {
+        renderResults([]);
+        setStatus("Search by coordinates until an OSM search mirror is configured.");
+        return;
+      }
+
+      const response = await fetch(url, {
         signal: activeSearchController.signal,
         headers: { Accept: "application/json" }
       });
@@ -496,7 +509,14 @@
     activeReverseController = new AbortController();
 
     try {
-      const response = await fetch(reverseUrl(lat, lng), {
+      const url = reverseUrl(lat, lng);
+      if (!url) {
+        if (selectedLocation) selectedLocation.label ||= formatCoordPair(lat, lng);
+        setStatus(selectedLocation?.label || formatCoordPair(lat, lng));
+        return;
+      }
+
+      const response = await fetch(url, {
         signal: activeReverseController.signal,
         headers: { Accept: "application/json" }
       });
@@ -614,10 +634,11 @@
       attributionControl: true
     }).setView([center.lat, center.lng], Math.min(Math.max(zoom, 12), 18));
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 20,
-      attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
-    }).addTo(pickerMap);
+    (
+      window.createGridWildDefaultBaseLayer?.({ flavor: "light" }) ||
+      window.createStreetBaseLayer?.() ||
+      L.layerGroup()
+    ).addTo(pickerMap);
 
     marker = L.circleMarker([center.lat, center.lng], {
       radius: 7,

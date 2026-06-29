@@ -1870,10 +1870,7 @@
       return window.createStreetBaseLayer();
     }
 
-    return L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 20,
-      attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
-    });
+    return window.createGridWildBlankBaseLayer?.() || L.layerGroup();
   }
 
   function destroyPartyRecapMaps(root = document) {

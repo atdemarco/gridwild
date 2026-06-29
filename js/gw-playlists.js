@@ -1495,9 +1495,11 @@
       tap: true
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 20
-    }).addTo(miniMap);
+    (
+      window.createGridWildDefaultBaseLayer?.({ flavor: "light" }) ||
+      window.createStreetBaseLayer?.() ||
+      L.layerGroup()
+    ).addTo(miniMap);
 
     const group = L.featureGroup();
 

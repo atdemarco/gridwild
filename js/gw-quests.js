@@ -111,7 +111,6 @@
     }
   };
 
-  const QUEST_REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
   const QUEST_LOCALE_CACHE_KEY = "gw_quest_locale_v1";
 
   let questLocale = loadCachedQuestLocale();
@@ -206,6 +205,11 @@
   }
 
   function questReverseUrl(lat, lng) {
+    const endpoint = String(
+      window.GridWildExternalServices?.getOsmEndpoint?.("nominatimReverse") || ""
+    ).trim();
+    if (!endpoint) return "";
+
     const params = new URLSearchParams({
       lat: String(lat),
       lon: String(lng),
@@ -213,7 +217,7 @@
       zoom: "16",
       addressdetails: "1"
     });
-    return `${QUEST_REVERSE_ENDPOINT}?${params.toString()}`;
+    return `${endpoint}?${params.toString()}`;
   }
 
   function getGpsFix() {
@@ -302,7 +306,10 @@
     refreshDailyQuestSurfaces();
 
     try {
-      const response = await fetch(questReverseUrl(fix.lat, fix.lng), {
+      const url = questReverseUrl(fix.lat, fix.lng);
+      if (!url) return;
+
+      const response = await fetch(url, {
         signal: localeLookupController.signal,
         headers: { Accept: "application/json" }
       });

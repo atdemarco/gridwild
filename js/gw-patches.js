@@ -8,14 +8,19 @@
   const PANE = "gwPatchPane";
   const LABEL_PANE = "gwPatchLabelPane";
   const INAT_PROJECT_RESULT_LIMIT = 12;
-  const INAT_PROJECT_SEARCH_PAGE_SIZE = 24;
+  const INAT_PROJECT_SEARCH_PAGE_SIZE = 12;
   const INAT_PROJECT_GEOMETRY_CHECK_LIMIT = 18;
-  const INAT_PROJECT_NEARBY_GEOMETRY_CHECK_LIMIT = 72;
+  const INAT_PROJECT_NEARBY_GEOMETRY_CHECK_LIMIT = 18;
   const INAT_PROJECT_FOV_MARGIN_RATIO = 0.14;
   const INAT_PROJECT_MAX_FOV_BOUNDS_RATIO = 1;
-  const INAT_PLACE_NEARBY_PAGE_SIZE = 50;
-  const INAT_PLACE_PROJECT_LOOKUP_LIMIT = 18;
-  const INAT_PROJECTS_PER_PLACE_LIMIT = 12;
+  const INAT_PROJECT_FOV_SEARCH_POINTS_MAX = 2;
+  const INAT_PLACE_NEARBY_PAGE_SIZE = 24;
+  const INAT_PLACE_PROJECT_LOOKUP_LIMIT = 6;
+  const INAT_PROJECTS_PER_PLACE_LIMIT = 6;
+  const INAT_REQUEST_MIN_INTERVAL_MS = 850;
+  const INAT_RATE_LIMIT_COOLDOWN_MS = 60 * 1000;
+  const INAT_RESPONSE_CACHE_TTL_MS = 10 * 60 * 1000;
+  const INAT_RESPONSE_CACHE_LIMIT = 160;
   const NEARBY_PROJECT_RADIUS_M = 50000;
   const PATCH_COMPLETENESS_MAX_EXACT_CELLS = 12000;
   const PATCH_COMPLETENESS_MAX_SAMPLE_CELLS = 6000;
@@ -26,8 +31,10 @@
   const PATCH_VIEW_OSM_FETCH_RADIUS_M = 420;
   const PATCH_VIEW_INAT_SEARCH_RADIUS_M = 900;
   const PATCH_VIEW_OSM_CANDIDATE_LIMIT = 160;
-  const PATCH_VIEW_INAT_PROJECT_LIMIT = 18;
-  const PATCH_VIEW_INAT_GEOMETRY_CHECK_LIMIT = 96;
+  const PATCH_VIEW_INAT_PROJECT_LIMIT = 10;
+  const PATCH_VIEW_INAT_GEOMETRY_CHECK_LIMIT = 16;
+  const PATCH_VIEW_MIN_CANDIDATE_FOV_AREA_RATIO = 0.01;
+  const PATCH_VIEW_MAX_OUTLINE_FOV_RATIO = 0.9;
   const PATCH_MENU_LONG_HOLD_MS = 620;
   const PATCH_MENU_MOVE_TOLERANCE_PX = 14;
   const PATCH_LABEL_ICON_WIDTH = 158;
@@ -100,7 +107,11 @@
 
   const projectBoundaryCache = new Map();
   const placeGeometryCache = new Map();
+  const inatResponseCache = new Map();
   const patchSubscriptionFetches = new Map();
+  let inatRequestQueue = Promise.resolve();
+  let inatLastRequestAt = 0;
+  let inatRateLimitedUntil = 0;
 
   const state = {
     patches: loadPatches(),
@@ -376,6 +387,20 @@
       [point.lat - latPad, point.lng - lngPad],
       [point.lat + latPad, point.lng + lngPad]
     );
+  }
+
+  function boundsCenterLatLng(bounds) {
+    return normalizeLatLng(bounds?.getCenter?.());
+  }
+
+  function summarizeBounds(bounds) {
+    if (!bounds?.isValid?.()) return null;
+    return {
+      south: Number(bounds.getSouth().toFixed(6)),
+      west: Number(bounds.getWest().toFixed(6)),
+      north: Number(bounds.getNorth().toFixed(6)),
+      east: Number(bounds.getEast().toFixed(6))
+    };
   }
 
   function currentFovBounds() {
@@ -810,10 +835,23 @@
     };
   }
 
-  async function startPatchFillQuest(patchId) {
-    const patch = getPatch(patchId);
+  function resolvePatchQuestTarget(patchOrId) {
+    const rawPatch = patchOrId && typeof patchOrId === "object" ? patchOrId : null;
+    const id = rawPatch?.id ?? patchOrId;
+    const saved = getPatch(id);
+    if (saved) return saved;
+
+    const grouped = findGroupedPatchRow(id);
+    if (grouped) return grouped;
+
+    const selected = rawPatch ? patchSelectionTarget(rawPatch) || rawPatch : null;
+    return selected?.id ? withDerivedPatchFields(selected) : null;
+  }
+
+  async function startPatchFillQuest(patchOrId) {
+    const patch = resolvePatchQuestTarget(patchOrId);
     if (!patch) {
-      toast("Save this Patch before starting a quest.");
+      toast("That Patch is not available for a quest yet.");
       return null;
     }
 
@@ -842,19 +880,22 @@
     const recipe = patchFillQuestRecipe(patch, targetInfo);
     const targetCount = targetInfo.totalEligibleCells;
     const storedCount = targetInfo.cells.length;
-    return window.GridWildQuests.startQuestFromRecipe(recipe, {
+    toast(`Starting Fill Grid for ${patchTitle(patch)}...`);
+    const quest = await window.GridWildQuests.startQuestFromRecipe(recipe, {
       title: `Help Fill Grid: ${patchTitle(patch)}`,
       description: `Observe one organism in each marked unobserved GridWild square inside ${patchTitle(patch)}. ${storedCount} of ${targetCount} eligible target squares are marked for this run.`,
       source: "patch",
       autoEmbark: true,
       openStatus: false
     });
+    toast(quest ? "Fill Grid quest started." : "Could not start Fill Grid quest.");
+    return quest;
   }
 
-  async function startPatchIdentifyQuest(patchId) {
-    const patch = getPatch(patchId);
+  async function startPatchIdentifyQuest(patchOrId) {
+    const patch = resolvePatchQuestTarget(patchOrId);
     if (!patch) {
-      toast("Save this Patch before starting a quest.");
+      toast("That Patch is not available for a quest yet.");
       return null;
     }
 
@@ -1374,6 +1415,18 @@
       north: Math.max(...points.map((point) => point.lat)),
       west: Math.min(...points.map((point) => point.lng)),
       east: Math.max(...points.map((point) => point.lng))
+    };
+  }
+
+  function rawBoundsFromLatLngBounds(bounds) {
+    if (!bounds?.isValid?.()) return null;
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    return {
+      south: Number(sw.lat),
+      west: Number(sw.lng),
+      north: Number(ne.lat),
+      east: Number(ne.lng)
     };
   }
 
@@ -2425,16 +2478,21 @@
       button.addEventListener("click", async () => {
         const questType = button.dataset.gwPatchQuestType;
         closePatchActionMenu();
-        if (questType === "fill_grid") {
-          await startPatchFillQuest(patch.id);
-        } else if (questType === "identify_unknowns") {
-          await startPatchIdentifyQuest(patch.id);
-        } else if (questType === "custom") {
-          if (window.GridWildQuestTargetBuilder?.open) {
-            window.GridWildQuestTargetBuilder.open({ source: "patch", patch });
-          } else {
-            toast("Quest Target Builder is still loading.");
+        try {
+          if (questType === "fill_grid") {
+            await startPatchFillQuest(patch);
+          } else if (questType === "identify_unknowns") {
+            await startPatchIdentifyQuest(patch);
+          } else if (questType === "custom") {
+            if (window.GridWildQuestTargetBuilder?.open) {
+              window.GridWildQuestTargetBuilder.open({ source: "patch", patch });
+            } else {
+              toast("Quest Target Builder is still loading.");
+            }
           }
+        } catch (err) {
+          console.warn("Could not start Patch quest:", err);
+          toast(err?.message || "Could not start Patch quest.");
         }
       });
     });
@@ -2709,18 +2767,97 @@
     return state.peekLayer;
   }
 
+  function localOsmFeatureSource() {
+    return window.GridWildOsmFeaturesLayer || null;
+  }
+
+  function delay(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+  }
+
+  function hydrateLocalPatchFeaturesForCurrentView(options = {}) {
+    const source = localOsmFeatureSource();
+    if (source?.fetchBasemapFeaturesForCurrentView) {
+      return source.fetchBasemapFeaturesForCurrentView({ silent: true, ...options });
+    }
+    if (source?.fetchParksForCurrentView) return source.fetchParksForCurrentView(options);
+    source?.scheduleFetch?.(0);
+    return null;
+  }
+
+  function hydrateLocalPatchFeaturesForBounds(bounds, options = {}) {
+    const source = localOsmFeatureSource();
+    if (source?.fetchBasemapFeaturesForBounds) {
+      return source.fetchBasemapFeaturesForBounds(bounds, { silent: true, ...options });
+    }
+    if (source?.fetchBasemapFeaturesForCurrentView) {
+      return source.fetchBasemapFeaturesForCurrentView({ silent: true, ...options });
+    }
+    if (source?.fetchParksForBounds) return source.fetchParksForBounds(bounds, options);
+    source?.scheduleFetch?.(0);
+    return null;
+  }
+
+  async function refreshLocalPatchCandidates(options = {}) {
+    const hydratePromise = options.bounds
+      ? hydrateLocalPatchFeaturesForBounds(options.bounds, options)
+      : hydrateLocalPatchFeaturesForCurrentView(options);
+
+    if (hydratePromise?.then) {
+      await hydratePromise;
+      return true;
+    }
+
+    await delay(options.fallbackDelayMs || 900);
+    return false;
+  }
+
+  function localPatchFovSearchBounds(options = {}) {
+    if (!window.map?.getBounds || !window.L) return null;
+    if (options.bounds?.isValid?.()) return options.bounds;
+    return expandLatLngBounds(window.map.getBounds(), Number(options.marginRatio) || 0.08);
+  }
+
   function localPatchesInFov(options = {}) {
     if (!window.map?.getBounds || !window.L) return [];
-    const bounds = expandLatLngBounds(window.map.getBounds(), Number(options.marginRatio) || 0.08);
+    const bounds = localPatchFovSearchBounds(options);
+    if (!bounds?.isValid?.()) return [];
+    const debug = options.debugSummary || null;
+    if (debug) debug.osm = {};
     const savedRows = patchesWithDistance().map((patch) => ({ ...patch, candidate: false }));
-    const candidateRows = nearbyOsmPatchCandidates(options.candidateLimit || 80);
+    const viewCandidateLimit =
+      options.viewCandidateLimit === undefined || options.viewCandidateLimit === null
+        ? Infinity
+        : options.viewCandidateLimit;
+    const candidateRows = nearbyOsmPatchCandidates({
+      origin: boundsCenterLatLng(bounds) || nearbySearchOrigin(),
+      bounds,
+      limit: Infinity,
+      includeFallback: true,
+      includeClippedBasemap: true,
+      debug: debug?.osm
+    });
     const seen = new Set();
 
-    return [...savedRows, ...candidateRows].filter((patch) => {
+    const rows = [...savedRows, ...candidateRows].filter((patch) => {
       if (!patch?.id || seen.has(patch.id)) return false;
       seen.add(patch.id);
       return patchIntersectsBounds(patch, bounds);
     });
+    const limitedRows = Number.isFinite(Number(viewCandidateLimit))
+      ? rows.slice(0, Math.max(0, Number(viewCandidateLimit)))
+      : rows;
+    if (debug) {
+      debug.fov = {
+        bounds: summarizeBounds(bounds),
+        savedRows: savedRows.length,
+        osmRows: candidateRows.length,
+        returnedRows: limitedRows.length,
+        preLimitRows: rows.length,
+        viewCandidateLimit
+      };
+    }
+    return limitedRows;
   }
 
   function patchTouchesLatLngArea(patch, latlng, bounds, radiusM = PATCH_VIEW_SEARCH_RADIUS_M) {
@@ -2740,6 +2877,8 @@
 
     const radiusM = Number(options.radiusM) || PATCH_VIEW_SEARCH_RADIUS_M;
     const bounds = options.bounds || boundsAroundLatLng(point, radiusM);
+    const debug = options.debugSummary || null;
+    if (debug) debug.osm = {};
     const savedRows = state.patches
       .map((patch) => ({
         ...patch,
@@ -2754,17 +2893,29 @@
       bounds,
       radiusM,
       limit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT,
-      includeFallback: true
+      includeFallback: true,
+      includeClippedBasemap: true,
+      debug: debug?.osm
     });
     const seen = new Set();
 
-    return [...savedRows, ...candidateRows]
+    const rows = [...savedRows, ...candidateRows]
       .filter((patch) => {
         if (!patch?.id || seen.has(patch.id)) return false;
         seen.add(patch.id);
         return patchTouchesLatLngArea(patch, point, bounds, radiusM);
       })
       .sort((a, b) => Number(a.distance_m || Infinity) - Number(b.distance_m || Infinity));
+    if (debug) {
+      debug.pointSearch = {
+        bounds: summarizeBounds(bounds),
+        radiusM,
+        savedRows: savedRows.length,
+        osmRows: candidateRows.length,
+        returnedRows: rows.length
+      };
+    }
+    return rows;
   }
 
   function mergePatchRows(rows = []) {
@@ -2774,6 +2925,90 @@
       seen.add(patch.id);
       return true;
     });
+  }
+
+  function patchFitsVisibleFov(patch, fovBounds = currentFovBounds()) {
+    const rings = patchRings(patch);
+    if (!rings.length) return true;
+    return ringsFitWithinFovSize(rings, fovBounds, PATCH_VIEW_MAX_OUTLINE_FOV_RATIO);
+  }
+
+  function patchVisibleFovAreaRatio(patch, fovBounds = currentFovBounds()) {
+    const rings = patchRings(patch);
+    const patchRawBounds = rawBoundsFromRings(rings);
+    const fovRawBounds = rawBoundsFromLatLngBounds(fovBounds);
+    if (!patchRawBounds || !fovRawBounds) return null;
+    const visibleRawBounds = rawBoundsIntersection(patchRawBounds, fovRawBounds);
+    const visibleAreaM2 = rawBoundsAreaM2(visibleRawBounds);
+    const fovAreaM2 = rawBoundsAreaM2(fovRawBounds);
+    if (!Number.isFinite(visibleAreaM2) || !Number.isFinite(fovAreaM2) || fovAreaM2 <= 0) {
+      return null;
+    }
+    return visibleAreaM2 / fovAreaM2;
+  }
+
+  function patchMeetsVisibleFovFloor(
+    patch,
+    fovBounds = currentFovBounds(),
+    minRatio = PATCH_VIEW_MIN_CANDIDATE_FOV_AREA_RATIO
+  ) {
+    if (patch?.candidate !== true) return true;
+    const ratio = patchVisibleFovAreaRatio(patch, fovBounds);
+    if (!Number.isFinite(ratio)) return true;
+    return ratio >= minRatio;
+  }
+
+  function filterPatchRowsForVisibleFov(rows = [], options = {}) {
+    if (options.skipOversizeFov === false) return rows;
+    const fovBounds = options.fovBounds || currentFovBounds();
+    if (!fovBounds?.isValid?.()) return rows;
+    const minCandidateFovAreaRatio = Number.isFinite(Number(options.minCandidateFovAreaRatio))
+      ? Math.max(0, Number(options.minCandidateFovAreaRatio))
+      : PATCH_VIEW_MIN_CANDIDATE_FOV_AREA_RATIO;
+
+    let skippedOversizeRows = 0;
+    let skippedTinyCandidateRows = 0;
+    const filtered = (Array.isArray(rows) ? rows : []).filter((patch) => {
+      if (!patchFitsVisibleFov(patch, fovBounds)) {
+        skippedOversizeRows++;
+        return false;
+      }
+      if (!patchMeetsVisibleFovFloor(patch, fovBounds, minCandidateFovAreaRatio)) {
+        skippedTinyCandidateRows++;
+        return false;
+      }
+      return true;
+    });
+
+    const debug = options.debugSummary || null;
+    if (debug) {
+      debug.outlineFilter = {
+        minCandidateFovAreaRatio,
+        maxFovRatio: PATCH_VIEW_MAX_OUTLINE_FOV_RATIO,
+        inputRows: Array.isArray(rows) ? rows.length : 0,
+        skippedRows: skippedOversizeRows + skippedTinyCandidateRows,
+        skippedOversizeRows,
+        skippedTinyCandidateRows,
+        returnedRows: filtered.length
+      };
+    }
+
+    return filtered;
+  }
+
+  function patchDiscoveryDebugEnabled(options = {}) {
+    return options.debug === true || window.__gwDebugLocalPatches === true;
+  }
+
+  function publishPatchDiscoveryDebug(label, detail, options = {}) {
+    if (!patchDiscoveryDebugEnabled(options)) return;
+    const summary = {
+      label,
+      at: new Date().toISOString(),
+      ...detail
+    };
+    state.lastDiscoveryDebug = summary;
+    if (window.console?.info) console.info("GridWild patch discovery", summary);
   }
 
   function patchFromINatProjectCandidate(project) {
@@ -2822,6 +3057,7 @@
 
     const radiusM = Number(options.radiusM) || PATCH_VIEW_INAT_SEARCH_RADIUS_M;
     const bounds = options.bounds || boundsAroundLatLng(point, radiusM);
+    const debug = options.debugSummary ? (options.debugSummary.inat = { mode: "point" }) : null;
     const savedIds = new Set(state.patches.map((patch) => patch.id));
     const projects = await searchINatProjects("", {
       nearby: true,
@@ -2829,26 +3065,49 @@
       bounds,
       rejectOversize: false,
       geometryCheckLimit: options.geometryCheckLimit || PATCH_VIEW_INAT_GEOMETRY_CHECK_LIMIT,
-      resultLimit: options.resultLimit || PATCH_VIEW_INAT_PROJECT_LIMIT
+      resultLimit: options.resultLimit || PATCH_VIEW_INAT_PROJECT_LIMIT,
+      debug
     });
 
-    return projects
+    const rows = projects
       .map(patchFromINatProjectCandidate)
       .filter(Boolean)
       .filter((patch) => !savedIds.has(patch.id))
       .filter((patch) => patchTouchesLatLngArea(patch, point, bounds, radiusM));
+    if (debug) {
+      debug.patchRows = rows.length;
+      debug.bounds = summarizeBounds(bounds);
+      debug.radiusM = radiusM;
+    }
+    return rows;
   }
 
   async function nearbyINatProjectPatchCandidates(options = {}) {
     if (!window.map?.getBounds || !window.L) return [];
     const bounds = expandLatLngBounds(window.map.getBounds(), Number(options.marginRatio) || 0.08);
+    const origin =
+      normalizeLatLng(options.origin) || boundsCenterLatLng(bounds) || nearbySearchOrigin();
+    const debug = options.debugSummary ? (options.debugSummary.inat = { mode: "view" }) : null;
     const savedIds = new Set(state.patches.map((patch) => patch.id));
-    const projects = await searchINatProjects("", { nearby: true });
-    return projects
+    const projects = await searchINatProjects("", {
+      nearby: true,
+      origin,
+      bounds,
+      rejectOversize: options.rejectOversize === undefined ? false : options.rejectOversize,
+      geometryCheckLimit: options.geometryCheckLimit || PATCH_VIEW_INAT_GEOMETRY_CHECK_LIMIT,
+      resultLimit: options.resultLimit || PATCH_VIEW_INAT_PROJECT_LIMIT,
+      debug
+    });
+    const rows = projects
       .map(patchFromINatProjectCandidate)
       .filter(Boolean)
       .filter((patch) => !savedIds.has(patch.id))
       .filter((patch) => patchIntersectsBounds(patch, bounds));
+    if (debug) {
+      debug.patchRows = rows.length;
+      debug.bounds = summarizeBounds(bounds);
+    }
+    return rows;
   }
 
   function popupGroupingRows() {
@@ -3096,16 +3355,30 @@
   async function showLocalPatchHighlights(options = {}) {
     const runId = ++state.peekRunId;
     setVisible(true);
-    const parksHydratePromise =
-      window.GridWildOsmFeaturesLayer?.fetchParksForCurrentView?.() || null;
-    let rows = localPatchesInFov(options);
+    const debugSummary = patchDiscoveryDebugEnabled(options)
+      ? { action: "patches-in-view", phase: "initial" }
+      : null;
+    const searchBounds = localPatchFovSearchBounds(options);
+    const debugOptions = debugSummary
+      ? { ...options, bounds: searchBounds, debugSummary }
+      : { ...options, bounds: searchBounds };
+    const featureHydratePromise = searchBounds?.isValid?.()
+      ? hydrateLocalPatchFeaturesForBounds(searchBounds, {
+          silent: true,
+          ignoreMinZoom: true,
+          profile: "patch-view",
+          coverageBounds: searchBounds
+        })
+      : hydrateLocalPatchFeaturesForCurrentView({ silent: true, profile: "patch-view" });
+    let rows = filterPatchRowsForVisibleFov(localPatchesInFov(debugOptions), debugOptions);
     let hydratedINatRows = [];
     highlightPatchRows(rows);
 
-    if (parksHydratePromise?.then) {
-      await parksHydratePromise;
+    if (featureHydratePromise?.then) {
+      await featureHydratePromise;
       if (state.peekRunId === runId) {
-        rows = localPatchesInFov(options);
+        if (debugSummary) debugSummary.phase = "after-osm-hydrate";
+        rows = filterPatchRowsForVisibleFov(localPatchesInFov(debugOptions), debugOptions);
         highlightPatchRows(rows);
       }
     }
@@ -3113,26 +3386,44 @@
     if (options.retryAfterOsm !== false) {
       const retry = () => {
         if (state.peekRunId !== runId) return;
-        const refreshedRows = mergePatchRows([...localPatchesInFov(options), ...hydratedINatRows]);
+        if (debugSummary) debugSummary.phase = "after-osm-event";
+        const refreshedRows = filterPatchRowsForVisibleFov(
+          mergePatchRows([...localPatchesInFov(debugOptions), ...hydratedINatRows]),
+          debugOptions
+        );
         if (refreshedRows.length) highlightPatchRows(refreshedRows);
       };
       window.addEventListener("gwOsmFeaturesUpdated", retry, { once: true });
       window.setTimeout(() => window.removeEventListener("gwOsmFeaturesUpdated", retry), 1800);
     }
 
-    if (options.includeINatProjects !== false) {
+    if (options.includeINatProjects === true) {
       try {
-        const inatRows = await nearbyINatProjectPatchCandidates(options);
+        const inatRows = await nearbyINatProjectPatchCandidates(debugOptions);
         if (state.peekRunId === runId && inatRows.length) {
           hydratedINatRows = inatRows;
-          rows = mergePatchRows([...localPatchesInFov(options), ...hydratedINatRows]);
+          if (debugSummary) debugSummary.phase = "after-inat-hydrate";
+          rows = filterPatchRowsForVisibleFov(
+            mergePatchRows([...localPatchesInFov(debugOptions), ...hydratedINatRows]),
+            debugOptions
+          );
           highlightPatchRows(rows);
         }
       } catch (err) {
+        if (debugSummary) debugSummary.inatError = err?.message || String(err);
         console.warn("Could not hydrate nearby iNat project patches:", err);
       }
     }
 
+    publishPatchDiscoveryDebug(
+      "patches-in-view",
+      {
+        rows: rows.length,
+        inatRows: hydratedINatRows.length,
+        summary: debugSummary
+      },
+      options
+    );
     return rows;
   }
 
@@ -3142,6 +3433,10 @@
 
     const runId = ++state.peekRunId;
     setVisible(true);
+    const debugSummary = patchDiscoveryDebugEnabled(options)
+      ? { action: "patch-here", phase: "initial" }
+      : null;
+    const debugOptions = debugSummary ? { ...options, debugSummary } : options;
 
     const searchRadiusM = Number(options.radiusM) || PATCH_VIEW_SEARCH_RADIUS_M;
     const osmFetchRadiusM = Number(options.osmFetchRadiusM) || PATCH_VIEW_OSM_FETCH_RADIUS_M;
@@ -3149,57 +3444,91 @@
     const searchBounds = boundsAroundLatLng(point, searchRadiusM);
     const osmFetchBounds = boundsAroundLatLng(point, osmFetchRadiusM);
     const inatBounds = boundsAroundLatLng(point, inatRadiusM);
-    let rows = localPatchesAtLatLng(point, {
-      bounds: searchBounds,
-      radiusM: searchRadiusM,
-      candidateLimit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT
-    });
+    let rows = filterPatchRowsForVisibleFov(
+      localPatchesAtLatLng(point, {
+        ...debugOptions,
+        bounds: searchBounds,
+        radiusM: searchRadiusM,
+        candidateLimit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT
+      }),
+      debugOptions
+    );
     let hydratedINatRows = [];
     highlightPatchRows(rows);
 
-    const parksHydratePromise =
-      window.GridWildOsmFeaturesLayer?.fetchParksForBounds?.(osmFetchBounds, {
-        broad: true,
-        ignoreMinZoom: true,
-        profile: "patch-view"
-      }) || null;
+    const featureHydratePromise = hydrateLocalPatchFeaturesForBounds(osmFetchBounds, {
+      broad: true,
+      ignoreMinZoom: true,
+      profile: "patch-view",
+      silent: true
+    });
 
-    if (parksHydratePromise?.then) {
-      await parksHydratePromise;
+    if (featureHydratePromise?.then) {
+      await featureHydratePromise;
       if (state.peekRunId === runId) {
-        rows = localPatchesAtLatLng(point, {
-          bounds: searchBounds,
-          radiusM: searchRadiusM,
-          candidateLimit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT
-        });
+        if (debugSummary) debugSummary.phase = "after-osm-hydrate";
+        rows = filterPatchRowsForVisibleFov(
+          localPatchesAtLatLng(point, {
+            ...debugOptions,
+            bounds: searchBounds,
+            radiusM: searchRadiusM,
+            candidateLimit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT
+          }),
+          debugOptions
+        );
         highlightPatchRows(rows);
       }
     }
 
-    if (options.includeINatProjects !== false) {
+    if (options.includeINatProjects === true) {
       try {
         hydratedINatRows = await nearbyINatProjectPatchCandidatesAtLatLng(point, {
+          ...debugOptions,
           bounds: inatBounds,
           radiusM: inatRadiusM,
           geometryCheckLimit: options.geometryCheckLimit || PATCH_VIEW_INAT_GEOMETRY_CHECK_LIMIT,
           resultLimit: options.resultLimit || PATCH_VIEW_INAT_PROJECT_LIMIT
         });
         if (state.peekRunId === runId && hydratedINatRows.length) {
-          rows = mergePatchRows([
-            ...localPatchesAtLatLng(point, {
-              bounds: searchBounds,
-              radiusM: searchRadiusM,
-              candidateLimit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT
-            }),
-            ...hydratedINatRows
-          ]).sort((a, b) => Number(a.distance_m || Infinity) - Number(b.distance_m || Infinity));
+          if (debugSummary) debugSummary.phase = "after-inat-hydrate";
+          rows = filterPatchRowsForVisibleFov(
+            mergePatchRows([
+              ...localPatchesAtLatLng(point, {
+                ...debugOptions,
+                bounds: searchBounds,
+                radiusM: searchRadiusM,
+                candidateLimit: options.candidateLimit || PATCH_VIEW_OSM_CANDIDATE_LIMIT
+              }),
+              ...hydratedINatRows
+            ]).sort((a, b) => Number(a.distance_m || Infinity) - Number(b.distance_m || Infinity)),
+            debugOptions
+          );
           highlightPatchRows(rows);
         }
       } catch (err) {
+        if (debugSummary) debugSummary.inatError = err?.message || String(err);
         console.warn("Could not hydrate iNat project patches at selected point:", err);
       }
     }
 
+    if (debugSummary) {
+      debugSummary.point = {
+        lat: Number(point.lat.toFixed(6)),
+        lng: Number(point.lng.toFixed(6))
+      };
+      debugSummary.searchRadiusM = searchRadiusM;
+      debugSummary.osmFetchRadiusM = osmFetchRadiusM;
+      debugSummary.localRows = Math.max(0, rows.length - hydratedINatRows.length);
+    }
+    publishPatchDiscoveryDebug(
+      "patch-here",
+      {
+        rows: rows.length,
+        inatRows: hydratedINatRows.length,
+        summary: debugSummary
+      },
+      options
+    );
     return rows;
   }
 
@@ -3611,6 +3940,71 @@
     return "park";
   }
 
+  function addOsmKindToken(tokens, value) {
+    const token = String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ");
+    if (!token) return;
+    tokens.add(token);
+
+    if (["park", "garden", "nature reserve", "national park", "protected area"].includes(token)) {
+      tokens.add("park");
+      tokens.add("greenspace");
+    }
+    if (["common", "dog park", "playground", "field", "golf course"].includes(token)) {
+      tokens.add("park");
+      tokens.add("greenspace");
+    }
+    if (["recreation ground", "village green", "greenfield", "greenery"].includes(token)) {
+      tokens.add("grass");
+      tokens.add("greenspace");
+    }
+    if (["grave yard", "graveyard", "cemetery"].includes(token)) {
+      tokens.add("cemetery");
+      tokens.add("greenspace");
+    }
+    if (["wood", "woodland", "forest", "trees", "tree cover"].includes(token)) {
+      tokens.add("wood");
+      tokens.add("greenspace");
+    }
+    if (["grass", "grassland", "meadow", "allotments", "orchard"].includes(token)) {
+      tokens.add("grass");
+      tokens.add("greenspace");
+    }
+    if (["wetland", "scrub", "scrubland", "heath", "shrubbery"].includes(token)) {
+      tokens.add(token === "wetland" ? "wetland" : "scrub");
+      tokens.add("greenspace");
+    }
+    if (["picnic site", "camp site"].includes(token)) tokens.add("greenspace");
+  }
+
+  function osmKindTokens(tags = {}) {
+    const tokens = new Set();
+    [
+      tags.kind,
+      tags.place,
+      tags.leisure,
+      tags.natural,
+      tags.landuse,
+      tags.landcover,
+      tags.boundary,
+      tags.amenity,
+      tags.historic,
+      tags.tourism,
+      osmBoundaryKind(tags)
+    ].forEach((value) => addOsmKindToken(tokens, value));
+    return tokens;
+  }
+
+  function osmKindMatchScore(targetTokens = new Set(), candidateTokens = new Set()) {
+    for (const token of targetTokens) {
+      if (token !== "greenspace" && candidateTokens.has(token)) return 0;
+    }
+    return targetTokens.has("greenspace") && candidateTokens.has("greenspace") ? 1 : 2;
+  }
+
   function osmFeatureBoundary(feature) {
     return (feature?.points || [])
       .map((p) => ({ lat: Number(p.lat), lng: Number(p.lng) }))
@@ -3623,6 +4017,7 @@
       .map((feature) => ({
         feature,
         name: osmHumanName(feature.tags),
+        kindTokens: osmKindTokens(feature.tags),
         boundary: osmFeatureBoundary(feature)
       }))
       .filter((row) => row.name && row.boundary.length >= 3);
@@ -3630,6 +4025,7 @@
     const namedPlaces = places
       .map((place) => ({
         name: osmHumanName(place.tags),
+        kindTokens: osmKindTokens(place.tags),
         point: place?.points?.[0]
           ? { lat: Number(place.points[0].lat), lng: Number(place.points[0].lng) }
           : null
@@ -3644,28 +4040,38 @@
   function inheritedOsmBoundaryName(feature, boundary, context = {}) {
     const centroid = centroidForPoints(boundary);
     if (!centroid) return null;
+    const targetKindTokens = osmKindTokens(feature?.tags || {});
 
     const containingBoundary = (context.namedBoundaries || [])
       .filter((row) => row.feature?.id !== feature?.id)
       .map((row) => ({
         name: row.name,
+        kindScore: osmKindMatchScore(targetKindTokens, row.kindTokens),
         distance: pointInRing(centroid, row.boundary)
           ? 0
           : distanceToRingsM(centroid, [row.boundary])
       }))
-      .filter((row) => Number.isFinite(row.distance) && row.distance <= 40)
-      .sort((a, b) => a.distance - b.distance)[0];
+      .filter(
+        (row) => Number.isFinite(row.distance) && row.distance <= (row.kindScore < 2 ? 80 : 40)
+      )
+      .sort((a, b) => a.kindScore - b.kindScore || a.distance - b.distance)[0];
 
     if (containingBoundary) return containingBoundary.name;
 
     const nearbyPlace = (context.namedPlaces || [])
       .map((row) => ({
         name: row.name,
+        kindScore: osmKindMatchScore(targetKindTokens, row.kindTokens),
         inside: pointInRing(row.point, boundary),
         distance: distanceToRingsM(row.point, [boundary])
       }))
-      .filter((row) => row.inside || (Number.isFinite(row.distance) && row.distance <= 80))
+      .filter((row) => {
+        if (row.inside) return true;
+        if (!Number.isFinite(row.distance)) return false;
+        return row.distance <= (row.kindScore < 2 ? 180 : 80);
+      })
       .sort((a, b) => {
+        if (a.kindScore !== b.kindScore) return a.kindScore - b.kindScore;
         if (a.inside && !b.inside) return -1;
         if (!a.inside && b.inside) return 1;
         return a.distance - b.distance;
@@ -3705,12 +4111,13 @@
     const id = patchIdFor("osm", feature.id);
     const label = osmFeatureLabel(feature, context);
     const kind = osmBoundaryKind(feature.tags);
+    const localMapSource = feature.source === "basemap_pmtiles";
     return withDerivedPatchFields({
       id,
       name: label.name,
       source: "osm",
       source_id: feature.id,
-      source_label: `OSM ${kind} boundary`,
+      source_label: localMapSource ? `Local map ${kind} boundary` : `OSM ${kind} boundary`,
       boundary,
       geometry: {
         type: "polygon",
@@ -3718,11 +4125,24 @@
       },
       metadata: {
         tags: feature.tags || {},
+        map_source: feature.source || null,
         osm_id: feature.id,
-        osm_label_source: label.source
+        osm_label_source: label.source,
+        clipped_to_tile: feature.clipped_to_tile === true
       },
       created_at: new Date().toISOString()
     });
+  }
+
+  function osmFeatureUsableAsPatchCandidate(feature, options = {}) {
+    if (!feature || feature.closed === false) return false;
+    if (
+      options.includeClippedBasemap !== true &&
+      feature.source === "basemap_pmtiles" &&
+      feature.clipped_to_tile === true
+    )
+      return false;
+    return true;
   }
 
   function nearbyOsmPatchCandidates(limitOrOptions = 12) {
@@ -3734,15 +4154,31 @@
     const origin = normalizeLatLng(options.origin) || locationOrigin();
     const searchBounds = options.bounds || null;
     const radiusM = Number(options.radiusM);
+    const debug = options.debug || null;
+    const includeClippedBasemap = options.includeClippedBasemap === true;
     const savedIds = new Set(state.patches.map((patch) => patch.id));
-    const osmFeatures = window.GridWildOsmFeaturesLayer?.getFeatures?.() || {};
-    const features = (osmFeatures.parks || []).filter((feature) => feature.closed !== false);
+    const osmFeatures =
+      window.GridWildOsmFeaturesLayer?.getFeatures?.({
+        includeClippedBasemapPolygons: true
+      }) || {};
+    const rawParkFeatures = osmFeatures.parks || [];
+    const clippedParkFeatures = rawParkFeatures.filter(
+      (feature) => feature?.source === "basemap_pmtiles" && feature.clipped_to_tile === true
+    );
+    const namedClippedParkFeatures = clippedParkFeatures.filter((feature) =>
+      osmHumanName(feature.tags)
+    );
+    const features = rawParkFeatures.filter((feature) =>
+      osmFeatureUsableAsPatchCandidate(feature, { includeClippedBasemap })
+    );
     const labelContext = buildOsmLabelContext(features, osmFeatures.places || []);
 
-    const rows = features
+    const patchRows = features
       .map((feature) => patchFromOsmFeature(feature, labelContext))
       .filter(Boolean)
-      .filter((patch) => !savedIds.has(patch.id))
+      .filter((patch) => !savedIds.has(patch.id));
+
+    const rows = patchRows
       .filter((patch) => {
         if (!searchBounds?.isValid?.()) return true;
         const rings = patch.geometry?.rings || [patch.boundary];
@@ -3780,13 +4216,40 @@
           ? namedRows
           : withoutInheritedDuplicates;
 
-    return sourceRows
+    const sortedRows = sourceRows
       .sort((a, b) => Number(a.distance_m || Infinity) - Number(b.distance_m || Infinity))
       .slice(0, limit);
+
+    if (debug) {
+      Object.assign(debug, {
+        rawParkFeatures: rawParkFeatures.length,
+        usableParkFeatures: features.length,
+        namedRawParkFeatures: rawParkFeatures.filter((feature) => osmHumanName(feature.tags))
+          .length,
+        namedUsableParkFeatures: features.filter((feature) => osmHumanName(feature.tags)).length,
+        clippedParkFeatures: clippedParkFeatures.length,
+        usableClippedParkFeatures: includeClippedBasemap ? clippedParkFeatures.length : 0,
+        skippedClippedParkFeatures: includeClippedBasemap ? 0 : clippedParkFeatures.length,
+        namedClippedParkFeatures: namedClippedParkFeatures.length,
+        namedClippedParkNames: namedClippedParkFeatures
+          .map((feature) => osmHumanName(feature.tags))
+          .filter(Boolean)
+          .slice(0, 8),
+        patchCandidates: patchRows.length,
+        inBoundsCandidates: rows.length,
+        namedCandidates: namedRows.length,
+        fallbackCandidates: withoutInheritedDuplicates.length - namedRows.length,
+        returnedRows: sortedRows.length,
+        limit,
+        includeClippedBasemap,
+        hasSearchBounds: searchBounds?.isValid?.() === true
+      });
+    }
+
+    return sortedRows;
   }
 
   function openPatchSelector() {
-    window.GridWildOsmFeaturesLayer?.scheduleFetch?.(0);
     injectFieldModalStyles();
 
     const root = document.createElement("div");
@@ -3794,11 +4257,11 @@
     root.innerHTML = `
       <div class="gw-quest-modal gw-field-selector-modal">
         <div class="gw-quest-modal-title">Nearby Patches</div>
-        <div class="gw-quest-modal-subtitle">Saved patches and nearby OSM habitat boundaries.</div>
+        <div class="gw-quest-modal-subtitle">Saved patches and nearby self-hosted map habitat boundaries.</div>
         <div id="gwPatchSelectorRows">${renderPatchSelectorRows()}</div>
         <div class="gw-quest-actions">
           <button class="gw-quest-btn secondary" id="gwPatchSelectorCancel" type="button">Cancel</button>
-          <button class="gw-quest-btn secondary" id="gwPatchSelectorRefresh" type="button">Refresh OSM</button>
+          <button class="gw-quest-btn secondary" id="gwPatchSelectorRefresh" type="button">Refresh Map</button>
         </div>
       </div>
     `;
@@ -3849,12 +4312,24 @@
 
       const refreshBtn = evt.target.closest("#gwPatchSelectorRefresh");
       if (refreshBtn) {
-        window.GridWildOsmFeaturesLayer?.scheduleFetch?.(0);
-        setTimeout(rerender, 1200);
+        const originalText = refreshBtn.textContent;
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = "Refreshing...";
+        refreshLocalPatchCandidates({ silent: true })
+          .then(rerender)
+          .catch((err) => console.warn("Could not refresh local patch candidates:", err))
+          .finally(() => {
+            if (!root.isConnected) return;
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = originalText || "Refresh Map";
+          });
       }
     };
 
     window.addEventListener("gwOsmFeaturesUpdated", rerender, { once: true });
+    refreshLocalPatchCandidates({ silent: true })
+      .then(rerender)
+      .catch((err) => console.warn("Could not hydrate local patch candidates:", err));
   }
 
   function renderPatchSelectorRows() {
@@ -3863,12 +4338,12 @@
     const empty = !saved.length && !candidates.length;
 
     if (empty) {
-      return `<div class="gw-muted">No saved patches or loaded OSM habitat boundaries nearby yet.</div>`;
+      return `<div class="gw-muted">No saved patches or loaded map habitat boundaries nearby yet.</div>`;
     }
 
     return `
       ${saved.length ? `<div class="gw-field-list-heading">Saved</div>${saved.map(renderSavedPatchRow).join("")}` : ""}
-      ${candidates.length ? `<div class="gw-field-list-heading">Nearby OSM</div>${candidates.map(renderCandidatePatchRow).join("")}` : ""}
+      ${candidates.length ? `<div class="gw-field-list-heading">Nearby Map</div>${candidates.map(renderCandidatePatchRow).join("")}` : ""}
     `;
   }
 
@@ -4161,9 +4636,143 @@
     }
   }
 
+  function proxiedINatUrl(url) {
+    const target = String(url || "").trim();
+    if (!target) return target;
+    return `/.netlify/functions/inat-public?url=${encodeURIComponent(target)}`;
+  }
+
+  function inatRequestKey(url) {
+    return String(url?.toString?.() || url || "").trim();
+  }
+
+  function makeINatError(status, message, detail = {}) {
+    return Object.assign(new Error(message || `iNaturalist HTTP ${status}`), {
+      status,
+      ...detail
+    });
+  }
+
+  function isINatRateLimited(err) {
+    return (
+      Number(err?.status) === 429 ||
+      /iNaturalist HTTP 429|rate limit|cooldown/i.test(String(err?.message || err || ""))
+    );
+  }
+
+  function inatRetryAfterMs(headers) {
+    const raw = headers?.get?.("retry-after");
+    if (!raw) return INAT_RATE_LIMIT_COOLDOWN_MS;
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds)) return Math.max(1000, seconds * 1000);
+    const at = Date.parse(raw);
+    return Number.isFinite(at) ? Math.max(1000, at - Date.now()) : INAT_RATE_LIMIT_COOLDOWN_MS;
+  }
+
+  function inatHeadersObject(headers) {
+    const out = {};
+    headers?.forEach?.((value, key) => {
+      out[String(key).toLowerCase()] = String(value);
+    });
+    return out;
+  }
+
+  function makeINatTextResponse(status, headers = {}, body = "") {
+    const normalizedHeaders = {};
+    Object.entries(headers || {}).forEach(([key, value]) => {
+      normalizedHeaders[String(key).toLowerCase()] = String(value);
+    });
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      headers: {
+        get(name) {
+          return normalizedHeaders[String(name || "").toLowerCase()] || null;
+        }
+      },
+      text: async () => body,
+      json: async () => JSON.parse(body)
+    };
+  }
+
+  function cachedINatResponse(cacheKey) {
+    const entry = inatResponseCache.get(cacheKey);
+    if (!entry) return null;
+    if (Date.now() - Number(entry.savedAt || 0) > INAT_RESPONSE_CACHE_TTL_MS) {
+      inatResponseCache.delete(cacheKey);
+      return null;
+    }
+    return makeINatTextResponse(entry.status, entry.headers, entry.body);
+  }
+
+  function rememberINatResponse(cacheKey, response) {
+    if (!cacheKey || !response?.ok) return;
+    inatResponseCache.set(cacheKey, {
+      savedAt: Date.now(),
+      status: response.status,
+      headers: response.__headers || {},
+      body: response.__body || ""
+    });
+    while (inatResponseCache.size > INAT_RESPONSE_CACHE_LIMIT) {
+      const oldest = inatResponseCache.keys().next().value;
+      inatResponseCache.delete(oldest);
+    }
+  }
+
+  async function waitForINatRequestSlot() {
+    const cooldownMs = Math.max(0, inatRateLimitedUntil - Date.now());
+    if (cooldownMs > 0) {
+      throw makeINatError(
+        429,
+        `iNaturalist rate limit cooldown (${Math.ceil(cooldownMs / 1000)}s)`,
+        {
+          cooldownMs
+        }
+      );
+    }
+
+    const waitMs = Math.max(0, inatLastRequestAt + INAT_REQUEST_MIN_INTERVAL_MS - Date.now());
+    if (waitMs > 0) await delay(waitMs);
+  }
+
+  async function fetchINat(url, options = {}) {
+    const target = inatRequestKey(url);
+    const method = String(options.method || "GET").toUpperCase();
+    const cacheable = method === "GET" && !options.body;
+    const cacheKey = cacheable ? target : "";
+    const cached = cacheable ? cachedINatResponse(cacheKey) : null;
+    if (cached) return cached;
+
+    const request = inatRequestQueue
+      .catch(() => null)
+      .then(async () => {
+        await waitForINatRequestSlot();
+        const upstream = await fetch(proxiedINatUrl(target), options);
+        inatLastRequestAt = Date.now();
+        const body = await upstream.text();
+        const headers = inatHeadersObject(upstream.headers);
+        const response = makeINatTextResponse(upstream.status, headers, body);
+        response.__headers = headers;
+        response.__body = body;
+
+        if (upstream.status === 429) {
+          const cooldownMs = inatRetryAfterMs(upstream.headers);
+          inatRateLimitedUntil = Math.max(inatRateLimitedUntil, Date.now() + cooldownMs);
+          throw makeINatError(429, "iNaturalist HTTP 429", { cooldownMs });
+        }
+        if (!response.ok)
+          throw makeINatError(response.status, `iNaturalist HTTP ${response.status}`);
+
+        if (cacheable) rememberINatResponse(cacheKey, response);
+        return response;
+      });
+
+    inatRequestQueue = request.catch(() => null);
+    return await request;
+  }
+
   async function fetchINatJson(url) {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`iNaturalist HTTP ${resp.status}`);
+    const resp = await fetchINat(url);
     return await resp.json();
   }
 
@@ -4219,32 +4828,65 @@
     })();
 
     projectBoundaryCache.set(key, promise);
-    return await promise;
+    try {
+      return await promise;
+    } catch (err) {
+      projectBoundaryCache.delete(key);
+      throw err;
+    }
   }
 
   async function filterProjectsWithBoundaries(projects = [], options = {}) {
     const origin = options.origin || null;
     const searchBounds = options.bounds || null;
     const maxSizeBounds = options.maxSizeBounds || searchBounds;
-    const rejectOversize = options.rejectOversize === true || options.nearby === true;
+    const rejectOversize =
+      options.rejectOversize === false
+        ? false
+        : options.rejectOversize === true || options.nearby === true;
+    const debug = options.debug || null;
     const geometryLimit =
       Number(options.geometryCheckLimit) ||
       (options.nearby
         ? INAT_PROJECT_NEARBY_GEOMETRY_CHECK_LIMIT
         : INAT_PROJECT_GEOMETRY_CHECK_LIMIT);
     const resultLimit = Number(options.resultLimit) || INAT_PROJECT_RESULT_LIMIT;
-    const checks = projects.slice(0, geometryLimit).map(async (project) => {
+    if (debug) {
+      Object.assign(debug, {
+        rawProjectCount: projects.length,
+        geometryLimit,
+        resultLimit,
+        rejectOversize,
+        checkedProjects: Math.min(projects.length, geometryLimit),
+        noBoundary: 0,
+        outsideBounds: 0,
+        oversize: 0,
+        errors: 0,
+        acceptedBeforeLimit: 0
+      });
+    }
+    const rows = [];
+    let checkedProjects = 0;
+    for (const project of projects.slice(0, geometryLimit)) {
+      checkedProjects += 1;
       try {
         const resolved = await resolveINatProjectBoundary(project);
-        if (!resolved) return null;
+        if (!resolved) {
+          if (debug) debug.noBoundary += 1;
+          continue;
+        }
 
         const distance = origin ? distanceToRingsM(origin, resolved.geometry.rings) : Infinity;
         if (options.nearby) {
-          // Nearby iNat projects must be drawable, in view, and no larger than one FOV.
+          // Nearby iNat projects must be drawable and intersect the search area.
           if (searchBounds?.isValid?.()) {
-            if (!ringsIntersectBounds(resolved.geometry.rings, searchBounds)) return null;
+            if (!ringsIntersectBounds(resolved.geometry.rings, searchBounds)) {
+              if (debug) debug.outsideBounds += 1;
+              continue;
+            }
           } else if (!Number.isFinite(distance) || distance > NEARBY_PROJECT_RADIUS_M) {
-            return null;
+            if (debug) debug.outsideBounds += 1;
+            continue;
           }
         }
 
@@ -4253,24 +4895,31 @@
           maxSizeBounds?.isValid?.() &&
           !ringsFitWithinFovSize(resolved.geometry.rings, maxSizeBounds)
         ) {
-          return null;
+          if (debug) debug.oversize += 1;
+          continue;
         }
 
-        return {
+        if (debug) debug.acceptedBeforeLimit += 1;
+        rows.push({
           ...resolved.project,
           __gwPlaceId: resolved.placeId,
           __gwBoundaryGeometry: resolved.geometry,
           __gwInFov: options.nearby === true && searchBounds?.isValid?.(),
           distance_m: distance
-        };
+        });
+        if (rows.length >= resultLimit) break;
       } catch (err) {
+        if (debug) debug.errors += 1;
+        if (isINatRateLimited(err)) {
+          if (debug) debug.rateLimited = true;
+          break;
+        }
         console.warn("Could not inspect iNat project boundary:", err);
-        return null;
       }
-    });
+    }
 
-    const rows = (await Promise.all(checks)).filter(Boolean);
-    return rows
+    if (debug) debug.checkedProjects = checkedProjects;
+    const sortedRows = rows
       .sort((a, b) => {
         const da = Number(a.distance_m);
         const db = Number(b.distance_m);
@@ -4282,32 +4931,27 @@
         );
       })
       .slice(0, resultLimit);
+    if (debug) debug.returnedProjects = sortedRows.length;
+    return sortedRows;
   }
 
   function fovProjectSearchPoints(bounds, origin) {
     if (!bounds?.isValid?.()) return origin ? [origin] : [];
 
     const center = bounds.getCenter();
-    const sw = bounds.getSouthWest();
-    const ne = bounds.getNorthEast();
-    const raw = [
-      { lat: center.lat, lng: center.lng },
-      { lat: sw.lat, lng: sw.lng },
-      { lat: sw.lat, lng: ne.lng },
-      { lat: ne.lat, lng: sw.lng },
-      { lat: ne.lat, lng: ne.lng },
-      origin
-    ].filter(Boolean);
+    const raw = [{ lat: center.lat, lng: center.lng }, origin].filter(Boolean);
     const seen = new Set();
-    return raw.filter((point) => {
-      const lat = Number(point.lat);
-      const lng = Number(point.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-      const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return raw
+      .filter((point) => {
+        const lat = Number(point.lat);
+        const lng = Number(point.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+        const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, INAT_PROJECT_FOV_SEARCH_POINTS_MAX);
   }
 
   function mergeProjectCandidates(groups = []) {
@@ -4361,50 +5005,77 @@
       0,
       options.placeLimit || INAT_PLACE_PROJECT_LOOKUP_LIMIT
     );
-    const settled = await Promise.allSettled(
-      selected.map(async (place) => {
+    const groups = [];
+    for (const place of selected) {
+      try {
         const projects = await fetchINatProjectCandidates(options.query || "", {
           placeId: place.id,
           perPage: options.perPage || INAT_PROJECTS_PER_PLACE_LIMIT
         });
-        return projects.map((project) => ({
-          ...project,
-          __gwCandidatePlaceId: place.id,
-          __gwCandidatePlaceName: place.display_name || place.name || place.slug || ""
-        }));
-      })
-    );
+        groups.push(
+          projects.map((project) => ({
+            ...project,
+            __gwCandidatePlaceId: place.id,
+            __gwCandidatePlaceName: place.display_name || place.name || place.slug || ""
+          }))
+        );
+      } catch (err) {
+        if (isINatRateLimited(err)) throw err;
+      }
+    }
 
-    return mergeProjectCandidates(
-      settled.filter((result) => result.status === "fulfilled").map((result) => result.value)
-    );
+    return mergeProjectCandidates(groups);
   }
 
   async function searchINatProjects(query, options = {}) {
     const origin = options.origin || nearbySearchOrigin();
     const bounds = options.nearby ? options.bounds || nearbySearchBounds() : null;
     const maxSizeBounds = options.maxSizeBounds || currentFovBounds() || bounds;
+    const debug = options.debug || null;
     let projects = [];
 
     if (options.nearby) {
       const points = fovProjectSearchPoints(bounds, origin);
-      const settled = await Promise.allSettled([
-        fetchINatPlacesInBounds(bounds, {
+      const settled = [];
+
+      try {
+        const places = await fetchINatPlacesInBounds(bounds, {
           maxSizeBounds,
           rejectOversize: options.rejectOversize
-        }).then((places) =>
-          fetchINatProjectCandidatesForPlaces(places, {
-            query,
-            perPage: INAT_PROJECTS_PER_PLACE_LIMIT
-          })
-        ),
-        ...points.map((point) =>
-          fetchINatProjectCandidates(query, {
-            point,
-            perPage: INAT_PROJECT_SEARCH_PAGE_SIZE
-          })
-        )
-      ]);
+        });
+        const placeProjects = await fetchINatProjectCandidatesForPlaces(places, {
+          query,
+          perPage: INAT_PROJECTS_PER_PLACE_LIMIT
+        });
+        settled.push({ status: "fulfilled", value: placeProjects });
+      } catch (err) {
+        settled.push({ status: "rejected", reason: err });
+      }
+
+      if (
+        !settled.some((result) => result.status === "rejected" && isINatRateLimited(result.reason))
+      ) {
+        for (const point of points) {
+          try {
+            const pointProjects = await fetchINatProjectCandidates(query, {
+              point,
+              perPage: INAT_PROJECT_SEARCH_PAGE_SIZE
+            });
+            settled.push({ status: "fulfilled", value: pointProjects });
+          } catch (err) {
+            settled.push({ status: "rejected", reason: err });
+            if (isINatRateLimited(err)) break;
+          }
+        }
+      }
+
+      if (debug) {
+        debug.searchPoints = points.length;
+        debug.searchBatches = settled.map((result) => ({
+          status: result.status,
+          count: result.status === "fulfilled" ? result.value.length : 0
+        }));
+      }
       const batches = settled
         .filter((result) => result.status === "fulfilled")
         .map((result) => result.value);
@@ -4418,6 +5089,7 @@
         perPage: INAT_PROJECT_RESULT_LIMIT
       });
     }
+    if (debug) debug.mergedProjectCount = projects.length;
 
     return await filterProjectsWithBoundaries(projects, {
       nearby: options.nearby === true,
@@ -4430,7 +5102,8 @@
         (options.nearby
           ? INAT_PROJECT_NEARBY_GEOMETRY_CHECK_LIMIT
           : INAT_PROJECT_GEOMETRY_CHECK_LIMIT),
-      resultLimit: options.resultLimit
+      resultLimit: options.resultLimit,
+      debug
     });
   }
 
@@ -4603,12 +5276,12 @@
           return { ...parsed, geojson, source_format: "inat_place_geojson" };
         }
       } catch (err) {
+        if (isINatRateLimited(err)) throw err;
         console.warn("Could not load iNat place GeoJSON:", err);
       }
 
       const kmlUrl = `https://www.inaturalist.org/places/geometry/${encodeURIComponent(key)}.kml`;
-      const resp = await fetch(kmlUrl);
-      if (!resp.ok) throw new Error(`iNaturalist KML HTTP ${resp.status}`);
+      const resp = await fetchINat(kmlUrl);
       const text = await resp.text();
       return {
         type: "kml",
@@ -4726,6 +5399,7 @@
     focusPatch,
     formatDistance,
     getHomePatch,
+    getLastDiscoveryDebug: () => plainClone(state.lastDiscoveryDebug),
     getPatch,
     getPatches: () => patchesWithDistance(),
     isVisible: () => state.layerVisible,

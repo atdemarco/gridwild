@@ -23,7 +23,7 @@
   let recordsByKey = new Map();
   let metricsByKey = new Map();
   let summary = emptySummary();
-  let enabled = localStorage.getItem(ENABLED_KEY) !== "false";
+  let enabled = localStorage.getItem(ENABLED_KEY) === "true";
   let readyPromise = loadPersisted();
 
   function sleep(ms) {
@@ -112,10 +112,6 @@
   async function loadPersisted() {
     try {
       const saved = await readState();
-      const savedEnabled = saved?.enabled;
-      if (localStorage.getItem(ENABLED_KEY) == null && typeof savedEnabled === "boolean") {
-        enabled = savedEnabled;
-      }
 
       const rows = Array.isArray(saved?.observations) ? saved.observations : [];
       observationsById = new Map();
@@ -124,7 +120,7 @@
         if (compact?.id) observationsById.set(compact.id, compact);
       }
 
-      await rebuildAggregates();
+      if (enabled) await rebuildAggregates();
       emitUpdated({ source: "load" });
     } catch (err) {
       console.warn("GridWild pyrite lake cache unavailable; using in-memory pyrite lake.", err);
@@ -941,6 +937,9 @@
   async function setEnabled(value) {
     await readyPromise;
     enabled = value !== false;
+    if (enabled && observationsById.size && !recordsByKey.size) {
+      await rebuildAggregates();
+    }
     localStorage.setItem(ENABLED_KEY, enabled ? "true" : "false");
     try {
       await writeState();

@@ -11,8 +11,6 @@
   const CONTROLS_VERSION = 2;
   const PANE = "gwLocalNichePane";
   const LABEL_PANE = "gwLocalNicheLabelPane";
-  const NOMINATIM_REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
-  const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
   const NICHE_OSM_CONTEXT_ENABLED = true;
   const SAMPLING_RESULT_TOAST_MS = 1800;
   const SAMPLING_FINISH_TOAST_MS = 5200;
@@ -1584,7 +1582,14 @@
     return data.osm_type && data.osm_id ? `${data.osm_type}/${data.osm_id}` : null;
   }
 
+  function osmServiceEndpoint(kind) {
+    return String(window.GridWildExternalServices?.getOsmEndpoint?.(kind) || "").trim();
+  }
+
   function reverseContextUrl(lat, lng) {
+    const endpoint = osmServiceEndpoint("nominatimReverse");
+    if (!endpoint) return "";
+
     const params = new URLSearchParams({
       lat: String(lat),
       lon: String(lng),
@@ -1593,7 +1598,7 @@
       addressdetails: "1",
       namedetails: "1"
     });
-    return `${NOMINATIM_REVERSE_ENDPOINT}?${params.toString()}`;
+    return `${endpoint}?${params.toString()}`;
   }
 
   function placeContextFromReverse(data = {}, lat, lng) {
@@ -1888,7 +1893,10 @@
   }
 
   async function lookupNominatimPlaceContext(lat, lng) {
-    const response = await fetch(reverseContextUrl(lat, lng), {
+    const url = reverseContextUrl(lat, lng);
+    if (!url) return null;
+
+    const response = await fetch(url, {
       headers: { Accept: "application/json" }
     });
     if (!response.ok) throw new Error(`Nominatim reverse lookup failed (${response.status})`);
@@ -1898,7 +1906,10 @@
 
   async function lookupOverpassPlaceContext(lat, lng) {
     if (Date.now() < overpassPlaceLookupDisabledUntil) return null;
-    const response = await fetch(OVERPASS_ENDPOINT, {
+    const endpoint = osmServiceEndpoint("overpass");
+    if (!endpoint) return null;
+
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -1916,11 +1927,14 @@
 
   async function lookupOverpassPlaceContextsForNiches(niches = []) {
     if (Date.now() < overpassPlaceLookupDisabledUntil) return new Map();
+    const endpoint = osmServiceEndpoint("overpass");
+    if (!endpoint) return new Map();
+
     const bounds = nicheCentroidBounds(niches);
     const query = overpassBatchQuery(bounds);
     if (!query) return new Map();
 
-    const response = await fetch(OVERPASS_ENDPOINT, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         Accept: "application/json",
