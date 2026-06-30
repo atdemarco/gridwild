@@ -6,6 +6,7 @@
   "scripts": {
     "audit:economy-authority": "node scripts/audit-economy-authority.js",
     "audit:function-auth": "node scripts/audit-function-auth.js",
+    "audit:playable-taxonomy": "node scripts/audit-playable-taxonomy-policy.js",
     "build:coarse-pyramid": "node scripts/build-coarse-pyramid.js",
     "build:hybrid-occurrence-stage": "node scripts/build-hybrid-occurrence-stage.js",
     "build:inat-snapshot-stage": "node scripts/build-inat-snapshot-stage.js",
