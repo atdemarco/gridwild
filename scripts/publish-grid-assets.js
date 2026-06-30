@@ -447,6 +447,7 @@ function buildTopLevelAssets(manifest) {
     { manifestKey: "coarse_pyramid_summary_file", label: "coarse pyramid summary" },
     { manifestKey: "coarse_pmtiles_shard_manifest_file", label: "coarse PMTiles shard manifest" },
     { manifestKey: "pmtiles_shard_manifest_file", label: "PMTiles shard manifest" },
+    { manifestKey: "metadata_shard_manifest_file", label: "metadata shard manifest" },
     { manifestKey: "pmtiles_file", label: "PMTiles" }
   ];
 
@@ -547,6 +548,14 @@ async function loadCoarsePMTilesShardManifest(assetDir, manifest) {
   return readJson(localPath);
 }
 
+async function loadMetadataShardManifest(assetDir, manifest) {
+  if (!manifest.metadata_shard_manifest_file) return null;
+  const file = normalizeAssetPath(manifest.metadata_shard_manifest_file);
+  const localPath = path.join(assetDir, file);
+  if (!(await fileExists(localPath))) return null;
+  return readJson(localPath);
+}
+
 function coarsePyramidTileFiles(coarseManifest) {
   const files = new Set();
   for (const level of coarseManifest?.levels || []) {
@@ -559,6 +568,17 @@ function coarsePyramidTileFiles(coarseManifest) {
 
 function pmtilesShardFiles(shardManifest) {
   const files = new Set();
+  for (const shard of shardManifest?.shards || []) {
+    if (shard?.file) files.add(normalizeAssetPath(shard.file));
+  }
+  return Array.from(files).sort();
+}
+
+function metadataShardFiles(shardManifest) {
+  const files = new Set();
+  if (shardManifest?.dictionaries_file) {
+    files.add(normalizeAssetPath(shardManifest.dictionaries_file));
+  }
   for (const shard of shardManifest?.shards || []) {
     if (shard?.file) files.add(normalizeAssetPath(shard.file));
   }
@@ -675,6 +695,8 @@ async function main() {
   const coarsePMTilesShardAssetFiles = pmtilesShardFiles(coarsePMTilesShardManifest);
   const pmtilesShardManifest = await loadPMTilesShardManifest(assetDir, manifest);
   const pmtilesShardAssetFiles = pmtilesShardFiles(pmtilesShardManifest);
+  const metadataShardManifest = await loadMetadataShardManifest(assetDir, manifest);
+  const metadataShardAssetFiles = metadataShardFiles(metadataShardManifest);
 
   for (const asset of topLevelAssets) {
     const file = assetFileFor(asset, manifest);
@@ -712,6 +734,10 @@ async function main() {
     await assertFileExists(path.join(assetDir, file), `coarse PMTiles shard ${file}`);
   }
 
+  for (const file of metadataShardAssetFiles) {
+    await assertFileExists(path.join(assetDir, file), `metadata shard asset ${file}`);
+  }
+
   console.log("All referenced files are present.");
 
   if (dryRun) {
@@ -721,6 +747,7 @@ async function main() {
     console.log(`Coarse pyramid tiles present: ${coarsePyramidFiles.length}`);
     console.log(`Coarse PMTiles shards present: ${coarsePMTilesShardAssetFiles.length}`);
     console.log(`PMTiles shards present: ${pmtilesShardAssetFiles.length}`);
+    console.log(`Metadata shard assets present: ${metadataShardAssetFiles.length}`);
     return;
   }
 
@@ -797,6 +824,18 @@ async function main() {
     });
   }
 
+  let uploadedMetadataShardAssets = 0;
+  if (metadataShardAssetFiles.length) {
+    console.log("Uploading metadata shard assets...");
+    uploadedMetadataShardAssets = await uploadAssetFileList({
+      uploader,
+      assetDir,
+      files: metadataShardAssetFiles,
+      buildPrefix,
+      label: "metadata shard"
+    });
+  }
+
   console.log("Upserting superchunk metadata...");
   const superchunkRows = normalizedSuperchunks.map((superchunk) =>
     buildSuperchunkRow(manifest, superchunk, buildPrefix)
@@ -816,6 +855,7 @@ async function main() {
     console.log(`Coarse pyramid tiles uploaded: ${uploadedCoarsePyramidFiles}`);
     console.log(`Coarse PMTiles shards uploaded: ${uploadedCoarsePMTilesShards}`);
     console.log(`PMTiles shards uploaded: ${uploadedPMTilesShards}`);
+    console.log(`Metadata shard assets uploaded: ${uploadedMetadataShardAssets}`);
     console.log(`Superchunk rows upserted: ${superchunkRows.length}`);
     console.log(`Staged build: ${manifest.build_id}`);
     return;
@@ -830,6 +870,7 @@ async function main() {
   console.log(`Coarse pyramid tiles uploaded: ${uploadedCoarsePyramidFiles}`);
   console.log(`Coarse PMTiles shards uploaded: ${uploadedCoarsePMTilesShards}`);
   console.log(`PMTiles shards uploaded: ${uploadedPMTilesShards}`);
+  console.log(`Metadata shard assets uploaded: ${uploadedMetadataShardAssets}`);
   console.log(`Superchunk rows upserted: ${superchunkRows.length}`);
   console.log(`Current build: ${manifest.build_id}`);
 }

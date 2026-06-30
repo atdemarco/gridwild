@@ -49,6 +49,16 @@ function normalizeAssetPath(value) {
     .replace(/^\/+/, "");
 }
 
+function relativeAssetPath(assetDir, file) {
+  const relative = path.relative(path.resolve(assetDir), path.resolve(file));
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return null;
+  return normalizeAssetPath(relative);
+}
+
+function joinAssetPath(...parts) {
+  return normalizeAssetPath(parts.filter(Boolean).join("/"));
+}
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -447,6 +457,7 @@ async function main() {
   const limitSuperchunks = Math.max(0, int(args["limit-superchunks"]));
   const keepJson = boolArg(args, "keep-json", false);
   const includeObservers = !boolArg(args, "no-observers", false);
+  const updateManifest = !boolArg(args, "no-update-manifest", false);
   const generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
   const required = ["superchunks.csv", "square_summary.csv", "square_taxa.csv"];
@@ -535,7 +546,19 @@ async function main() {
     dates: dates.rows,
     filters: makeFilterDictionary(dictionaries.groupRows)
   };
-  await writeJson(path.join(outDir, "metadata_dictionaries.json"), dictionaryPayload);
+  const dictionariesPath = path.join(outDir, "metadata_dictionaries.json");
+  await writeJson(dictionariesPath, dictionaryPayload);
+
+  const relativeOutDir = relativeAssetPath(assetDir, outDir);
+  const publicFile = (file) => (relativeOutDir ? joinAssetPath(relativeOutDir, file) : file);
+  const publicShards = shards.map((shard) => ({
+    ...shard,
+    file: publicFile(shard.file)
+  }));
+  const publicStats = {
+    ...stats,
+    largest_shard: stats.largest_shard ? publicFile(stats.largest_shard) : null
+  };
 
   const shardManifest = {
     schema_version: "gridwild.metadata-shards.v1",
@@ -551,8 +574,8 @@ async function main() {
     shard_payload: "compact-json-gzip",
     include_observers: includeObservers,
     keep_json: keepJson,
-    dictionaries_file: "metadata_dictionaries.json",
-    shards_dir: "shards",
+    dictionaries_file: publicFile("metadata_dictionaries.json"),
+    shards_dir: publicFile("shards"),
     cell_schema: [
       "ix",
       "iy",
@@ -577,9 +600,13 @@ async function main() {
     ],
     observer_schema: ["observer_id", "count", "served_taxa"],
     stats: {
-      ...stats,
-      average_json_bytes: stats.shard_count ? Math.round(stats.json_bytes / stats.shard_count) : 0,
-      average_gzip_bytes: stats.shard_count ? Math.round(stats.gzip_bytes / stats.shard_count) : 0,
+      ...publicStats,
+      average_json_bytes: publicStats.shard_count
+        ? Math.round(publicStats.json_bytes / publicStats.shard_count)
+        : 0,
+      average_gzip_bytes: publicStats.shard_count
+        ? Math.round(publicStats.gzip_bytes / publicStats.shard_count)
+        : 0,
       dictionary_counts: {
         groups: dictionaries.groupRows.length,
         iconic_groups: dictionaries.iconicRows.length,
@@ -589,9 +616,24 @@ async function main() {
       },
       source_superchunk_size_metrics: manifest?.size_metrics || null
     },
-    shards
+    shards: publicShards
   };
-  await writeJson(path.join(outDir, "metadata_manifest.json"), shardManifest);
+  const shardManifestPath = path.join(outDir, "metadata_manifest.json");
+  await writeJson(shardManifestPath, shardManifest);
+
+  const relativeManifestFile = relativeAssetPath(assetDir, shardManifestPath);
+  const relativeDictionaryFile = relativeAssetPath(assetDir, dictionariesPath);
+  if (updateManifest && manifest && relativeManifestFile && relativeDictionaryFile) {
+    manifest.metadata_shard_manifest_file = relativeManifestFile;
+    manifest.metadata_shard_dictionary_file = relativeDictionaryFile;
+    manifest.metadata_shard_mode = "json_gzip_spatial_shards";
+    manifest.metadata_shard_payload = "compact_served_taxon_cells";
+    manifest.metadata_shard_count = stats.shard_count;
+    manifest.metadata_shard_total_gzip_bytes = stats.gzip_bytes;
+    manifest.metadata_shard_largest_gzip_bytes = stats.largest_gzip_bytes;
+    manifest.metadata_shard_dictionary_counts = shardManifest.stats.dictionary_counts;
+    await writeJson(path.join(assetDir, "manifest.json"), manifest);
+  }
 
   console.log(
     JSON.stringify(
@@ -604,9 +646,10 @@ async function main() {
         gzipBytes: stats.gzip_bytes,
         averageGzipBytes: shardManifest.stats.average_gzip_bytes,
         largestGzipBytes: stats.largest_gzip_bytes,
-        largestShard: stats.largest_shard,
+        largestShard: publicStats.largest_shard,
         dictionaries: shardManifest.stats.dictionary_counts,
-        oldSuperchunkGzipBytes: manifest?.size_metrics?.total_superchunk_gzip_bytes || null
+        oldSuperchunkGzipBytes: manifest?.size_metrics?.total_superchunk_gzip_bytes || null,
+        manifestUpdated: Boolean(updateManifest && relativeManifestFile && relativeDictionaryFile)
       },
       null,
       2

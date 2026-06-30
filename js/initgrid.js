@@ -317,8 +317,7 @@ function captureGridHeatStaleFrame() {
   if (gridHeatCanvas.style.display === "none") return null;
 
   const priorPainted = Number(gridHeatLastRenderState?.painted) || 0;
-  const canCarryFrame =
-    priorPainted > 0 || gridHeatLastRenderState?.staleFrameRestored === true;
+  const canCarryFrame = priorPainted > 0 || gridHeatLastRenderState?.staleFrameRestored === true;
   if (!canCarryFrame) return null;
 
   const frame = document.createElement("canvas");
@@ -361,27 +360,14 @@ function restoreGridHeatStaleFrame(frame, reason) {
     dh = Math.round(frame.layout.height * dprY);
 
     const overlaps =
-      dx < gridHeatCanvas.width &&
-      dy < gridHeatCanvas.height &&
-      dx + dw > 0 &&
-      dy + dh > 0;
+      dx < gridHeatCanvas.width && dy < gridHeatCanvas.height && dx + dw > 0 && dy + dh > 0;
     if (!overlaps) return false;
   }
 
   gridHeatCtx.save();
   gridHeatCtx.setTransform(1, 0, 0, 1, 0, 0);
   gridHeatCtx.clearRect(0, 0, gridHeatCanvas.width, gridHeatCanvas.height);
-  gridHeatCtx.drawImage(
-    frame.canvas,
-    0,
-    0,
-    frame.width,
-    frame.height,
-    dx,
-    dy,
-    dw,
-    dh
-  );
+  gridHeatCtx.drawImage(frame.canvas, 0, 0, frame.width, frame.height, dx, dy, dw, dh);
   gridHeatCtx.restore();
 
   if (gridHeatLastRenderState) {
@@ -1058,11 +1044,12 @@ window.GridWildGrid =
         );
       }
 
+      await ensureMetadataShardManifest();
       const jobs = [];
 
       for (let iy = bounds.minIy; iy <= bounds.maxIy; iy++) {
         for (let ix = bounds.minIx; ix <= bounds.maxIx; ix++) {
-          if (!hasStaticGoldCellForGenera(ix, iy)) continue;
+          if (!shouldRequestSquareGeneraRecord(ix, iy)) continue;
           jobs.push(getSquareGeneraRecord(ix, iy));
         }
       }
@@ -1101,10 +1088,11 @@ window.GridWildGrid =
 
       const seen = new Set();
       const jobs = [];
+      await ensureMetadataShardManifest();
 
       normalized.forEach((cell) => {
         const key = cellKey(cell.ix, cell.iy);
-        if (seen.has(key) || !hasStaticGoldCellForGenera(cell.ix, cell.iy)) return;
+        if (seen.has(key) || !shouldRequestSquareGeneraRecord(cell.ix, cell.iy)) return;
         seen.add(key);
         jobs.push(getSquareGeneraRecord(cell.ix, cell.iy));
       });
@@ -1499,6 +1487,11 @@ function mergeSquareGeneraRecords(squareRecords) {
 // ─────────────────────────────────────────────────────────────
 window.__genusTaxonomyDict = window.__genusTaxonomyDict || null;
 window.__squareGeneraSuperchunkCache = window.__squareGeneraSuperchunkCache || new Map();
+window.__gwMetadataShardCache = window.__gwMetadataShardCache || new Map();
+window.__gwMetadataShardPending = window.__gwMetadataShardPending || new Map();
+window.__gwMetadataDictionaries = window.__gwMetadataDictionaries || null;
+window.__gwMetadataShardManifest = window.__gwMetadataShardManifest || null;
+window.__gwMetadataShardUnavailable = window.__gwMetadataShardUnavailable || false;
 
 // Caches for in-flight fetches to prevent duplicate requests for the same data
 window.__richGridMetrics = window.__richGridMetrics || new Map();
@@ -1846,6 +1839,216 @@ async function loadObserverDictionary() {
   return window.__gwObserverDict;
 }
 
+async function ensureMetadataShardManifest() {
+  if (window.GW_DISABLE_METADATA_SHARDS === true) return null;
+  if (window.__gwMetadataShardManifest) return window.__gwMetadataShardManifest;
+  if (window.__gwMetadataShardUnavailable) return null;
+  if (!window.GridWildAssets?.loadMetadataShardManifest) return null;
+
+  try {
+    const manifest = await window.GridWildAssets.loadMetadataShardManifest();
+    if (!manifest?.shards?.length) {
+      window.__gwMetadataShardUnavailable = true;
+      return null;
+    }
+
+    const shardIndex = new Map();
+    for (const shard of manifest.shards || []) {
+      const sx = Number(shard.sx);
+      const sy = Number(shard.sy);
+      if (Number.isFinite(sx) && Number.isFinite(sy)) {
+        shardIndex.set(`${sx}_${sy}`, shard);
+      }
+    }
+
+    window.__gwMetadataShardManifest = {
+      ...manifest,
+      __shardIndex: shardIndex
+    };
+    return window.__gwMetadataShardManifest;
+  } catch (err) {
+    window.__gwMetadataShardUnavailable = true;
+    console.warn("GridWild metadata shards unavailable; falling back to superchunks.", err);
+    return null;
+  }
+}
+
+function buildMetadataDictionaryIndex(dictionaries) {
+  const groupsById = new Map();
+  const iconicById = new Map();
+  const taxaById = new Map();
+  const datesById = new Map();
+
+  for (const row of dictionaries?.groups || []) groupsById.set(Number(row.id), row);
+  for (const row of dictionaries?.iconic_groups || []) iconicById.set(Number(row.id), row);
+  for (const row of dictionaries?.taxa || []) taxaById.set(Number(row.id), row);
+  for (const row of dictionaries?.dates || []) datesById.set(Number(row.id), row?.date || "");
+
+  return {
+    ...dictionaries,
+    __groupsById: groupsById,
+    __iconicById: iconicById,
+    __taxaById: taxaById,
+    __datesById: datesById
+  };
+}
+
+async function loadMetadataDictionaries() {
+  if (window.__gwMetadataDictionaries) return window.__gwMetadataDictionaries;
+
+  const manifest = await ensureMetadataShardManifest();
+  if (!manifest?.dictionaries_file || !window.GridWildAssets?.assetRelativeUrl) return null;
+
+  const url = await window.GridWildAssets.assetRelativeUrl(manifest.dictionaries_file);
+  const resp = await fetch(url, { cache: "force-cache" });
+  if (!resp.ok) {
+    throw new Error(
+      `Failed to load GridWild metadata dictionaries: HTTP ${resp.status} for ${url}`
+    );
+  }
+
+  window.__gwMetadataDictionaries = buildMetadataDictionaryIndex(await resp.json());
+  return window.__gwMetadataDictionaries;
+}
+
+async function fetchMetadataShardJson(url) {
+  const resp = await fetch(url, { cache: "force-cache" });
+  if (!resp.ok) {
+    throw new Error(`Failed to load GridWild metadata shard: HTTP ${resp.status} for ${url}`);
+  }
+
+  if (
+    String(url || "")
+      .toLowerCase()
+      .endsWith(".gz") &&
+    "DecompressionStream" in window
+  ) {
+    const stream = resp.body.pipeThrough(new window.DecompressionStream("gzip"));
+    return new window.Response(stream).json();
+  }
+
+  return resp.json();
+}
+
+function metadataDate(dictionaries, id) {
+  return dictionaries?.__datesById?.get?.(Number(id)) || "";
+}
+
+function metadataTaxonRowToGeneraRow(row, dictionaries) {
+  const taxonId = Number(row?.[0]);
+  const taxon = dictionaries?.__taxaById?.get?.(taxonId);
+  if (!taxon) return null;
+
+  const group = dictionaries?.__groupsById?.get?.(Number(taxon.playable_group_id));
+  return {
+    iconic_taxon_name: taxon.iconic_taxon_name || "Unknown",
+    order_name: taxon.order_name || "Unknown",
+    family_name: taxon.family_name || "Unknown",
+    genus_name:
+      taxon.genus_name || taxon.served_display_name || taxon.served_taxon_key || "Unknown",
+    served_rank: taxon.served_rank || "taxon",
+    served_taxon_key: taxon.served_taxon_key || "",
+    served_display_name: taxon.served_display_name || "",
+    playable_group_key: taxon.playable_group_key || group?.key || "unmapped",
+    playable_group_name: group?.name || taxon.playable_group_key || "Unmapped Taxa",
+    policy_action: taxon.policy_action || "",
+    original_policy_action: taxon.original_policy_action || "",
+    policy_match_rank: taxon.policy_match_rank || "",
+    playability_score: taxon.playability_score ?? null,
+    reason_codes: Array.isArray(taxon.reason_codes) ? taxon.reason_codes.slice() : [],
+    raw_taxa_count: Number(row?.[2]) || 0,
+    count: Number(row?.[1]) || 0,
+    last_observed: metadataDate(dictionaries, row?.[3]),
+    median_last10_observed: metadataDate(dictionaries, row?.[4]),
+    month_counts: Array.isArray(row?.[5])
+      ? row[5].slice(0, 12).map((value) => Number(value) || 0)
+      : []
+  };
+}
+
+function metadataCellToSquareRecord(cell, dictionaries) {
+  if (!Array.isArray(cell)) return null;
+
+  const taxa = Array.isArray(cell[9]) ? cell[9] : [];
+  const genera = taxa.map((row) => metadataTaxonRowToGeneraRow(row, dictionaries)).filter(Boolean);
+  if (!genera.length) return null;
+
+  const topObservers = (Array.isArray(cell[10]) ? cell[10] : [])
+    .map((row) => ({
+      observer_id: Number(row?.[0]) || null,
+      count: Number(row?.[1]) || 0,
+      species: Number(row?.[2]) || 0
+    }))
+    .filter((row) => row.count > 0);
+
+  const rec = {
+    count: Number(cell[2]) || 0,
+    n_genera: Number(cell[3]) || genera.length,
+    n_observers: Number(cell[4]) || topObservers.length,
+    n_captive: Number(cell[5]) || 0,
+    last_observed: metadataDate(dictionaries, cell[6]),
+    median_last10_observed: metadataDate(dictionaries, cell[7]),
+    genera,
+    top_observers: topObservers,
+    source: "metadata_shard"
+  };
+
+  rec.__metrics = window.GWMetrics?.buildSquareMetrics
+    ? {
+        ...window.GWMetrics.buildSquareMetrics(rec),
+        observers: rec.n_observers,
+        n_captive: rec.n_captive,
+        source: "metadata_shard"
+      }
+    : null;
+
+  return rec;
+}
+
+async function loadMetadataGeneraChunk(ix, iy) {
+  const manifest = await ensureMetadataShardManifest();
+  if (!manifest?.__shardIndex || !window.GridWildAssets?.assetRelativeUrl) return null;
+
+  const key = getGeneraSuperchunkKey(ix, iy);
+  const cache = window.__gwMetadataShardCache;
+  const pending = window.__gwMetadataShardPending;
+  if (cache.has(key)) return cache.get(key);
+  if (pending.has(key)) return pending.get(key);
+
+  const shard = manifest.__shardIndex.get(key);
+  if (!shard?.file) return null;
+
+  const job = (async () => {
+    const dictionaries = await loadMetadataDictionaries();
+    if (!dictionaries) return null;
+
+    const url = await window.GridWildAssets.assetRelativeUrl(shard.file);
+    const payload = await fetchMetadataShardJson(url);
+    const squares = {};
+
+    for (const cell of payload?.cells || []) {
+      const rec = metadataCellToSquareRecord(cell, dictionaries);
+      if (!rec) continue;
+      squares[encodeGeneraSquareId(Number(cell[0]), Number(cell[1]))] = rec;
+    }
+
+    const chunk = {
+      schema: "gridwild.metadata-shard.compat-square-genera.v1",
+      source: "metadata_shard",
+      super_ix: payload?.sx,
+      super_iy: payload?.sy,
+      squares
+    };
+    cache.set(key, chunk);
+    return chunk;
+  })().finally(() => {
+    pending.delete(key);
+  });
+
+  pending.set(key, job);
+  return job;
+}
+
 async function loadGenusTaxonomyDictionary() {
   if (window.__genusTaxonomyDict) return window.__genusTaxonomyDict;
 
@@ -1874,10 +2077,17 @@ async function loadGeneraSuperchunk(ix, iy) {
   }
 
   const job = (async () => {
-    const url = await getGeneraSuperchunkUrlAsync(ix, iy);
     beginGeneraSuperchunkDownloadToast();
 
     try {
+      const metadataChunk = await loadMetadataGeneraChunk(ix, iy);
+      if (metadataChunk) {
+        cache.set(key, metadataChunk);
+        queueCoarseDataVersionBump("superchunks");
+        return metadataChunk;
+      }
+
+      const url = await getGeneraSuperchunkUrlAsync(ix, iy);
       const resp = await fetch(url);
       if (!resp.ok) {
         if (resp.status === 400 || resp.status === 404) {
@@ -2032,8 +2242,26 @@ function hasStaticGoldCellForGenera(ix, iy) {
   return false;
 }
 
+function hasMetadataShardForGenera(ix, iy) {
+  const manifest = window.__gwMetadataShardManifest;
+  const key = getGeneraSuperchunkKey(ix, iy);
+  const shard = manifest?.__shardIndex?.get?.(key);
+  if (!shard) return false;
+
+  const bbox = Array.isArray(shard.bbox_grid) ? shard.bbox_grid : null;
+  if (!bbox || bbox.length < 4) return true;
+  return ix >= bbox[0] && iy >= bbox[1] && ix <= bbox[2] && iy <= bbox[3];
+}
+
+function shouldRequestSquareGeneraRecord(ix, iy) {
+  return hasStaticGoldCellForGenera(ix, iy) || hasMetadataShardForGenera(ix, iy);
+}
+
 async function getSquareGeneraRecord(ix, iy) {
-  if (!hasStaticGoldCellForGenera(ix, iy)) return null;
+  if (!shouldRequestSquareGeneraRecord(ix, iy)) {
+    await ensureMetadataShardManifest();
+    if (!shouldRequestSquareGeneraRecord(ix, iy)) return null;
+  }
 
   const squareId = encodeGeneraSquareId(ix, iy);
   //console.log("GENERA squareId wanted", squareId);
@@ -2233,8 +2461,12 @@ function requestCoarseRichMetricsForCell(ix, iy, options = {}) {
   }
 
   const superKey = getGeneraSuperchunkKey(ix, iy);
-  const chunkCached = window.__squareGeneraSuperchunkCache?.has?.(superKey) === true;
-  const chunkPending = window.__squareGeneraSuperchunkPending?.has?.(superKey) === true;
+  const chunkCached =
+    window.__squareGeneraSuperchunkCache?.has?.(superKey) === true ||
+    window.__gwMetadataShardCache?.has?.(superKey) === true;
+  const chunkPending =
+    window.__squareGeneraSuperchunkPending?.has?.(superKey) === true ||
+    window.__gwMetadataShardPending?.has?.(superKey) === true;
 
   if (
     !chunkCached &&
@@ -4922,10 +5154,7 @@ function getCoarseHeatBinSize() {
 }
 
 function getEffectiveCoarseHeatBinSize() {
-  if (
-    gridHeatMotionState.active &&
-    Number.isFinite(gridHeatMotionState.frozenEffectiveBinSize)
-  ) {
+  if (gridHeatMotionState.active && Number.isFinite(gridHeatMotionState.frozenEffectiveBinSize)) {
     return gridHeatMotionState.frozenEffectiveBinSize;
   }
 
@@ -8550,10 +8779,7 @@ function computePMTilesFineZ19Use(rawMapZoom = Number(map.getZoom()) || 0) {
 }
 
 function shouldUsePMTilesFineZ19(rawMapZoom = Number(map.getZoom()) || 0) {
-  if (
-    gridHeatMotionState.active &&
-    typeof gridHeatMotionState.frozenPMTilesFineZ19 === "boolean"
-  ) {
+  if (gridHeatMotionState.active && typeof gridHeatMotionState.frozenPMTilesFineZ19 === "boolean") {
     return gridHeatMotionState.frozenPMTilesFineZ19;
   }
 
@@ -8565,10 +8791,7 @@ function computePMTilesHeatZoom(rawMapZoom = Number(map.getZoom()) || 0) {
 }
 
 function getPMTilesHeatZoom(info) {
-  if (
-    gridHeatMotionState.active &&
-    Number.isFinite(gridHeatMotionState.frozenPMTilesHeatZoom)
-  ) {
+  if (gridHeatMotionState.active && Number.isFinite(gridHeatMotionState.frozenPMTilesHeatZoom)) {
     return clampPMTilesHeatZoom(gridHeatMotionState.frozenPMTilesHeatZoom, info);
   }
 

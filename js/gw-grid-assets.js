@@ -18,6 +18,7 @@
     manifestPromise: null,
     coarsePyramidManifestPromise: null,
     coarsePMTilesShardManifestPromise: null,
+    metadataShardManifestPromise: null,
     pmtilesShardManifestPromise: null
   };
 
@@ -464,6 +465,18 @@
     return state.coarsePMTilesShardManifestPromise;
   }
 
+  async function loadMetadataShardManifest() {
+    if (state.metadataShardManifestPromise) return state.metadataShardManifestPromise;
+    state.metadataShardManifestPromise = (async () => {
+      const manifest = await loadManifest();
+      const file = manifest?.metadata_shard_manifest_file;
+      if (!file) return null;
+      const url = await assetRelativeUrl(file);
+      return fetchJson(url, "GridWild metadata shard manifest");
+    })();
+    return state.metadataShardManifestPromise;
+  }
+
   async function coarsePyramidTileUrl(tileFile) {
     return assetRelativeUrl(tileFile);
   }
@@ -525,6 +538,22 @@
     };
   }
 
+  async function metadataShardsInfo() {
+    const shardManifest = await loadMetadataShardManifest();
+    if (!shardManifest?.shards?.length) return null;
+
+    return {
+      ...shardManifest,
+      dictionaries_url: await assetRelativeUrl(shardManifest.dictionaries_file),
+      shards: await Promise.all(
+        shardManifest.shards.map(async (shard) => ({
+          ...shard,
+          url: await assetRelativeUrl(shard.file)
+        }))
+      )
+    };
+  }
+
   async function superchunkUrl(superIx, superIy) {
     const catalog = await getCatalog();
     const base = trimTrailingSlash(catalog.urls.superchunkBase);
@@ -540,11 +569,13 @@
     loadCoarsePyramidManifest,
     loadPMTilesShardManifest,
     loadCoarsePMTilesShardManifest,
+    loadMetadataShardManifest,
     coarsePyramidTileUrl,
     pmtilesUrl,
     pmtilesInfo,
     pmtilesShardsInfo,
     coarsePMTilesShardsInfo,
+    metadataShardsInfo,
     superchunkUrl,
     localCatalog,
     localFallbackAllowed
