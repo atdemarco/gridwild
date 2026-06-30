@@ -134,13 +134,110 @@ The full response should include `Accept-Ranges: bytes`, `Content-Length`, and
 `Cache-Control: public, max-age=31536000, immutable`. The range response should
 return `206 Partial Content` with `Content-Range`.
 
-## Runtime Wiring
+## Sharded Production Workflow
 
-GridWild's main `street` basemap is wired to the hosted PMTiles archive through
-the locally vendored `protomaps-leaflet` browser bundle:
+The single broad archive is useful as a source artifact, but it is too large and
+too easy to serve incorrectly from object storage. The production runtime should
+use small named Protomaps PMTiles shards plus a manifest.
+
+Edit the shard coverage file:
 
 ```text
-https://assets.gridwild.com/osm/protomaps/mid_atlantic_broad/<build_id>/<build_id>.pmtiles
+config/osm-basemap-shards.mid-atlantic.json
+```
+
+Each shard is a named bbox:
+
+```json
+{
+  "id": "georgetown_dc",
+  "label": "Georgetown and DC Core",
+  "bbox": [-77.12, 38.86, -76.95, 39.02]
+}
+```
+
+For future coverage expansion, add more shard entries rather than changing app
+code. Keep shard boxes modest, with a little overlap. If a shard grows beyond
+Wrangler's upload limit or becomes slow to build, split it into smaller named
+boxes.
+
+Dry-run the exact extraction and upload plan:
+
+```powershell
+$src = "C:\Users\<you>\Desktop\gridwild\osm\basemaps\mid_atlantic_broad\<source_build>\<source_build>.pmtiles"
+npm.cmd run build:osm-basemap-shards -- --source "$src" --dry-run
+```
+
+Build one starter shard:
+
+```powershell
+npm.cmd run build:osm-basemap-shards -- --source "$src" --only georgetown_dc --verify
+```
+
+Upload the selected shard and its manifest to the existing `assets.gridwild.com`
+asset host:
+
+```powershell
+$env:npm_config_cache="$PWD\.npm-cache"
+npm.cmd run build:osm-basemap-shards -- --source "$src" --only georgetown_dc --skip-extract --upload --publish-current
+```
+
+The script uploads PMTiles objects as `application/vnd.pmtiles` and JSON manifests
+as `application/json`, with immutable cache headers for build-versioned files.
+The moving `current.json` pointer uses a short cache. The script uses `wrangler`
+if it is installed, otherwise it falls back to `npm exec --package wrangler`.
+The public asset host may still apply its own cache policy to JSON responses, so
+GridWild cache-busts `current.json` at runtime while leaving build-versioned
+manifests and PMTiles archives cacheable.
+
+The important uploaded JSON pointer is:
+
+```text
+https://assets.gridwild.com/osm/protomaps/shards/current.json
+```
+
+GridWild reads that pointer by default, selects the shard that best covers the
+current map view, and only fetches that shard. To test a different manifest
+without editing code:
+
+```text
+?gwBasemapManifest=https://assets.gridwild.com/osm/protomaps/shards/<build_id>/manifest.json
+```
+
+To force a specific PMTiles archive:
+
+```text
+?gwBasemapUrl=https://assets.gridwild.com/path/to/archive.pmtiles
+```
+
+The old giant Mid-Atlantic archive is now opt-in only:
+
+```text
+?gwBasemapLegacy=1
+```
+
+Verify every uploaded shard with a range request:
+
+```powershell
+curl.exe -sS -D - -o NUL -r 0-16383 https://assets.gridwild.com/osm/protomaps/shards/<build_id>/shards/<shard_id>/<file>.pmtiles
+```
+
+Expected signal:
+
+```text
+HTTP/1.1 206 Partial Content
+Content-Length: 16384
+Content-Range: bytes 0-16383/<total bytes>
+```
+
+## Runtime Wiring
+
+GridWild's main `street` basemap is wired to hosted PMTiles through the locally
+vendored `protomaps-leaflet` browser bundle. Normal startup reads the basemap
+shard manifest:
+
+```text
+https://assets.gridwild.com/osm/protomaps/shards/current.json
 ```
 
 Use the blank local fallback when debugging or when you want to prove the app is
