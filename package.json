@@ -11,6 +11,7 @@
     "build:hybrid-occurrence-stage": "node scripts/build-hybrid-occurrence-stage.js",
     "build:inat-snapshot-stage": "node scripts/build-inat-snapshot-stage.js",
     "build:gold-served-taxonomy": "node scripts/build-gold-served-taxonomy.js",
+    "build:metadata-shards": "node scripts/build-metadata-shards.js",
     "build:coarse-pmtiles": "node scripts/build-coarse-pmtiles-direct.js",
     "build:osm-basemap": "node scripts/build-osm-basemap-mirror.js",
     "build:osm-basemap-shards": "node scripts/build-osm-basemap-shards.js",

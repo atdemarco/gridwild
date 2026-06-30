@@ -210,6 +210,18 @@ Suggested production split:
   observations/observers/cell coverage for exact display, otherwise collapse to
   the configured endpoint or parent.
 
+The repo-owned pilot builder for the spatial metadata layer is:
+
+```powershell
+npm.cmd run build:metadata-shards -- --stage-dir C:\Users\ad1470\Desktop\gridwild\world\gold_stage\dc_va_hybrid_served_v002 --asset-dir C:\Users\ad1470\Desktop\gridwild\world\gold\dc_va_hybrid_served_v002 --out-dir $env:TEMP\gridwild-metadata-pilot-dc-va-hybrid-v002
+```
+
+It writes one compact JSON+gzip metadata shard per existing source superchunk,
+plus shared dictionaries for taxon, playable group, iconic group, dates, and
+basic filter aliases. The first DC+VA hybrid pilot turned the old
+`square_genera_superchunks` payload from about 149 MB gzipped into about 34 MB
+gzipped while preserving all 1.95M occupied cells and 2.62M cell/taxon records.
+
 GBIF backbone taxonomy alone cannot score this. The scorer needs occurrence
 evidence. Prefer a GBIF occurrence download or the existing local silver lake
 over repeated iNaturalist API calls; iNaturalist-specific enrichment should be a
