@@ -44,8 +44,30 @@ html.gw-map-night #map {
   transition: filter 180ms ease;
 }
 
+html.gw-heat-contrast-underlay #map .leaflet-tile-pane {
+  filter: saturate(0.58) brightness(0.92) contrast(0.94);
+}
+
 html.gw-map-night #map .leaflet-tile-pane {
   filter: brightness(0.34) contrast(1.24) saturate(0.72);
+}
+
+html.gw-map-night.gw-heat-contrast-underlay #map .leaflet-tile-pane {
+  filter: brightness(0.32) contrast(1.14) saturate(0.48);
+}
+
+#map .leaflet-pane canvas {
+  transition: filter 180ms ease;
+}
+
+html.gw-heat-contrast-underlay #gwOsmContextCanvas,
+html.gw-heat-contrast-underlay #gwOsmBuildingCanvas {
+  filter: saturate(0.52) brightness(0.88) contrast(0.9);
+}
+
+html.gw-map-night.gw-heat-contrast-underlay #gwOsmContextCanvas,
+html.gw-map-night.gw-heat-contrast-underlay #gwOsmBuildingCanvas {
+  filter: saturate(0.42) brightness(0.72) contrast(0.96);
 }
 
 /* ------------------------------------------------------------------ */

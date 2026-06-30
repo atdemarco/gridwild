@@ -1554,6 +1554,10 @@ window.GridWildHudHighContrast = (function () {
   function sync() {
     const btn = button();
     const enabled = window.__gwState?.highContrastLensEnabled === true;
+    document.documentElement.classList.toggle(
+      "gw-heat-contrast-underlay",
+      enabled
+    );
     if (!btn) return;
 
     btn.classList.toggle("is-on", enabled);
