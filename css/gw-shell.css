@@ -296,6 +296,21 @@ html.gw-map-night.gw-heat-contrast-underlay #gwOsmBuildingCanvas {
   opacity: 0.9;
 }
 
+.gw-map-scale-reference {
+  width: min(104px, calc(100vw - 28px));
+  margin-left: 50%;
+  margin-bottom: 4px;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(22, 24, 20, 0.72);
+}
+
 .gw-map-scale-hatch-line {
   position: relative;
   height: 8px;

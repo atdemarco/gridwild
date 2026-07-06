@@ -1,7 +1,7 @@
 (function () {
   const HERE_RADIUS_CELLS = 7;
   const MAX_TAXA_CELLS = 225;
-  const MAX_SELECTION_TAXA_CELLS = 1600;
+  const MAX_SELECTION_TAXA_CELLS = 2400;
   const TAXON_COLORS = [
     "#79c86b",
     "#e0b24d",
@@ -30,6 +30,8 @@
   const HERE_ELEVATION_LOCAL_Z_SCALE_M = 34;
   const HERE_ELEVATION_LOCAL_Z_MIN = -0.9;
   const HERE_ELEVATION_LOCAL_Z_MAX = 3.6;
+  const HERE_3D_QUEST_TARGET_MAX_CELLS = 420;
+  const HERE_3D_QUEST_TARGET_MAX_REGIONS = 24;
   const HERE_LIST_VIEWS = [
     { id: "common", label: "Common Taxa" },
     { id: "rare", label: "Rare Taxa" },
@@ -49,6 +51,9 @@
   const hereMap3dPointers = new Map();
   let hereMapOnlyRefreshTimer = null;
   let hereListView = "common";
+  let genusCodexScriptPromise = null;
+  let hereCodexOpeningGenus = "";
+  let hereCodexOpeningToken = 0;
   let hereElevationCacheLoaded = false;
   let hereElevationFetchInFlight = false;
   let hereElevationFetchQueued = false;
@@ -767,6 +772,30 @@
         cursor: pointer;
       }
 
+      .gw-here-inline-link.is-loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        color: #f0d18a;
+        cursor: progress;
+        text-decoration: none;
+      }
+
+      .gw-here-inline-link:disabled {
+        opacity: 0.9;
+        pointer-events: none;
+      }
+
+      .gw-here-inline-spinner {
+        width: 0.78em;
+        height: 0.78em;
+        flex: 0 0 auto;
+        border: 1.3px solid rgba(240,209,138,0.26);
+        border-top-color: #f0d18a;
+        border-radius: 999px;
+        animation: gwHereInlineSpin 720ms linear infinite;
+      }
+
       .gw-here-inline-link:hover {
         color: #f0d18a;
         text-decoration: underline;
@@ -1045,6 +1074,16 @@
 
       @keyframes gw-selection-dash {
         to { stroke-dashoffset: -22; }
+      }
+
+      @keyframes gwHereInlineSpin {
+        to { transform: rotate(360deg); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .gw-here-inline-spinner {
+          animation: none;
+        }
       }
 
       @media (max-width: 760px) {
@@ -2898,6 +2937,304 @@
       return Math.hypot(ix - (origin.ix + 0.5), iy - (origin.iy + 0.5));
     }
 
+    function questCellKey(ix, iy) {
+      return `${Math.floor(Number(ix))},${Math.floor(Number(iy))}`;
+    }
+
+    function questTargetCellsFor3d(target) {
+      if (!target || target.mode === "anywhere") return [];
+
+      const rawCells =
+        target.mode === "target_set"
+          ? Array.isArray(target.cells)
+            ? target.cells
+            : []
+          : Number.isFinite(Number(target.ix)) && Number.isFinite(Number(target.iy))
+            ? (() => {
+                const radius = Math.max(
+                  0,
+                  Math.min(10, Math.round(Number(target.radiusCells) || 0))
+                );
+                const out = [];
+                for (let iy = Number(target.iy) - radius; iy <= Number(target.iy) + radius; iy++) {
+                  for (
+                    let ix = Number(target.ix) - radius;
+                    ix <= Number(target.ix) + radius;
+                    ix++
+                  ) {
+                    out.push({ ix, iy });
+                  }
+                }
+                return out;
+              })()
+            : [];
+
+      const cells = [];
+      const seen = new Set();
+      for (const cell of rawCells) {
+        const ix = Math.floor(Number(cell?.ix));
+        const iy = Math.floor(Number(cell?.iy));
+        if (!Number.isFinite(ix) || !Number.isFinite(iy)) continue;
+        if (
+          ix < renderBounds.minIx ||
+          ix > renderBounds.maxIx ||
+          iy < renderBounds.minIy ||
+          iy > renderBounds.maxIy
+        ) {
+          continue;
+        }
+
+        const key = questCellKey(ix, iy);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        cells.push({
+          ix,
+          iy,
+          key,
+          distance: distanceFromCamera(ix + 0.5, iy + 0.5)
+        });
+      }
+
+      return cells
+        .sort((a, b) => a.distance - b.distance || a.key.localeCompare(b.key))
+        .slice(0, HERE_3D_QUEST_TARGET_MAX_CELLS);
+    }
+
+    function contiguousQuestTargetRegions(cells = []) {
+      const byKey = new Map(cells.map((cell) => [cell.key, cell]));
+      const visited = new Set();
+      const regions = [];
+      const neighbors = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1]
+      ];
+
+      for (const start of cells) {
+        if (visited.has(start.key)) continue;
+
+        const queue = [start];
+        const regionCells = [];
+        visited.add(start.key);
+
+        for (let i = 0; i < queue.length; i++) {
+          const cell = queue[i];
+          regionCells.push(cell);
+
+          for (const [dx, dy] of neighbors) {
+            const key = questCellKey(cell.ix + dx, cell.iy + dy);
+            const next = byKey.get(key);
+            if (!next || visited.has(key)) continue;
+            visited.add(key);
+            queue.push(next);
+          }
+        }
+
+        let minIx = Infinity;
+        let maxIx = -Infinity;
+        let minIy = Infinity;
+        let maxIy = -Infinity;
+        let sumX = 0;
+        let sumY = 0;
+        const keySet = new Set();
+
+        regionCells.forEach((cell) => {
+          minIx = Math.min(minIx, cell.ix);
+          maxIx = Math.max(maxIx, cell.ix);
+          minIy = Math.min(minIy, cell.iy);
+          maxIy = Math.max(maxIy, cell.iy);
+          sumX += cell.ix + 0.5;
+          sumY += cell.iy + 0.5;
+          keySet.add(cell.key);
+        });
+
+        const cx = sumX / Math.max(1, regionCells.length);
+        const cy = sumY / Math.max(1, regionCells.length);
+        regions.push({
+          cells: regionCells,
+          keySet,
+          minIx,
+          maxIx,
+          minIy,
+          maxIy,
+          cx,
+          cy,
+          distance: distanceFromCamera(cx, cy)
+        });
+      }
+
+      return regions
+        .sort((a, b) => b.cells.length - a.cells.length || a.distance - b.distance)
+        .slice(0, HERE_3D_QUEST_TARGET_MAX_REGIONS);
+    }
+
+    function renderQuestRegionBoundary(region) {
+      const segments = [];
+      const edges = [
+        {
+          neighbor: (cell) => questCellKey(cell.ix, cell.iy - 1),
+          a: (cell) => ({ ix: cell.ix, iy: cell.iy }),
+          b: (cell) => ({ ix: cell.ix + 1, iy: cell.iy })
+        },
+        {
+          neighbor: (cell) => questCellKey(cell.ix + 1, cell.iy),
+          a: (cell) => ({ ix: cell.ix + 1, iy: cell.iy }),
+          b: (cell) => ({ ix: cell.ix + 1, iy: cell.iy + 1 })
+        },
+        {
+          neighbor: (cell) => questCellKey(cell.ix, cell.iy + 1),
+          a: (cell) => ({ ix: cell.ix + 1, iy: cell.iy + 1 }),
+          b: (cell) => ({ ix: cell.ix, iy: cell.iy + 1 })
+        },
+        {
+          neighbor: (cell) => questCellKey(cell.ix - 1, cell.iy),
+          a: (cell) => ({ ix: cell.ix, iy: cell.iy + 1 }),
+          b: (cell) => ({ ix: cell.ix, iy: cell.iy })
+        }
+      ];
+
+      for (const cell of region.cells) {
+        for (const edge of edges) {
+          if (region.keySet.has(edge.neighbor(cell))) continue;
+          const a = edge.a(cell);
+          const b = edge.b(cell);
+          const pa = project(a.ix, a.iy, terrainZAt(a.ix, a.iy, 0.34));
+          const pb = project(b.ix, b.iy, terrainZAt(b.ix, b.iy, 0.34));
+          if (!isVisibleLine([pa, pb])) continue;
+          segments.push({
+            depth: (pa.forward + pb.forward) / 2,
+            d: `M${pa.x.toFixed(1)} ${pa.y.toFixed(1)} L${pb.x.toFixed(1)} ${pb.y.toFixed(1)}`
+          });
+        }
+      }
+
+      const paths = segments
+        .sort((a, b) => a.depth - b.depth)
+        .map((segment) => segment.d)
+        .join(" ");
+      if (!paths) return "";
+
+      return `
+        <path d="${paths}" fill="none" stroke="rgba(214,72,70,0.22)" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="${paths}" fill="none" stroke="rgba(236,106,94,0.42)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="${paths}" fill="none" stroke="rgba(255,188,174,0.78)" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path>
+      `;
+    }
+
+    function renderQuestTargetTether(region) {
+      if (!region || !userCell) return "";
+
+      const ux = Number(userCell.ix) + 0.5;
+      const uy = Number(userCell.iy) + 0.5;
+      const tx = Number(region.cx);
+      const ty = Number(region.cy);
+      if (![ux, uy, tx, ty].every(Number.isFinite)) return "";
+
+      const distance = Math.hypot(tx - ux, ty - uy);
+      if (distance < 0.65) return "";
+
+      const steps = Math.max(4, Math.min(34, Math.ceil(distance * 0.72)));
+      const points = [];
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const ease = t * t * (3 - 2 * t);
+        const ix = tx + (ux - tx) * ease;
+        const iy = ty + (uy - ty) * ease;
+        const lift = 0.44 + Math.sin(Math.PI * t) * 0.18;
+        points.push(project(ix, iy, terrainZAt(ix, iy, lift)));
+      }
+
+      if (!isVisibleLine(points)) return "";
+      const d = points
+        .map(
+          (point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`
+        )
+        .join(" ");
+      const width = hereUsesLarge3dFrame() ? 2.2 : 1.55;
+
+      return `
+        <g data-layer="quest-target-tether" aria-label="Quest line from target to avatar">
+          <path d="${d}" fill="none" stroke="rgba(118,28,34,0.34)" stroke-width="${(width + 5.6).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="${d}" fill="none" stroke="rgba(225,86,78,0.46)" stroke-width="${(width + 2.4).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="${d}" fill="none" stroke="rgba(255,196,184,0.82)" stroke-width="${width.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3.2 5.4">
+            <animate attributeName="stroke-dashoffset" values="0;-17.2" dur="2.35s" repeatCount="indefinite"></animate>
+          </path>
+        </g>
+      `;
+    }
+
+    function renderQuestTarget3d(target) {
+      const targetCells = questTargetCellsFor3d(target);
+      if (!targetCells.length) return "";
+
+      const regions = contiguousQuestTargetRegions(targetCells);
+      if (!regions.length) return "";
+
+      const primary = regions[0];
+      const tether = renderQuestTargetTether(primary);
+      const groundMarkup = regions
+        .map((region, regionIndex) => {
+          const fillOpacity = regionIndex === 0 ? 0.18 : 0.12;
+          const cellPolys = region.cells
+            .map((cell) => {
+              const poly = terrainCellPolygon(cell.ix, cell.iy, 0.01, 0.2);
+              if (!isVisiblePoly(poly)) return "";
+              return `<polygon points="${pointsAttr(poly)}" fill="rgba(218,76,72,${fillOpacity})"></polygon>`;
+            })
+            .join("");
+          if (!cellPolys) return "";
+
+          const boundary = renderQuestRegionBoundary(region);
+          return `
+            <g data-layer="quest-target-region" aria-label="Quest target region">
+              <animate attributeName="opacity" values="0.70;1;0.76" dur="${(2.2 + regionIndex * 0.18).toFixed(2)}s" repeatCount="indefinite"></animate>
+              ${cellPolys}
+              ${boundary}
+            </g>
+          `;
+        })
+        .join("");
+
+      const baseZ = terrainZAt(primary.cx, primary.cy, 0.34);
+      const beamHeight = clamp(5.2 + Math.sqrt(primary.cells.length) * 0.55, 6.4, 14.5);
+      const base = project(primary.cx, primary.cy, baseZ);
+      const top = project(primary.cx, primary.cy, terrainZAt(primary.cx, primary.cy, beamHeight));
+      const haloR = clamp(
+        Math.sqrt(primary.cells.length) * 1.3 + 5,
+        7,
+        hereUsesLarge3dFrame() ? 24 : 16
+      );
+      const label =
+        primary.cells.length === 1
+          ? "1 target cell"
+          : `${primary.cells.length} connected target cells`;
+
+      const beacon = isVisibleLine([base, top])
+        ? `
+          <g data-layer="quest-target-beacon" aria-label="${esc(label)}">
+            <path d="M${top.x.toFixed(1)} ${top.y.toFixed(1)} L${base.x.toFixed(1)} ${base.y.toFixed(1)}" stroke="url(#gwHereQuestBeam)" stroke-width="${(hereUsesLarge3dFrame() ? 16 : 10).toFixed(1)}" stroke-linecap="round" opacity="0.86"></path>
+            <path d="M${top.x.toFixed(1)} ${top.y.toFixed(1)} L${base.x.toFixed(1)} ${base.y.toFixed(1)}" stroke="rgba(255,190,176,0.72)" stroke-width="${(hereUsesLarge3dFrame() ? 2.4 : 1.6).toFixed(1)}" stroke-linecap="round">
+              <animate attributeName="opacity" values="0.36;1;0.48" dur="1.65s" repeatCount="indefinite"></animate>
+            </path>
+            <ellipse cx="${base.x.toFixed(1)}" cy="${base.y.toFixed(1)}" rx="${haloR.toFixed(1)}" ry="${Math.max(3.2, haloR * 0.34).toFixed(1)}" fill="rgba(214,72,70,0.13)" stroke="rgba(245,130,116,0.42)" stroke-width="1.1">
+              <animate attributeName="rx" values="${(haloR * 0.78).toFixed(1)};${(haloR * 1.24).toFixed(1)};${(haloR * 0.86).toFixed(1)}" dur="1.9s" repeatCount="indefinite"></animate>
+              <animate attributeName="opacity" values="0.55;1;0.62" dur="1.9s" repeatCount="indefinite"></animate>
+            </ellipse>
+            <circle cx="${base.x.toFixed(1)}" cy="${base.y.toFixed(1)}" r="${clamp(4 + Math.sqrt(primary.cells.length) * 0.42, 4.5, 9).toFixed(1)}" fill="rgba(224,86,78,0.72)" stroke="rgba(255,204,190,0.62)" stroke-width="1.15"></circle>
+          </g>
+        `
+        : "";
+
+      return `
+        <g data-layer="quest-target-3d">
+          ${groundMarkup}
+          ${tether}
+          ${beacon}
+        </g>
+      `;
+    }
+
     function isSlimCell(cell) {
       if (!hudFov.expanded) return false;
       const detailRadius = hereUsesLarge3dFrame()
@@ -4170,37 +4507,7 @@
       lightweightMotion || !featureTier.showPatchLabels ? "" : renderPatchLabels();
 
     const questTarget = activeQuestTarget();
-    const questMarker =
-      questTarget &&
-      questTarget.mode !== "anywhere" &&
-      Number.isFinite(Number(questTarget.ix)) &&
-      Number.isFinite(Number(questTarget.iy))
-        ? (() => {
-            const qBounds = {
-              minIx: Number(questTarget.ix) - Math.max(0, Number(questTarget.radiusCells) || 0),
-              maxIx: Number(questTarget.ix) + Math.max(0, Number(questTarget.radiusCells) || 0),
-              minIy: Number(questTarget.iy) - Math.max(0, Number(questTarget.radiusCells) || 0),
-              maxIy: Number(questTarget.iy) + Math.max(0, Number(questTarget.radiusCells) || 0)
-            };
-            if (
-              qBounds.maxIx < renderBounds.minIx ||
-              qBounds.minIx > renderBounds.maxIx ||
-              qBounds.maxIy < renderBounds.minIy ||
-              qBounds.minIy > renderBounds.maxIy
-            ) {
-              return "";
-            }
-            const qx = Number(questTarget.ix) + 0.5;
-            const qy = Number(questTarget.iy) + 0.5;
-            const p = project(qx, qy, terrainZAt(qx, qy, 0.25));
-            return `
-          <g data-layer="quest">
-            <line x1="${p.x}" y1="${p.y - 62}" x2="${p.x}" y2="${p.y + 3}" stroke="url(#gwHereQuestBeam)" stroke-width="8" stroke-linecap="round"></line>
-            <circle cx="${p.x}" cy="${p.y}" r="5" fill="rgba(255,224,130,0.86)" stroke="rgba(255,255,255,0.68)" stroke-width="1"></circle>
-          </g>
-        `;
-          })()
-        : "";
+    const questMarker = questTarget ? renderQuestTarget3d(questTarget) : "";
 
     const userAvatar = inBounds(userCell)
       ? (() => {
@@ -4256,9 +4563,10 @@
             <stop offset="100%" stop-color="rgba(6,8,8,0.82)"></stop>
           </radialGradient>
           <linearGradient id="gwHereQuestBeam" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="rgba(255,224,130,0)"></stop>
-            <stop offset="0.28" stop-color="rgba(255,224,130,0.68)"></stop>
-            <stop offset="1" stop-color="rgba(118,231,191,0.16)"></stop>
+            <stop offset="0" stop-color="rgba(224,86,78,0)"></stop>
+            <stop offset="0.18" stop-color="rgba(210,68,66,0.18)"></stop>
+            <stop offset="0.42" stop-color="rgba(255,176,160,0.62)"></stop>
+            <stop offset="1" stop-color="rgba(158,42,45,0.08)"></stop>
           </linearGradient>
         </defs>
         ${sky.markup}
@@ -4621,9 +4929,10 @@
             const label = taxonListLabel(row);
             const titleText = label.sub ? `${label.main} (${label.sub})` : label.main;
             const fontSize = scaledListFontSize(row.count, context.taxaMaxCount);
+            const isOpening = row.genus === hereCodexOpeningGenus;
             return `
             <span class="gw-here-inline-item" style="font-size:${fontSize}px">
-              <button class="gw-here-inline-link" type="button" data-genus="${esc(row.genus)}" title="${esc(titleText)} - ${esc(row.family || row.order || row.iconic || row.genus)}">${esc(label.main)}</button>
+              <button class="gw-here-inline-link${isOpening ? " is-loading" : ""}" type="button" data-genus="${esc(row.genus)}" title="${esc(titleText)} - ${esc(row.family || row.order || row.iconic || row.genus)}"${isOpening ? ' aria-busy="true" disabled' : ""}><span>${esc(label.main)}</span>${isOpening ? '<span class="gw-here-inline-spinner" aria-hidden="true"></span>' : ""}</button>
               <span class="gw-here-inline-count">${row.count}</span>${inlineComma(index, rows.length)}
             </span>
           `;
@@ -4753,6 +5062,40 @@
       },
       { cells: cells.length, active: 0, obs: 0, species: 0 }
     );
+  }
+
+  function summarizeTaxaRecord(record, fallback = {}) {
+    const metrics = record?.__metrics || null;
+    if (!metrics) return fallback;
+
+    const cells = Math.max(
+      0,
+      Number(fallback.cells) || Number(metrics.nSquares) || Number(record?.genera?.length) || 0
+    );
+    const active = Math.max(
+      0,
+      Number(metrics.nActiveSquares) ||
+        (Number(metrics.count) > 0 ? Number(fallback.active) || 1 : 0)
+    );
+
+    return {
+      cells,
+      active,
+      obs: Math.max(0, Number(metrics.count) || 0),
+      species: Math.max(0, Number(metrics.species) || Number(metrics.genera) || 0)
+    };
+  }
+
+  function renderHereStats(summary = {}) {
+    const cells = Math.max(0, Number(summary.cells) || 0);
+    const active = Math.max(0, Number(summary.active) || 0);
+    const obs = Math.max(0, Number(summary.obs) || 0);
+    const species = Math.max(0, Number(summary.species) || 0);
+    return `
+        <div class="gw-here-stat" title="${obs} observations"><b>${compactStatNumber(obs)}</b><span>Obs</span></div>
+        <div class="gw-here-stat" title="${species} species"><b>${compactStatNumber(species)}</b><span>Spp</span></div>
+        <div class="gw-here-stat" title="${active} active cells of ${cells} cells"><b>${compactStatNumber(active)}/${compactStatNumber(cells)}</b><span>Cells</span></div>
+      `;
   }
 
   function compactStatNumber(value) {
@@ -4977,28 +5320,42 @@
     };
   }
 
-  function centeredCells(cells = [], maxCells = MAX_SELECTION_TAXA_CELLS) {
-    if (!Array.isArray(cells) || cells.length <= maxCells) return cells || [];
+  function representativeCells(cells = [], maxCells = MAX_SELECTION_TAXA_CELLS) {
+    const normalized = (Array.isArray(cells) ? cells : [])
+      .map((cell) => ({
+        ...cell,
+        ix: Math.floor(Number(cell?.ix)),
+        iy: Math.floor(Number(cell?.iy))
+      }))
+      .filter((cell) => Number.isFinite(cell.ix) && Number.isFinite(cell.iy))
+      .sort((a, b) => a.iy - b.iy || a.ix - b.ix);
 
-    const bounds = boundsForCells(cells);
-    if (!bounds) return cells.slice(0, maxCells);
+    if (normalized.length <= maxCells) return normalized;
+    if (maxCells <= 1) return normalized.slice(0, Math.max(0, maxCells));
 
-    const cx = (bounds.minIx + bounds.maxIx) / 2;
-    const cy = (bounds.minIy + bounds.maxIy) / 2;
-    return cells
-      .slice()
-      .sort((a, b) => {
-        const ad = Math.hypot(Number(a.ix) - cx, Number(a.iy) - cy);
-        const bd = Math.hypot(Number(b.ix) - cx, Number(b.iy) - cy);
-        return ad - bd || keyForCell(a).localeCompare(keyForCell(b));
-      })
-      .slice(0, maxCells);
+    const out = [];
+    const used = new Set();
+    const step = (normalized.length - 1) / (maxCells - 1);
+
+    for (let i = 0; i < maxCells; i++) {
+      let index = Math.round(i * step);
+      while (index < normalized.length && used.has(index)) index++;
+      if (index >= normalized.length) {
+        index = normalized.length - 1;
+        while (index >= 0 && used.has(index)) index--;
+      }
+      if (index < 0 || used.has(index)) continue;
+      used.add(index);
+      out.push(normalized[index]);
+    }
+
+    return out;
   }
 
   function getTaxaBoundsForContext(bounds, selection) {
     const selectedCells = Array.isArray(selection?.cells) ? selection.cells : [];
     if (selectedCells.length) {
-      const taxaCells = centeredCells(selectedCells, MAX_SELECTION_TAXA_CELLS);
+      const taxaCells = representativeCells(selectedCells, MAX_SELECTION_TAXA_CELLS);
       return {
         bounds: boundsForCells(taxaCells) || bounds,
         cells: taxaCells,
@@ -5340,7 +5697,7 @@
 
     if (!node.children?.length) {
       if (node.rank === "genus" && node.name && node.name !== "Unknown") {
-        window.GridWildGenusCodex?.open?.(node.name);
+        openHereGenusCodex(node.name);
       }
       return;
     }
@@ -5364,6 +5721,66 @@
     herePieState.currentPath = "root";
     herePieState.pathStack = [];
     rerenderTaxaHud();
+  }
+
+  function setHereCodexOpeningGenus(genus) {
+    const next = String(genus || "").trim();
+    if (hereCodexOpeningGenus === next) return;
+    hereCodexOpeningGenus = next;
+    rerenderTaxaListOnly();
+  }
+
+  function clearHereCodexOpeningGenus(token) {
+    if (token !== hereCodexOpeningToken) return;
+    setHereCodexOpeningGenus("");
+  }
+
+  function ensureGenusCodexScript() {
+    if (window.GridWildGenusCodex?.open) return Promise.resolve(window.GridWildGenusCodex);
+    if (genusCodexScriptPromise) return genusCodexScriptPromise;
+
+    genusCodexScriptPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "js/gw-genus-codex.js";
+      script.async = true;
+      script.onload = () => resolve(window.GridWildGenusCodex || null);
+      script.onerror = () => reject(new Error("Could not load genus codex"));
+      document.head.appendChild(script);
+    }).finally(() => {
+      genusCodexScriptPromise = null;
+    });
+
+    return genusCodexScriptPromise;
+  }
+
+  function openHereGenusCodex(genus) {
+    const clean = String(genus || "").trim();
+    if (!clean || clean === "Unknown") return;
+
+    const token = ++hereCodexOpeningToken;
+    setHereCodexOpeningGenus(clean);
+
+    const codexPromise =
+      typeof window.GridWildGenusCodex?.open === "function"
+        ? Promise.resolve(window.GridWildGenusCodex)
+        : ensureGenusCodexScript();
+
+    codexPromise
+      .then((codex) => {
+        if (typeof codex?.open === "function") {
+          return codex.open(clean);
+        } else {
+          toast("Codex is still loading");
+          return null;
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not open genus codex:", err);
+        toast("Codex is not available yet");
+      })
+      .finally(() => {
+        clearHereCodexOpeningGenus(token);
+      });
   }
 
   function normalizeHere3dYaw(value) {
@@ -5817,7 +6234,7 @@
         evt.preventDefault();
         evt.stopPropagation();
         const genus = taxonRow.dataset.genus;
-        if (genus) window.GridWildGenusCodex?.open?.(genus);
+        openHereGenusCodex(genus);
         return;
       }
 
@@ -5923,7 +6340,7 @@
     return { bounds, selection };
   }
 
-  function renderHereMapOnlyForCurrentView() {
+  function renderHereMapOnlyForCurrentView(options = {}) {
     const api = gridApi();
     if (!api || !herePanelOpen || !hereMap3dEnabled) return;
 
@@ -5935,7 +6352,7 @@
     const selection = context?.selection || null;
     if (!bounds) return;
 
-    requestHere3dOsmCoverage(bounds, selection);
+    if (options.motion !== true) requestHere3dOsmCoverage(bounds, selection);
     syncHereMapClasses(mapEl);
     mapEl.innerHTML = renderHereMap(bounds, selection);
     syncHereImmersiveViewport(bounds, selection);
@@ -5957,13 +6374,15 @@
     if (window.GridWildSelectionTool?.getSelection?.()) return;
 
     markHere3dMotion(260);
+    if (!hereMap3dImmersed) return;
+
     const now = Date.now();
-    const waitMs = Math.max(0, 90 - (now - hereMapMotionRefreshLastAt));
+    const waitMs = Math.max(0, 180 - (now - hereMapMotionRefreshLastAt));
     if (waitMs === 0) {
       clearTimeout(hereMapMotionRefreshTimer);
       hereMapMotionRefreshTimer = null;
       hereMapMotionRefreshLastAt = now;
-      renderHereMapOnlyForCurrentView();
+      renderHereMapOnlyForCurrentView({ motion: true });
       return;
     }
 
@@ -5971,7 +6390,7 @@
     hereMapMotionRefreshTimer = setTimeout(() => {
       hereMapMotionRefreshTimer = null;
       hereMapMotionRefreshLastAt = Date.now();
-      renderHereMapOnlyForCurrentView();
+      renderHereMapOnlyForCurrentView({ motion: true });
     }, waitMs);
   }
 
@@ -6026,11 +6445,7 @@
       syncHereImmersiveViewport(bounds, selection || null);
     }
     if (statsEl) {
-      statsEl.innerHTML = `
-        <div class="gw-here-stat" title="${summary.obs} observations"><b>${compactStatNumber(summary.obs)}</b><span>Obs</span></div>
-        <div class="gw-here-stat" title="${summary.species} species"><b>${compactStatNumber(summary.species)}</b><span>Spp</span></div>
-        <div class="gw-here-stat" title="${summary.active} active cells of ${summary.cells} cells"><b>${compactStatNumber(summary.active)}/${compactStatNumber(summary.cells)}</b><span>Cells</span></div>
-      `;
+      statsEl.innerHTML = renderHereStats(summary);
     }
     syncHereDownloadControl(selection);
     syncHerePyriteControl(selection);
@@ -6061,6 +6476,14 @@
     herePieState.previewNote = taxaContext.capped
       ? `<div class="gw-here-taxa-heading">Taxa preview: ${taxaContext.taxaCellCount}/${taxaContext.cellCount} selected cells</div>`
       : "";
+    if (statsEl) {
+      statsEl.innerHTML = renderHereStats(
+        summarizeTaxaRecord(record, {
+          ...summary,
+          cells: taxaContext.taxaCellCount || summary.cells
+        })
+      );
+    }
     if (herePieState.signature !== contextSignature) {
       resetPieState(record, contextSignature);
     } else {

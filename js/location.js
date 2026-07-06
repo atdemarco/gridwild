@@ -1140,6 +1140,7 @@ function getMapResolution() {
 const GW_SCALE_TARGET_PX = 78;
 const GW_SCALE_MIN_PX = 44;
 const GW_SCALE_MAX_PX = 118;
+const FEET_PER_METER_FOR_SCALE = 3.280839895;
 
 function scaleDistanceCandidates() {
   if (window.GridWildUnits?.metricEnabled?.()) {
@@ -1185,12 +1186,29 @@ function formatZoomMultiplier() {
   return `x${multiplier.toFixed(2)}`;
 }
 
+function getScaleReference(distanceFeet) {
+  const feet = Number(distanceFeet);
+  if (!Number.isFinite(feet)) return { glyph: "🗺", label: "region-scale" };
+
+  if (feet <= 10) return { glyph: "👣", label: "stride-scale" };
+  if (feet <= 50) return { glyph: "🧍", label: "person-scale" };
+  if (feet <= 150) return { glyph: "🌳", label: "tree-scale" };
+  if (feet <= 350) return { glyph: "🏀", label: "court-scale" };
+  if (feet <= 600) return { glyph: "⚽", label: "field-scale" };
+  if (feet <= 1500) return { glyph: "🏙", label: "block-scale" };
+  if (feet <= 5280) return { glyph: "🚶", label: "walk-scale" };
+  if (feet <= 3 * 5280) return { glyph: "🌲", label: "park-scale" };
+  if (feet <= 15 * 5280) return { glyph: "🚗", label: "drive-scale" };
+  return { glyph: "🗺", label: "region-scale" };
+}
+
 let scaleHatchRaf = null;
 
 function updateMapScaleHatch() {
   return timeLocationVerbose("updateMapScaleHatch", () => {
     const hatch = document.getElementById("gwMapScaleHatch");
     const label = document.getElementById("gwMapScaleHatchLabel");
+    const reference = document.getElementById("gwMapScaleReference");
     if (!hatch || !label) return;
 
     const scale = chooseScaleDistance(getMapResolution());
@@ -1200,6 +1218,10 @@ function updateMapScaleHatch() {
     const distanceLabel =
       window.GridWildUnits?.formatDistance?.(scale.meters) || `${Math.round(scale.meters)} m`;
     label.textContent = `${distanceLabel} ${formatZoomMultiplier()}`;
+    if (reference) {
+      const felt = getScaleReference(scale.meters * FEET_PER_METER_FOR_SCALE);
+      reference.textContent = `${felt.glyph} ${felt.label}`;
+    }
   });
 }
 

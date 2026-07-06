@@ -266,7 +266,8 @@
     const manifest = isGridWildManifest(pointerOrManifest)
       ? pointerOrManifest
       : await fetchJson(manifestUrl, "GridWild CDN asset manifest", {
-          timeoutMs: CDN_CATALOG_TIMEOUT_MS
+          timeoutMs: CDN_CATALOG_TIMEOUT_MS,
+          forceCacheBust: config.source === "direct-current"
         });
 
     cacheManifest(manifest);
@@ -429,6 +430,17 @@
     return state.manifestPromise;
   }
 
+  function reset() {
+    state.catalogPromise = null;
+    state.catalog = null;
+    state.manifest = null;
+    state.manifestPromise = null;
+    state.coarsePyramidManifestPromise = null;
+    state.coarsePMTilesShardManifestPromise = null;
+    state.metadataShardManifestPromise = null;
+    state.pmtilesShardManifestPromise = null;
+  }
+
   async function loadCoarsePyramidManifest() {
     if (state.coarsePyramidManifestPromise) return state.coarsePyramidManifestPromise;
     state.coarsePyramidManifestPromise = (async () => {
@@ -578,7 +590,8 @@
     metadataShardsInfo,
     superchunkUrl,
     localCatalog,
-    localFallbackAllowed
+    localFallbackAllowed,
+    reset
   };
 
   window.GridWildAssets.hasDirectCatalogConfig = function hasDirectCatalogConfig() {

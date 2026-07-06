@@ -93,6 +93,8 @@ const COARSE_HEAT_BIN_PIXEL_OVERLAP = 0;
 const COARSE_HEAT_RICH_VIEW_CELL_BUDGET = 700;
 const COARSE_HEAT_RICH_VIEW_SUPERCHUNK_BUDGET = 32;
 const COARSE_HEAT_RICH_SUPERCHUNK_CONCURRENCY = 4;
+const METADATA_FILTER_HEAT_SUPERCHUNK_BUDGET = 32;
+const METADATA_FILTER_HEAT_CELL_BUDGET = 80000;
 const COARSE_PYRAMID_NEW_TILE_BUDGET = 8;
 const COARSE_DATA_VERSION_DEBOUNCE_MS = 360;
 const COARSE_DATA_VERSION_MAX_WAIT_MS = 1200;
@@ -1017,10 +1019,25 @@ window.GridWildGrid =
         }))
         .filter((row) => row.count > 0);
 
+      const filteredMetrics = window.GWMetrics?.buildSquareMetrics
+        ? window.GWMetrics.buildSquareMetrics({ ...rec, genera })
+        : null;
+      const observerBase = Number(rec.__metrics?.observers) || Number(rec.n_observers) || 0;
+      const captiveBase = Number(rec.__metrics?.n_captive) || Number(rec.n_captive) || 0;
+
       return {
         ...rec,
         genera,
-        top_observers: topObservers
+        top_observers: topObservers,
+        __metrics: filteredMetrics
+          ? {
+              ...(rec.__metrics || {}),
+              ...filteredMetrics,
+              observers: Math.round(observerBase * ratio),
+              n_captive: Math.round(captiveBase * ratio),
+              source: rec.__metrics?.source || rec.source || "metadata_filter"
+            }
+          : null
       };
     }
 
@@ -1493,6 +1510,17 @@ window.__gwMetadataDictionaries = window.__gwMetadataDictionaries || null;
 window.__gwMetadataShardManifest = window.__gwMetadataShardManifest || null;
 window.__gwMetadataShardUnavailable = window.__gwMetadataShardUnavailable || false;
 
+window.resetGridWildMetadataShards = function resetGridWildMetadataShards() {
+  window.GridWildAssets?.reset?.();
+  window.__gwMetadataShardManifest = null;
+  window.__gwMetadataShardUnavailable = false;
+  window.__gwMetadataDictionaries = null;
+  window.__gwMetadataShardCache?.clear?.();
+  window.__gwMetadataShardPending?.clear?.();
+  scheduleGridHeatCanvasRender?.({ force: true, reason: "metadata-shard-reset" });
+  return window.getGridWildHeatDataStats?.() || null;
+};
+
 // Caches for in-flight fetches to prevent duplicate requests for the same data
 window.__richGridMetrics = window.__richGridMetrics || new Map();
 window.__richGridMetricsPending = window.__richGridMetricsPending || new Map();
@@ -1839,6 +1867,24 @@ async function loadObserverDictionary() {
   return window.__gwObserverDict;
 }
 
+function parseMetadataShardCoords(shard) {
+  const directSx = Number(shard?.sx ?? shard?.super_ix);
+  const directSy = Number(shard?.sy ?? shard?.super_iy);
+  if (Number.isFinite(directSx) && Number.isFinite(directSy)) {
+    return { sx: Math.floor(directSx), sy: Math.floor(directSy) };
+  }
+
+  const encoded = String(shard?.shard || shard?.file || "");
+  const match = /meta_(-?\d+)_(-?\d+)/.exec(encoded);
+  if (!match) return null;
+
+  const sx = Number(match[1]);
+  const sy = Number(match[2]);
+  return Number.isFinite(sx) && Number.isFinite(sy)
+    ? { sx: Math.floor(sx), sy: Math.floor(sy) }
+    : null;
+}
+
 async function ensureMetadataShardManifest() {
   if (window.GW_DISABLE_METADATA_SHARDS === true) return null;
   if (window.__gwMetadataShardManifest) return window.__gwMetadataShardManifest;
@@ -1854,10 +1900,13 @@ async function ensureMetadataShardManifest() {
 
     const shardIndex = new Map();
     for (const shard of manifest.shards || []) {
-      const sx = Number(shard.sx);
-      const sy = Number(shard.sy);
-      if (Number.isFinite(sx) && Number.isFinite(sy)) {
-        shardIndex.set(`${sx}_${sy}`, shard);
+      const coords = parseMetadataShardCoords(shard);
+      if (coords) {
+        shardIndex.set(`${coords.sx}_${coords.sy}`, {
+          ...shard,
+          sx: coords.sx,
+          sy: coords.sy
+        });
       }
     }
 
@@ -1982,6 +2031,9 @@ function metadataCellToSquareRecord(cell, dictionaries) {
     .filter((row) => row.count > 0);
 
   const rec = {
+    ix: Number(cell[0]),
+    iy: Number(cell[1]),
+    key: `${Number(cell[0])},${Number(cell[1])}`,
     count: Number(cell[2]) || 0,
     n_genera: Number(cell[3]) || genera.length,
     n_observers: Number(cell[4]) || topObservers.length,
@@ -6651,7 +6703,14 @@ window.getGridWildHeatDataStats = function getGridWildHeatDataStats() {
     },
     pmtiles: window.GridWildPMTilesHeat?.stats?.() || null,
     coarsePMTiles: window.GridWildCoarsePMTiles?.stats?.() || null,
-    coarse: window.GridWildCoarsePyramid?.stats?.() || null
+    coarse: window.GridWildCoarsePyramid?.stats?.() || null,
+    metadataShards: {
+      manifestLoaded: Boolean(window.__gwMetadataShardManifest),
+      unavailable: window.__gwMetadataShardUnavailable === true,
+      shardCount: window.__gwMetadataShardManifest?.shards?.length || 0,
+      cachedShards: window.__gwMetadataShardCache?.size || 0,
+      pendingShards: window.__gwMetadataShardPending?.size || 0
+    }
   };
 };
 
@@ -6768,6 +6827,13 @@ function gridWildHeatDebugSource(stats) {
     };
   }
 
+  if (String(status).startsWith("metadata-filter")) {
+    return {
+      source: "metadata-filter",
+      detail: render.metadataFilterOutcome || render
+    };
+  }
+
   return {
     source: status,
     detail: render
@@ -6840,6 +6906,13 @@ function getGridWildZoomHeatDebug() {
 }
 
 window.getGridWildZoomHeatDebug = getGridWildZoomHeatDebug;
+window.GridWildDebug = {
+  ...(window.GridWildDebug || {}),
+  heat: getGridWildZoomHeatDebug,
+  heatData: window.getGridWildHeatDataStats,
+  forceHeat: window.forceGridWildHeatRender,
+  resetMetadata: window.resetGridWildMetadataShards
+};
 
 function logGridWildZoomHeatDebug() {
   if (window.__gwState?.zoomHeatDebugEnabled === false) return;
@@ -6882,15 +6955,26 @@ function median(values) {
   return nums.length % 2 ? nums[mid] : (nums[mid - 1] + nums[mid]) / 2;
 }
 
-function coarseHeatLensNeedsRichMetrics(lens = window.__gwState?.activeLens || "classic") {
+function heatLensNeedsRichMetrics(lens = window.__gwState?.activeLens || "classic") {
   return (
-    window.GridWildIconicOverlayFilter?.isActive?.() === true ||
     lens === "dominantlife" ||
     lens === "seasonalpulse" ||
     lens === "stability" ||
     lens === "breadth" ||
     lens === "cultivated" ||
     lens === "wildbalance"
+  );
+}
+
+function coarseHeatLensNeedsRichMetrics(lens = window.__gwState?.activeLens || "classic") {
+  return (
+    window.GridWildIconicOverlayFilter?.isActive?.() === true || heatLensNeedsRichMetrics(lens)
+  );
+}
+
+function shouldRenderMetadataShardHeat(lens = window.__gwState?.activeLens || "classic") {
+  return (
+    window.GridWildIconicOverlayFilter?.isActive?.() === true || heatLensNeedsRichMetrics(lens)
   );
 }
 
@@ -8711,12 +8795,333 @@ function drawFineHeatItem(item, fogOn) {
   return true;
 }
 
+function visibleFineCellRange(startX, endX, startY, endY) {
+  return {
+    minIx: Math.floor(startX / GRID_SIZE_M),
+    maxIx: Math.floor((endX - GRID_SIZE_M) / GRID_SIZE_M),
+    minIy: Math.floor(startY / GRID_SIZE_M),
+    maxIy: Math.floor((endY - GRID_SIZE_M) / GRID_SIZE_M)
+  };
+}
+
+function metadataFilteredHeatSuperchunksForView(startX, endX, startY, endY) {
+  const manifest = window.__gwMetadataShardManifest;
+  const index = manifest?.__shardIndex;
+  if (!index?.size) return [];
+
+  const range = visibleFineCellRange(startX, endX, startY, endY);
+  const superchunkSize = getGeneraSuperchunkSize();
+  const startSx = Math.floor(range.minIx / superchunkSize);
+  const endSx = Math.floor(range.maxIx / superchunkSize);
+  const startSy = Math.floor(range.minIy / superchunkSize);
+  const endSy = Math.floor(range.maxIy / superchunkSize);
+  const center = getVisualGridFineCell();
+  const centerSx = Math.floor(center.ix / superchunkSize);
+  const centerSy = Math.floor(center.iy / superchunkSize);
+  const shards = [];
+
+  for (let sx = startSx; sx <= endSx; sx++) {
+    for (let sy = startSy; sy <= endSy; sy++) {
+      const key = `${sx}_${sy}`;
+      if (!index.has(key)) continue;
+      shards.push({
+        key,
+        sx,
+        sy,
+        ix: sx * superchunkSize,
+        iy: sy * superchunkSize,
+        distance: Math.abs(sx - centerSx) + Math.abs(sy - centerSy)
+      });
+    }
+  }
+
+  shards.sort((a, b) => a.distance - b.distance || a.sx - b.sx || a.sy - b.sy);
+  return shards;
+}
+
+function getCachedGeneraChunkForSuperKey(superKey) {
+  const chunk = window.__squareGeneraSuperchunkCache?.get?.(superKey);
+  if (chunk?.squares) return chunk;
+
+  const metadataChunk = window.__gwMetadataShardCache?.get?.(superKey);
+  return metadataChunk?.squares ? metadataChunk : null;
+}
+
+function decodeGeneraSquareId(squareId) {
+  const match = /^sq_([mp]\d+)_([mp]\d+)$/.exec(String(squareId || ""));
+  if (!match) return null;
+
+  const decode = (part) => {
+    const value = Number(part.slice(1));
+    if (!Number.isFinite(value)) return null;
+    return part[0] === "m" ? -value : value;
+  };
+  const ix = decode(match[1]);
+  const iy = decode(match[2]);
+  return Number.isFinite(ix) && Number.isFinite(iy) ? { ix, iy } : null;
+}
+
+function requestMetadataFilteredHeatChunk(shard) {
+  if (!shard) return;
+  if (window.__squareGeneraSuperchunkPending?.has?.(shard.key)) return;
+  if (window.__gwMetadataShardPending?.has?.(shard.key)) return;
+
+  loadGeneraSuperchunk(shard.ix, shard.iy)
+    .then(() => scheduleGridHeatCanvasRender())
+    .catch((err) => console.warn("Metadata filtered heat shard unavailable:", err));
+}
+
+function collectMetadataFilteredHeatItems(chunks, range) {
+  const items = [];
+  let consideredCells = 0;
+  let limited = false;
+
+  for (const chunk of chunks) {
+    const squares = chunk?.squares || {};
+    for (const [squareId, rec] of Object.entries(squares)) {
+      const decoded = decodeGeneraSquareId(squareId);
+      const ix = Math.floor(Number.isFinite(Number(rec?.ix)) ? Number(rec.ix) : decoded?.ix);
+      const iy = Math.floor(Number.isFinite(Number(rec?.iy)) ? Number(rec.iy) : decoded?.iy);
+      if (!Number.isFinite(ix) || !Number.isFinite(iy)) continue;
+      if (ix < range.minIx || ix > range.maxIx || iy < range.minIy || iy > range.maxIy) continue;
+
+      consideredCells++;
+      if (consideredCells > METADATA_FILTER_HEAT_CELL_BUDGET) {
+        limited = true;
+        break;
+      }
+
+      const key = `${ix},${iy}`;
+      const baseMetrics = rec.__metrics || buildRichMetricsForGeneraRecord(ix, iy, rec);
+      const displayMetrics = getDisplayMetricsForCell(ix, iy, baseMetrics, {
+        requestMissingRecord: false
+      });
+      if (!displayMetrics) continue;
+
+      const heatValue = getHeatValueForCell(displayMetrics);
+      if (heatValue <= 0) continue;
+
+      items.push({
+        ix,
+        iy,
+        key,
+        x: ix * GRID_SIZE_M,
+        y: iy * GRID_SIZE_M,
+        metrics: displayMetrics,
+        heatValue
+      });
+    }
+    if (limited) break;
+  }
+
+  return { items, consideredCells, limited };
+}
+
+function buildMetadataFilteredCoarseMetrics(items, binSize) {
+  const values = {
+    count: [],
+    species: [],
+    genera: [],
+    observers: [],
+    n_captive: [],
+    median_last10_observed_ms: []
+  };
+  const lensFields = {
+    iconic_counts: {},
+    month_totals: Array(12).fill(0)
+  };
+  let nActiveSquares = 0;
+  let latestLastObservedMs = 0;
+
+  for (const item of items || []) {
+    const metrics = item?.metrics;
+    if (!hasGridMetricSignal(metrics)) continue;
+
+    const count = Number(metrics.count) || 0;
+    const species = Number(metrics.species) || Number(metrics.genera) || 0;
+    const genera = Number(metrics.genera) || species;
+    const observers = Number(metrics.observers) || 0;
+    const nCaptive = Number(metrics.n_captive) || 0;
+    const lastObservedMs =
+      Number(metrics.last_observed_ms) || parseGridDateMs(metrics.last_observed);
+    const medianLast10Ms =
+      Number(metrics.median_last10_observed_ms) || parseGridDateMs(metrics.median_last10_observed);
+
+    values.count.push(count);
+    values.species.push(species);
+    values.genera.push(genera);
+    values.observers.push(observers);
+    values.n_captive.push(nCaptive);
+    if (medianLast10Ms) values.median_last10_observed_ms.push(medianLast10Ms);
+    latestLastObservedMs = Math.max(latestLastObservedMs, lastObservedMs || 0);
+    mergeCoarseLensMetricFields(lensFields, metrics);
+    if (count > 0) nActiveSquares++;
+  }
+
+  if (!values.count.length) return null;
+
+  const peak = Math.max(...lensFields.month_totals);
+  const total = lensFields.month_totals.reduce((sum, value) => sum + value, 0);
+  const dominant =
+    Object.entries(lensFields.iconic_counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
+
+  return {
+    count: median(values.count),
+    species: median(values.species),
+    genera: median(values.genera),
+    observers: median(values.observers),
+    n_captive: median(values.n_captive),
+    iconic_counts: lensFields.iconic_counts,
+    month_totals: lensFields.month_totals,
+    dominant_iconic: dominant,
+    iconic_n: Object.keys(lensFields.iconic_counts).length,
+    peak_month: lensFields.month_totals.indexOf(peak) + 1,
+    seasonal_strength: total ? peak / total : 0,
+    month_entropy: metricEntropy(lensFields.month_totals),
+    last_observed: gridDateIsoFromMs(latestLastObservedMs),
+    median_last10_observed: gridDateIsoFromMs(median(values.median_last10_observed_ms)),
+    last_observed_ms: latestLastObservedMs,
+    median_last10_observed_ms: median(values.median_last10_observed_ms),
+    nSquares: binSize * binSize,
+    nActiveSquares,
+    activity_score: Math.log1p(median(values.count)) * (1 + median(values.genera) * 0.05),
+    source: "metadata_filter_coarse"
+  };
+}
+
+function collectMetadataFilteredCoarseHeatItems(items, binSize) {
+  const normalizedBinSize = Math.max(1, Math.round(Number(binSize) || 1));
+  const groups = new Map();
+
+  for (const item of items || []) {
+    const ix = Math.floor(Number(item?.ix));
+    const iy = Math.floor(Number(item?.iy));
+    if (!Number.isFinite(ix) || !Number.isFinite(iy)) continue;
+
+    const anchorIx = Math.floor(ix / normalizedBinSize) * normalizedBinSize;
+    const anchorIy = Math.floor(iy / normalizedBinSize) * normalizedBinSize;
+    const key = `${anchorIx},${anchorIy}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        ix: anchorIx,
+        iy: anchorIy,
+        key,
+        cells: []
+      };
+      groups.set(key, group);
+    }
+    group.cells.push(item);
+  }
+
+  const coarseItems = [];
+  for (const group of groups.values()) {
+    const metrics = buildMetadataFilteredCoarseMetrics(group.cells, normalizedBinSize);
+    if (!metrics) continue;
+
+    const heatValue = getHeatValueForCell(metrics);
+    if (heatValue <= 0) continue;
+
+    coarseItems.push({
+      ix: group.ix,
+      iy: group.iy,
+      key: group.key,
+      metrics,
+      heatValue,
+      fineItemCount: group.cells.length
+    });
+  }
+
+  return coarseItems;
+}
+
+function renderMetadataFilteredHeatCanvas(startX, endX, startY, endY, fogOn) {
+  if (shouldRenderMetadataShardHeat() !== true) return null;
+
+  if (!window.__gwMetadataShardManifest && !window.__gwMetadataShardUnavailable) {
+    ensureMetadataShardManifest()
+      .then(() => scheduleGridHeatCanvasRender())
+      .catch((err) => console.warn("Metadata filtered heat manifest unavailable:", err));
+    return { status: "pending", painted: 0, pendingShards: 1, itemCount: 0 };
+  }
+
+  if (!window.__gwMetadataShardManifest?.__shardIndex) return null;
+
+  const range = visibleFineCellRange(startX, endX, startY, endY);
+  const shards = metadataFilteredHeatSuperchunksForView(startX, endX, startY, endY);
+  if (!shards.length) return { status: "empty", painted: 0, pendingShards: 0, itemCount: 0 };
+
+  const selectedShards = shards.slice(0, METADATA_FILTER_HEAT_SUPERCHUNK_BUDGET);
+  const truncatedShards = shards.length > selectedShards.length;
+  const chunks = [];
+  let pendingShards = 0;
+
+  for (const shard of selectedShards) {
+    const chunk = getCachedGeneraChunkForSuperKey(shard.key);
+    if (chunk) {
+      chunks.push(chunk);
+      continue;
+    }
+
+    pendingShards++;
+    requestMetadataFilteredHeatChunk(shard);
+  }
+
+  const { items, consideredCells, limited } = collectMetadataFilteredHeatItems(chunks, range);
+  const coarseMode = isCoarseHeatEnabled();
+  const binSize = coarseMode ? getEffectiveCoarseHeatBinSize() : 1;
+  const paintItems = coarseMode ? collectMetadataFilteredCoarseHeatItems(items, binSize) : items;
+  const heatZStats = isHeatZThresholdEnabled()
+    ? buildZStats(paintItems.map((item) => item.heatValue))
+    : null;
+  const heatMorphologyMask = isHeatMorphologyEnabled()
+    ? buildThresholdedHeatMorphologyMask(paintItems, heatZStats, { step: binSize })
+    : null;
+  let painted = 0;
+
+  for (const item of paintItems) {
+    if (
+      heatMorphologyMask
+        ? !heatMorphologyMask.has(item.key)
+        : !passesHeatZThreshold(item.heatValue, heatZStats)
+    ) {
+      continue;
+    }
+
+    if (coarseMode) {
+      const baseStyle = metricsToFill(item.metrics);
+      if (!baseStyle) continue;
+      painted += paintCoarseHeatBin(gridHeatCtx, item.ix, item.iy, binSize, baseStyle);
+    } else if (drawFineHeatItem(item, fogOn)) {
+      painted++;
+    }
+  }
+
+  gridHeatCtx.globalAlpha = 1;
+  return {
+    status: painted ? "painted" : pendingShards ? "pending" : "empty",
+    mode: coarseMode ? "coarse" : "fine",
+    binSize,
+    painted,
+    pendingShards,
+    selectedShards: selectedShards.length,
+    visibleShards: shards.length,
+    truncatedShards,
+    itemCount: paintItems.length,
+    fineItemCount: items.length,
+    consideredCells,
+    limited
+  };
+}
+
 function canUsePMTilesHeat() {
   if (window.__gwState?.pmtilesHeatEnabled === false) return false;
   if (!window.GridWildPMTilesHeat?.tileFor) return false;
   if (window.GridWildMeOverlayFilter?.isActive?.()) return false;
   if (window.GridWildIconicOverlayFilter?.isActive?.()) return false;
-  if (window.GridWildOsmPriorsLayer?.isOsmPriorLens?.(window.__gwState?.activeLens)) return false;
+  const activeLens = window.__gwState?.activeLens || "classic";
+  if (heatLensNeedsRichMetrics(activeLens)) return false;
+  if (window.GridWildOsmPriorsLayer?.isOsmPriorLens?.(activeLens)) return false;
 
   const metric = window.__gwState?.heatMetric || "count";
   return metric === "count" || metric === "species" || metric === "observers";
@@ -8731,6 +9136,7 @@ function getPMTilesHeatGateState() {
   if (!window.GridWildPMTilesHeat?.tileFor) reasons.push("pmtiles renderer unavailable");
   if (window.GridWildMeOverlayFilter?.isActive?.()) reasons.push("me overlay active");
   if (window.GridWildIconicOverlayFilter?.isActive?.()) reasons.push("iconic overlay active");
+  if (heatLensNeedsRichMetrics(activeLens)) reasons.push(`rich metric lens ${activeLens}`);
   if (window.GridWildOsmPriorsLayer?.isOsmPriorLens?.(activeLens)) {
     reasons.push(`OSM prior lens ${activeLens}`);
   }
@@ -9178,6 +9584,19 @@ function renderGridHeatCanvas() {
 
   gridHeatCtx.clearRect(0, 0, gridHeatCanvasLayout.width, gridHeatCanvasLayout.height);
 
+  const fogOn = window.__gwState?.showFog ?? false;
+  const { startX, endX, startY, endY } = getPaddedBoundsMeters();
+  const metadataFilterOutcome = renderMetadataFilteredHeatCanvas(startX, endX, startY, endY, fogOn);
+  if (metadataFilterOutcome) {
+    gridHeatLastRenderState.status = `metadata-filter-${metadataFilterOutcome.status}`;
+    gridHeatLastRenderState.painted = metadataFilterOutcome.painted;
+    gridHeatLastRenderState.metadataFilterOutcome = metadataFilterOutcome;
+    if (!metadataFilterOutcome.painted && metadataFilterOutcome.pendingShards) {
+      restoreGridHeatStaleFrame(staleFrame, gridHeatLastRenderState.status);
+    }
+    return;
+  }
+
   if (!hasStaticCounts && !pyriteEnabled && !coarseHeatEnabled && !pmtilesHeatEnabled) {
     ensureStaticHeatmapCsvLoaded("heat fallback").catch((err) =>
       console.warn("GridWild static heat fallback unavailable.", err)
@@ -9237,8 +9656,6 @@ function renderGridHeatCanvas() {
     }
   }
 
-  const fogOn = window.__gwState?.showFog ?? false;
-  const { startX, endX, startY, endY } = getPaddedBoundsMeters();
   const meHeatActive = window.GridWildMeOverlayFilter?.isActive?.();
   const heatMorphologyActive = isHeatMorphologyEnabled();
   const meHeatEntries = meHeatActive

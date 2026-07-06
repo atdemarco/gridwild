@@ -81,7 +81,7 @@
   const OVERPASS_RATE_LIMIT_COOLDOWN_MS = 120000;
   const OVERPASS_ERROR_COOLDOWN_MS = 30000;
   const MIN_ZOOM = 15;
-  const CLOSE_DETAIL_MIN_ZOOM = 18;
+  const CLOSE_DETAIL_MIN_ZOOM = 17; // HUD x1.00
   const LEAN_QUERY_BOUNDS_PAD_RATIO = 0.5;
   const DETAIL_QUERY_BOUNDS_PAD_RATIO = 1.15;
   const PARKS_QUERY_BOUNDS_PAD_RATIO = 0.65;
@@ -100,6 +100,40 @@
     vectorTile: "/vendor/pmtiles/vector-tile-1.3.1.esm.js",
     pbf: "/vendor/pmtiles/pbf-3.3.0.esm.js"
   };
+  const BASEMAP_NAME_TAG_ALIASES = [
+    ["name", "name"],
+    ["name:en", "name:en"],
+    ["name_en", "name:en"],
+    ["name:latin", "name:latin"],
+    ["name_latin", "name:latin"],
+    ["name:nonlatin", "name:nonlatin"],
+    ["name_nonlatin", "name:nonlatin"],
+    ["name:int", "name:int"],
+    ["name_int", "name:int"],
+    ["official_name", "official_name"],
+    ["short_name", "short_name"],
+    ["name:short", "name:short"],
+    ["name_short", "name:short"],
+    ["loc_name", "loc_name"],
+    ["alt_name", "alt_name"],
+    ["gnis:feature_name", "gnis:feature_name"],
+    ["gnis_feature_name", "gnis:feature_name"],
+    ["old_name", "old_name"]
+  ];
+  const BASEMAP_NAME_PREFERENCE_KEYS = [
+    "name",
+    "name:en",
+    "name:latin",
+    "name:nonlatin",
+    "name:int",
+    "official_name",
+    "short_name",
+    "name:short",
+    "loc_name",
+    "alt_name",
+    "gnis:feature_name",
+    "old_name"
+  ];
   const BASEMAP_BUILDING_TILE_Z = 15;
   const BASEMAP_BUILDING_MAX_TILES = 96;
   const BASEMAP_BUILDING_CACHE_MAX = 72;
@@ -570,20 +604,20 @@
 
   function basemapNameTagsFromProps(props = {}) {
     const out = {};
-    [
-      "name",
-      "name:en",
-      "official_name",
-      "short_name",
-      "loc_name",
-      "alt_name",
-      "gnis:feature_name",
-      "old_name"
-    ].forEach((key) => {
-      const value = props[key];
-      if (String(value || "").trim()) out[key] = value;
+    BASEMAP_NAME_TAG_ALIASES.forEach(([sourceKey, tagKey]) => {
+      const value = props[sourceKey];
+      if (String(value || "").trim() && !String(out[tagKey] || "").trim()) {
+        out[tagKey] = String(value).trim();
+      }
     });
     return out;
+  }
+
+  function basemapBestName(tags = {}) {
+    const label = BASEMAP_NAME_PREFERENCE_KEYS.map((key) => tags[key]).find((value) =>
+      String(value || "").trim()
+    );
+    return label ? String(label).trim() : "";
   }
 
   function landuseTagsFromBasemapKind(kind) {
@@ -598,6 +632,25 @@
       return { landuse: kind };
     }
     if (kind === "cemetery") return { landuse: "cemetery" };
+    return null;
+  }
+
+  function parkLikePointTagsFromBasemapProps(props = {}) {
+    const kind = String(props.kind || "").trim();
+    const detail = String(props.kind_detail || "").trim();
+    const candidates = [kind, detail].filter(Boolean);
+
+    for (const candidate of candidates) {
+      const tags = landuseTagsFromBasemapKind(candidate);
+      if (tags) return { ...tags, kind: kind || candidate, kind_detail: detail || null };
+      if (candidate === "grave_yard" || candidate === "graveyard") {
+        return { amenity: "grave_yard", kind: kind || candidate, kind_detail: detail || null };
+      }
+      if (candidate === "picnic_site" || candidate === "camp_site") {
+        return { tourism: candidate, kind: kind || candidate, kind_detail: detail || null };
+      }
+    }
+
     return null;
   }
 
@@ -711,7 +764,7 @@
       for (let featureIndex = 0; featureIndex < layer.length; featureIndex++) {
         const feature = layer.feature(featureIndex);
         const props = feature.properties || {};
-        const kind = String(props.kind || "");
+        const kind = String(props.kind || props.kind_detail || "");
         const tags = landuseTagsFromBasemapKind(kind);
         if (!tags) continue;
 
@@ -738,7 +791,7 @@
         const feature = places.feature(featureIndex);
         const props = feature.properties || {};
         const nameTags = basemapNameTagsFromProps(props);
-        const name = nameTags.name || nameTags["name:en"] || null;
+        const name = basemapBestName(nameTags);
         if (!name) continue;
 
         basemapFeatureGeometry(tile, places, feature).forEach((part, partIndex) => {
@@ -752,8 +805,37 @@
             {
               place: props.kind || "place",
               kind: props.kind || null,
+              kind_detail: props.kind_detail || null,
               ...nameTags
             },
+            part.points.slice(0, 1),
+            false,
+            { clippedToTile: part.clippedToTile }
+          );
+        });
+      }
+    }
+
+    const pois = vectorTile.layers?.pois;
+    if (pois?.length) {
+      for (let featureIndex = 0; featureIndex < pois.length; featureIndex++) {
+        const feature = pois.feature(featureIndex);
+        const props = feature.properties || {};
+        const nameTags = basemapNameTagsFromProps(props);
+        if (!basemapBestName(nameTags)) continue;
+
+        const pointTags = parkLikePointTagsFromBasemapProps(props);
+        if (!pointTags) continue;
+
+        basemapFeatureGeometry(tile, pois, feature).forEach((part, partIndex) => {
+          addBasemapFeature(
+            out,
+            "places",
+            tile,
+            "pois",
+            featureIndex,
+            partIndex,
+            { ...pointTags, ...nameTags },
             part.points.slice(0, 1),
             false,
             { clippedToTile: part.clippedToTile }

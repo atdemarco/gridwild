@@ -415,6 +415,9 @@ async function writeShard(outDir, shard, payload, keepJson) {
   return {
     shard,
     file,
+    sx: payload.sx,
+    sy: payload.sy,
+    span: payload.span,
     json_bytes: Buffer.byteLength(json),
     gzip_bytes: gzip.length,
     cells: payload.cells.length,

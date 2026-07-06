@@ -24,9 +24,12 @@
   const NEARBY_PROJECT_RADIUS_M = 50000;
   const PATCH_COMPLETENESS_MAX_EXACT_CELLS = 12000;
   const PATCH_COMPLETENESS_MAX_SAMPLE_CELLS = 6000;
-  const PATCH_HERE_SELECTION_SCAN_LIMIT = 1800;
+  const PATCH_COMPLETENESS_METADATA_MAX_CELLS = 3600;
+  const PATCH_COMPLETENESS_CACHE_LIMIT = 220;
+  const PATCH_HERE_SELECTION_SCAN_LIMIT = 3600;
   const PATCH_QUEST_TARGET_MAX_CELLS = 400;
   const PATCH_QUEST_SCAN_MAX_BBOX_CELLS = 120000;
+  const PATCH_QUEST_METADATA_SCAN_BATCH = 72;
   const PATCH_VIEW_SEARCH_RADIUS_M = 220;
   const PATCH_VIEW_OSM_FETCH_RADIUS_M = 420;
   const PATCH_VIEW_INAT_SEARCH_RADIUS_M = 900;
@@ -49,6 +52,9 @@
   const PATCH_GROUP_YEAR_DICE_THRESHOLD = 0.04;
   const PATCH_GROUP_YEAR_COVERAGE_THRESHOLD = 0.08;
   const PATCH_GROUP_MIN_INTERSECTION_M2 = 35;
+  const OSM_CLIPPED_GROUP_GAP_M = 36;
+  const OSM_CLIPPED_FALLBACK_GROUP_GAP_M = 8;
+  const OSM_CLIPPED_GROUP_SOURCE_ID_LIMIT = 80;
   const PATCH_SUBSCRIPTION_POLL_MS = 10 * 60 * 1000;
   const PATCH_SUBSCRIPTION_INITIAL_DELAY_MS = 4500;
   const PATCH_SUBSCRIPTION_SCAN_LIMIT = 6;
@@ -67,6 +73,26 @@
     "Amphibia",
     "Actinopterygii",
     "Mollusca"
+  ];
+  const OSM_NAME_TAG_KEYS = [
+    "name",
+    "name:en",
+    "name_en",
+    "name:latin",
+    "name_latin",
+    "name:nonlatin",
+    "name_nonlatin",
+    "name:int",
+    "name_int",
+    "official_name",
+    "short_name",
+    "name:short",
+    "name_short",
+    "loc_name",
+    "alt_name",
+    "gnis:feature_name",
+    "gnis_feature_name",
+    "old_name"
   ];
   const PATCH_BOUNDARY_THEMES = {
     default: {
@@ -128,6 +154,9 @@
     patchHoldTimer: null,
     patchHoldStart: null,
     labelUpdateRaf: null,
+    patchCompletenessCache: new Map(),
+    patchCompletenessPending: new Map(),
+    patchCompletenessVersion: 0,
     suppressPatchInfoUntil: 0,
     suppressHudActionMenuUntil: 0,
     subscriptionPollTimer: null,
@@ -265,6 +294,10 @@
     } catch (err) {
       console.warn("Could not save patches:", err);
     }
+
+    state.patchCompletenessVersion += 1;
+    state.patchCompletenessCache.clear();
+    state.patchCompletenessPending.clear();
 
     window.__gwState = window.__gwState || {};
     window.__gwState.patches = state.patches.slice();
@@ -662,6 +695,18 @@
     return Number(metrics?.count) || 0;
   }
 
+  function baseObservationCountForCell(ix, iy) {
+    const key = window.GridWildGrid?.cellKey?.(ix, iy) || `${ix},${iy}`;
+    const baseMetrics =
+      window.getGridWildBaseMetricsForCell?.(ix, iy) ||
+      window.__richGridMetrics?.get?.(key) ||
+      window.__staticGridCounts?.get?.(key) ||
+      null;
+    if (baseMetrics) return Number(baseMetrics.count) || 0;
+
+    return staticObservationCountForCell(ix, iy);
+  }
+
   function staticGridReady() {
     return (
       window.__gwStaticHeatLoaded === true ||
@@ -669,8 +714,27 @@
     );
   }
 
-  function waitForStaticGridReady(timeoutMs = 8000) {
-    if (staticGridReady()) return Promise.resolve(true);
+  function metadataGridMemoryAvailable() {
+    if (window.GW_DISABLE_METADATA_SHARDS === true) return false;
+    if (window.__gwMetadataShardManifest?.shards?.length) return true;
+    if (window.__gwMetadataShardUnavailable === true) return false;
+
+    const stats = window.getGridWildHeatDataStats?.();
+    if (stats?.metadataShards?.manifestLoaded) return true;
+    if (Number(stats?.metadataShards?.shardCount) > 0) return true;
+
+    return (
+      typeof window.getSquareGeneraRecord === "function" &&
+      typeof window.GridWildAssets?.loadMetadataShardManifest === "function"
+    );
+  }
+
+  function questGridMemoryReady() {
+    return staticGridReady() || metadataGridMemoryAvailable();
+  }
+
+  function waitForQuestGridMemoryReady(timeoutMs = 8000) {
+    if (questGridMemoryReady()) return Promise.resolve(true);
 
     return new Promise((resolve) => {
       let done = false;
@@ -678,12 +742,14 @@
         if (done) return;
         done = true;
         window.removeEventListener("gridwild:staticheatloaded", onLoaded);
+        window.removeEventListener("gridwild:heatchange", onLoaded);
         window.clearTimeout(timer);
         resolve(value);
       };
-      const onLoaded = () => finish(true);
-      const timer = window.setTimeout(() => finish(staticGridReady()), timeoutMs);
+      const onLoaded = () => finish(questGridMemoryReady());
+      const timer = window.setTimeout(() => finish(questGridMemoryReady()), timeoutMs);
       window.addEventListener("gridwild:staticheatloaded", onLoaded, { once: true });
+      window.addEventListener("gridwild:heatchange", onLoaded, { once: true });
     });
   }
 
@@ -695,7 +761,32 @@
     return window.map?.getBounds?.().contains([center.lat, center.lng]) ? 0 : 1;
   }
 
-  function patchQuestTargetCells(patch) {
+  function generaRecordObservationCount(record) {
+    if (!record) return 0;
+    const metricsCount = Number(record.__metrics?.count);
+    if (Number.isFinite(metricsCount) && metricsCount > 0) return metricsCount;
+
+    const directCount = Number(record.count || record.n_observations || record.observations);
+    if (Number.isFinite(directCount) && directCount > 0) return directCount;
+
+    return (Array.isArray(record.genera) ? record.genera : []).reduce(
+      (sum, row) => sum + (Number(row?.count) || 0),
+      0
+    );
+  }
+
+  async function metadataObservationCountForCell(ix, iy) {
+    if (typeof window.getSquareGeneraRecord !== "function") return 0;
+    try {
+      const record = await window.getSquareGeneraRecord(ix, iy);
+      return generaRecordObservationCount(record);
+    } catch (err) {
+      console.warn("Could not read Patch quest metadata for cell:", err);
+      return 0;
+    }
+  }
+
+  async function patchQuestTargetCells(patch) {
     const rings = patchRings(patch);
     const bounds = patchCellBounds(rings);
     if (!bounds) return { cells: [], totalEligibleCells: 0, scannedCells: 0 };
@@ -713,9 +804,7 @@
       for (let ix = bounds.minIx; ix <= bounds.maxIx; ix++) {
         const center = cellCenterPoint(ix, iy);
         if (!center || !pointInRings(center, rings)) continue;
-        if (staticObservationCountForCell(ix, iy) > 0) continue;
 
-        totalEligibleCells++;
         rows.push({
           ix,
           iy,
@@ -735,10 +824,49 @@
         a.key.localeCompare(b.key)
     );
 
+    if (staticGridReady() || !metadataGridMemoryAvailable()) {
+      const eligibleRows = rows.filter((row) => baseObservationCountForCell(row.ix, row.iy) <= 0);
+      return {
+        cells: eligibleRows
+          .slice(0, PATCH_QUEST_TARGET_MAX_CELLS)
+          .map((row) => ({ ix: row.ix, iy: row.iy, key: row.key })),
+        totalEligibleCells: eligibleRows.length,
+        scannedCells: bboxCells
+      };
+    }
+
+    const cells = [];
+    for (let i = 0; i < rows.length; i += PATCH_QUEST_METADATA_SCAN_BATCH) {
+      const batch = rows.slice(i, i + PATCH_QUEST_METADATA_SCAN_BATCH);
+      const counts = await Promise.all(
+        batch.map(async (row) => {
+          const warmedCount = baseObservationCountForCell(row.ix, row.iy);
+          if (warmedCount > 0) return warmedCount;
+          return metadataObservationCountForCell(row.ix, row.iy);
+        })
+      );
+
+      batch.forEach((row, index) => {
+        if ((Number(counts[index]) || 0) > 0) return;
+
+        totalEligibleCells++;
+        if (cells.length < PATCH_QUEST_TARGET_MAX_CELLS) {
+          cells.push({ ix: row.ix, iy: row.iy, key: row.key });
+        }
+      });
+
+      if (cells.length >= PATCH_QUEST_TARGET_MAX_CELLS) {
+        return {
+          cells,
+          totalEligibleCells,
+          scannedCells: Math.min(rows.length, i + batch.length),
+          partialScan: i + batch.length < rows.length
+        };
+      }
+    }
+
     return {
-      cells: rows
-        .slice(0, PATCH_QUEST_TARGET_MAX_CELLS)
-        .map((row) => ({ ix: row.ix, iy: row.iy, key: row.key })),
+      cells,
       totalEligibleCells,
       scannedCells: bboxCells
     };
@@ -860,14 +988,14 @@
       return null;
     }
 
-    if (!staticGridReady()) toast("Loading grid memory...");
-    const staticReady = await waitForStaticGridReady();
-    if (!staticReady) {
+    if (!questGridMemoryReady()) toast("Loading grid memory...");
+    const memoryReady = await waitForQuestGridMemoryReady();
+    if (!memoryReady) {
       toast("Grid memory is still loading. Try the Patch quest again in a moment.");
       return null;
     }
 
-    const targetInfo = patchQuestTargetCells(patch);
+    const targetInfo = await patchQuestTargetCells(patch);
     if (targetInfo.tooLarge) {
       toast("That Patch is too large for a fill quest right now.");
       return null;
@@ -1225,27 +1353,122 @@
     const stride = exact
       ? 1
       : Math.max(1, Math.ceil(Math.sqrt(bboxCells / PATCH_COMPLETENESS_MAX_SAMPLE_CELLS)));
-    let total = 0;
-    let observed = 0;
+    const cells = [];
 
     for (let iy = bounds.minIy; iy <= bounds.maxIy; iy += stride) {
       for (let ix = bounds.minIx; ix <= bounds.maxIx; ix += stride) {
         const center = cellCenterPoint(ix, iy);
         if (!center || !pointInRings(center, rings)) continue;
 
-        total++;
-        const metrics = displayMetricsForCell(ix, iy);
-        if ((Number(metrics?.count) || 0) > 0) observed++;
+        cells.push({
+          ix,
+          iy,
+          key: window.GridWildGrid?.cellKey?.(ix, iy) || `${ix},${iy}`
+        });
       }
     }
 
+    const signature = patchCompletenessSignature(patch, bounds, cells.length, stride);
+    const cached = state.patchCompletenessCache.get(signature);
+    if (cached) return cached;
+
+    const fallback = patchCompletenessFromCells(cells, {
+      sampled: !exact && stride > 1,
+      source: "runtime-cache"
+    });
+    schedulePatchCompletenessHydration(signature, cells, fallback);
+    return fallback;
+  }
+
+  function patchCompletenessSignature(patch, bounds, cellCount, stride) {
+    return [
+      state.patchCompletenessVersion,
+      patch?.id || "patch",
+      bounds.minIx,
+      bounds.maxIx,
+      bounds.minIy,
+      bounds.maxIy,
+      cellCount,
+      stride
+    ].join(":");
+  }
+
+  function patchCompletenessFromCells(cells = [], options = {}) {
+    let observed = 0;
+    for (const cell of cells) {
+      if (baseObservationCountForCell(cell.ix, cell.iy) > 0) observed++;
+    }
+
+    const total = cells.length;
     const percent = total ? Math.max(0, Math.min(1, observed / total)) : 0;
     return {
       total,
       observed,
       percent,
-      sampled: !exact && stride > 1
+      sampled: options.sampled === true,
+      source: options.source || "runtime-cache"
     };
+  }
+
+  function representativePatchCompletenessCells(cells = []) {
+    const normalized = (Array.isArray(cells) ? cells : [])
+      .map((cell) => ({
+        ix: Math.floor(Number(cell?.ix)),
+        iy: Math.floor(Number(cell?.iy)),
+        key: cell?.key || `${Math.floor(Number(cell?.ix))},${Math.floor(Number(cell?.iy))}`
+      }))
+      .filter((cell) => Number.isFinite(cell.ix) && Number.isFinite(cell.iy))
+      .sort((a, b) => a.iy - b.iy || a.ix - b.ix);
+
+    if (normalized.length <= PATCH_COMPLETENESS_METADATA_MAX_CELLS) return normalized;
+
+    const out = [];
+    const step = (normalized.length - 1) / (PATCH_COMPLETENESS_METADATA_MAX_CELLS - 1);
+    for (let i = 0; i < PATCH_COMPLETENESS_METADATA_MAX_CELLS; i++) {
+      const cell = normalized[Math.round(i * step)];
+      if (cell) out.push(cell);
+    }
+    return out;
+  }
+
+  function rememberPatchCompleteness(signature, value) {
+    state.patchCompletenessCache.set(signature, value);
+    while (state.patchCompletenessCache.size > PATCH_COMPLETENESS_CACHE_LIMIT) {
+      state.patchCompletenessCache.delete(state.patchCompletenessCache.keys().next().value);
+    }
+  }
+
+  function schedulePatchCompletenessHydration(signature, cells = [], fallback) {
+    const api = window.GridWildGrid;
+    if (!api?.mergedGeneraRecordForCells || state.patchCompletenessPending.has(signature)) return;
+    if (!cells.length) return;
+
+    const sampledCells = representativePatchCompletenessCells(cells);
+    const sampled = fallback.sampled === true || sampledCells.length < cells.length;
+    const job = api
+      .mergedGeneraRecordForCells(sampledCells, { applyFilters: false })
+      .then((record) => {
+        const metrics = record?.__metrics || {};
+        const observed = Math.max(0, Number(metrics.nActiveSquares) || 0);
+        const total = sampledCells.length;
+        const percent = total ? Math.max(0, Math.min(1, observed / total)) : 0;
+        rememberPatchCompleteness(signature, {
+          total,
+          observed,
+          percent,
+          sampled,
+          source: "metadata-shards"
+        });
+        render();
+      })
+      .catch((err) => {
+        console.warn("GridWild patch completeness metadata hydration failed:", err);
+      })
+      .finally(() => {
+        state.patchCompletenessPending.delete(signature);
+      });
+
+    state.patchCompletenessPending.set(signature, job);
   }
 
   function completenessColor(percent) {
@@ -3881,16 +4104,9 @@
   }
 
   function osmHumanName(tags = {}) {
-    const label = [
-      tags.name,
-      tags["name:en"],
-      tags["official_name"],
-      tags["short_name"],
-      tags["loc_name"],
-      tags["alt_name"],
-      tags["gnis:feature_name"],
-      tags["old_name"]
-    ].find((value) => String(value || "").trim());
+    const label = OSM_NAME_TAG_KEYS.map((key) => tags[key]).find((value) =>
+      String(value || "").trim()
+    );
 
     return label ? String(label).trim() : "";
   }
@@ -4134,6 +4350,178 @@
     });
   }
 
+  function isClippedBasemapPatchCandidate(patch) {
+    return (
+      patch?.source === "osm" &&
+      patch?.metadata?.map_source === "basemap_pmtiles" &&
+      patch?.metadata?.clipped_to_tile === true
+    );
+  }
+
+  function normalizedOsmPatchNameKey(patch) {
+    return String(patch?.name || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+  }
+
+  function clippedBasemapPatchGroupKey(patch) {
+    if (!isClippedBasemapPatchCandidate(patch)) return null;
+    const name = normalizedOsmPatchNameKey(patch);
+    if (!name) return null;
+    const tags = patch?.metadata?.tags || {};
+    return [patch?.metadata?.osm_label_source || "fallback", osmBoundaryKind(tags), name].join("|");
+  }
+
+  function rawBoundsGapM(a, b) {
+    if (!a || !b) return Infinity;
+    const latGap =
+      a.south > b.north ? a.south - b.north : b.south > a.north ? b.south - a.north : 0;
+    const lngGap = a.west > b.east ? a.west - b.east : b.west > a.east ? b.west - a.east : 0;
+    const midLat = (a.south + a.north + b.south + b.north) / 4;
+    const lngScale = Math.max(0.18, Math.cos((midLat * Math.PI) / 180));
+    return Math.hypot(latGap * 111320, lngGap * 111320 * lngScale);
+  }
+
+  function clippedBasemapPatchesConnect(a, b) {
+    const gapM = Math.min(
+      OSM_CLIPPED_GROUP_GAP_M,
+      a?.metadata?.osm_label_source === "fallback" || b?.metadata?.osm_label_source === "fallback"
+        ? OSM_CLIPPED_FALLBACK_GROUP_GAP_M
+        : OSM_CLIPPED_GROUP_GAP_M
+    );
+    return (
+      rawBoundsGapM(rawBoundsFromRings(patchRings(a)), rawBoundsFromRings(patchRings(b))) <= gapM
+    );
+  }
+
+  function clippedBasemapPatchComponents(rows = []) {
+    const parent = rows.map((_, index) => index);
+
+    function root(index) {
+      let current = index;
+      while (parent[current] !== current) {
+        parent[current] = parent[parent[current]];
+        current = parent[current];
+      }
+      return current;
+    }
+
+    function unite(a, b) {
+      const ra = root(a);
+      const rb = root(b);
+      if (ra !== rb) parent[rb] = ra;
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      for (let j = i + 1; j < rows.length; j++) {
+        if (clippedBasemapPatchesConnect(rows[i], rows[j])) unite(i, j);
+      }
+    }
+
+    const byRoot = new Map();
+    rows.forEach((row, index) => {
+      const key = root(index);
+      if (!byRoot.has(key)) byRoot.set(key, []);
+      byRoot.get(key).push(row);
+    });
+
+    return Array.from(byRoot.values());
+  }
+
+  function collapseClippedBasemapPatchGroup(rows = [], groupKey = "") {
+    if (!Array.isArray(rows) || rows.length <= 1) return rows[0] || null;
+    const rings = rows
+      .flatMap((patch) => patchRings(patch))
+      .map((ring) =>
+        (Array.isArray(ring) ? ring : [])
+          .map((point) => ({ lat: Number(point.lat), lng: Number(point.lng) }))
+          .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+      )
+      .filter((ring) => ring.length >= 3);
+    if (!rings.length) return rows[0] || null;
+
+    const sourceIds = rows
+      .map((patch) => String(patch.source_id || patch.metadata?.osm_id || patch.id || "").trim())
+      .filter(Boolean)
+      .sort();
+    const base = rows
+      .slice()
+      .sort((a, b) => ringsAreaM2(patchRings(b)) - ringsAreaM2(patchRings(a)))[0];
+    const id = patchIdFor("osm_clipped_group", `${groupKey}:${sourceIds.join("|")}`);
+    const kind = osmBoundaryKind(base?.metadata?.tags || {});
+    const sourceId = `basemap_clipped_group:${shortHash(sourceIds.join("|") || groupKey)}`;
+
+    return withDerivedPatchFields({
+      ...base,
+      id,
+      source_id: sourceId,
+      source_label: `Local map ${kind} boundary`,
+      boundary: rings[0],
+      geometry: {
+        type: "polygon",
+        rings
+      },
+      metadata: {
+        ...(base?.metadata || {}),
+        map_source: "basemap_pmtiles",
+        osm_id: sourceId,
+        osm_label_source: base?.metadata?.osm_label_source || "fallback",
+        clipped_to_tile: true,
+        clipped_group: true,
+        clipped_group_key: groupKey,
+        clipped_fragment_count: rows.length,
+        clipped_fragment_ids: sourceIds.slice(0, OSM_CLIPPED_GROUP_SOURCE_ID_LIMIT),
+        clipped_fragment_ids_truncated: sourceIds.length > OSM_CLIPPED_GROUP_SOURCE_ID_LIMIT
+      },
+      centroid: centroidForPoints(validRingPoints(rings)) || base?.centroid || null
+    });
+  }
+
+  function collapseClippedBasemapPatchRows(rows = [], debug = null) {
+    const grouped = new Map();
+    const passthrough = [];
+    const output = [];
+
+    (Array.isArray(rows) ? rows : []).forEach((patch) => {
+      const key = clippedBasemapPatchGroupKey(patch);
+      if (!key) {
+        passthrough.push(patch);
+        return;
+      }
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(patch);
+    });
+
+    grouped.forEach((groupRows, key) => {
+      clippedBasemapPatchComponents(groupRows).forEach((component) => {
+        const collapsed =
+          component.length > 1 ? collapseClippedBasemapPatchGroup(component, key) : component[0];
+        if (collapsed) output.push(collapsed);
+      });
+    });
+
+    if (debug) {
+      const clippedInput = Array.from(grouped.values()).reduce(
+        (sum, groupRows) => sum + groupRows.length,
+        0
+      );
+      const collapsedRows = output.filter((patch) => patch?.metadata?.clipped_group === true);
+      debug.clippedBasemapCollapse = {
+        clippedInputRows: clippedInput,
+        passthroughRows: passthrough.length,
+        collapsedRows: collapsedRows.length,
+        collapsedFragmentRows: collapsedRows.reduce(
+          (sum, patch) => sum + (Number(patch?.metadata?.clipped_fragment_count) || 0),
+          0
+        ),
+        outputRows: passthrough.length + output.length
+      };
+    }
+
+    return [...passthrough, ...output];
+  }
+
   function osmFeatureUsableAsPatchCandidate(feature, options = {}) {
     if (!feature || feature.closed === false) return false;
     if (
@@ -4177,8 +4565,9 @@
       .map((feature) => patchFromOsmFeature(feature, labelContext))
       .filter(Boolean)
       .filter((patch) => !savedIds.has(patch.id));
+    const collapsedPatchRows = collapseClippedBasemapPatchRows(patchRows, debug);
 
-    const rows = patchRows
+    const rows = collapsedPatchRows
       .filter((patch) => {
         if (!searchBounds?.isValid?.()) return true;
         const rings = patch.geometry?.rings || [patch.boundary];
@@ -4236,6 +4625,7 @@
           .filter(Boolean)
           .slice(0, 8),
         patchCandidates: patchRows.length,
+        collapsedPatchCandidates: collapsedPatchRows.length,
         inBoundsCandidates: rows.length,
         namedCandidates: namedRows.length,
         fallbackCandidates: withoutInheritedDuplicates.length - namedRows.length,

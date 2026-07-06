@@ -1,5 +1,8 @@
 (function () {
   const STORAGE_KEY = "gw_saved_locations_v1";
+  const PUBLIC_NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
+  const PUBLIC_NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
+  const NOMINATIM_MIN_REQUEST_INTERVAL_MS = 1100;
 
   let root = null;
   let pickerMap = null;
@@ -9,6 +12,8 @@
   let reverseTimer = null;
   let activeSearchController = null;
   let activeReverseController = null;
+  let lastNominatimRequestAt = 0;
+  let nominatimQueue = Promise.resolve();
   let suppressMapMove = false;
 
   function escapeHtml(value) {
@@ -388,8 +393,59 @@
     return String(window.GridWildExternalServices?.getOsmEndpoint?.(kind) || "").trim();
   }
 
+  function nominatimEndpoint(kind) {
+    if (window.GW_DISABLE_LOCATION_PICKER_GEOCODE === true) return "";
+    const configured = osmServiceEndpoint(kind);
+    if (configured) return configured;
+    return kind === "nominatimReverse" ? PUBLIC_NOMINATIM_REVERSE_URL : PUBLIC_NOMINATIM_SEARCH_URL;
+  }
+
+  function abortError() {
+    try {
+      return new window.DOMException("Aborted", "AbortError");
+    } catch {
+      const err = new Error("Aborted");
+      err.name = "AbortError";
+      return err;
+    }
+  }
+
+  function delayWithAbort(ms, signal) {
+    if (!ms || ms <= 0) return Promise.resolve();
+    if (signal?.aborted) return Promise.reject(abortError());
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        signal?.removeEventListener?.("abort", onAbort);
+        resolve();
+      }, ms);
+      function onAbort() {
+        clearTimeout(timer);
+        signal?.removeEventListener?.("abort", onAbort);
+        reject(abortError());
+      }
+      signal?.addEventListener?.("abort", onAbort, { once: true });
+    });
+  }
+
+  function waitForNominatimSlot(signal) {
+    const job = nominatimQueue
+      .catch(() => null)
+      .then(async () => {
+        const waitMs = Math.max(
+          0,
+          NOMINATIM_MIN_REQUEST_INTERVAL_MS - (Date.now() - lastNominatimRequestAt)
+        );
+        await delayWithAbort(waitMs, signal);
+        if (signal?.aborted) throw abortError();
+        lastNominatimRequestAt = Date.now();
+      });
+    nominatimQueue = job.catch(() => null);
+    return job;
+  }
+
   function geocodeUrl(query) {
-    const endpoint = osmServiceEndpoint("nominatimSearch");
+    const endpoint = nominatimEndpoint("nominatimSearch");
     if (!endpoint) return "";
     const params = new URLSearchParams({
       q: query,
@@ -401,7 +457,7 @@
   }
 
   function reverseUrl(lat, lng) {
-    const endpoint = osmServiceEndpoint("nominatimReverse");
+    const endpoint = nominatimEndpoint("nominatimReverse");
     if (!endpoint) return "";
     const params = new URLSearchParams({
       lat: String(lat),
@@ -484,10 +540,11 @@
       const url = geocodeUrl(query);
       if (!url) {
         renderResults([]);
-        setStatus("Search by coordinates until an OSM search mirror is configured.");
+        setStatus("Search by coordinates until address lookup is configured.");
         return;
       }
 
+      await waitForNominatimSlot(activeSearchController.signal);
       const response = await fetch(url, {
         signal: activeSearchController.signal,
         headers: { Accept: "application/json" }
@@ -516,6 +573,7 @@
         return;
       }
 
+      await waitForNominatimSlot(activeReverseController.signal);
       const response = await fetch(url, {
         signal: activeReverseController.signal,
         headers: { Accept: "application/json" }
