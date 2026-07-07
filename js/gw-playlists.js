@@ -99,6 +99,25 @@
       margin-top: 18px;
     }
 
+    .gw-playlist-dialog-status {
+      min-height: 16px;
+      margin-top: 10px;
+      color: rgba(239,230,211,0.70);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .gw-playlist-recipe-status {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(215,183,116,0.22);
+      background: rgba(0,0,0,0.18);
+      color: rgba(239,230,211,0.78);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
     .gw-playlist-primary-btn {
       border-color: rgba(240,209,138,0.42);
       background: linear-gradient(180deg, #f0d18a, #b8893e);
@@ -292,6 +311,15 @@
     return window.GridWildRecentINat?.getRecentObservations?.() || [];
   }
 
+  function showPlaylistToast(message) {
+    if (typeof window.showGridWildToast === "function") {
+      window.showGridWildToast(message);
+      return;
+    }
+
+    console.log("GridWild Wildlist:", message);
+  }
+
   function getObsThumbUrl(obs) {
     return obs?.photo_square_url || obs?.photo_url || obs?.photo_medium_url || "";
   }
@@ -366,6 +394,134 @@
     slots.forEach((slot) => observer.observe(slot));
   }
 
+  function openThemedDialog(options = {}) {
+    ensureStyles();
+
+    const modal = document.createElement("div");
+    modal.className = ["gw-playlist-backdrop", options.backdropClass || ""]
+      .filter(Boolean)
+      .join(" ");
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+
+    const bodyLines = Array.isArray(options.body) ? options.body : [options.body || ""];
+    const primaryLabel = options.primaryLabel || "OK";
+    const secondaryLabel = options.secondaryLabel || "";
+
+    modal.innerHTML = `
+      <div class="gw-playlist-modal gw-playlist-empty-dialog">
+        <div class="gw-playlist-empty-mark">${esc(options.mark || "*")}</div>
+        <div class="gw-playlist-empty-title">${esc(options.title || "Wildlist")}</div>
+        <div class="gw-playlist-empty-copy">
+          ${bodyLines.map((line) => `<div>${esc(line)}</div>`).join("")}
+        </div>
+        <div class="gw-playlist-dialog-status" data-dialog-status></div>
+        <div class="gw-playlist-dialog-actions">
+          ${
+            secondaryLabel
+              ? `<button class="gw-mini-btn" type="button" data-dialog-secondary>${esc(secondaryLabel)}</button>`
+              : ""
+          }
+          <button class="gw-mini-btn gw-playlist-primary-btn" type="button" data-dialog-primary>
+            ${esc(primaryLabel)}
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const primary = modal.querySelector("[data-dialog-primary]");
+    const secondary = modal.querySelector("[data-dialog-secondary]");
+    const status = modal.querySelector("[data-dialog-status]");
+    const close = () => modal.remove();
+    const setStatus = (message) => {
+      if (status) status.textContent = message || "";
+    };
+
+    secondary?.addEventListener("click", () => {
+      options.onSecondary?.();
+      close();
+    });
+
+    primary?.addEventListener("click", async () => {
+      if (!options.onPrimary) {
+        close();
+        return;
+      }
+
+      const oldText = primary.textContent;
+      primary.disabled = true;
+      if (secondary) secondary.disabled = true;
+      if (options.primaryBusyLabel) primary.textContent = options.primaryBusyLabel;
+
+      try {
+        const shouldClose = await options.onPrimary({ close, setStatus });
+        if (shouldClose !== false) close();
+      } catch (err) {
+        console.warn("GridWild Wildlist dialog action failed:", err);
+        setStatus(options.errorMessage || "Could not finish that action. Try again in a moment.");
+        primary.disabled = false;
+        if (secondary) secondary.disabled = false;
+        primary.textContent = oldText;
+      }
+    });
+
+    modal.addEventListener("click", (evt) => {
+      if (evt.target === modal && options.closeOnBackdrop !== false) close();
+    });
+
+    return modal;
+  }
+
+  function openThemedNotice(title, body) {
+    return openThemedDialog({
+      title,
+      body,
+      primaryLabel: "OK"
+    });
+  }
+
+  function getRecentObservationSyncUser() {
+    return (
+      window.__gwUser?.username ||
+      window.GridWildINatAuth?.getUsername?.() ||
+      window.__gwState?.player?.inat_login ||
+      "andrew2285"
+    );
+  }
+
+  function openRecentObservationSyncPrompt(options = {}) {
+    if (document.querySelector(".gw-playlist-sync-prompt")) return null;
+
+    return openThemedDialog({
+      backdropClass: "gw-playlist-sync-prompt",
+      title: "No local observations yet",
+      body: [
+        "Sync your iNaturalist observations to use observation recipes.",
+        "Or cancel and keep browsing Wildlist recipes."
+      ],
+      primaryLabel: "Sync Local Observations",
+      secondaryLabel: "Cancel",
+      primaryBusyLabel: "Syncing...",
+      async onPrimary({ setStatus }) {
+        const refresh = window.GridWildRecentINat?.refreshRecentObservations;
+        if (typeof refresh !== "function") {
+          setStatus("Observation sync is still loading.");
+          return false;
+        }
+
+        setStatus("Syncing local observations...");
+        await refresh(getRecentObservationSyncUser());
+        window.refreshGridWildMePanel?.();
+        options.onSynced?.(getRecentObs());
+        showPlaylistToast("Local observations synced.");
+        return true;
+      },
+      errorMessage: "Could not sync observations right now."
+    });
+  }
+
   const WILDLIST_RECIPES = [
     {
       id: "custom",
@@ -402,9 +558,10 @@
       title: "Recent Party",
       subtitle: "Build from recent party effort, route, and contributors.",
       icon: "👣",
-      placeholder: true
     }
   ];
+
+  const OBSERVATION_RECIPE_IDS = new Set(["today", "week", "mysteries", "leafhoppers"]);
 
   function compactObs(o) {
     return {
@@ -419,6 +576,12 @@
       iconic_taxon_name: o.iconic_taxon_name || "Unknown",
       genus_name: o.genus_name || "",
       uri: o.uri || null,
+      source: o.source || null,
+      source_observation_id: o.source_observation_id || null,
+      party_id: o.party_id || null,
+      party_title: o.party_title || "",
+      cell_key: o.cell_key || o.cellKey || "",
+      time_observed_at: o.time_observed_at || null,
       lat: Number.isFinite(Number(o.lat)) ? Number(o.lat) : null,
       lng: Number.isFinite(Number(o.lng)) ? Number(o.lng) : null,
       accuracy: Number.isFinite(Number(o.accuracy)) ? Number(o.accuracy) : null,
@@ -598,6 +761,8 @@
       snapshotObservations: playlist.snapshotObservations || [],
       visibility: playlist.visibility || "unlisted",
       coverObsId: playlist.coverObsId || null,
+      source: playlist.source || null,
+      sourceParty: playlist.sourceParty || null,
       createdAt: playlist.createdAt || now,
       updatedAt: now
     };
@@ -770,7 +935,7 @@
     selected = applyRecipeFilters(selected, filters);
 
     if (!selected.length) {
-      alert("No observations matched that recipe/filter combination.");
+      return null;
     }
 
     return savePlaylist({
@@ -783,24 +948,178 @@
     });
   }
 
-  function openPartyWildlistPlaceholder() {
-    const partyStore = JSON.parse(localStorage.getItem("gw_party_sessions_v1") || "[]");
+  function partySortTime(p) {
+    const raw = p?.endedAt || p?.completedAt || p?.startsAt || p?.createdAt || "";
+    const t = Date.parse(raw);
+    return Number.isFinite(t) ? t : 0;
+  }
 
-    alert(
-      [
-        "Party Wildlists are the next integration point.",
-        "",
-        `Found ${Array.isArray(partyStore) ? partyStore.length : 0} locally stored party sessions.`,
-        "",
-        "Next version will snapshot:",
-        "• party title",
-        "• participants",
-        "• start/end time",
-        "• route/path polyline",
-        "• contributed observations",
-        "• effort stats"
-      ].join("\n")
+  function partyEvidenceToObservation(row, report, index) {
+    const party = report?.party || {};
+    const draftId = String(row?.draftId || row?.draft_id || "").trim();
+    const inatMatch = draftId.match(/^inat:(\d+)$/i);
+    const observedAt =
+      row?.countedAt || party.endedAt || party.completedAt || party.startsAt || report?.exportedAt || "";
+    const observedDate = String(observedAt || "").slice(0, 10);
+    const taxon = row?.taxon || "Party observation";
+
+    return {
+      id: draftId ? `party:${party.id}:${draftId}` : `party:${party.id}:evidence:${index + 1}`,
+      source: "party",
+      source_observation_id: draftId || null,
+      party_id: party.id || null,
+      party_title: party.title || "",
+      taxon,
+      common_name: "",
+      scientific_name: taxon,
+      iconic_taxon_name: row?.iconicTaxon || row?.iconic_taxon || "Unknown",
+      observed_on: /^\d{4}-\d{2}-\d{2}/.test(observedDate) ? observedDate : null,
+      time_observed_at: observedAt || null,
+      uri: inatMatch ? `https://www.inaturalist.org/observations/${inatMatch[1]}` : null,
+      lat: Number.isFinite(Number(row?.lat)) ? Number(row.lat) : null,
+      lng: Number.isFinite(Number(row?.lng)) ? Number(row.lng) : null,
+      cell_key: row?.cellKey || row?.cell_key || "",
+      place_guess: party.locationLabel || ""
+    };
+  }
+
+  function partyWildlistDescription(report, count) {
+    const party = report?.party || {};
+    const parts = [
+      party.durationLabel ? `${party.durationLabel} party` : "Party effort",
+      Number.isFinite(Number(party.routeDistanceMeters))
+        ? `${Math.round(Number(party.routeDistanceMeters))} m route`
+        : "",
+      `${count} counted observation${count === 1 ? "" : "s"}`
+    ].filter(Boolean);
+
+    return parts.join(" - ");
+  }
+
+  function savePartyWildlistFromReport(report, options = {}) {
+    const party = report?.party || {};
+    let selected = (report?.evidence || [])
+      .map((row, index) => partyEvidenceToObservation(row, report, index))
+      .filter(Boolean);
+
+    selected = applyRecipeFilters(selected, options.filters || {});
+
+    if (!selected.length) {
+      openThemedNotice(
+        "No party observations available",
+        "This party does not have counted observations that match the current filters."
+      );
+      return null;
+    }
+
+    return createFromObservations(selected, {
+      title: options.title || `${party.title || "Party"} Wildlist`,
+      description: options.description || partyWildlistDescription(report, selected.length),
+      mode: "party",
+      template: "party_recent",
+      source: "party",
+      sourceParty: {
+        id: party.id || null,
+        title: party.title || "",
+        startsAt: party.startsAt || null,
+        endedAt: party.endedAt || null,
+        durationLabel: party.durationLabel || "",
+        routeDistanceMeters: party.routeDistanceMeters || 0
+      },
+      open: options.open
+    });
+  }
+
+  async function getPartyReportForWildlist(partyId, options = {}) {
+    const partyApi = window.GridWildParty;
+    if (!partyApi?.makePartyReportPayload || !partyId) return null;
+
+    let report = partyApi.makePartyReportPayload(partyId);
+    const shouldHydrate = options.force === true || !report || !(report.evidence || []).length;
+    if (shouldHydrate && typeof partyApi.hydratePartySnapshot === "function") {
+      try {
+        await partyApi.hydratePartySnapshot(partyId, { force: shouldHydrate });
+        report = partyApi.makePartyReportPayload(partyId);
+      } catch (err) {
+        console.warn("Could not hydrate party for Wildlist:", err);
+      }
+    }
+
+    return report;
+  }
+
+  async function createFromParty(partyId, options = {}) {
+    const report = await getPartyReportForWildlist(partyId, { force: options.force === true });
+    if (!report) {
+      openThemedNotice("Party unavailable", "GridWild could not load that party right now.");
+      return null;
+    }
+
+    return savePartyWildlistFromReport(report, options);
+  }
+
+  async function openRecentPartyWildlist(options = {}) {
+    if (!options || typeof options !== "object" || Array.isArray(options)) options = {};
+
+    const partyApi = window.GridWildParty;
+    if (!partyApi?.getAllParties) {
+      openThemedNotice("Party tools are loading", "Try again once the Party panel has finished loading.");
+      return null;
+    }
+
+    let parties = partyApi
+      .getAllParties()
+      .filter((p) => p?.id)
+      .sort((a, b) => partySortTime(b) - partySortTime(a));
+
+    if (!parties.length && window.GridWildPartyLive?.loadParty) {
+      try {
+        await window.GridWildPartyLive.loadParty({ forceHistory: true, forceNearby: true });
+        parties = partyApi
+          .getAllParties()
+          .filter((p) => p?.id)
+          .sort((a, b) => partySortTime(b) - partySortTime(a));
+      } catch (err) {
+        console.warn("Could not refresh parties for Wildlist:", err);
+      }
+    }
+
+    if (!parties.length) {
+      openThemedNotice(
+        "No recent party found",
+        "Start or join a party, then count observations to build a Party Wildlist."
+      );
+      return null;
+    }
+
+    const activeId = partyApi.getActivePartyId?.();
+    const ordered = parties.slice(0, 8).sort((a, b) => {
+      if (a.id === activeId) return -1;
+      if (b.id === activeId) return 1;
+
+      const aCount = Number(partyApi.countEvidenceForParty?.(a.id) || 0);
+      const bCount = Number(partyApi.countEvidenceForParty?.(b.id) || 0);
+      if (aCount !== bCount) return bCount - aCount;
+
+      return partySortTime(b) - partySortTime(a);
+    });
+
+    for (const party of ordered) {
+      const report = await getPartyReportForWildlist(party.id);
+      if ((report?.evidence || []).length) {
+        return savePartyWildlistFromReport(report, options);
+      }
+    }
+
+    openThemedNotice(
+      "No party observations available",
+      "Recent parties are visible, but none have counted observations for a Wildlist yet."
     );
+    return null;
+  }
+
+  function openPartyWildlistPlaceholder() {
+    return openRecentPartyWildlist();
   }
 
   function renderSummary() {
@@ -860,7 +1179,9 @@
     const preselectedIds = new Set((options.selectedIds || []).map(String));
 
     if (!obs.length) {
-      alert("Refresh Recent Observations first so GridWild has observations to build from.");
+      openRecentObservationSyncPrompt({
+        onSynced: () => openCustomBuilder(options)
+      });
       return;
     }
 
@@ -1084,6 +1405,19 @@
     });
   }
 
+  function updateRecipeObservationStatus(modal, message) {
+    const status = modal?.querySelector?.("#gwRecipeObservationStatus");
+    if (!status) return;
+
+    const count = getRecentObs().length;
+    status.style.display = "block";
+    status.textContent =
+      message ||
+      (count
+        ? `${count} local observation${count === 1 ? "" : "s"} available for recipes.`
+        : "No observations available yet. Sync local observations to use observation recipes.");
+  }
+
   function openCreateMenu() {
     ensureStyles();
 
@@ -1146,6 +1480,14 @@
         </label>
       </div>
 
+      <div
+        class="gw-playlist-recipe-status"
+        id="gwRecipeObservationStatus"
+        style="${obs.length ? "display:none;" : ""}"
+      >
+        No observations available yet. Sync local observations to use observation recipes.
+      </div>
+
       <div style="
         display:grid;
         grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
@@ -1162,7 +1504,6 @@
               text-align:left;
               cursor:pointer;
               min-height:118px;
-              ${r.placeholder ? "opacity:.72;" : ""}
             "
           >
             <div style="font-size:26px;margin-bottom:8px;">${esc(r.icon)}</div>
@@ -1172,15 +1513,6 @@
             <div class="gw-muted" style="font-size:11px;line-height:1.35;margin-top:5px;">
               ${esc(r.subtitle)}
             </div>
-            ${
-              r.placeholder
-                ? `
-              <div class="gw-muted" style="font-size:10px;margin-top:8px;">
-                placeholder
-              </div>
-            `
-                : ""
-            }
           </button>
         `
         ).join("")}
@@ -1193,31 +1525,64 @@
     modal.querySelector("#gwRecipeCloseBtn").onclick = () => modal.remove();
 
     modal.querySelectorAll(".gw-recipe-btn").forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         const recipeId = btn.dataset.recipeId;
 
         const taxonFilter = modal.querySelector("#gwRecipeTaxonFilter")?.value?.trim() || "";
         const photosOnly = !!modal.querySelector("#gwRecipePhotosOnly")?.checked;
         const maxObs = Number(modal.querySelector("#gwRecipeMaxObs")?.value || 60);
-
-        modal.remove();
-
-        if (recipeId === "custom") {
-          return openCustomBuilder();
-        }
-
-        if (recipeId === "party_recent") {
-          return openPartyWildlistPlaceholder();
-        }
-
-        const playlist = buildTemplatePlaylistWithFilters(recipeId, {
+        const filters = {
           taxonFilter,
           photosOnly,
           maxObs
-        });
+        };
 
-        renderSummary();
-        openViewer(playlist.id);
+        btn.disabled = true;
+
+        try {
+          if (recipeId === "custom") {
+            if (!getRecentObs().length) {
+              updateRecipeObservationStatus(modal);
+              openRecentObservationSyncPrompt({
+                onSynced: () => updateRecipeObservationStatus(modal)
+              });
+              return;
+            }
+
+            modal.remove();
+            openCustomBuilder();
+            return;
+          }
+
+          if (recipeId === "party_recent") {
+            modal.remove();
+            await openRecentPartyWildlist({ filters });
+            return;
+          }
+
+          if (OBSERVATION_RECIPE_IDS.has(recipeId) && !getRecentObs().length) {
+            updateRecipeObservationStatus(modal);
+            openRecentObservationSyncPrompt({
+              onSynced: () => updateRecipeObservationStatus(modal)
+            });
+            return;
+          }
+
+          const playlist = buildTemplatePlaylistWithFilters(recipeId, filters);
+          if (!playlist) {
+            updateRecipeObservationStatus(
+              modal,
+              "No observations matched that recipe and filter combination."
+            );
+            return;
+          }
+
+          modal.remove();
+          renderSummary();
+          openViewer(playlist.id);
+        } finally {
+          if (modal.isConnected) btn.disabled = false;
+        }
       };
     });
 
@@ -1226,11 +1591,10 @@
     };
 
     if (!obs.length) {
-      // Allow modal to open, but warn once.
       setTimeout(() => {
-        alert(
-          "Recent observations are empty. Refresh Recent Observations before using observation-based recipes."
-        );
+        openRecentObservationSyncPrompt({
+          onSynced: () => updateRecipeObservationStatus(modal)
+        });
       }, 100);
     }
   }
@@ -2018,6 +2382,8 @@
       template: options.template || null,
       observationIds: selected.map((o) => o.id),
       snapshotObservations: selected.map(compactObs),
+      source: options.source || null,
+      sourceParty: options.sourceParty || null,
       coverObsId:
         options.coverObsId ||
         selected.find((o) => o.photo_medium_url || o.photo_square_url || o.photo_url)?.id ||
@@ -2054,8 +2420,10 @@
     openCustomBuilderFromPlaylist,
     addObservationToWildlist,
     createFromObservations,
+    createFromParty,
     openSlideshow,
     buildTemplatePlaylistWithFilters,
+    openRecentPartyWildlist,
     openPartyWildlistPlaceholder
   };
 })();

@@ -184,7 +184,7 @@ function dispatchGridWildBootstrapUnavailable(err) {
 }
 
 const GRIDWILD_ONLINE_BOOT_DELAY_MS = 2500;
-const GRIDWILD_ONLINE_BOOT_TIMEOUT_MS = 3500;
+const GRIDWILD_ONLINE_BOOT_TIMEOUT_MS = 9000;
 let gwOnlineBootstrapPromise = null;
 let gwOnlineBootstrapScheduled = false;
 

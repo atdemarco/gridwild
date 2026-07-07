@@ -271,11 +271,16 @@
     return window.__gwState.partySnapshotsById[party.id];
   }
 
-  async function hydratePartySnapshot(id) {
+  async function hydratePartySnapshot(id, options = {}) {
     if (!id) return false;
 
     const existing = window.__gwState?.partySnapshotsById?.[id];
-    if (existing?.party && Array.isArray(existing.evidence) && Array.isArray(existing.route)) {
+    if (
+      options.force !== true &&
+      existing?.party &&
+      Array.isArray(existing.evidence) &&
+      Array.isArray(existing.route)
+    ) {
       return true;
     }
 
@@ -1115,6 +1120,66 @@
     } else {
       navigator.clipboard?.writeText(url);
       toast("🔗 Static report link copied");
+    }
+  }
+
+  function partyINatSyncToast(result = {}) {
+    const imported = Number(result.imported || 0);
+    if (imported > 0) {
+      return `Synced ${imported} iNaturalist observation${imported === 1 ? "" : "s"}`;
+    }
+
+    const linked = Number(result.linked_members || 0);
+    if (!linked) return "No linked iNaturalist accounts in this party";
+
+    const matched = Number(result.matched || 0);
+    if (matched > 0) return "Those party-time iNaturalist observations were already synced";
+
+    return "No new party-time iNaturalist observations found";
+  }
+
+  async function syncPartyINatObservationsForRecap(id, root, closeRecap) {
+    if (!id) return false;
+    if (!window.GridWildAPI?.syncPartyINatObservations) {
+      toast("iNaturalist party sync is unavailable");
+      return false;
+    }
+
+    const button = root?.querySelector?.("#gwPartySyncRecapBtn");
+    const oldText = button?.textContent || "Sync";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Syncing...";
+    }
+
+    try {
+      const result = await window.GridWildAPI.syncPartyINatObservations(id);
+      const route = loadPartyRoutes()[id] || [];
+      if (result?.party?.id) {
+        rememberPartySnapshot({ ...result, route });
+      }
+      await hydratePartySnapshot(id, { force: true });
+
+      window.GridWildPartyLive?.refreshPartySheet?.();
+      refreshMapBeacon();
+      scheduleActivePartyHudRender();
+      toast(partyINatSyncToast(result));
+
+      closeRecap?.();
+      openPartyRecap(id);
+      return true;
+    } catch (err) {
+      console.error("Could not sync party iNaturalist observations:", err);
+      toast(
+        err?.statusCode === 429 || /429|too many/i.test(String(err?.message || ""))
+          ? "iNaturalist is rate limiting; try again later"
+          : "Could not sync iNaturalist observations"
+      );
+      if (button) {
+        button.disabled = false;
+        button.textContent = oldText;
+      }
+      return false;
     }
   }
 
@@ -2258,6 +2323,8 @@
 
       <div class="gw-party-modal-actions">
         <button class="gw-mini-btn" data-party-close>Close</button>
+        <button class="gw-mini-btn" id="gwPartySyncRecapBtn">Sync</button>
+        <button class="gw-mini-btn" id="gwPartyWildlistRecapBtn">Wildlist</button>
         <button class="gw-mini-btn" id="gwPartyShareRecapBtn">Share</button>
         ${
           getActivePartyId() === id
@@ -2285,6 +2352,38 @@
 
     root.querySelector("#gwPartyShareRecapBtn")?.addEventListener("click", () => {
       shareParty(id);
+    });
+
+    root.querySelector("#gwPartySyncRecapBtn")?.addEventListener("click", () => {
+      syncPartyINatObservationsForRecap(id, root, closeRecap);
+    });
+
+    root.querySelector("#gwPartyWildlistRecapBtn")?.addEventListener("click", async (evt) => {
+      const btn = evt.currentTarget;
+      if (!window.GridWildPlaylists?.createFromParty) {
+        toast("Wildlists are unavailable");
+        return;
+      }
+
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Building...";
+
+      try {
+        const playlist = await window.GridWildPlaylists.createFromParty(id, {
+          force: false,
+          open: true
+        });
+        if (playlist) toast("Party Wildlist created");
+      } catch (err) {
+        console.warn("Could not create Party Wildlist:", err);
+        toast("Could not create Party Wildlist");
+      } finally {
+        if (root.isConnected) {
+          btn.disabled = false;
+          btn.textContent = oldText;
+        }
+      }
     });
 
     root.querySelector("#gwPartyEndRecapBtn")?.addEventListener("click", () => {
@@ -2716,6 +2815,13 @@
     if (type === "player_left") return "Player left";
     if (type === "party_ended") return "Party ended";
     if (type === "evidence_counted") return "Observation counted";
+    if (type === "inat_sync") {
+      const imported = Number(e?.payload?.imported || 0);
+      const linked = Number(e?.payload?.linked_members || 0);
+      return imported
+        ? `Synced ${imported} iNaturalist observation${imported === 1 ? "" : "s"} from ${linked || 1} linked member${linked === 1 ? "" : "s"}`
+        : "Checked linked iNaturalist accounts";
+    }
 
     return type.replaceAll("_", " ");
   }
