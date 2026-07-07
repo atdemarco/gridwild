@@ -579,13 +579,14 @@ window.GridWildAPI = {
     });
   },
 
-  async addPartyRoutePoint(partyId, lat, lng, accuracyMeters = null) {
+  async addPartyRoutePoint(partyId, lat, lng, accuracyMeters = null, createdAt = null) {
     return postFunction("add-party-route-point", {
       player_id: this.getPlayerId(),
       party_id: partyId,
       lat,
       lng,
-      accuracy_meters: accuracyMeters
+      accuracy_meters: accuracyMeters,
+      created_at: createdAt
     });
   },
 
