@@ -184,7 +184,7 @@ function dispatchGridWildBootstrapUnavailable(err) {
 }
 
 const GRIDWILD_ONLINE_BOOT_DELAY_MS = 2500;
-const GRIDWILD_ONLINE_BOOT_TIMEOUT_MS = 3500;
+const GRIDWILD_ONLINE_BOOT_TIMEOUT_MS = 9000;
 let gwOnlineBootstrapPromise = null;
 let gwOnlineBootstrapScheduled = false;
 
@@ -1554,6 +1554,10 @@ window.GridWildHudHighContrast = (function () {
   function sync() {
     const btn = button();
     const enabled = window.__gwState?.highContrastLensEnabled === true;
+    document.documentElement.classList.toggle(
+      "gw-heat-contrast-underlay",
+      enabled
+    );
     if (!btn) return;
 
     btn.classList.toggle("is-on", enabled);

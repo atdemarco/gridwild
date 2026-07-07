@@ -21,7 +21,7 @@ const DEFAULT_PROFILE_INPUT = path.join(
 const DEFAULT_OUT_DIR = path.join(__dirname, "..", "assets", "playable_taxonomy");
 const DEFAULT_OCCURRENCE_INPUT =
   "C:\\Users\\ad1470\\Desktop\\gridwild\\world\\parquet\\occurrence_silver_v001";
-const DEFAULT_VERSION = "playable-taxa-score-v001";
+const DEFAULT_VERSION = "playable-taxa-score-v002";
 
 const SCORE_WEIGHTS = {
   identifiability: 0.3,
@@ -1239,6 +1239,9 @@ function storageAction({ taxon, stats, score, evidence, args }) {
   const collapseScore = toNumber(args["min-collapse-score"], 38);
   const minOccurrences = toNumber(args["min-occurrences"], 3);
   const speciesMode = taxon.speciesMode || "";
+  const rank = String(taxon.rank || "").toLowerCase();
+  const speciesModeBlocksBeginner =
+    rank === "species" && (speciesMode === "discouraged" || speciesMode === "hidden");
   const reasonCodes = [];
 
   if (occurrenceCount <= 0) reasonCodes.push("no_occurrence_evidence");
@@ -1246,10 +1249,14 @@ function storageAction({ taxon, stats, score, evidence, args }) {
   if (taxon.candidateStatus === "needs_filter") reasonCodes.push("needs_local_filter");
   if (evidence.validationReliability < 35) reasonCodes.push("low_validation_reliability");
   if (!taxon.commonName && taxon.rank === "species") reasonCodes.push("no_common_name");
+  if (rank === "species" && speciesMode === "discouraged") {
+    reasonCodes.push("species_level_discouraged");
+  }
+  if (rank === "species" && speciesMode === "hidden") reasonCodes.push("species_level_hidden");
 
   let mode = "drop";
-  if (occurrenceCount >= minOccurrences && score >= keepScore && speciesMode !== "hidden") {
-    mode = speciesMode === "discouraged" ? "developer_only" : "keep";
+  if (occurrenceCount >= minOccurrences && score >= keepScore && !speciesModeBlocksBeginner) {
+    mode = "keep";
   } else if (occurrenceCount >= minOccurrences && score >= developerScore) {
     mode = "developer_only";
   } else if (occurrenceCount >= minOccurrences && score >= collapseScore) {
@@ -1282,8 +1289,47 @@ function storageAction({ taxon, stats, score, evidence, args }) {
   };
 }
 
+function lineageTargetForRank(taxon, targetRank) {
+  const rank = String(targetRank || "").toLowerCase();
+  if (rank === "genus" && taxon.lineage?.genus) {
+    return {
+      rank: "genus",
+      key: taxon.parentTaxonKey || taxon.lineage.genus,
+      displayName: taxon.lineage.genus
+    };
+  }
+  if (rank === "family" && taxon.lineage?.family) {
+    return {
+      rank: "family",
+      key: taxon.lineage.family,
+      displayName: taxon.lineage.family
+    };
+  }
+  if (rank === "order" && taxon.lineage?.order) {
+    return {
+      rank: "order",
+      key: taxon.lineage.order,
+      displayName: taxon.lineage.order
+    };
+  }
+  if (rank === "class" && taxon.lineage?.class) {
+    return {
+      rank: "class",
+      key: taxon.lineage.class,
+      displayName: taxon.lineage.class
+    };
+  }
+  return null;
+}
+
 function collapseTargetFor(taxon) {
   const rank = String(taxon.rank || "").toLowerCase();
+  const endpointRank = String(taxon.endpointRank || "").toLowerCase();
+  const endpointComparison = compareRanks(rank, endpointRank);
+  if (endpointComparison != null && endpointComparison > 0) {
+    const endpointTarget = lineageTargetForRank(taxon, endpointRank);
+    if (endpointTarget) return endpointTarget;
+  }
   if (rank === "species" && taxon.parentTaxonKey && taxon.lineage?.genus) {
     return {
       rank: "genus",
@@ -1503,7 +1549,7 @@ function main() {
   const evidenceScale = args["evidence-scale"] === "global" ? "global" : "local";
   const globalLimitApplied = Math.max(0, Number.parseInt(args.limit || "0", 10) || 0) > 0;
   const scoringModel = {
-    name: "taxon_level_playability_heuristic_v001",
+    name: "taxon_level_playability_heuristic_v002",
     score_weights: weights,
     evidence_scale: evidenceScale,
     recent_since_year: recentSinceYear,
@@ -1517,6 +1563,8 @@ function main() {
     notes: [
       "Scores lower taxa with the same five conceptual components as curated playable groups.",
       "Per-taxon heuristics combine profile priors, common-name signal, rank fit, species-mode policy, sibling crowding, and occurrence evidence.",
+      "Species-mode beginner demotions apply only to species-rank taxa, so family/genus beginner endpoints can be kept when evidence supports them.",
+      "Collapse targets prefer the configured beginner endpoint rank when the raw taxon is more specific than that endpoint.",
       "GBIF backbone supplies taxonomy; occurrence evidence supplies local/commonness support.",
       "iNaturalist-specific human identifiability signals are intentionally left for cached future enrichment."
     ]

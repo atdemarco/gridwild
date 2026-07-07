@@ -12,3 +12,7 @@ assets/playable_taxonomy/generated_playable_taxa.json
 assets/playable_taxonomy/scored_playable_taxa.json
 assets/playable_taxonomy/*.duckdb
 assets/playable_taxonomy/*.parquet
+
+# Generated OSM/Protomaps basemap mirrors belong on R2/CDN.
+assets/osm_basemap/
+assets/osm_context/

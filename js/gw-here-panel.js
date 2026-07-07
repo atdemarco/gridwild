@@ -1,7 +1,7 @@
 (function () {
   const HERE_RADIUS_CELLS = 7;
   const MAX_TAXA_CELLS = 225;
-  const MAX_SELECTION_TAXA_CELLS = 1600;
+  const MAX_SELECTION_TAXA_CELLS = 2400;
   const TAXON_COLORS = [
     "#79c86b",
     "#e0b24d",
@@ -30,6 +30,8 @@
   const HERE_ELEVATION_LOCAL_Z_SCALE_M = 34;
   const HERE_ELEVATION_LOCAL_Z_MIN = -0.9;
   const HERE_ELEVATION_LOCAL_Z_MAX = 3.6;
+  const HERE_3D_QUEST_TARGET_MAX_CELLS = 420;
+  const HERE_3D_QUEST_TARGET_MAX_REGIONS = 24;
   const HERE_LIST_VIEWS = [
     { id: "common", label: "Common Taxa" },
     { id: "rare", label: "Rare Taxa" },
@@ -42,10 +44,16 @@
   let hereMap3dPitchDeg = 48;
   let hereMap3dZoom = 1;
   let hereMap3dDrag = null;
+  let hereMap3dMotionUntil = 0;
+  let hereMap3dMotionSettleTimer = null;
   let hereInsetPanDrag = null;
   const hereInsetPointers = new Map();
   const hereMap3dPointers = new Map();
+  let hereMapOnlyRefreshTimer = null;
   let hereListView = "common";
+  let genusCodexScriptPromise = null;
+  let hereCodexOpeningGenus = "";
+  let hereCodexOpeningToken = 0;
   let hereElevationCacheLoaded = false;
   let hereElevationFetchInFlight = false;
   let hereElevationFetchQueued = false;
@@ -56,6 +64,7 @@
   const hereElevationCache = new Map();
   const hereElevationPending = new Map();
   const hereElevationRequestedAt = new Map();
+  const here3dOsmFallbackRequestedAt = new Map();
   const hereObservationDownload = {
     busy: false,
     progressText: "",
@@ -75,8 +84,10 @@
     minEffectiveZoom: 0.22,
     hudFovWideZoom: 17,
     hudFovCloseZoom: 19,
+    hudFovMaxCameraScale: 2.05,
+    hudFovCameraScaleStrength: 0.22,
     baseViewCells: HERE_RADIUS_CELLS * 2 + 1,
-    maxAutoViewCells: 89,
+    maxAutoViewCells: 101,
     detailRadiusCells: HERE_RADIUS_CELLS * 2.6,
     expandedDetailRadiusCells: HERE_RADIUS_CELLS * 3.3,
     linearDetailRadiusCells: HERE_RADIUS_CELLS * 2.9,
@@ -98,9 +109,86 @@
   const HERE_3D_BUILDING_MAX_POINTS = 34;
   const HERE_3D_BARRIER_MAX_EDGES = 160;
   const HERE_3D_GROUND_DETAIL_MAX_MARKS = 180;
+  const HERE_3D_GROUND_MAX_QUADS = 720;
+  const HERE_3D_TREE_MAX_SPRITES = 72;
   const HERE_SKY_REFRESH_MS = 1000 * 60;
   const HERE_3D_OSM_MAX_REQUEST_CELLS =
     HERE_3D_CAMERA.maxAutoViewCells * HERE_3D_CAMERA.maxAutoViewCells;
+  const HERE_3D_OSM_FALLBACK_COOLDOWN_MS = 1000 * 12;
+  const HERE_3D_FEATURE_TIERS = {
+    close: {
+      id: "close",
+      maxSpanCells: 45,
+      fetchProfile: "detail",
+      includeCellPriors: true,
+      showBuildings: true,
+      showBarriers: true,
+      showGroundDetails: true,
+      showLinear: true,
+      showTrails: true,
+      showRoadLabels: true,
+      showPlaceLabels: true,
+      showTrees: true,
+      showPatchLabels: true,
+      maxHabitatFeatures: HERE_3D_HABITAT_MAX_FEATURES,
+      maxHabitatPoints: 88,
+      maxWaterFeatures: HERE_3D_WATER_MAX_FEATURES,
+      maxWaterPoints: 100,
+      maxLinearFeatures: 90,
+      maxLinearSegments: 180,
+      buildingScale: 1,
+      treeScale: 1,
+      maxOsmCells: 61 * 61
+    },
+    mid: {
+      id: "mid",
+      maxSpanCells: 89,
+      fetchProfile: "detail",
+      includeCellPriors: true,
+      showBuildings: true,
+      showBarriers: true,
+      showGroundDetails: true,
+      showLinear: true,
+      showTrails: true,
+      showRoadLabels: true,
+      showPlaceLabels: true,
+      showTrees: true,
+      showPatchLabels: false,
+      maxHabitatFeatures: 76,
+      maxHabitatPoints: 76,
+      maxWaterFeatures: 72,
+      maxWaterPoints: 84,
+      maxLinearFeatures: 110,
+      maxLinearSegments: 190,
+      buildingScale: 0.42,
+      treeScale: 0.72,
+      maxOsmCells: 95 * 95
+    },
+    wide: {
+      id: "wide",
+      maxSpanCells: HERE_3D_CAMERA.maxAutoViewCells,
+      fetchProfile: "detail",
+      includeCellPriors: false,
+      showBuildings: false,
+      showBarriers: false,
+      showGroundDetails: false,
+      showLinear: true,
+      showTrails: true,
+      showRoadLabels: true,
+      showPlaceLabels: true,
+      showTrees: true,
+      showPatchLabels: false,
+      maxHabitatFeatures: 92,
+      maxHabitatPoints: 58,
+      maxWaterFeatures: 86,
+      maxWaterPoints: 64,
+      maxLinearFeatures: 72,
+      maxLinearSegments: 112,
+      buildingScale: 0,
+      treeScale: 0.28,
+      maxOsmCells: HERE_3D_OSM_MAX_REQUEST_CELLS
+    }
+  };
 
   function gridApi() {
     return window.GridWildGrid;
@@ -684,6 +772,30 @@
         cursor: pointer;
       }
 
+      .gw-here-inline-link.is-loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        color: #f0d18a;
+        cursor: progress;
+        text-decoration: none;
+      }
+
+      .gw-here-inline-link:disabled {
+        opacity: 0.9;
+        pointer-events: none;
+      }
+
+      .gw-here-inline-spinner {
+        width: 0.78em;
+        height: 0.78em;
+        flex: 0 0 auto;
+        border: 1.3px solid rgba(240,209,138,0.26);
+        border-top-color: #f0d18a;
+        border-radius: 999px;
+        animation: gwHereInlineSpin 720ms linear infinite;
+      }
+
       .gw-here-inline-link:hover {
         color: #f0d18a;
         text-decoration: underline;
@@ -962,6 +1074,16 @@
 
       @keyframes gw-selection-dash {
         to { stroke-dashoffset: -22; }
+      }
+
+      @keyframes gwHereInlineSpin {
+        to { transform: rotate(360deg); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .gw-here-inline-spinner {
+          animation: none;
+        }
       }
 
       @media (max-width: 760px) {
@@ -1263,7 +1385,7 @@
   }
 
   function renderMiniMapOsm(bounds, cellSize) {
-    const features = window.GridWildOsmFeaturesLayer?.getFeatures?.() || {};
+    const features = window.GridWildOsmFeaturesLayer?.getFeatures?.({ includeDetail: true }) || {};
     const showParks = window.__gwState?.showOsmParks ?? true;
     const showWater = window.__gwState?.showOsmWater ?? true;
     const showRoads = window.__gwState?.showOsmRoads ?? true;
@@ -1960,7 +2082,7 @@
   }
 
   function normalizeDeg(value) {
-    return ((Number(value) || 0) % 360 + 360) % 360;
+    return (((Number(value) || 0) % 360) + 360) % 360;
   }
 
   function signedAngleDeg(fromDeg, toDeg) {
@@ -2005,8 +2127,7 @@
   function rightAscension(eclipticLon, eclipticLat) {
     const obliquity = degToRad(23.4397);
     return Math.atan2(
-      Math.sin(eclipticLon) * Math.cos(obliquity) -
-        Math.tan(eclipticLat) * Math.sin(obliquity),
+      Math.sin(eclipticLon) * Math.cos(obliquity) - Math.tan(eclipticLat) * Math.sin(obliquity),
       Math.cos(eclipticLon)
     );
   }
@@ -2207,7 +2328,7 @@
           </linearGradient>
           <radialGradient id="gwHereSunsetGlow" cx="${glowX}" cy="${glowY}" r="${(height * 0.46).toFixed(1)}" gradientUnits="userSpaceOnUse">
             <stop offset="0" stop-color="rgba(255,193,104,${(0.48 + theme.sunsetGlow * 0.34).toFixed(3)})"></stop>
-            <stop offset="0.42" stop-color="rgba(224,103,82,${(0.20 + theme.sunsetGlow * 0.24).toFixed(3)})"></stop>
+            <stop offset="0.42" stop-color="rgba(224,103,82,${(0.2 + theme.sunsetGlow * 0.24).toFixed(3)})"></stop>
             <stop offset="1" stop-color="rgba(224,103,82,0)"></stop>
           </radialGradient>
         `,
@@ -2233,12 +2354,18 @@
     return span;
   }
 
+  function smoothStep01(value) {
+    const t = clamp(value, 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
   function here3dHudFovState(selectedContext) {
     const baseCells = HERE_3D_CAMERA.baseViewCells;
     if (selectedContext) {
       return {
         spanCells: baseCells,
         scale: 1,
+        coverageScale: 1,
         expanded: false
       };
     }
@@ -2249,17 +2376,36 @@
     const t = Number.isFinite(zoom)
       ? clamp((HERE_3D_CAMERA.hudFovCloseZoom - zoom) / zoomRange, 0, 1)
       : 0;
+    const eased = smoothStep01(t);
     const spanCells = oddCellSpan(
-      baseCells + (HERE_3D_CAMERA.maxAutoViewCells - baseCells) * t,
+      baseCells + (HERE_3D_CAMERA.maxAutoViewCells - baseCells) * eased,
       baseCells,
       HERE_3D_CAMERA.maxAutoViewCells
+    );
+    const coverageScale = spanCells / baseCells;
+    const cameraScale = clamp(
+      1 + (coverageScale - 1) * HERE_3D_CAMERA.hudFovCameraScaleStrength,
+      1,
+      HERE_3D_CAMERA.hudFovMaxCameraScale
     );
 
     return {
       spanCells,
-      scale: spanCells / baseCells,
+      scale: cameraScale,
+      coverageScale,
       expanded: spanCells > baseCells
     };
+  }
+
+  function here3dFeatureTierFor(hudFov = here3dHudFovState(null)) {
+    const spanCells = Number(hudFov?.spanCells) || HERE_3D_CAMERA.baseViewCells;
+    if (spanCells <= HERE_3D_FEATURE_TIERS.close.maxSpanCells) {
+      return HERE_3D_FEATURE_TIERS.close;
+    }
+    if (spanCells <= HERE_3D_FEATURE_TIERS.mid.maxSpanCells) {
+      return HERE_3D_FEATURE_TIERS.mid;
+    }
+    return HERE_3D_FEATURE_TIERS.wide;
   }
 
   function squareBoundsAround(bounds, spanCells) {
@@ -2275,7 +2421,11 @@
     };
   }
 
-  function here3dRenderBoundsFor(bounds, selectedContext, hudFov = here3dHudFovState(selectedContext)) {
+  function here3dRenderBoundsFor(
+    bounds,
+    selectedContext,
+    hudFov = here3dHudFovState(selectedContext)
+  ) {
     if (!bounds) return null;
     return hudFov.expanded ? squareBoundsAround(bounds, hudFov.spanCells) : bounds;
   }
@@ -2640,12 +2790,15 @@
 
     const immersive = options.immersive === true;
     const hudFov = here3dHudFovState(selectedContext);
+    const featureTier = here3dFeatureTierFor(hudFov);
+    const lightweightMotion = options.lightweightMotion === true || here3dUsesLightweightMotion();
     const renderBounds = here3dRenderBoundsFor(bounds, selectedContext, hudFov);
     const cells = api.cellsForBounds(renderBounds);
     const selectedBounds = selectionBounds(selectedContext);
     const selectedKeys = selectionKeySet(selectedContext);
     const { w, h } = here3dFrameSize(immersive);
     const gridSizeM = Number(api.gridSizeM) || 1;
+    const renderLatLngBounds = api.boundsToLatLngBounds?.(renderBounds) || null;
     const widthCells = renderBounds.maxIx - renderBounds.minIx + 1;
     const heightCells = renderBounds.maxIy - renderBounds.minIy + 1;
     const userCell = api.currentUserCell?.();
@@ -2784,6 +2937,304 @@
       return Math.hypot(ix - (origin.ix + 0.5), iy - (origin.iy + 0.5));
     }
 
+    function questCellKey(ix, iy) {
+      return `${Math.floor(Number(ix))},${Math.floor(Number(iy))}`;
+    }
+
+    function questTargetCellsFor3d(target) {
+      if (!target || target.mode === "anywhere") return [];
+
+      const rawCells =
+        target.mode === "target_set"
+          ? Array.isArray(target.cells)
+            ? target.cells
+            : []
+          : Number.isFinite(Number(target.ix)) && Number.isFinite(Number(target.iy))
+            ? (() => {
+                const radius = Math.max(
+                  0,
+                  Math.min(10, Math.round(Number(target.radiusCells) || 0))
+                );
+                const out = [];
+                for (let iy = Number(target.iy) - radius; iy <= Number(target.iy) + radius; iy++) {
+                  for (
+                    let ix = Number(target.ix) - radius;
+                    ix <= Number(target.ix) + radius;
+                    ix++
+                  ) {
+                    out.push({ ix, iy });
+                  }
+                }
+                return out;
+              })()
+            : [];
+
+      const cells = [];
+      const seen = new Set();
+      for (const cell of rawCells) {
+        const ix = Math.floor(Number(cell?.ix));
+        const iy = Math.floor(Number(cell?.iy));
+        if (!Number.isFinite(ix) || !Number.isFinite(iy)) continue;
+        if (
+          ix < renderBounds.minIx ||
+          ix > renderBounds.maxIx ||
+          iy < renderBounds.minIy ||
+          iy > renderBounds.maxIy
+        ) {
+          continue;
+        }
+
+        const key = questCellKey(ix, iy);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        cells.push({
+          ix,
+          iy,
+          key,
+          distance: distanceFromCamera(ix + 0.5, iy + 0.5)
+        });
+      }
+
+      return cells
+        .sort((a, b) => a.distance - b.distance || a.key.localeCompare(b.key))
+        .slice(0, HERE_3D_QUEST_TARGET_MAX_CELLS);
+    }
+
+    function contiguousQuestTargetRegions(cells = []) {
+      const byKey = new Map(cells.map((cell) => [cell.key, cell]));
+      const visited = new Set();
+      const regions = [];
+      const neighbors = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1]
+      ];
+
+      for (const start of cells) {
+        if (visited.has(start.key)) continue;
+
+        const queue = [start];
+        const regionCells = [];
+        visited.add(start.key);
+
+        for (let i = 0; i < queue.length; i++) {
+          const cell = queue[i];
+          regionCells.push(cell);
+
+          for (const [dx, dy] of neighbors) {
+            const key = questCellKey(cell.ix + dx, cell.iy + dy);
+            const next = byKey.get(key);
+            if (!next || visited.has(key)) continue;
+            visited.add(key);
+            queue.push(next);
+          }
+        }
+
+        let minIx = Infinity;
+        let maxIx = -Infinity;
+        let minIy = Infinity;
+        let maxIy = -Infinity;
+        let sumX = 0;
+        let sumY = 0;
+        const keySet = new Set();
+
+        regionCells.forEach((cell) => {
+          minIx = Math.min(minIx, cell.ix);
+          maxIx = Math.max(maxIx, cell.ix);
+          minIy = Math.min(minIy, cell.iy);
+          maxIy = Math.max(maxIy, cell.iy);
+          sumX += cell.ix + 0.5;
+          sumY += cell.iy + 0.5;
+          keySet.add(cell.key);
+        });
+
+        const cx = sumX / Math.max(1, regionCells.length);
+        const cy = sumY / Math.max(1, regionCells.length);
+        regions.push({
+          cells: regionCells,
+          keySet,
+          minIx,
+          maxIx,
+          minIy,
+          maxIy,
+          cx,
+          cy,
+          distance: distanceFromCamera(cx, cy)
+        });
+      }
+
+      return regions
+        .sort((a, b) => b.cells.length - a.cells.length || a.distance - b.distance)
+        .slice(0, HERE_3D_QUEST_TARGET_MAX_REGIONS);
+    }
+
+    function renderQuestRegionBoundary(region) {
+      const segments = [];
+      const edges = [
+        {
+          neighbor: (cell) => questCellKey(cell.ix, cell.iy - 1),
+          a: (cell) => ({ ix: cell.ix, iy: cell.iy }),
+          b: (cell) => ({ ix: cell.ix + 1, iy: cell.iy })
+        },
+        {
+          neighbor: (cell) => questCellKey(cell.ix + 1, cell.iy),
+          a: (cell) => ({ ix: cell.ix + 1, iy: cell.iy }),
+          b: (cell) => ({ ix: cell.ix + 1, iy: cell.iy + 1 })
+        },
+        {
+          neighbor: (cell) => questCellKey(cell.ix, cell.iy + 1),
+          a: (cell) => ({ ix: cell.ix + 1, iy: cell.iy + 1 }),
+          b: (cell) => ({ ix: cell.ix, iy: cell.iy + 1 })
+        },
+        {
+          neighbor: (cell) => questCellKey(cell.ix - 1, cell.iy),
+          a: (cell) => ({ ix: cell.ix, iy: cell.iy + 1 }),
+          b: (cell) => ({ ix: cell.ix, iy: cell.iy })
+        }
+      ];
+
+      for (const cell of region.cells) {
+        for (const edge of edges) {
+          if (region.keySet.has(edge.neighbor(cell))) continue;
+          const a = edge.a(cell);
+          const b = edge.b(cell);
+          const pa = project(a.ix, a.iy, terrainZAt(a.ix, a.iy, 0.34));
+          const pb = project(b.ix, b.iy, terrainZAt(b.ix, b.iy, 0.34));
+          if (!isVisibleLine([pa, pb])) continue;
+          segments.push({
+            depth: (pa.forward + pb.forward) / 2,
+            d: `M${pa.x.toFixed(1)} ${pa.y.toFixed(1)} L${pb.x.toFixed(1)} ${pb.y.toFixed(1)}`
+          });
+        }
+      }
+
+      const paths = segments
+        .sort((a, b) => a.depth - b.depth)
+        .map((segment) => segment.d)
+        .join(" ");
+      if (!paths) return "";
+
+      return `
+        <path d="${paths}" fill="none" stroke="rgba(214,72,70,0.22)" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="${paths}" fill="none" stroke="rgba(236,106,94,0.42)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="${paths}" fill="none" stroke="rgba(255,188,174,0.78)" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path>
+      `;
+    }
+
+    function renderQuestTargetTether(region) {
+      if (!region || !userCell) return "";
+
+      const ux = Number(userCell.ix) + 0.5;
+      const uy = Number(userCell.iy) + 0.5;
+      const tx = Number(region.cx);
+      const ty = Number(region.cy);
+      if (![ux, uy, tx, ty].every(Number.isFinite)) return "";
+
+      const distance = Math.hypot(tx - ux, ty - uy);
+      if (distance < 0.65) return "";
+
+      const steps = Math.max(4, Math.min(34, Math.ceil(distance * 0.72)));
+      const points = [];
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const ease = t * t * (3 - 2 * t);
+        const ix = tx + (ux - tx) * ease;
+        const iy = ty + (uy - ty) * ease;
+        const lift = 0.44 + Math.sin(Math.PI * t) * 0.18;
+        points.push(project(ix, iy, terrainZAt(ix, iy, lift)));
+      }
+
+      if (!isVisibleLine(points)) return "";
+      const d = points
+        .map(
+          (point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`
+        )
+        .join(" ");
+      const width = hereUsesLarge3dFrame() ? 2.2 : 1.55;
+
+      return `
+        <g data-layer="quest-target-tether" aria-label="Quest line from target to avatar">
+          <path d="${d}" fill="none" stroke="rgba(118,28,34,0.34)" stroke-width="${(width + 5.6).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="${d}" fill="none" stroke="rgba(225,86,78,0.46)" stroke-width="${(width + 2.4).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="${d}" fill="none" stroke="rgba(255,196,184,0.82)" stroke-width="${width.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3.2 5.4">
+            <animate attributeName="stroke-dashoffset" values="0;-17.2" dur="2.35s" repeatCount="indefinite"></animate>
+          </path>
+        </g>
+      `;
+    }
+
+    function renderQuestTarget3d(target) {
+      const targetCells = questTargetCellsFor3d(target);
+      if (!targetCells.length) return "";
+
+      const regions = contiguousQuestTargetRegions(targetCells);
+      if (!regions.length) return "";
+
+      const primary = regions[0];
+      const tether = renderQuestTargetTether(primary);
+      const groundMarkup = regions
+        .map((region, regionIndex) => {
+          const fillOpacity = regionIndex === 0 ? 0.18 : 0.12;
+          const cellPolys = region.cells
+            .map((cell) => {
+              const poly = terrainCellPolygon(cell.ix, cell.iy, 0.01, 0.2);
+              if (!isVisiblePoly(poly)) return "";
+              return `<polygon points="${pointsAttr(poly)}" fill="rgba(218,76,72,${fillOpacity})"></polygon>`;
+            })
+            .join("");
+          if (!cellPolys) return "";
+
+          const boundary = renderQuestRegionBoundary(region);
+          return `
+            <g data-layer="quest-target-region" aria-label="Quest target region">
+              <animate attributeName="opacity" values="0.70;1;0.76" dur="${(2.2 + regionIndex * 0.18).toFixed(2)}s" repeatCount="indefinite"></animate>
+              ${cellPolys}
+              ${boundary}
+            </g>
+          `;
+        })
+        .join("");
+
+      const baseZ = terrainZAt(primary.cx, primary.cy, 0.34);
+      const beamHeight = clamp(5.2 + Math.sqrt(primary.cells.length) * 0.55, 6.4, 14.5);
+      const base = project(primary.cx, primary.cy, baseZ);
+      const top = project(primary.cx, primary.cy, terrainZAt(primary.cx, primary.cy, beamHeight));
+      const haloR = clamp(
+        Math.sqrt(primary.cells.length) * 1.3 + 5,
+        7,
+        hereUsesLarge3dFrame() ? 24 : 16
+      );
+      const label =
+        primary.cells.length === 1
+          ? "1 target cell"
+          : `${primary.cells.length} connected target cells`;
+
+      const beacon = isVisibleLine([base, top])
+        ? `
+          <g data-layer="quest-target-beacon" aria-label="${esc(label)}">
+            <path d="M${top.x.toFixed(1)} ${top.y.toFixed(1)} L${base.x.toFixed(1)} ${base.y.toFixed(1)}" stroke="url(#gwHereQuestBeam)" stroke-width="${(hereUsesLarge3dFrame() ? 16 : 10).toFixed(1)}" stroke-linecap="round" opacity="0.86"></path>
+            <path d="M${top.x.toFixed(1)} ${top.y.toFixed(1)} L${base.x.toFixed(1)} ${base.y.toFixed(1)}" stroke="rgba(255,190,176,0.72)" stroke-width="${(hereUsesLarge3dFrame() ? 2.4 : 1.6).toFixed(1)}" stroke-linecap="round">
+              <animate attributeName="opacity" values="0.36;1;0.48" dur="1.65s" repeatCount="indefinite"></animate>
+            </path>
+            <ellipse cx="${base.x.toFixed(1)}" cy="${base.y.toFixed(1)}" rx="${haloR.toFixed(1)}" ry="${Math.max(3.2, haloR * 0.34).toFixed(1)}" fill="rgba(214,72,70,0.13)" stroke="rgba(245,130,116,0.42)" stroke-width="1.1">
+              <animate attributeName="rx" values="${(haloR * 0.78).toFixed(1)};${(haloR * 1.24).toFixed(1)};${(haloR * 0.86).toFixed(1)}" dur="1.9s" repeatCount="indefinite"></animate>
+              <animate attributeName="opacity" values="0.55;1;0.62" dur="1.9s" repeatCount="indefinite"></animate>
+            </ellipse>
+            <circle cx="${base.x.toFixed(1)}" cy="${base.y.toFixed(1)}" r="${clamp(4 + Math.sqrt(primary.cells.length) * 0.42, 4.5, 9).toFixed(1)}" fill="rgba(224,86,78,0.72)" stroke="rgba(255,204,190,0.62)" stroke-width="1.15"></circle>
+          </g>
+        `
+        : "";
+
+      return `
+        <g data-layer="quest-target-3d">
+          ${groundMarkup}
+          ${tether}
+          ${beacon}
+        </g>
+      `;
+    }
+
     function isSlimCell(cell) {
       if (!hudFov.expanded) return false;
       const detailRadius = hereUsesLarge3dFrame()
@@ -2811,30 +3262,46 @@
     const heatStats = buildHereHeatZStats(cells);
     const maxCount = Math.max(...sorted.map((item) => Number(item.metrics?.count) || 0), 1);
     const osmByKey = new Map();
-    for (const item of sorted) {
-      if (isSlimCell(item)) continue;
-      const prior = window.GridWildOsmPriorsLayer?.getCell?.(item.ix, item.iy) || null;
-      if (prior) osmByKey.set(item.key, prior.osm || null);
+    if (!lightweightMotion && featureTier.includeCellPriors) {
+      for (const item of sorted) {
+        if (isSlimCell(item)) continue;
+        const prior = window.GridWildOsmPriorsLayer?.getCell?.(item.ix, item.iy) || null;
+        if (prior) osmByKey.set(item.key, prior.osm || null);
+      }
     }
     const patchRows = visiblePatch3dRows(renderBounds);
-    const osmFeatures = window.GridWildOsmFeaturesLayer?.getFeatures?.() || {};
+    const osmFeatures =
+      window.GridWildOsmFeaturesLayer?.getFeatures?.({
+        includeDetail: featureTier.showBuildings
+      }) || {};
     const roadLabelCandidates = [];
 
     function renderRaisedOsmLines() {
+      if (!featureTier.showLinear) return "";
+
       const groups = [];
 
       if ((window.__gwState?.showOsmRoads ?? true) !== false) {
         groups.push({ kind: "road", features: osmFeatures.roads || [] });
       }
-      if ((window.__gwState?.showOsmTrails ?? true) !== false) {
+      if (featureTier.showTrails && (window.__gwState?.showOsmTrails ?? true) !== false) {
         groups.push({ kind: "trail", features: osmFeatures.trails || [] });
       }
 
       const segments = [];
-      const maxFeatures = hudFov.expanded ? 120 : 90;
-      const maxSegments = hudFov.expanded ? 240 : 180;
+      const maxFeatures = featureTier.maxLinearFeatures;
+      const maxSegments = featureTier.maxLinearSegments;
       for (const group of groups) {
-        for (const feature of group.features.slice(0, maxFeatures)) {
+        let usedFeatures = 0;
+        for (const feature of group.features || []) {
+          if (usedFeatures >= maxFeatures) break;
+          if (
+            renderLatLngBounds &&
+            !here3dFeatureOverlapsLatLngBounds(feature, renderLatLngBounds)
+          ) {
+            continue;
+          }
+
           const labelName = osmLinearFeatureName(feature.tags);
           const points = (feature.points || [])
             .map((point) => latLngToGridPoint(point, gridSizeM))
@@ -2842,6 +3309,7 @@
           if (points.length < 2) continue;
 
           const cls = group.kind === "trail" ? "trail" : highwayClass(feature.tags);
+          let drewFeature = false;
           for (let i = 1; i < points.length; i++) {
             const clipped = clipSegmentToCellBounds(points[i - 1], points[i], renderBounds);
             if (!clipped) continue;
@@ -2883,7 +3351,11 @@
             const crossingGlow =
               isBridge || osmFlag(feature.tags?.ford) || osmFlag(feature.tags?.crossing);
 
-            if (labelName && screenLength >= Math.max(32, Math.min(78, labelName.length * 3.2))) {
+            if (
+              featureTier.showRoadLabels &&
+              labelName &&
+              screenLength >= Math.max(24, Math.min(58, labelName.length * 2.4))
+            ) {
               roadLabelCandidates.push({
                 key: feature.id || `${group.kind}:${labelName}`,
                 name: labelName,
@@ -2912,9 +3384,11 @@
                 </g>
               `
             });
+            drewFeature = true;
 
             if (segments.length >= maxSegments) break;
           }
+          if (drewFeature) usedFeatures++;
           if (segments.length >= maxSegments) break;
         }
         if (segments.length >= maxSegments) break;
@@ -2972,6 +3446,66 @@
 
     function featurePolygonPoints(points, lift = 0.05) {
       return points.map((point) => terrainPoint(point, lift));
+    }
+
+    function renderGroundSurface() {
+      const maxDim = Math.max(widthCells, heightCells);
+      const step = Math.max(2, Math.ceil(maxDim / 28));
+      const pad = step;
+      const startIx = Math.floor((renderBounds.minIx - pad) / step) * step;
+      const endIx = Math.ceil((renderBounds.maxIx + 1 + pad) / step) * step;
+      const startIy = Math.floor((renderBounds.minIy - pad) / step) * step;
+      const endIy = Math.ceil((renderBounds.maxIy + 1 + pad) / step) * step;
+      const rows = [];
+
+      for (let iy = startIy; iy < endIy; iy += step) {
+        for (let ix = startIx; ix < endIx; ix += step) {
+          if (rows.length >= HERE_3D_GROUND_MAX_QUADS) break;
+          const cx = ix + step / 2;
+          const cy = iy + step / 2;
+          const lift = -0.16;
+          const poly = [
+            project(ix, iy, terrainZAt(ix, iy, lift)),
+            project(ix + step, iy, terrainZAt(ix + step, iy, lift)),
+            project(ix + step, iy + step, terrainZAt(ix + step, iy + step, lift)),
+            project(ix, iy + step, terrainZAt(ix, iy + step, lift))
+          ];
+          if (!isVisiblePoly(poly)) continue;
+
+          const avgZ =
+            (terrainZAt(ix, iy) +
+              terrainZAt(ix + step, iy) +
+              terrainZAt(ix + step, iy + step) +
+              terrainZAt(ix, iy + step)) /
+            4;
+          const dist = distanceFromCamera(cx, cy);
+          const near = clamp(1 - dist / Math.max(12, maxDim * 0.62), 0, 1);
+          const alpha = 0.28 + near * 0.14;
+          const fill =
+            avgZ > 0.38
+              ? `rgba(92,106,70,${alpha.toFixed(3)})`
+              : avgZ < -0.26
+                ? `rgba(54,91,92,${(alpha * 0.92).toFixed(3)})`
+                : `rgba(61,91,67,${alpha.toFixed(3)})`;
+          const strokeAlpha = 0.08;
+
+          rows.push({
+            depth: worldToCamera(cx, cy, terrainZAt(cx, cy, lift)).forward,
+            markup: `<polygon points="${pointsAttr(poly)}" fill="${fill}" stroke="rgba(237,220,170,${strokeAlpha})" stroke-width="0.32" stroke-linejoin="round"></polygon>`
+          });
+        }
+        if (rows.length >= HERE_3D_GROUND_MAX_QUADS) break;
+      }
+
+      if (!rows.length) return "";
+      return `
+        <g data-layer="ground-surface">
+          ${rows
+            .sort((a, b) => a.depth - b.depth)
+            .map((row) => row.markup)
+            .join("")}
+        </g>
+      `;
     }
 
     function featureGridRing(feature) {
@@ -3035,11 +3569,12 @@
     }
 
     function renderBuildingExtrusions() {
+      if (!featureTier.showBuildings) return "";
       if ((window.__gwState?.showOsmBuildings ?? true) === false) return "";
 
       const maxRendered = hereUsesLarge3dFrame()
-        ? Math.round(HERE_3D_BUILDING_MAX_FEATURES * 1.35)
-        : HERE_3D_BUILDING_MAX_FEATURES;
+        ? Math.round(HERE_3D_BUILDING_MAX_FEATURES * 1.35 * featureTier.buildingScale)
+        : Math.round(HERE_3D_BUILDING_MAX_FEATURES * featureTier.buildingScale);
       const maxPoints = hereUsesLarge3dFrame()
         ? Math.round(HERE_3D_BUILDING_MAX_POINTS * 1.35)
         : HERE_3D_BUILDING_MAX_POINTS;
@@ -3081,7 +3616,8 @@
 
         const name = osmFeatureName(feature.tags) || "OSM building";
         rows.push({
-          depth: worldToCamera(center.ix, center.iy, terrainZAt(center.ix, center.iy, lift)).forward,
+          depth: worldToCamera(center.ix, center.iy, terrainZAt(center.ix, center.iy, lift))
+            .forward,
           markup: `
             <g data-layer="buildings" aria-label="${esc(name)}">
               <polygon points="${pointsAttr(base)}" fill="rgba(0,0,0,0.14)"></polygon>
@@ -3107,9 +3643,9 @@
       if ((window.__gwState?.showOsmParks ?? true) === false) return "";
 
       return (osmFeatures.parks || [])
-        .slice(0, HERE_3D_HABITAT_MAX_FEATURES)
+        .slice(0, featureTier.maxHabitatFeatures)
         .map((feature) => {
-          const points = featureGridPoints(feature, 88);
+          const points = featureGridPoints(feature, featureTier.maxHabitatPoints);
           if (points.length < 2 || !boundsOverlap(gridBoundsForPoints(points), renderBounds, 1.5))
             return "";
 
@@ -3152,9 +3688,9 @@
       if ((window.__gwState?.showOsmWater ?? true) === false) return "";
 
       return (osmFeatures.water || [])
-        .slice(0, HERE_3D_WATER_MAX_FEATURES)
+        .slice(0, featureTier.maxWaterFeatures)
         .map((feature) => {
-          const points = featureGridPoints(feature, 100);
+          const points = featureGridPoints(feature, featureTier.maxWaterPoints);
           if (points.length < 2 || !boundsOverlap(gridBoundsForPoints(points), renderBounds, 1.6))
             return "";
 
@@ -3189,6 +3725,7 @@
     }
 
     function renderBarrierEdges() {
+      if (!featureTier.showBarriers) return "";
       if ((window.__gwState?.showOsmRoads ?? true) === false) return "";
 
       const edges = [];
@@ -3245,6 +3782,8 @@
     }
 
     function renderGroundDetails() {
+      if (!featureTier.showGroundDetails) return "";
+
       const marks = [];
       for (const item of sorted) {
         if (marks.length >= HERE_3D_GROUND_DETAIL_MAX_MARKS) break;
@@ -3303,6 +3842,197 @@
       return marks.length ? `<g data-layer="osm-ground-detail">${marks.join("")}</g>` : "";
     }
 
+    function gridPointInRing(point, ring = []) {
+      if (!point || !Array.isArray(ring) || ring.length < 3) return false;
+      let inside = false;
+      const x = Number(point.ix);
+      const y = Number(point.iy);
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = Number(ring[i]?.ix);
+        const yi = Number(ring[i]?.iy);
+        const xj = Number(ring[j]?.ix);
+        const yj = Number(ring[j]?.iy);
+        if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+        const crosses = yi > y !== yj > y;
+        const denom = yj - yi;
+        if (crosses && Math.abs(denom) > 1e-9 && x < ((xj - xi) * (y - yi)) / denom + xi) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    }
+
+    function treeHabitatClass(tags = {}) {
+      const cls = osmLanduseClass(tags);
+      if (["wood", "park", "cemetery", "scrub"].includes(cls)) return cls;
+      if (tags.natural === "tree_row" || tags.landcover === "trees") return "wood";
+      return "";
+    }
+
+    function treeSpriteAt(ix, iy, cls, seed) {
+      const p = project(ix, iy, terrainZAt(ix, iy, cls === "scrub" ? 0.52 : 0.7));
+      if (p.x < -22 || p.x > w + 22 || p.y < -24 || p.y > h + 22) return null;
+
+      const scaleFactor = cls === "scrub" ? 0.125 : cls === "cemetery" ? 0.145 : 0.17;
+      const r = clamp(p.scale * scaleFactor, cls === "scrub" ? 1.7 : 2.1, 6.1);
+      const lean = (((seed >> 4) % 9) - 4) * r * 0.035;
+      const palette =
+        cls === "scrub"
+          ? {
+              trunk: "rgba(100,74,42,0.58)",
+              fill: "rgba(117,166,84,0.64)",
+              stroke: "rgba(210,231,166,0.17)"
+            }
+          : cls === "cemetery"
+            ? {
+                trunk: "rgba(88,72,48,0.62)",
+                fill: "rgba(105,157,92,0.66)",
+                stroke: "rgba(222,230,190,0.18)"
+              }
+            : {
+                trunk: "rgba(91,66,38,0.72)",
+                fill: cls === "park" ? "rgba(100,177,100,0.68)" : "rgba(78,160,94,0.74)",
+                stroke: "rgba(199,235,167,0.2)"
+              };
+      const x = p.x;
+      const y = p.y;
+
+      return {
+        depth: p.forward,
+        markup: `
+          <g data-layer="tree">
+            <line x1="${x.toFixed(1)}" y1="${(y + r * 1.18).toFixed(1)}" x2="${(x + lean).toFixed(1)}" y2="${(y + r * 0.12).toFixed(1)}" stroke="${palette.trunk}" stroke-width="${Math.max(0.6, r * 0.25).toFixed(2)}" stroke-linecap="round"></line>
+            <polygon points="${(x + lean).toFixed(1)},${(y - r).toFixed(1)} ${(x + r * 1.12).toFixed(1)},${(y - r * 0.02).toFixed(1)} ${(x + r * 0.42).toFixed(1)},${(y + r * 0.98).toFixed(1)} ${(x - r * 0.54).toFixed(1)},${(y + r * 0.84).toFixed(1)} ${(x - r * 1.12).toFixed(1)},${(y - r * 0.08).toFixed(1)}" fill="${palette.fill}" stroke="${palette.stroke}" stroke-width="0.4" stroke-linejoin="round"></polygon>
+          </g>
+        `
+      };
+    }
+
+    function renderTreeSprites() {
+      if (!featureTier.showTrees) return "";
+
+      const maxTrees = hereUsesLarge3dFrame()
+        ? Math.round(HERE_3D_TREE_MAX_SPRITES * 1.35)
+        : HERE_3D_TREE_MAX_SPRITES;
+      const cap = Math.round(
+        (hudFov.expanded ? maxTrees * 0.82 : maxTrees) * featureTier.treeScale
+      );
+      const rows = [];
+      const seen = new Set();
+      const featureRows = [];
+
+      for (const feature of Array.isArray(osmFeatures.parks) ? osmFeatures.parks : []) {
+        const cls = treeHabitatClass(feature.tags);
+        if (!cls || !feature.closed) continue;
+
+        const rawRing = featureGridRing(feature);
+        if (rawRing.length < 3) continue;
+        const rawBounds = gridBoundsForPoints(rawRing);
+        if (!boundsOverlap(rawBounds, renderBounds, 0.8)) continue;
+
+        const areaCells = Math.abs(signedGridPolygonArea(rawRing));
+        if (areaCells < 0.18) continue;
+
+        const center = centerForGridPoints(rawRing);
+        const featureKey =
+          feature.id ||
+          osmFeatureName(feature.tags) ||
+          `${cls}:${Math.round(rawBounds.minIx)}:${Math.round(rawBounds.minIy)}`;
+        const priority = cls === "wood" ? 24 : cls === "park" ? 17 : cls === "cemetery" ? 15 : 10;
+        featureRows.push({
+          key: featureKey,
+          cls,
+          ring: downsampleRing(rawRing, hereUsesLarge3dFrame() ? 180 : 120),
+          bounds: {
+            minIx: Math.max(rawBounds.minIx, renderBounds.minIx - 0.5),
+            maxIx: Math.min(rawBounds.maxIx, renderBounds.maxIx + 1.5),
+            minIy: Math.max(rawBounds.minIy, renderBounds.minIy - 0.5),
+            maxIy: Math.min(rawBounds.maxIy, renderBounds.maxIy + 1.5)
+          },
+          areaCells,
+          score:
+            priority + Math.min(18, Math.sqrt(areaCells)) - distanceFromCamera(center.ix, center.iy)
+        });
+      }
+
+      featureRows
+        .sort((a, b) => b.score - a.score)
+        .slice(0, hereUsesLarge3dFrame() ? 32 : 24)
+        .forEach((row) => {
+          if (rows.length >= cap) return;
+          const step =
+            row.cls === "wood"
+              ? hudFov.expanded
+                ? 3
+                : 2
+              : row.cls === "park" || row.cls === "cemetery"
+                ? hudFov.expanded
+                  ? 4
+                  : 3
+                : hudFov.expanded
+                  ? 5
+                  : 4;
+          const perFeatureMax = clamp(Math.ceil(Math.sqrt(row.areaCells) * 0.9), 2, 26);
+          let made = 0;
+          const startIx = Math.floor(row.bounds.minIx / step) * step + 0.5;
+          const startIy = Math.floor(row.bounds.minIy / step) * step + 0.5;
+
+          for (let iy = startIy; iy <= row.bounds.maxIy; iy += step) {
+            for (let ix = startIx; ix <= row.bounds.maxIx; ix += step) {
+              if (rows.length >= cap || made >= perFeatureMax) break;
+              const seed = stableHash(`${row.key}:${Math.floor(ix)}:${Math.floor(iy)}`);
+              const keepMod = row.cls === "wood" ? 2 : row.cls === "scrub" ? 4 : 3;
+              if (seed % keepMod === 0) continue;
+
+              const jitterRange = Math.min(0.76, step * 0.34);
+              const jx = ((seed % 19) / 18 - 0.5) * jitterRange;
+              const jy = ((stableHash(`y:${seed}`) % 19) / 18 - 0.5) * jitterRange;
+              const x = ix + jx;
+              const y = iy + jy;
+              if (isSlimPoint(x, y)) continue;
+              if (!gridPointInRing({ ix: x, iy: y }, row.ring)) continue;
+
+              const dupeKey = `${Math.floor(x * 2)},${Math.floor(y * 2)}`;
+              if (seen.has(dupeKey)) continue;
+              const sprite = treeSpriteAt(x, y, row.cls, seed);
+              if (!sprite) continue;
+              seen.add(dupeKey);
+              rows.push(sprite);
+              made += 1;
+            }
+            if (rows.length >= cap || made >= perFeatureMax) break;
+          }
+        });
+
+      for (const item of sorted) {
+        if (rows.length >= cap) break;
+        if (isSlimCell(item)) continue;
+        const osm = osmByKey.get(item.key);
+        const cls = ["wood", "park", "cemetery", "scrub"].includes(osm?.landuseClass)
+          ? osm.landuseClass
+          : "";
+        if (!cls) continue;
+        const seed = stableHash(item.key);
+        if (seed % 3 === 0) continue;
+        const dupeKey = `${item.ix},${item.iy}`;
+        if (seen.has(dupeKey)) continue;
+        const sprite = treeSpriteAt(item.ix + 0.5, item.iy + 0.5, cls, seed);
+        if (!sprite) continue;
+        seen.add(dupeKey);
+        rows.push(sprite);
+      }
+
+      if (!rows.length) return "";
+      return `
+        <g data-layer="trees">
+          ${rows
+            .sort((a, b) => a.depth - b.depth)
+            .map((row) => row.markup)
+            .join("")}
+        </g>
+      `;
+    }
+
     function groundTextAngle(ix, iy) {
       const a = terrainPoint({ ix: ix - 0.45, iy }, 0.3);
       const b = terrainPoint({ ix: ix + 0.45, iy }, 0.3);
@@ -3312,6 +4042,8 @@
     }
 
     function renderPlaceLabels() {
+      if (!featureTier.showPlaceLabels) return "";
+
       const candidates = [];
       const seen = new Set();
 
@@ -3320,9 +4052,21 @@
         const key = name.toLowerCase();
         if (!name || seen.has(key)) return;
         const points = featureGridPoints(feature, kind === "place" ? 2 : 80);
-        if (!points.length || !boundsOverlap(gridBoundsForPoints(points), renderBounds, 1.4))
-          return;
-        const center = kind === "place" ? points[0] : centerForGridPoints(points);
+        const featureBounds = gridBoundsForPoints(points);
+        if (!points.length || !boundsOverlap(featureBounds, renderBounds, 1.4)) return;
+        const center =
+          kind === "place"
+            ? points[0]
+            : {
+                ix:
+                  (Math.max(featureBounds.minIx, renderBounds.minIx) +
+                    Math.min(featureBounds.maxIx, renderBounds.maxIx)) /
+                  2,
+                iy:
+                  (Math.max(featureBounds.minIy, renderBounds.minIy) +
+                    Math.min(featureBounds.maxIy, renderBounds.maxIy)) /
+                  2
+              };
         if (!center || isSlimPoint(center.ix, center.iy)) return;
         const p = terrainPoint(center, 0.34);
         if (p.x < -12 || p.x > w + 12 || p.y < -12 || p.y > h + 12) return;
@@ -3337,17 +4081,27 @@
         });
       }
 
-      (osmFeatures.places || [])
-        .slice(0, 30)
-        .forEach((feature) => addCandidate(feature, "place", 32));
-      (osmFeatures.water || [])
-        .filter((feature) => osmFeatureName(feature.tags))
-        .slice(0, 18)
-        .forEach((feature) => addCandidate(feature, "water", 24));
-      (osmFeatures.parks || [])
-        .filter((feature) => osmFeatureName(feature.tags))
-        .slice(0, 22)
-        .forEach((feature) => addCandidate(feature, "habitat", 22));
+      function addVisibleNamedCandidates(features, kind, priority, maxCandidates, options = {}) {
+        let added = 0;
+        for (const feature of features || []) {
+          if (added >= maxCandidates) break;
+          if (options.namedOnly && !osmFeatureName(feature.tags)) continue;
+          if (
+            renderLatLngBounds &&
+            !here3dFeatureOverlapsLatLngBounds(feature, renderLatLngBounds)
+          ) {
+            continue;
+          }
+
+          const before = candidates.length;
+          addCandidate(feature, kind, priority);
+          if (candidates.length > before) added++;
+        }
+      }
+
+      addVisibleNamedCandidates(osmFeatures.places, "place", 32, 30);
+      addVisibleNamedCandidates(osmFeatures.water, "water", 24, 18, { namedOnly: true });
+      addVisibleNamedCandidates(osmFeatures.parks, "habitat", 22, 22, { namedOnly: true });
 
       return candidates
         .sort((a, b) => b.score - a.score)
@@ -3377,6 +4131,7 @@
     }
 
     function renderRoadLabels() {
+      if (!featureTier.showRoadLabels) return "";
       if (!roadLabelCandidates.length) return "";
 
       const byFeature = new Map();
@@ -3718,88 +4473,41 @@
       })
       .join("");
 
-    const osmLines = renderRaisedOsmLines();
-    const roadLabels = renderRoadLabels();
+    const groundSurface = renderGroundSurface();
+    const elevationRidges = renderElevationRidges();
     const habitatPolygons = renderHabitatPolygons();
     const waterFeatures = renderWaterFeatures();
-    const barrierEdges = renderBarrierEdges();
-    const groundDetails = renderGroundDetails();
-    const placeLabels = renderPlaceLabels();
-    const elevationRidges = renderElevationRidges();
-    const patchOutlines = renderPatchOutlines();
+    const groundDetails = lightweightMotion ? "" : renderGroundDetails();
+    const barrierEdges = lightweightMotion ? "" : renderBarrierEdges();
+    const patchOutlines = lightweightMotion ? "" : renderPatchOutlines();
+    const osmLines = renderRaisedOsmLines();
+    const roadLabels = lightweightMotion ? "" : renderRoadLabels();
+    const placeLabels = lightweightMotion ? "" : renderPlaceLabels();
     const buildings = renderBuildingExtrusions();
+    const trees = renderTreeSprites();
 
-    const trees = sorted
-      .map((item) => {
-        if (isSlimCell(item)) return "";
-        const osm = osmByKey.get(item.key);
-        if (!(osm?.landuseClass === "wood" || osm?.landuseClass === "park")) return "";
-        if (stableHash(item.key) % 3 === 0) return "";
-        const p = project(
-          item.ix + 0.5,
-          item.iy + 0.5,
-          terrainZAt(item.ix + 0.5, item.iy + 0.5, 0.7)
-        );
-        if (p.x < -20 || p.x > w + 20 || p.y < -20 || p.y > h + 20) return "";
-        const r = Math.max(2.2, Math.min(5.8, p.scale * 0.19));
-        return `
-        <g data-layer="trees">
-          <line x1="${p.x}" y1="${p.y + r * 1.2}" x2="${p.x}" y2="${p.y + r * 0.15}" stroke="rgba(91,66,38,0.72)" stroke-width="${Math.max(0.7, r * 0.28)}"></line>
-          <polygon points="${p.x},${p.y - r} ${p.x + r * 1.15},${p.y - r * 0.05} ${p.x + r * 0.45},${p.y + r} ${p.x - r * 0.55},${p.y + r * 0.86} ${p.x - r * 1.18},${p.y - r * 0.1}" fill="rgba(88,171,102,0.76)" stroke="rgba(199,235,167,0.20)" stroke-width="0.4"></polygon>
-        </g>
-      `;
-      })
-      .join("");
-
-    const niches = overlappingNiches(renderBounds)
-      .slice(0, 4)
-      .map((entry, index) => {
-        const polys = entry.cells
-          .slice(0, 90)
-          .map((cell) => {
-            if (isSlimCell(cell)) return "";
-            const poly = terrainCellPolygon(cell.ix, cell.iy, 0.02, 0.72 + index * 0.12);
-            if (!isVisiblePoly(poly)) return "";
-            return `<polygon points="${pointsAttr(poly)}" fill="rgba(118,231,191,0.13)" stroke="rgba(118,231,191,0.38)" stroke-width="0.5"></polygon>`;
+    const niches = lightweightMotion
+      ? ""
+      : overlappingNiches(renderBounds)
+          .slice(0, 4)
+          .map((entry, index) => {
+            const polys = entry.cells
+              .slice(0, 90)
+              .map((cell) => {
+                if (isSlimCell(cell)) return "";
+                const poly = terrainCellPolygon(cell.ix, cell.iy, 0.02, 0.72 + index * 0.12);
+                if (!isVisiblePoly(poly)) return "";
+                return `<polygon points="${pointsAttr(poly)}" fill="rgba(118,231,191,0.13)" stroke="rgba(118,231,191,0.38)" stroke-width="0.5"></polygon>`;
+              })
+              .join("");
+            return `<g data-layer="niches">${polys}</g>`;
           })
           .join("");
-        return `<g data-layer="niches">${polys}</g>`;
-      })
-      .join("");
-    const patchLabels = renderPatchLabels();
+    const patchLabels =
+      lightweightMotion || !featureTier.showPatchLabels ? "" : renderPatchLabels();
 
     const questTarget = activeQuestTarget();
-    const questMarker =
-      questTarget &&
-      questTarget.mode !== "anywhere" &&
-      Number.isFinite(Number(questTarget.ix)) &&
-      Number.isFinite(Number(questTarget.iy))
-        ? (() => {
-            const qBounds = {
-              minIx: Number(questTarget.ix) - Math.max(0, Number(questTarget.radiusCells) || 0),
-              maxIx: Number(questTarget.ix) + Math.max(0, Number(questTarget.radiusCells) || 0),
-              minIy: Number(questTarget.iy) - Math.max(0, Number(questTarget.radiusCells) || 0),
-              maxIy: Number(questTarget.iy) + Math.max(0, Number(questTarget.radiusCells) || 0)
-            };
-            if (
-              qBounds.maxIx < renderBounds.minIx ||
-              qBounds.minIx > renderBounds.maxIx ||
-              qBounds.maxIy < renderBounds.minIy ||
-              qBounds.minIy > renderBounds.maxIy
-            ) {
-              return "";
-            }
-            const qx = Number(questTarget.ix) + 0.5;
-            const qy = Number(questTarget.iy) + 0.5;
-            const p = project(qx, qy, terrainZAt(qx, qy, 0.25));
-            return `
-          <g data-layer="quest">
-            <line x1="${p.x}" y1="${p.y - 62}" x2="${p.x}" y2="${p.y + 3}" stroke="url(#gwHereQuestBeam)" stroke-width="8" stroke-linecap="round"></line>
-            <circle cx="${p.x}" cy="${p.y}" r="5" fill="rgba(255,224,130,0.86)" stroke="rgba(255,255,255,0.68)" stroke-width="1"></circle>
-          </g>
-        `;
-          })()
-        : "";
+    const questMarker = questTarget ? renderQuestTarget3d(questTarget) : "";
 
     const userAvatar = inBounds(userCell)
       ? (() => {
@@ -3808,7 +4516,11 @@
           const ground = project(ux, uy, terrainZAt(ux, uy, 0.02));
           const avatarTop = project(ux, uy, terrainZAt(ux, uy, 3.02));
           const projectedSixtyFeet = Math.hypot(avatarTop.x - ground.x, avatarTop.y - ground.y);
-          const size = clamp(projectedSixtyFeet, hereUsesLarge3dFrame() ? 9.5 : 8, hereUsesLarge3dFrame() ? 32 : 28);
+          const size = clamp(
+            projectedSixtyFeet,
+            hereUsesLarge3dFrame() ? 9.5 : 8,
+            hereUsesLarge3dFrame() ? 32 : 28
+          );
           const x = ground.x;
           const ay = ground.y - size * 0.47;
           const bodyBottom = ay + size * 0.47;
@@ -3851,13 +4563,15 @@
             <stop offset="100%" stop-color="rgba(6,8,8,0.82)"></stop>
           </radialGradient>
           <linearGradient id="gwHereQuestBeam" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="rgba(255,224,130,0)"></stop>
-            <stop offset="0.28" stop-color="rgba(255,224,130,0.68)"></stop>
-            <stop offset="1" stop-color="rgba(118,231,191,0.16)"></stop>
+            <stop offset="0" stop-color="rgba(224,86,78,0)"></stop>
+            <stop offset="0.18" stop-color="rgba(210,68,66,0.18)"></stop>
+            <stop offset="0.42" stop-color="rgba(255,176,160,0.62)"></stop>
+            <stop offset="1" stop-color="rgba(158,42,45,0.08)"></stop>
           </linearGradient>
         </defs>
         ${sky.markup}
         ${elevationRidges}
+        ${groundSurface}
         ${terrain}
         ${habitatPolygons}
         ${waterFeatures}
@@ -4215,9 +4929,10 @@
             const label = taxonListLabel(row);
             const titleText = label.sub ? `${label.main} (${label.sub})` : label.main;
             const fontSize = scaledListFontSize(row.count, context.taxaMaxCount);
+            const isOpening = row.genus === hereCodexOpeningGenus;
             return `
             <span class="gw-here-inline-item" style="font-size:${fontSize}px">
-              <button class="gw-here-inline-link" type="button" data-genus="${esc(row.genus)}" title="${esc(titleText)} - ${esc(row.family || row.order || row.iconic || row.genus)}">${esc(label.main)}</button>
+              <button class="gw-here-inline-link${isOpening ? " is-loading" : ""}" type="button" data-genus="${esc(row.genus)}" title="${esc(titleText)} - ${esc(row.family || row.order || row.iconic || row.genus)}"${isOpening ? ' aria-busy="true" disabled' : ""}><span>${esc(label.main)}</span>${isOpening ? '<span class="gw-here-inline-spinner" aria-hidden="true"></span>' : ""}</button>
               <span class="gw-here-inline-count">${row.count}</span>${inlineComma(index, rows.length)}
             </span>
           `;
@@ -4349,6 +5064,40 @@
     );
   }
 
+  function summarizeTaxaRecord(record, fallback = {}) {
+    const metrics = record?.__metrics || null;
+    if (!metrics) return fallback;
+
+    const cells = Math.max(
+      0,
+      Number(fallback.cells) || Number(metrics.nSquares) || Number(record?.genera?.length) || 0
+    );
+    const active = Math.max(
+      0,
+      Number(metrics.nActiveSquares) ||
+        (Number(metrics.count) > 0 ? Number(fallback.active) || 1 : 0)
+    );
+
+    return {
+      cells,
+      active,
+      obs: Math.max(0, Number(metrics.count) || 0),
+      species: Math.max(0, Number(metrics.species) || Number(metrics.genera) || 0)
+    };
+  }
+
+  function renderHereStats(summary = {}) {
+    const cells = Math.max(0, Number(summary.cells) || 0);
+    const active = Math.max(0, Number(summary.active) || 0);
+    const obs = Math.max(0, Number(summary.obs) || 0);
+    const species = Math.max(0, Number(summary.species) || 0);
+    return `
+        <div class="gw-here-stat" title="${obs} observations"><b>${compactStatNumber(obs)}</b><span>Obs</span></div>
+        <div class="gw-here-stat" title="${species} species"><b>${compactStatNumber(species)}</b><span>Spp</span></div>
+        <div class="gw-here-stat" title="${active} active cells of ${cells} cells"><b>${compactStatNumber(active)}/${compactStatNumber(cells)}</b><span>Cells</span></div>
+      `;
+  }
+
   function compactStatNumber(value) {
     const n = Math.max(0, Number(value) || 0);
     if (n >= 1000000) return `${(n / 1000000).toFixed(n >= 10000000 ? 0 : 1)}m`;
@@ -4363,20 +5112,184 @@
     );
   }
 
+  function here3dLatLngBoundsKey(bounds, profile = "detail") {
+    if (!bounds?.getSouth) return profile;
+    return [
+      profile,
+      bounds.getSouth().toFixed(4),
+      bounds.getWest().toFixed(4),
+      bounds.getNorth().toFixed(4),
+      bounds.getEast().toFixed(4)
+    ].join(":");
+  }
+
+  function here3dFeatureOverlapsLatLngBounds(feature, bounds) {
+    if (!feature || !bounds?.getSouth) return false;
+    const points = Array.isArray(feature.points) ? feature.points : [];
+    if (!points.length) return false;
+
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    let minLng = Infinity;
+    let maxLng = -Infinity;
+    for (const point of points) {
+      const lat = Number(point?.lat ?? point?.[0]);
+      const lng = Number(point?.lng ?? point?.lon ?? point?.[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
+    }
+
+    if (![minLat, maxLat, minLng, maxLng].every(Number.isFinite)) return false;
+    return !(
+      maxLat < bounds.getSouth() ||
+      minLat > bounds.getNorth() ||
+      maxLng < bounds.getWest() ||
+      minLng > bounds.getEast()
+    );
+  }
+
+  function here3dHasVisibleOsmFeatures(source, featureTier, latLngBounds) {
+    const features =
+      source?.getFeatures?.({
+        includeDetail: featureTier.showBuildings || featureTier.fetchProfile === "detail"
+      }) || {};
+    const groups = [];
+
+    if ((window.__gwState?.showOsmParks ?? true) !== false) groups.push(features.parks);
+    if ((window.__gwState?.showOsmWater ?? true) !== false) groups.push(features.water);
+    if (featureTier.showLinear && (window.__gwState?.showOsmRoads ?? true) !== false) {
+      groups.push(features.roads);
+    }
+    if (featureTier.showTrails && (window.__gwState?.showOsmTrails ?? true) !== false) {
+      groups.push(features.trails);
+    }
+    if (featureTier.showPlaceLabels) groups.push(features.places);
+    if (featureTier.showBuildings && (window.__gwState?.showOsmBuildings ?? true) !== false) {
+      groups.push(features.buildings);
+    }
+
+    return groups.some((group) =>
+      (Array.isArray(group) ? group : []).some((feature) =>
+        here3dFeatureOverlapsLatLngBounds(feature, latLngBounds)
+      )
+    );
+  }
+
+  function requestHere3dFallbackOsmCoverage(source, latLngBounds, featureTier) {
+    if (!source || !latLngBounds?.isValid?.()) return;
+
+    const status = source.getCacheStatus?.() || {};
+    if (
+      status.fetchInFlight ||
+      status.detailCoverageQueued ||
+      status.basemapPmtiles?.fetchInFlight
+    ) {
+      return;
+    }
+
+    const key = here3dLatLngBoundsKey(latLngBounds, featureTier.fetchProfile);
+    const now = Date.now();
+    if (
+      now - Number(here3dOsmFallbackRequestedAt.get(key) || 0) <
+      HERE_3D_OSM_FALLBACK_COOLDOWN_MS
+    ) {
+      return;
+    }
+    here3dOsmFallbackRequestedAt.set(key, now);
+
+    if (featureTier.fetchProfile === "patch-view" && source.fetchParksForBounds) {
+      source
+        .fetchParksForBounds(latLngBounds, {
+          broad: true,
+          ignoreMinZoom: true,
+          profile: "patch-view",
+          silent: true
+        })
+        ?.catch?.((err) => console.warn("GridWild Here 3D OSM parks coverage failed:", err));
+      return;
+    }
+
+    source
+      .ensureDetailCoverage?.(latLngBounds, {
+        bufferRatio: 0.22,
+        coverageBufferRatio: 0.08,
+        ignoreMinZoom: true,
+        minIntervalMs: 2500,
+        reason: "here-3d-fallback",
+        silent: true
+      })
+      ?.catch?.((err) => console.warn("GridWild Here 3D OSM coverage failed:", err));
+  }
+
   function requestHere3dOsmCoverage(bounds, selectedContext = null) {
     if (!herePanelOpen || !hereMap3dEnabled) return;
     const api = gridApi();
-    const renderBounds = here3dRenderBoundsFor(bounds, selectedContext);
+    const hudFov = here3dHudFovState(selectedContext);
+    const featureTier = here3dFeatureTierFor(hudFov);
+    const renderBounds = here3dRenderBoundsFor(bounds, selectedContext, hudFov);
     if (!api || !renderBounds) return;
-    if (cellCountForBounds(renderBounds) > HERE_3D_OSM_MAX_REQUEST_CELLS) return;
+    if (cellCountForBounds(renderBounds) > featureTier.maxOsmCells) return;
 
     const latLngBounds = api.boundsToLatLngBounds?.(renderBounds);
     if (!latLngBounds?.isValid?.()) return;
 
-    window.GridWildOsmFeaturesLayer?.ensureDetailCoverage?.(latLngBounds, {
-      reason: "here-3d",
-      silent: true
-    });
+    const source = window.GridWildOsmFeaturesLayer;
+    if (!source) return;
+
+    const requestFallbackIfEmpty = () => {
+      if (!here3dHasVisibleOsmFeatures(source, featureTier, latLngBounds)) {
+        requestHere3dFallbackOsmCoverage(source, latLngBounds, featureTier);
+      }
+    };
+
+    if (source.fetchBasemapFeaturesForBounds) {
+      const basemapRequest = source.fetchBasemapFeaturesForBounds(latLngBounds, {
+        coverageBounds: latLngBounds,
+        ignoreMinZoom: true,
+        profile: featureTier.fetchProfile,
+        reason: "here-3d",
+        silent: true
+      });
+
+      Promise.resolve(basemapRequest)
+        .then((loaded) => {
+          if (loaded === true) return;
+          requestFallbackIfEmpty();
+        })
+        .catch((err) => {
+          console.warn("GridWild Here 3D local map coverage failed:", err);
+          requestFallbackIfEmpty();
+        });
+      return;
+    }
+
+    if (featureTier.fetchProfile === "patch-view" && source.fetchParksForBounds) {
+      if (here3dHasVisibleOsmFeatures(source, featureTier, latLngBounds)) return;
+      source
+        .fetchParksForBounds(latLngBounds, {
+          broad: true,
+          ignoreMinZoom: true,
+          profile: "patch-view",
+          silent: true
+        })
+        ?.catch?.((err) => console.warn("GridWild Here 3D OSM parks coverage failed:", err));
+      return;
+    }
+
+    if (here3dHasVisibleOsmFeatures(source, featureTier, latLngBounds)) return;
+    source
+      .ensureDetailCoverage?.(latLngBounds, {
+        bufferRatio: 0.22,
+        coverageBufferRatio: 0.08,
+        ignoreMinZoom: true,
+        minIntervalMs: 2500,
+        reason: "here-3d",
+        silent: true
+      })
+      ?.catch?.((err) => console.warn("GridWild Here 3D OSM coverage failed:", err));
   }
 
   function centeredTaxaBounds(bounds, maxCells) {
@@ -4407,28 +5320,42 @@
     };
   }
 
-  function centeredCells(cells = [], maxCells = MAX_SELECTION_TAXA_CELLS) {
-    if (!Array.isArray(cells) || cells.length <= maxCells) return cells || [];
+  function representativeCells(cells = [], maxCells = MAX_SELECTION_TAXA_CELLS) {
+    const normalized = (Array.isArray(cells) ? cells : [])
+      .map((cell) => ({
+        ...cell,
+        ix: Math.floor(Number(cell?.ix)),
+        iy: Math.floor(Number(cell?.iy))
+      }))
+      .filter((cell) => Number.isFinite(cell.ix) && Number.isFinite(cell.iy))
+      .sort((a, b) => a.iy - b.iy || a.ix - b.ix);
 
-    const bounds = boundsForCells(cells);
-    if (!bounds) return cells.slice(0, maxCells);
+    if (normalized.length <= maxCells) return normalized;
+    if (maxCells <= 1) return normalized.slice(0, Math.max(0, maxCells));
 
-    const cx = (bounds.minIx + bounds.maxIx) / 2;
-    const cy = (bounds.minIy + bounds.maxIy) / 2;
-    return cells
-      .slice()
-      .sort((a, b) => {
-        const ad = Math.hypot(Number(a.ix) - cx, Number(a.iy) - cy);
-        const bd = Math.hypot(Number(b.ix) - cx, Number(b.iy) - cy);
-        return ad - bd || keyForCell(a).localeCompare(keyForCell(b));
-      })
-      .slice(0, maxCells);
+    const out = [];
+    const used = new Set();
+    const step = (normalized.length - 1) / (maxCells - 1);
+
+    for (let i = 0; i < maxCells; i++) {
+      let index = Math.round(i * step);
+      while (index < normalized.length && used.has(index)) index++;
+      if (index >= normalized.length) {
+        index = normalized.length - 1;
+        while (index >= 0 && used.has(index)) index--;
+      }
+      if (index < 0 || used.has(index)) continue;
+      used.add(index);
+      out.push(normalized[index]);
+    }
+
+    return out;
   }
 
   function getTaxaBoundsForContext(bounds, selection) {
     const selectedCells = Array.isArray(selection?.cells) ? selection.cells : [];
     if (selectedCells.length) {
-      const taxaCells = centeredCells(selectedCells, MAX_SELECTION_TAXA_CELLS);
+      const taxaCells = representativeCells(selectedCells, MAX_SELECTION_TAXA_CELLS);
       return {
         bounds: boundsForCells(taxaCells) || bounds,
         cells: taxaCells,
@@ -4770,7 +5697,7 @@
 
     if (!node.children?.length) {
       if (node.rank === "genus" && node.name && node.name !== "Unknown") {
-        window.GridWildGenusCodex?.open?.(node.name);
+        openHereGenusCodex(node.name);
       }
       return;
     }
@@ -4796,9 +5723,93 @@
     rerenderTaxaHud();
   }
 
+  function setHereCodexOpeningGenus(genus) {
+    const next = String(genus || "").trim();
+    if (hereCodexOpeningGenus === next) return;
+    hereCodexOpeningGenus = next;
+    rerenderTaxaListOnly();
+  }
+
+  function clearHereCodexOpeningGenus(token) {
+    if (token !== hereCodexOpeningToken) return;
+    setHereCodexOpeningGenus("");
+  }
+
+  function ensureGenusCodexScript() {
+    if (window.GridWildGenusCodex?.open) return Promise.resolve(window.GridWildGenusCodex);
+    if (genusCodexScriptPromise) return genusCodexScriptPromise;
+
+    genusCodexScriptPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "js/gw-genus-codex.js";
+      script.async = true;
+      script.onload = () => resolve(window.GridWildGenusCodex || null);
+      script.onerror = () => reject(new Error("Could not load genus codex"));
+      document.head.appendChild(script);
+    }).finally(() => {
+      genusCodexScriptPromise = null;
+    });
+
+    return genusCodexScriptPromise;
+  }
+
+  function openHereGenusCodex(genus) {
+    const clean = String(genus || "").trim();
+    if (!clean || clean === "Unknown") return;
+
+    const token = ++hereCodexOpeningToken;
+    setHereCodexOpeningGenus(clean);
+
+    const codexPromise =
+      typeof window.GridWildGenusCodex?.open === "function"
+        ? Promise.resolve(window.GridWildGenusCodex)
+        : ensureGenusCodexScript();
+
+    codexPromise
+      .then((codex) => {
+        if (typeof codex?.open === "function") {
+          return codex.open(clean);
+        } else {
+          toast("Codex is still loading");
+          return null;
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not open genus codex:", err);
+        toast("Codex is not available yet");
+      })
+      .finally(() => {
+        clearHereCodexOpeningGenus(token);
+      });
+  }
+
   function normalizeHere3dYaw(value) {
     const yaw = (((Number(value) || 0) % 360) + 360) % 360;
     return yaw > 180 ? yaw - 360 : yaw;
+  }
+
+  function markHere3dMotion(settleDelay = 220) {
+    if (!hereMap3dEnabled) return;
+    hereMap3dMotionUntil = Date.now() + Math.max(120, Number(settleDelay) || 220);
+    clearTimeout(hereMap3dMotionSettleTimer);
+    hereMap3dMotionSettleTimer = setTimeout(
+      () => {
+        hereMap3dMotionUntil = 0;
+        scheduleHereMapOnlyRefresh(20);
+      },
+      Math.max(80, Number(settleDelay) || 220)
+    );
+  }
+
+  function endHere3dMotion(delay = 120) {
+    hereMap3dMotionUntil = 0;
+    clearTimeout(hereMap3dMotionSettleTimer);
+    hereMap3dMotionSettleTimer = null;
+    scheduleHereMapOnlyRefresh(delay);
+  }
+
+  function here3dUsesLightweightMotion() {
+    return Boolean(hereMap3dDrag) || Date.now() < hereMap3dMotionUntil;
   }
 
   function setHere3dView(next = {}, delay = 10) {
@@ -4811,7 +5822,8 @@
     if (Object.prototype.hasOwnProperty.call(next, "zoom")) {
       hereMap3dZoom = clamp(next.zoom, HERE_3D_CAMERA.minZoom, HERE_3D_CAMERA.maxZoom);
     }
-    scheduleRefresh(delay);
+    markHere3dMotion();
+    scheduleHereMapOnlyRefresh(delay);
   }
 
   function setHere3dYawOffset(value) {
@@ -5097,6 +6109,7 @@
     });
     mapEl.setPointerCapture?.(evt.pointerId);
     beginHere3dGesture(mapEl);
+    markHere3dMotion();
   }
 
   function moveHere3dDrag(evt) {
@@ -5156,7 +6169,7 @@
     }
 
     hereMap3dDrag = null;
-    scheduleRefresh(120);
+    endHere3dMotion(120);
   }
 
   function handleHere3dWheel(evt) {
@@ -5221,7 +6234,7 @@
         evt.preventDefault();
         evt.stopPropagation();
         const genus = taxonRow.dataset.genus;
-        if (genus) window.GridWildGenusCodex?.open?.(genus);
+        openHereGenusCodex(genus);
         return;
       }
 
@@ -5319,32 +6332,57 @@
   let hereMapMotionRefreshTimer = null;
   let hereMapMotionRefreshLastAt = 0;
 
-  function renderHereMapOnlyForCurrentView() {
+  function currentHereMapContext() {
+    const api = gridApi();
+    if (!api) return null;
+    const selection = window.GridWildSelectionTool?.getSelection?.() || null;
+    const bounds = selection?.bounds || api.centerAreaBounds(HERE_RADIUS_CELLS);
+    return { bounds, selection };
+  }
+
+  function renderHereMapOnlyForCurrentView(options = {}) {
     const api = gridApi();
     if (!api || !herePanelOpen || !hereMap3dEnabled) return;
-    if (window.GridWildSelectionTool?.getSelection?.()) return;
 
     const mapEl = document.getElementById("gwHereMap");
     if (!mapEl) return;
 
-    const bounds = api.centerAreaBounds(HERE_RADIUS_CELLS);
-    requestHere3dOsmCoverage(bounds, null);
+    const context = currentHereMapContext();
+    const bounds = context?.bounds;
+    const selection = context?.selection || null;
+    if (!bounds) return;
+
+    if (options.motion !== true) requestHere3dOsmCoverage(bounds, selection);
     syncHereMapClasses(mapEl);
-    mapEl.innerHTML = renderHereMap(bounds, null);
-    syncHereImmersiveViewport(bounds, null);
+    mapEl.innerHTML = renderHereMap(bounds, selection);
+    syncHereImmersiveViewport(bounds, selection);
+  }
+
+  function scheduleHereMapOnlyRefresh(delay = 10) {
+    clearTimeout(hereMapOnlyRefreshTimer);
+    hereMapOnlyRefreshTimer = setTimeout(
+      () => {
+        hereMapOnlyRefreshTimer = null;
+        renderHereMapOnlyForCurrentView();
+      },
+      Math.max(0, Number(delay) || 0)
+    );
   }
 
   function scheduleHereMapMotionRefresh() {
     if (!herePanelOpen || !hereMap3dEnabled) return;
     if (window.GridWildSelectionTool?.getSelection?.()) return;
 
+    markHere3dMotion(260);
+    if (!hereMap3dImmersed) return;
+
     const now = Date.now();
-    const waitMs = Math.max(0, 90 - (now - hereMapMotionRefreshLastAt));
+    const waitMs = Math.max(0, 180 - (now - hereMapMotionRefreshLastAt));
     if (waitMs === 0) {
       clearTimeout(hereMapMotionRefreshTimer);
       hereMapMotionRefreshTimer = null;
       hereMapMotionRefreshLastAt = now;
-      renderHereMapOnlyForCurrentView();
+      renderHereMapOnlyForCurrentView({ motion: true });
       return;
     }
 
@@ -5352,7 +6390,7 @@
     hereMapMotionRefreshTimer = setTimeout(() => {
       hereMapMotionRefreshTimer = null;
       hereMapMotionRefreshLastAt = Date.now();
-      renderHereMapOnlyForCurrentView();
+      renderHereMapOnlyForCurrentView({ motion: true });
     }, waitMs);
   }
 
@@ -5407,11 +6445,7 @@
       syncHereImmersiveViewport(bounds, selection || null);
     }
     if (statsEl) {
-      statsEl.innerHTML = `
-        <div class="gw-here-stat" title="${summary.obs} observations"><b>${compactStatNumber(summary.obs)}</b><span>Obs</span></div>
-        <div class="gw-here-stat" title="${summary.species} species"><b>${compactStatNumber(summary.species)}</b><span>Spp</span></div>
-        <div class="gw-here-stat" title="${summary.active} active cells of ${summary.cells} cells"><b>${compactStatNumber(summary.active)}/${compactStatNumber(summary.cells)}</b><span>Cells</span></div>
-      `;
+      statsEl.innerHTML = renderHereStats(summary);
     }
     syncHereDownloadControl(selection);
     syncHerePyriteControl(selection);
@@ -5442,6 +6476,14 @@
     herePieState.previewNote = taxaContext.capped
       ? `<div class="gw-here-taxa-heading">Taxa preview: ${taxaContext.taxaCellCount}/${taxaContext.cellCount} selected cells</div>`
       : "";
+    if (statsEl) {
+      statsEl.innerHTML = renderHereStats(
+        summarizeTaxaRecord(record, {
+          ...summary,
+          cells: taxaContext.taxaCellCount || summary.cells
+        })
+      );
+    }
     if (herePieState.signature !== contextSignature) {
       resetPieState(record, contextSignature);
     } else {

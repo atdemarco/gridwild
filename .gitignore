@@ -4,9 +4,14 @@
 .env
 node_modules
 node_modules
+.npm-cache/
 
 # Generated Playable Taxonomy artifacts: too large for git; keep local or publish sharded CDN copies.
 assets/playable_taxonomy/generated_playable_taxa.json
 assets/playable_taxonomy/scored_playable_taxa.json
 assets/playable_taxonomy/*.duckdb
 assets/playable_taxonomy/*.parquet
+
+# Generated OSM/Protomaps basemap mirrors should live on R2/CDN, not in git.
+assets/osm_basemap/
+assets/osm_context/

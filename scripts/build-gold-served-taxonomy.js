@@ -453,8 +453,54 @@ function exactServedTarget(taxon) {
   };
 }
 
+function rankIndex(rank) {
+  return ["kingdom", "phylum", "class", "order", "family", "genus", "species"].indexOf(
+    String(rank || "").toLowerCase()
+  );
+}
+
+function lineageTargetForRank(taxon, targetRank) {
+  const rank = String(targetRank || "").toLowerCase();
+  if (rank === "genus" && taxon.lineage?.genus) {
+    return {
+      rank: "genus",
+      key: taxon.parentTaxonKey || taxon.lineage.genus,
+      displayName: taxon.lineage.genus
+    };
+  }
+  if (rank === "family" && taxon.lineage?.family) {
+    return {
+      rank: "family",
+      key: taxon.lineage.family,
+      displayName: taxon.lineage.family
+    };
+  }
+  if (rank === "order" && taxon.lineage?.order) {
+    return {
+      rank: "order",
+      key: taxon.lineage.order,
+      displayName: taxon.lineage.order
+    };
+  }
+  if (rank === "class" && taxon.lineage?.class) {
+    return {
+      rank: "class",
+      key: taxon.lineage.class,
+      displayName: taxon.lineage.class
+    };
+  }
+  return null;
+}
+
 function collapseTargetFor(taxon) {
   const rank = String(taxon.rank || "").toLowerCase();
+  const endpointRank = String(taxon.endpointRank || "").toLowerCase();
+  const rankPosition = rankIndex(rank);
+  const endpointPosition = rankIndex(endpointRank);
+  if (rankPosition >= 0 && endpointPosition >= 0 && rankPosition > endpointPosition) {
+    const endpointTarget = lineageTargetForRank(taxon, endpointRank);
+    if (endpointTarget) return endpointTarget;
+  }
   if (rank === "species" && taxon.parentTaxonKey && taxon.lineage?.genus) {
     return {
       rank: "genus",

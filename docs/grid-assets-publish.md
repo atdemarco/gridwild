@@ -137,6 +137,10 @@ After staged verification, promote the same build intentionally:
 npm.cmd run publish:grid-assets -- --promote-only
 ```
 
+When a build is promoted, the publisher also writes a small mutable pointer at
+`builds/current.json`. The pointer names the promoted build and points the
+browser at that build's immutable `manifest.json`.
+
 The script uploads files under a build-specific prefix:
 
 ```text
@@ -151,6 +155,7 @@ builds/<manifest.build_id>/square_genera_superchunks/super_123_456.json
 builds/<manifest.build_id>/coarse_pyramid/manifest.json
 builds/<manifest.build_id>/coarse_pyramid/summary.csv
 builds/<manifest.build_id>/coarse_pyramid/bin_8/tile_123_456.json
+builds/current.json
 ```
 
 If `manifest.pmtiles_file` points to an existing local `.pmtiles` file, the
@@ -215,7 +220,32 @@ You should see:
 
 ## Frontend Runtime
 
-The frontend loads the current build through `/.netlify/functions/get-grid-assets-build`. That function uses the server-side `SUPABASE_SERVICE_ROLE_KEY` to read `gw_asset_builds`, then returns public URLs for:
+The frontend first tries the public CDN pointer:
+
+```text
+https://assets.gridwild.com/builds/current.json
+```
+
+That pointer should resolve to the promoted build's immutable manifest:
+
+```json
+{
+  "pointer_schema_version": "gridwild-current-assets-v1",
+  "build_id": "YOUR_BUILD_ID",
+  "manifest": "YOUR_BUILD_ID/manifest.json",
+  "manifest_path": "builds/YOUR_BUILD_ID/manifest.json"
+}
+```
+
+The browser reads the manifest, then resolves heat CSV, observer dictionary,
+superchunks, coarse-pyramid manifests, and PMTiles shard manifests relative to
+that manifest URL. PMTiles URLs must stay queryless so R2 byte-range requests
+continue returning `206 Partial Content`.
+
+If the CDN pointer is unavailable, the frontend can still ask
+`/.netlify/functions/get-grid-assets-build`. That function uses the server-side
+`SUPABASE_SERVICE_ROLE_KEY` to read `gw_asset_builds`, then returns public URLs
+for:
 
 - `manifest.json`
 - `dc_heat.csv`
@@ -227,19 +257,34 @@ If `GRIDWILD_ASSET_PUBLIC_BASE` is set, those URLs point to Cloudflare R2/CDN. O
 
 The browser never receives the `service_role` key or R2 write credentials.
 
-By default the browser uses Supabase assets and falls back to local `assets/` files if the catalog function is unavailable. For local development, you can force a mode with:
+By default the browser does not silently fall back to local `assets/` files. For
+local development, you can force a mode with:
 
 ```text
+?gwAssets=cdn
 ?gwAssets=supabase
 ?gwAssets=local
+?gwAssets=local-csv
 ```
 
 You can also set a persistent browser override in DevTools:
 
 ```js
-localStorage.setItem("GW_GRID_ASSET_MODE", "local");
+localStorage.setItem("GW_GRID_ASSET_MODE", "cdn");
 localStorage.setItem("GW_GRID_ASSET_MODE", "supabase");
+localStorage.setItem("GW_GRID_ASSET_MODE", "local");
 localStorage.removeItem("GW_GRID_ASSET_MODE");
 ```
 
-Use `supabase` mode when you want failures to be loud instead of falling back to local static assets.
+Use `cdn` mode when you want the browser to require the R2 pointer. Use
+`supabase` mode when you want to test only the Netlify/Supabase catalog
+function. Use `local` or `local-csv` only when intentionally debugging old local
+assets.
+
+You can also point a single browser session at a staged build or custom pointer:
+
+```text
+?gwAssetBuild=YOUR_BUILD_ID
+?gwAssetCurrent=https://assets.gridwild.com/builds/current.json
+?gwAssetManifest=https://assets.gridwild.com/builds/YOUR_BUILD_ID/manifest.json
+```

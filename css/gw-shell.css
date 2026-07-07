@@ -44,8 +44,30 @@ html.gw-map-night #map {
   transition: filter 180ms ease;
 }
 
+html.gw-heat-contrast-underlay #map .leaflet-tile-pane {
+  filter: saturate(0.58) brightness(0.92) contrast(0.94);
+}
+
 html.gw-map-night #map .leaflet-tile-pane {
   filter: brightness(0.34) contrast(1.24) saturate(0.72);
+}
+
+html.gw-map-night.gw-heat-contrast-underlay #map .leaflet-tile-pane {
+  filter: brightness(0.32) contrast(1.14) saturate(0.48);
+}
+
+#map .leaflet-pane canvas {
+  transition: filter 180ms ease;
+}
+
+html.gw-heat-contrast-underlay #gwOsmContextCanvas,
+html.gw-heat-contrast-underlay #gwOsmBuildingCanvas {
+  filter: saturate(0.52) brightness(0.88) contrast(0.9);
+}
+
+html.gw-map-night.gw-heat-contrast-underlay #gwOsmContextCanvas,
+html.gw-map-night.gw-heat-contrast-underlay #gwOsmBuildingCanvas {
+  filter: saturate(0.42) brightness(0.72) contrast(0.96);
 }
 
 /* ------------------------------------------------------------------ */
@@ -272,6 +294,21 @@ html.gw-map-night #map .leaflet-tile-pane {
     0 1px 0 rgba(255, 255, 255, 0.88),
     0 0 4px rgba(255, 255, 255, 0.72);
   opacity: 0.9;
+}
+
+.gw-map-scale-reference {
+  width: min(104px, calc(100vw - 28px));
+  margin-left: 50%;
+  margin-bottom: 4px;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(22, 24, 20, 0.72);
 }
 
 .gw-map-scale-hatch-line {

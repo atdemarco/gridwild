@@ -11,8 +11,6 @@
   const CONTROLS_VERSION = 2;
   const PANE = "gwLocalNichePane";
   const LABEL_PANE = "gwLocalNicheLabelPane";
-  const NOMINATIM_REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
-  const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
   const NICHE_OSM_CONTEXT_ENABLED = true;
   const SAMPLING_RESULT_TOAST_MS = 1800;
   const SAMPLING_FINISH_TOAST_MS = 5200;
@@ -201,7 +199,8 @@
     detectorDebug: null,
     constrainedGeometryDebug: null,
     samplingToast: null,
-    bookmarkedNiches: initialBookmarkedNiches
+    bookmarkedNiches: initialBookmarkedNiches,
+    dismissedNicheKeys: new Set()
   };
 
   function esc(s) {
@@ -261,6 +260,17 @@
     const aIds = nicheIdentifiers(a);
     const bIds = nicheIdentifiers(b);
     return Boolean(aIds.length && bIds.length && aIds.some((id) => bIds.includes(id)));
+  }
+
+  function isDismissedNiche(nicheOrKey) {
+    const ids = nicheIdentifiers(nicheOrKey);
+    return ids.some((id) => state.dismissedNicheKeys.has(id));
+  }
+
+  function rememberDismissedNiche(nicheOrKey) {
+    const ids = nicheIdentifiers(nicheOrKey);
+    ids.forEach((id) => state.dismissedNicheKeys.add(id));
+    return ids.length > 0;
   }
 
   function sanitizeBookmarkedNiche(niche, bookmarkedAt = "") {
@@ -356,31 +366,38 @@
       return;
     }
 
-    const bookmarkRows = state.bookmarkedNiches.map((bookmark) => {
-      const hasLiveMatch = state.niches.some(
-        (niche) => bookmarkMatches(niche, bookmark) && niche._bookmark_only !== true
-      );
-      return {
-        ...bookmark,
-        _bookmarked_niche: true,
-        _bookmark_only: !hasLiveMatch
-      };
-    });
+    const bookmarkRows = state.bookmarkedNiches
+      .filter((bookmark) => !isDismissedNiche(bookmark))
+      .map((bookmark) => {
+        const hasLiveMatch = state.niches.some(
+          (niche) =>
+            !isDismissedNiche(niche) &&
+            bookmarkMatches(niche, bookmark) &&
+            niche._bookmark_only !== true
+        );
+        return {
+          ...bookmark,
+          _bookmarked_niche: true,
+          _bookmark_only: !hasLiveMatch
+        };
+      });
 
-    state.niches = mergeNiches(state.niches, bookmarkRows).map((niche) => {
-      const bookmark = savedBookmarkFor(niche);
-      return bookmark
-        ? {
-            ...niche,
-            _bookmarked_niche: true,
-            _bookmark_only: niche._bookmark_only === true
-          }
-        : {
-            ...niche,
-            _bookmarked_niche: false,
-            _bookmark_only: false
-          };
-    });
+    state.niches = mergeNiches(state.niches, bookmarkRows)
+      .filter((niche) => !isDismissedNiche(niche))
+      .map((niche) => {
+        const bookmark = savedBookmarkFor(niche);
+        return bookmark
+          ? {
+              ...niche,
+              _bookmarked_niche: true,
+              _bookmark_only: niche._bookmark_only === true
+            }
+          : {
+              ...niche,
+              _bookmarked_niche: false,
+              _bookmark_only: false
+            };
+      });
     updateBookmarkedGlobalState();
   }
 
@@ -1443,15 +1460,21 @@
         }
       )
     );
+    const dismissButton = `
+      <button class="gw-niche-dismiss-btn gwDismissNicheBtn is-map-label" data-niche-key="${esc(nicheKey(niche))}" type="button" aria-label="Dismiss niche" title="Dismiss niche">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    `;
 
     if (!place.place) {
-      return `<span class="gw-niche-label-chip${homeClass}${bookmarkClass}"><span class="gw-niche-label-main">${esc(displayNicheShortTitle(niche))}</span></span>`;
+      return `<span class="gw-niche-label-chip${homeClass}${bookmarkClass}"><span class="gw-niche-label-main">${esc(displayNicheShortTitle(niche))}</span>${dismissButton}</span>`;
     }
 
     return `
       <span class="gw-niche-label-chip${homeClass}${bookmarkClass}">
         <span class="gw-niche-label-main">${esc(action || displayNicheShortTitle(niche))}</span>
         <span class="gw-niche-label-place"><i>${esc(place.relation)}</i><b>${esc(place.place)}</b></span>
+        ${dismissButton}
       </span>
     `;
   }
@@ -1584,7 +1607,14 @@
     return data.osm_type && data.osm_id ? `${data.osm_type}/${data.osm_id}` : null;
   }
 
+  function osmServiceEndpoint(kind) {
+    return String(window.GridWildExternalServices?.getOsmEndpoint?.(kind) || "").trim();
+  }
+
   function reverseContextUrl(lat, lng) {
+    const endpoint = osmServiceEndpoint("nominatimReverse");
+    if (!endpoint) return "";
+
     const params = new URLSearchParams({
       lat: String(lat),
       lon: String(lng),
@@ -1593,7 +1623,7 @@
       addressdetails: "1",
       namedetails: "1"
     });
-    return `${NOMINATIM_REVERSE_ENDPOINT}?${params.toString()}`;
+    return `${endpoint}?${params.toString()}`;
   }
 
   function placeContextFromReverse(data = {}, lat, lng) {
@@ -1888,7 +1918,10 @@
   }
 
   async function lookupNominatimPlaceContext(lat, lng) {
-    const response = await fetch(reverseContextUrl(lat, lng), {
+    const url = reverseContextUrl(lat, lng);
+    if (!url) return null;
+
+    const response = await fetch(url, {
       headers: { Accept: "application/json" }
     });
     if (!response.ok) throw new Error(`Nominatim reverse lookup failed (${response.status})`);
@@ -1898,7 +1931,10 @@
 
   async function lookupOverpassPlaceContext(lat, lng) {
     if (Date.now() < overpassPlaceLookupDisabledUntil) return null;
-    const response = await fetch(OVERPASS_ENDPOINT, {
+    const endpoint = osmServiceEndpoint("overpass");
+    if (!endpoint) return null;
+
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -1916,11 +1952,14 @@
 
   async function lookupOverpassPlaceContextsForNiches(niches = []) {
     if (Date.now() < overpassPlaceLookupDisabledUntil) return new Map();
+    const endpoint = osmServiceEndpoint("overpass");
+    if (!endpoint) return new Map();
+
     const bounds = nicheCentroidBounds(niches);
     const query = overpassBatchQuery(bounds);
     if (!query) return new Map();
 
-    const response = await fetch(OVERPASS_ENDPOINT, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -9362,7 +9401,7 @@
   function renderLocalNichesHtml() {
     injectStyles();
     const rows = (state.niches || []).filter(
-      (niche) => isCellSeededNiche(niche) || isBookmarkedNiche(niche)
+      (niche) => !isDismissedNiche(niche) && (isCellSeededNiche(niche) || isBookmarkedNiche(niche))
     );
 
     return `
@@ -9385,7 +9424,10 @@
                       <span class="gw-niche-title">
                         ${isHomeNiche(niche) ? `<span class="gw-niche-home-mark" aria-hidden="true">${homeIconSvg()}</span>` : ""}
                         ${isBookmarkedNiche(niche) ? `<span class="gw-niche-bookmark-mark" aria-hidden="true">${bookmarkIconSvg()}</span>` : ""}
-                        ${esc(displayNicheTitle(niche))}
+                        <span class="gw-niche-title-text">${esc(displayNicheTitle(niche))}</span>
+                        <button class="gw-niche-dismiss-btn gwDismissNicheBtn" data-niche-key="${esc(nicheKey(niche))}" type="button" aria-label="Dismiss niche" title="Dismiss niche">
+                          <span aria-hidden="true">&times;</span>
+                        </button>
                       </span>
                       <span class="gw-muted gw-niche-sub">
                         ${esc(formatDistance(niche.distance_m))} &middot; ${esc(niche.theme || "local niche")} &middot; ${esc(confidenceLabel(niche.confidence))}
@@ -9445,6 +9487,29 @@
       return true;
     }
     return false;
+  }
+
+  function dismissNiche(nicheOrKey) {
+    const original = nicheByKey(nicheOrKey);
+    if (!original && !nicheIdentifiers(nicheOrKey).length) return null;
+
+    const target = original || nicheOrKey;
+    rememberDismissedNiche(target);
+    state.niches = state.niches.filter((niche) => !bookmarkMatches(niche, target));
+
+    if (original && bookmarkMatches(state.selectedId, original)) {
+      const next = state.niches.find(
+        (niche) =>
+          !isDismissedNiche(niche) && (isCellSeededNiche(niche) || isBookmarkedNiche(niche))
+      );
+      state.selectedId = next ? nicheKey(next) : null;
+    }
+
+    updateNicheDistances();
+    drawNicheLayer();
+    renderIntoPage();
+    if (original) showNicheToast(`Dismissed niche: ${homeNicheTitle(original)}`);
+    return original;
   }
 
   function bindLocalNicheControls(root = document) {
@@ -9548,6 +9613,14 @@
         evt.stopPropagation();
         if (startBtn.disabled) return;
         startNicheQuest(startBtn.dataset.nicheKey);
+        return;
+      }
+
+      const dismissBtn = evt.target.closest(".gwDismissNicheBtn");
+      if (dismissBtn && root.contains(dismissBtn)) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        dismissNiche(dismissBtn.dataset.nicheKey);
         return;
       }
 
@@ -9821,7 +9894,10 @@
       <div class="gw-quest-modal gw-niche-detail">
         <div class="gw-niche-detail-header">
           <div class="gw-quest-modal-title ${home ? "is-home-niche" : ""} ${bookmarked ? "is-bookmarked-niche" : ""}">
-            ${esc(displayNicheTitle(niche))}
+            <span class="gw-niche-title-text">${esc(displayNicheTitle(niche))}</span>
+            <button class="gw-niche-dismiss-btn gwDismissNicheBtn is-detail-header" data-niche-key="${esc(nicheKey(niche))}" type="button" aria-label="Dismiss niche" title="Dismiss niche">
+              <span aria-hidden="true">&times;</span>
+            </button>
           </div>
           <button class="gw-niche-detail-close" id="gwNicheHeaderCloseBtn" type="button" aria-label="Close niche detail" title="Close">
             &times;
@@ -9957,6 +10033,15 @@
 
   function bindNicheDetail(root, niche) {
     root.addEventListener("click", (evt) => {
+      const dismissBtn = evt.target.closest(".gwDismissNicheBtn");
+      if (dismissBtn && root.contains(dismissBtn)) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        root.remove();
+        dismissNiche(dismissBtn.dataset.nicheKey || nicheKey(niche));
+        return;
+      }
+
       if (evt.target === root || evt.target.closest("#gwNicheCloseBtn, #gwNicheHeaderCloseBtn")) {
         root.remove();
         drawNicheLayer();
@@ -10894,6 +10979,7 @@
     const selectedId = String(state.selectedId || "");
 
     for (const niche of state.niches || []) {
+      if (isDismissedNiche(niche)) continue;
       const originalRadius = Number(niche.radius_m || 75);
       const radius = Math.max(
         GRID_SIZE_M * 0.75,
@@ -11091,6 +11177,11 @@
           .on("click", (evt) => {
             if (evt && typeof L !== "undefined" && L.DomEvent) {
               L.DomEvent.stop(evt);
+            }
+            const dismissBtn = evt?.originalEvent?.target?.closest?.(".gwDismissNicheBtn");
+            if (dismissBtn) {
+              dismissNiche(dismissBtn.dataset.nicheKey || nicheKey(niche));
+              return;
             }
             openNicheDetail(nicheKey(niche));
           })
@@ -11346,6 +11437,7 @@
       .gw-niche-name-label .gw-niche-label-chip {
         display: inline-grid;
         grid-template-rows: auto auto;
+        position: relative;
         align-items: center;
         justify-items: center;
         row-gap: 1px;
@@ -11358,7 +11450,7 @@
         border: 1px solid rgba(139,211,168,0.28);
         box-shadow: 0 7px 15px rgba(0,0,0,0.30);
         text-align: center;
-        overflow: hidden;
+        overflow: visible;
         white-space: normal;
         overflow-wrap: anywhere;
       }
@@ -11602,6 +11694,55 @@
         line-height: 1.2;
       }
 
+      .gw-niche-title-text {
+        min-width: 0;
+      }
+
+      .gw-niche-dismiss-btn {
+        width: 18px;
+        height: 18px;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 999px;
+        border: 1px solid rgba(218, 228, 215, 0.34);
+        background: rgba(10, 20, 18, 0.34);
+        color: rgba(244, 250, 241, 0.76);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 950;
+        line-height: 1;
+        padding: 0;
+        margin-left: 2px;
+        cursor: pointer;
+        flex: 0 0 auto;
+        transition:
+          background 120ms ease,
+          border-color 120ms ease,
+          color 120ms ease,
+          transform 120ms ease;
+      }
+
+      .gw-niche-dismiss-btn:hover,
+      .gw-niche-dismiss-btn:focus-visible {
+        background: rgba(244, 250, 241, 0.16);
+        border-color: rgba(244, 250, 241, 0.72);
+        color: #ffffff;
+        transform: scale(1.04);
+        outline: none;
+      }
+
+      .gw-niche-name-label .gw-niche-dismiss-btn.is-map-label {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 17px;
+        height: 17px;
+        font-size: 12px;
+        background: rgba(18, 18, 15, 0.92);
+        border-color: rgba(244, 250, 241, 0.62);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.34);
+      }
+
       .gw-niche-row.is-home-niche .gw-niche-title,
       .gw-niche-detail .gw-quest-modal-title.is-home-niche {
         color: #fff0a1;
@@ -11630,6 +11771,15 @@
       .gw-niche-detail-header .gw-quest-modal-title {
         min-width: 0;
         padding-right: 2px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .gw-niche-detail-header .gw-niche-dismiss-btn.is-detail-header {
+        width: 20px;
+        height: 20px;
+        font-size: 14px;
       }
 
       .gw-niche-detail-close {

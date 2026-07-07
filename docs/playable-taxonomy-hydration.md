@@ -158,7 +158,7 @@ assets\playable_taxonomy\scored_playable_taxa_manifest.json
 assets\playable_taxonomy\scored_playable_taxa.json
 ```
 
-The scoring model is `taxon_level_playability_heuristic_v001`. It uses the same
+The scoring model is `taxon_level_playability_heuristic_v002`. It uses the same
 five conceptual components as the curated playable profiles, but computes them
 per lower taxon:
 
@@ -182,6 +182,45 @@ It also emits a draft Gold Lake action per taxon:
 - `collapse`: retain evidence, but serve at genus, family, or playable-group
   level.
 - `drop`: keep offline only unless another policy override restores it.
+
+Policy v002 makes two cutoff/collapse rules explicit:
+
+- `speciesMode` only demotes species-rank records. A group such as beetles can
+  discourage species-level beginner play while still keeping high-evidence
+  family endpoints.
+- Collapse targets prefer the configured beginner endpoint when the raw taxon is
+  more specific than that endpoint. For example, a low-confidence beetle species
+  collapses to family before it collapses to the broad beetle group.
+
+The static policy should not be the final place-specific decision. The static
+taxonomy answers "what rank is beginner-playable in principle?" Runtime metadata
+should then answer "is this endpoint supported near this location?" by summing
+served taxon evidence inside a radius around the HUD center, clicked point, or
+patch geometry. That radius can scale with the HUD field of view, with a small
+minimum so low zoom does not overfit to a single cell and a cap so high zoom does
+not query the whole regional product.
+
+Suggested production split:
+
+- Static playable taxonomy: endpoint rank, species mode, collapse target, and
+  broad action gates.
+- Spatial metadata shards: per-cell served taxon counts, playable group counts,
+  observer support, month counts, and recency for top/local taxa.
+- Runtime local decision: aggregate nearby metadata cells, require enough local
+  observations/observers/cell coverage for exact display, otherwise collapse to
+  the configured endpoint or parent.
+
+The repo-owned pilot builder for the spatial metadata layer is:
+
+```powershell
+npm.cmd run build:metadata-shards -- --stage-dir C:\Users\ad1470\Desktop\gridwild\world\gold_stage\dc_va_hybrid_served_v002 --asset-dir C:\Users\ad1470\Desktop\gridwild\world\gold\dc_va_hybrid_served_v002 --out-dir $env:TEMP\gridwild-metadata-pilot-dc-va-hybrid-v002
+```
+
+It writes one compact JSON+gzip metadata shard per existing source superchunk,
+plus shared dictionaries for taxon, playable group, iconic group, dates, and
+basic filter aliases. The first DC+VA hybrid pilot turned the old
+`square_genera_superchunks` payload from about 149 MB gzipped into about 34 MB
+gzipped while preserving all 1.95M occupied cells and 2.62M cell/taxon records.
 
 GBIF backbone taxonomy alone cannot score this. The scorer needs occurrence
 evidence. Prefer a GBIF occurrence download or the existing local silver lake

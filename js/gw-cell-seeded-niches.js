@@ -15,6 +15,7 @@
   const MIN_SPARKLE_ZOOM = 16;
   const GRID_SIZE_M = 20 * 0.3048;
   const TAXON_HYDRATION_TIMEOUT_MS = 1600;
+  const LOCAL_NICHES_MODULE_TIMEOUT_MS = 2200;
   const NICHE_SAVE_TIMEOUT_MS = 2800;
 
   const state = {
@@ -453,6 +454,14 @@
     return values.reduce((total, value) => total + (Number(value) || 0), 0);
   }
 
+  function isOnlineUnavailableError(err) {
+    return (
+      err?.code === "GRIDWILD_ONLINE_UNAVAILABLE" ||
+      err?.onlineUnavailable === true ||
+      window.GridWildOnline?.isUnavailableError?.(err) === true
+    );
+  }
+
   function withTimeout(promise, timeoutMs, fallback, label) {
     let settled = false;
     const guarded = Promise.resolve(promise)
@@ -462,7 +471,13 @@
       })
       .catch((err) => {
         settled = true;
-        console.warn(label || "Cell-seeded niche async step failed.", err);
+        if (label === "Cell-seeded niche save" && isOnlineUnavailableError(err)) {
+          console.info(
+            "Cell-seeded niche save deferred; keeping runtime niche until online gameplay is ready."
+          );
+        } else {
+          console.warn(label || "Cell-seeded niche async step failed.", err);
+        }
         return fallback;
       });
 
@@ -481,6 +496,51 @@
         resolve(value);
       });
     });
+  }
+
+  function ensureLocalNichesModule() {
+    if (window.GridWildLocalNiches?.addRuntimeNiche) {
+      return Promise.resolve(window.GridWildLocalNiches);
+    }
+    if (typeof window.ensureGridWildLocalNichesLoaded === "function") {
+      return window.ensureGridWildLocalNichesLoaded();
+    }
+    return Promise.resolve(null);
+  }
+
+  function addRuntimeNicheToHud(localNiches, niche, options = {}) {
+    if (!localNiches?.addRuntimeNiche || !niche) return null;
+    const added = localNiches.addRuntimeNiche(niche, options);
+    window.GridWildHudTaxaFilter?.sync?.();
+    return added;
+  }
+
+  async function addRuntimeNicheIfPossible(niche, options = {}) {
+    let displayed = false;
+    const modulePromise = ensureLocalNichesModule();
+    const localNiches = await withTimeout(
+      modulePromise,
+      LOCAL_NICHES_MODULE_TIMEOUT_MS,
+      null,
+      "Local niches module load"
+    );
+
+    if (localNiches?.addRuntimeNiche) {
+      displayed = true;
+      return addRuntimeNicheToHud(localNiches, niche, options);
+    }
+
+    Promise.resolve(modulePromise)
+      .then((lateLocalNiches) => {
+        if (displayed || !lateLocalNiches?.addRuntimeNiche) return;
+        displayed = true;
+        addRuntimeNicheToHud(lateLocalNiches, niche, options);
+      })
+      .catch((err) => {
+        console.warn("Cell-seeded niche display failed; Local Niches module unavailable.", err);
+      });
+
+    return null;
   }
 
   function addTaxonCount(map, name, count) {
@@ -1132,11 +1192,10 @@
     const saved = await saveIfPossible(niche);
     if (!saved || saved._runtimeOnly !== false) return;
 
-    window.GridWildLocalNiches?.addRuntimeNiche?.(saved, {
+    await addRuntimeNicheIfPossible(saved, {
       openDetail: false,
       select: true
     });
-    window.GridWildHudTaxaFilter?.sync?.();
   }
 
   function waitForPaint() {
@@ -1195,11 +1254,10 @@
         niche,
         "Cell-seeded niche taxonomy hydration"
       );
-      window.GridWildLocalNiches?.addRuntimeNiche?.(hydrated, {
+      await addRuntimeNicheIfPossible(hydrated, {
         openDetail: options.openDetail === true,
         select: true
       });
-      window.GridWildHudTaxaFilter?.sync?.();
       persistPlantedNiche(hydrated).catch((err) => {
         console.warn("Cell-seeded niche background persistence failed.", err);
       });

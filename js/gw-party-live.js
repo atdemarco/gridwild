@@ -595,6 +595,12 @@
     }
   }
 
+  window.addEventListener("gwBootstrapReady", async () => {
+    await loadParty({ forceHistory: true, forceNearby: true });
+    refreshPartySheet();
+    startPartyPolling();
+  });
+
   window.GridWildPartyLive = {
     loadParty,
     refreshPartySheet,

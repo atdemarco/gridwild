@@ -1069,6 +1069,38 @@
     return L.latLng(lat, lng);
   }
 
+  function targetSetTetherLatLng(target, userLL) {
+    const cells = Array.isArray(target?.cells) ? target.cells : [];
+    if (!cells.length) return targetLatLng(target);
+
+    const claimedKeys = claimedTargetSetCellKeys();
+    const availableCells = cells.filter((cell) => !claimedKeys.has(cell.key));
+    const candidates = availableCells.length ? availableCells : cells;
+
+    return (
+      candidates
+        .map((cell) => ({
+          cell,
+          latlng:
+            Number.isFinite(Number(cell.lat)) && Number.isFinite(Number(cell.lng))
+              ? L.latLng(cell.lat, cell.lng)
+              : centerOfCell(cell.ix, cell.iy)
+        }))
+        .filter((entry) => entry.latlng)
+        .map((entry) => ({
+          ...entry,
+          distance: userLL ? entry.latlng.distanceTo(userLL) : Infinity
+        }))
+        .sort((a, b) => a.distance - b.distance || a.cell.key.localeCompare(b.cell.key))[0]
+        ?.latlng || targetLatLng(target)
+    );
+  }
+
+  function tetherTargetLatLng(target, userLL) {
+    if (target?.mode === "target_set") return targetSetTetherLatLng(target, userLL);
+    return targetLatLng(target);
+  }
+
   function isHudCollapsed() {
     return localStorage.getItem(HUD_COLLAPSED_KEY) === "1";
   }
@@ -1341,7 +1373,7 @@
     }
 
     const userLL = getUserLatLng();
-    const targetLL = targetLatLng(target);
+    const targetLL = tetherTargetLatLng(target, userLL);
 
     if (!targetLL) {
       if (target.mode === "target_set") setTargetSetQualifying(false);

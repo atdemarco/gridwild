@@ -255,12 +255,16 @@
       markerZoomAnimation: false
     });
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 20,
-      keepBuffer: 8,
-      updateWhenIdle: false,
-      updateWhenZooming: false
-    }).addTo(overviewMap);
+    (
+      window.createGridWildDefaultBaseLayer?.({
+        flavor: "light",
+        keepBuffer: 8,
+        updateWhenIdle: false,
+        updateWhenZooming: false
+      }) ||
+      window.createStreetBaseLayer?.() ||
+      L.layerGroup()
+    ).addTo(overviewMap);
 
     patchLayer = L.layerGroup().addTo(overviewMap);
 

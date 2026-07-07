@@ -48,6 +48,42 @@
     return window.GridWildOnline?.isReady?.() === true || window.__gwState?.bootstrapReady === true;
   }
 
+  function inboxAccountStatus() {
+    const signedIn = isSignedIn();
+    const onlineReady = isOnlineGameplayReady();
+    const bootState = window.__gwState || {};
+
+    if (!signedIn) {
+      return {
+        key: "signed-out",
+        badge: "!",
+        label: "Sign in for Inbox"
+      };
+    }
+
+    if (!onlineReady) {
+      if (bootState.onlineBootstrapDeferred || bootState.onlineGameplayReady !== false) {
+        return {
+          key: "checking",
+          badge: "...",
+          label: "Checking Inbox"
+        };
+      }
+
+      return {
+        key: "offline",
+        badge: "off",
+        label: "Inbox offline"
+      };
+    }
+
+    return {
+      key: "ready",
+      badge: null,
+      label: "HUD Inbox"
+    };
+  }
+
   function storageKey(base) {
     try {
       const playerId = localStorage.getItem("gwPlayerId");
@@ -247,7 +283,7 @@
         position: fixed;
         top: calc(max(12px, env(safe-area-inset-top)) + 50px);
         right: 12px;
-        z-index: 100003;
+        z-index: 1498;
         display: grid;
         justify-items: end;
         pointer-events: none;
@@ -281,6 +317,31 @@
         color: #231a12;
         font-size: 12px;
         line-height: 1;
+      }
+
+      .gw-player-inbox-root.is-checking .gw-player-inbox-count {
+        min-width: 28px;
+        background: rgba(151,181,190,0.92);
+        color: #152025;
+        animation: gwInboxPulse 1.25s ease-in-out infinite;
+      }
+
+      .gw-player-inbox-root.is-signed-out .gw-player-inbox-count {
+        background: #e0a84f;
+        color: #24180b;
+      }
+
+      .gw-player-inbox-root.is-offline .gw-player-inbox-count {
+        min-width: 30px;
+        background: rgba(155,163,175,0.88);
+        color: #151719;
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
+      @keyframes gwInboxPulse {
+        0%, 100% { opacity: 0.62; }
+        50% { opacity: 1; }
       }
 
       .gw-player-inbox-panel {
@@ -771,6 +832,45 @@
     `;
   }
 
+  function renderInboxEmptyState(status) {
+    if (status.key === "signed-out") {
+      return `
+        <div class="gw-player-inbox-item">
+          <div class="gw-player-inbox-item-title">Sign in for Inbox</div>
+          <div class="gw-player-inbox-item-copy">Sign in to receive chat, party, and quest updates.</div>
+          <div class="gw-player-inbox-actions">
+            <button class="gw-player-inbox-action" type="button" data-gw-inbox-login>Sign In</button>
+          </div>
+        </div>
+      `;
+    }
+
+    if (status.key === "checking") {
+      return `
+        <div class="gw-player-inbox-item">
+          <div class="gw-player-inbox-item-title">Checking Inbox</div>
+          <div class="gw-player-inbox-item-copy">GridWild is reconnecting your account and field updates.</div>
+        </div>
+      `;
+    }
+
+    if (status.key === "offline") {
+      return `
+        <div class="gw-player-inbox-item">
+          <div class="gw-player-inbox-item-title">Inbox offline</div>
+          <div class="gw-player-inbox-item-copy">Online gameplay is unavailable right now. Local quest assignments will still appear here.</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="gw-player-inbox-item">
+        <div class="gw-player-inbox-item-title">Inbox clear</div>
+        <div class="gw-player-inbox-item-copy">Chat, party, and quest assignments will appear here.</div>
+      </div>
+    `;
+  }
+
   function ensureHud() {
     injectStyles();
     if (hudRoot?.isConnected) return hudRoot;
@@ -786,14 +886,17 @@
     const root = ensureHud();
     const rows = inboxNotifications();
     const count = rows.length;
-    const hidden = !isSignedIn() && count === 0;
-    root.classList.toggle("is-hidden", hidden);
+    const status = inboxAccountStatus();
+    const badge = status.badge || String(count);
+    root.classList.remove("is-hidden");
+    root.classList.remove("is-ready", "is-checking", "is-signed-out", "is-offline");
+    root.classList.add(`is-${status.key}`);
     root.classList.toggle("is-open", inboxOpen);
 
     root.innerHTML = `
-      <button class="gw-player-inbox-pill" type="button" data-gw-inbox-toggle aria-expanded="${inboxOpen ? "true" : "false"}">
+      <button class="gw-player-inbox-pill" type="button" data-gw-inbox-toggle aria-expanded="${inboxOpen ? "true" : "false"}" aria-label="${esc(status.label)}" title="${esc(status.label)}">
         <span>Inbox</span>
-        <span class="gw-player-inbox-count">${count}</span>
+        <span class="gw-player-inbox-count">${esc(badge)}</span>
       </button>
       <div class="gw-player-inbox-panel" role="dialog" aria-label="HUD inbox">
         <div class="gw-player-inbox-head">
@@ -804,10 +907,7 @@
           ${
             count
               ? rows.map(renderNotification).join("")
-              : `<div class="gw-player-inbox-item">
-                <div class="gw-player-inbox-item-title">Inbox clear</div>
-                <div class="gw-player-inbox-item-copy">Chat, party, and quest assignments will appear here.</div>
-              </div>`
+              : renderInboxEmptyState(status)
           }
         </div>
       </div>
@@ -946,6 +1046,14 @@
     root.querySelector("[data-gw-inbox-close]")?.addEventListener("click", () => {
       inboxOpen = false;
       renderHud();
+    });
+
+    root.querySelector("[data-gw-inbox-login]")?.addEventListener("click", () => {
+      if (window.GridWildAccount?.openModal) {
+        window.GridWildAccount.openModal("login");
+      } else {
+        toast("Account tools are still loading.");
+      }
     });
 
     root.querySelectorAll("[data-gw-interaction-response]").forEach((button) => {
@@ -1176,6 +1284,10 @@
   }
 
   window.addEventListener("gwBootstrapReady", startPolling);
+  window.addEventListener("gwBootstrapUnavailable", () => {
+    renderHud();
+    updateMessagesSection();
+  });
   window.addEventListener("gwAccountChanged", () => {
     state = {
       notifications: [],
@@ -1194,6 +1306,9 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && refreshTimer) refresh({ quiet: true });
   });
+
+  renderHud();
+  if (isOnlineGameplayReady()) startPolling();
 
   window.GridWildPlayerInteractions = {
     bindAvatarActions,

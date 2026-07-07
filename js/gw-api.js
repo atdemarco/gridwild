@@ -59,9 +59,7 @@ function gridWildOnlineUnavailableError(functionName) {
 }
 
 function isGridWildOnlineReady() {
-  return (
-    gridWildOnlineState.bootstrapReady === true || window.__gwState?.bootstrapReady === true
-  );
+  return gridWildOnlineState.bootstrapReady === true || window.__gwState?.bootstrapReady === true;
 }
 
 function isGridWildOnlineCircuitOpen() {
@@ -127,11 +125,8 @@ function gridWildFunctionTimeoutMs(functionName, options = {}) {
 
 async function fetchGridWildFunction(functionName, fetchOptions = {}, options = {}) {
   const timeoutMs = gridWildFunctionTimeoutMs(functionName, options);
-  const controller =
-    timeoutMs > 0 && !fetchOptions.signal ? new AbortController() : null;
-  const timer = controller
-    ? window.setTimeout(() => controller.abort(), timeoutMs)
-    : null;
+  const controller = timeoutMs > 0 && !fetchOptions.signal ? new AbortController() : null;
+  const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
 
   try {
     return await fetch(`/.netlify/functions/${functionName}`, {
@@ -255,12 +250,15 @@ function gridWildReloginError(error) {
 }
 
 async function postFunction(name, payload = {}, options = {}) {
-  if (
-    name === "get-bootstrap" &&
-    isGridWildOnlineCircuitOpen() &&
-    options.force !== true
-  ) {
+  if (name === "get-bootstrap" && isGridWildOnlineCircuitOpen() && options.force !== true) {
     throw gridWildOnlineUnavailableError(name);
+  }
+
+  if (
+    shouldRequireGridWildOnline(name, options) &&
+    (!isGridWildOnlineReady() || isGridWildOnlineCircuitOpen())
+  ) {
+    await ensureGridWildPlayerSession({ force: true });
   }
 
   if (
@@ -579,13 +577,14 @@ window.GridWildAPI = {
     });
   },
 
-  async addPartyRoutePoint(partyId, lat, lng, accuracyMeters = null) {
+  async addPartyRoutePoint(partyId, lat, lng, accuracyMeters = null, createdAt = null) {
     return postFunction("add-party-route-point", {
       player_id: this.getPlayerId(),
       party_id: partyId,
       lat,
       lng,
-      accuracy_meters: accuracyMeters
+      accuracy_meters: accuracyMeters,
+      created_at: createdAt
     });
   },
 
@@ -688,6 +687,17 @@ window.GridWildAPI = {
       ...evidence,
       player_id: this.getPlayerId()
     });
+  },
+
+  async syncPartyINatObservations(partyId) {
+    return postFunction(
+      "sync-party-inat-observations",
+      {
+        player_id: this.getPlayerId(),
+        party_id: partyId
+      },
+      { timeoutMs: 20000 }
+    );
   },
 
   async acceptQuest(questId) {

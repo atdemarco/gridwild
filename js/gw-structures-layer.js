@@ -10,9 +10,12 @@
   let buildings = [];
 
   const STRUCTURE_Z = 450;
-  const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
   const FETCH_DEBOUNCE_MS = 900;
   const MIN_ZOOM = 17;
+
+  function overpassEndpoint() {
+    return String(window.GridWildExternalServices?.getOsmEndpoint?.("overpass") || "").trim();
+  }
 
   function ensureCanvas() {
     if (canvas) return canvas;
@@ -159,10 +162,13 @@
 
     const fetchKey = getFetchKey();
     if (fetchKey === lastFetchKey) return;
-    lastFetchKey = fetchKey;
 
     try {
-      const resp = await fetch(OVERPASS_URL, {
+      const endpoint = overpassEndpoint();
+      if (!endpoint) return;
+
+      lastFetchKey = fetchKey;
+      const resp = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"

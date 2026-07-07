@@ -8,10 +8,20 @@
   const PARTY_ROUTE_THROTTLE_MS = 8000;
   const PARTY_ROUTE_MAX_ACCURACY_M = 60;
   const PARTY_HUD_COLLAPSED_KEY = "gw_party_hud_collapsed";
+  const PARTY_ROUTE_OUTBOX_KEY = "gw_party_route_outbox_v1";
+  const PARTY_ROUTE_OUTBOX_LIMIT = 1200;
+  const PARTY_ROUTE_RETRY_MS = 15000;
+  const PARTY_ROUTE_FLUSH_BATCH = 80;
+  const PARTY_END_OUTBOX_KEY = "gw_party_end_outbox_v1";
+  const PARTY_END_RETRY_MS = 20000;
 
   let partyLayer = null;
   let partyHudRaiseTab = null;
   let partyRaiseTabPositionBound = false;
+  let partyRouteFlushTimer = null;
+  let partyRouteFlushPromise = null;
+  let partyEndFlushTimer = null;
+  let partyEndFlushPromise = null;
 
   const PARTY_TEMPLATES = [
     {
@@ -85,6 +95,32 @@
 
   function nowISO() {
     return new Date().toISOString();
+  }
+
+  function isoOrNow(value) {
+    const ms = Date.parse(value || "");
+    return Number.isFinite(ms) ? new Date(ms).toISOString() : nowISO();
+  }
+
+  function readStoredArray(key) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeStoredArray(key, rows = []) {
+    try {
+      localStorage.setItem(key, JSON.stringify(Array.isArray(rows) ? rows : []));
+    } catch (err) {
+      console.warn("Could not save GridWild party local queue:", err);
+    }
+  }
+
+  function shortRouteId() {
+    return `${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 10)}`;
   }
 
   function formatWhen(iso) {
@@ -235,11 +271,16 @@
     return window.__gwState.partySnapshotsById[party.id];
   }
 
-  async function hydratePartySnapshot(id) {
+  async function hydratePartySnapshot(id, options = {}) {
     if (!id) return false;
 
     const existing = window.__gwState?.partySnapshotsById?.[id];
-    if (existing?.party && Array.isArray(existing.evidence) && Array.isArray(existing.route)) {
+    if (
+      options.force !== true &&
+      existing?.party &&
+      Array.isArray(existing.evidence) &&
+      Array.isArray(existing.route)
+    ) {
       return true;
     }
 
@@ -657,7 +698,7 @@
       route.length &&
       (!loadedId || !routePartyId || String(routePartyId) === String(loadedId))
     ) {
-      rows[partyId] = route
+      rows[partyId] = mergeRouteRowsWithOutbox(route, partyId)
         .filter((p) => String(p?.party_id || routePartyId || "") === String(partyId))
         .map((p) => ({
           lat: Number(p.lat),
@@ -665,6 +706,13 @@
           accuracyMeters: p.accuracy_meters,
           t: p.created_at
         }));
+    } else if (partyId && partyRouteOutboxRows(partyId).length) {
+      rows[partyId] = mergeRouteRowsWithOutbox([], partyId).map((p) => ({
+        lat: Number(p.lat),
+        lng: Number(p.lng),
+        accuracyMeters: p.accuracy_meters,
+        t: p.created_at
+      }));
     }
 
     for (const [id, snapshot] of Object.entries(window.__gwState?.partySnapshotsById || {})) {
@@ -733,10 +781,28 @@
       }
     }
 
+    const queued = partyRouteOutboxRows(partyId);
+    for (let i = queued.length - 1; i >= 0; i--) {
+      const row = queued[i];
+      const cellKey = row?.cell_key || getPartyRouteCellKey(row?.lat, row?.lng);
+      if (cellKey) {
+        rememberPartyRouteCell(partyId, cellKey);
+        return cellKey;
+      }
+    }
+
     return "";
   }
 
-  function appendOptimisticPartyRoutePoint(partyId, lat, lng, accuracyMeters, cellKey, createdAt) {
+  function appendOptimisticPartyRoutePoint(
+    partyId,
+    lat,
+    lng,
+    accuracyMeters,
+    cellKey,
+    createdAt,
+    outboxId = null
+  ) {
     window.__gwState = window.__gwState || {};
     const route = Array.isArray(window.__gwState.partyRoute) ? window.__gwState.partyRoute : [];
 
@@ -753,6 +819,7 @@
       accuracy_meters: Number.isFinite(Number(accuracyMeters)) ? Number(accuracyMeters) : null,
       cell_key: cellKey || null,
       created_at: createdAt,
+      _route_outbox_id: outboxId || null,
       _optimistic: true
     });
 
@@ -772,8 +839,8 @@
     }
   }
 
-  function recordPartyPosition(lat, lng, accuracyMeters) {
-    const partyId = getActivePartyId();
+  function recordPartyPosition(lat, lng, accuracyMeters, options = {}) {
+    const partyId = options.partyId || getActivePartyId();
     if (!partyId) return;
 
     const latNum = Number(lat);
@@ -793,37 +860,39 @@
     const now = Date.now();
     const lastTime = Number(window.__gwState.lastPartyRoutePointAtByParty[partyId] || 0);
 
-    if (!enteredNewCell && now - lastTime < PARTY_ROUTE_THROTTLE_MS) return;
+    if (options.force !== true && !enteredNewCell && now - lastTime < PARTY_ROUTE_THROTTLE_MS) {
+      return;
+    }
 
     window.__gwState.lastPartyRoutePointAtByParty[partyId] = now;
     window.__gwState.lastPartyRoutePointAt = now;
     rememberPartyRouteCell(partyId, cellKey);
 
     const createdAt = new Date(now).toISOString();
+    const queued = enqueuePartyRoutePoint({
+      party_id: partyId,
+      lat: latNum,
+      lng: lngNum,
+      accuracy_meters: Number.isFinite(acc) ? acc : null,
+      cell_key: cellKey,
+      created_at: createdAt
+    });
     const optimisticId = appendOptimisticPartyRoutePoint(
       partyId,
       latNum,
       lngNum,
       Number.isFinite(acc) ? acc : null,
       cellKey,
-      createdAt
+      createdAt,
+      queued?.id || null
     );
+    if (queued?.id) {
+      updatePartyRouteOutboxRow(queued.id, { optimistic_id: optimisticId });
+    }
 
     scheduleActivePartyHudRender();
     refreshMapBeacon();
-
-    window.GridWildAPI?.addPartyRoutePoint?.(
-      partyId,
-      latNum,
-      lngNum,
-      Number.isFinite(acc) ? acc : null
-    )
-      .then((result) => {
-        replaceOptimisticPartyRoutePoint(optimisticId, result?.point);
-      })
-      .catch((err) => {
-        console.warn("Could not sync party route point:", err);
-      });
+    schedulePartyRouteOutboxFlush(0);
   }
 
   function getPartyEvidenceRows(partyId) {
@@ -987,7 +1056,7 @@
     return `${miles.toFixed(miles < 10 ? 1 : 0)} mi`;
   }
 
-  function endParty(id) {
+  async function endParty(id) {
     if (!id) return;
 
     if (!window.GridWildAPI?.endParty) {
@@ -995,19 +1064,34 @@
       return;
     }
 
-    window.GridWildAPI.endParty(id)
-      .then(async () => {
-        window.GridWildPartyLive?.setActivePartyId?.(null);
-        await window.GridWildPartyLive?.loadParty?.();
-        window.GridWildPartyLive?.refreshPartySheet?.();
-        refreshMapBeacon();
-        scheduleActivePartyHudRender();
-        toast("Online party ended");
-      })
-      .catch((err) => {
-        console.error("DB end failed:", err);
-        toast("Could not end online party");
-      });
+    if (partyIsEnding(id)) {
+      toast("Party end is already queued");
+      schedulePartyEndOutboxFlush(0);
+      return;
+    }
+
+    setPartyEnding(id, true);
+    recordLatestPartyRoutePoint(id);
+    const pendingBefore = partyRouteSyncStatus(id).pending;
+    if (pendingBefore) toast("Saving party route...");
+
+    await flushPartyRouteOutbox({ partyId: id }).catch((err) => {
+      console.warn("Could not flush party route before ending:", err);
+    });
+
+    try {
+      await window.GridWildAPI.endParty(id);
+      await finishEndedPartyLocally(id, "Online party ended");
+    } catch (err) {
+      console.error("DB end failed:", err);
+      queuePartyEnd(id, err);
+      setPartyEnding(id, false);
+      window.GridWildPartyLive?.setActivePartyId?.(null);
+      window.GridWildPartyLive?.refreshPartySheet?.();
+      refreshMapBeacon();
+      scheduleActivePartyHudRender();
+      toast("Party end queued; will retry");
+    }
 
     return;
   }
@@ -1036,6 +1120,66 @@
     } else {
       navigator.clipboard?.writeText(url);
       toast("🔗 Static report link copied");
+    }
+  }
+
+  function partyINatSyncToast(result = {}) {
+    const imported = Number(result.imported || 0);
+    if (imported > 0) {
+      return `Synced ${imported} iNaturalist observation${imported === 1 ? "" : "s"}`;
+    }
+
+    const linked = Number(result.linked_members || 0);
+    if (!linked) return "No linked iNaturalist accounts in this party";
+
+    const matched = Number(result.matched || 0);
+    if (matched > 0) return "Those party-time iNaturalist observations were already synced";
+
+    return "No new party-time iNaturalist observations found";
+  }
+
+  async function syncPartyINatObservationsForRecap(id, root, closeRecap) {
+    if (!id) return false;
+    if (!window.GridWildAPI?.syncPartyINatObservations) {
+      toast("iNaturalist party sync is unavailable");
+      return false;
+    }
+
+    const button = root?.querySelector?.("#gwPartySyncRecapBtn");
+    const oldText = button?.textContent || "Sync";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Syncing...";
+    }
+
+    try {
+      const result = await window.GridWildAPI.syncPartyINatObservations(id);
+      const route = loadPartyRoutes()[id] || [];
+      if (result?.party?.id) {
+        rememberPartySnapshot({ ...result, route });
+      }
+      await hydratePartySnapshot(id, { force: true });
+
+      window.GridWildPartyLive?.refreshPartySheet?.();
+      refreshMapBeacon();
+      scheduleActivePartyHudRender();
+      toast(partyINatSyncToast(result));
+
+      closeRecap?.();
+      openPartyRecap(id);
+      return true;
+    } catch (err) {
+      console.error("Could not sync party iNaturalist observations:", err);
+      toast(
+        err?.statusCode === 429 || /429|too many/i.test(String(err?.message || ""))
+          ? "iNaturalist is rate limiting; try again later"
+          : "Could not sync iNaturalist observations"
+      );
+      if (button) {
+        button.disabled = false;
+        button.textContent = oldText;
+      }
+      return false;
     }
   }
 
@@ -1193,6 +1337,380 @@
   }
 
   function refreshStoredPartyProgress() {}
+
+  function normalizeRouteOutboxRow(row = {}) {
+    const partyId = String(row.party_id || row.partyId || "").trim();
+    const lat = Number(row.lat);
+    const lng = Number(row.lng);
+    if (!partyId || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    const accuracy = Number(row.accuracy_meters ?? row.accuracyMeters);
+    return {
+      id: String(row.id || `route_outbox_${partyId}_${shortRouteId()}`),
+      party_id: partyId,
+      lat,
+      lng,
+      accuracy_meters: Number.isFinite(accuracy) ? accuracy : null,
+      cell_key: String(row.cell_key || row.cellKey || "").trim() || null,
+      created_at: isoOrNow(row.created_at || row.createdAt),
+      optimistic_id: row.optimistic_id || row.optimisticId || null,
+      attempts: Math.max(0, Number(row.attempts) || 0),
+      last_attempt_at: row.last_attempt_at || null,
+      last_error: row.last_error || null
+    };
+  }
+
+  function loadPartyRouteOutbox() {
+    return readStoredArray(PARTY_ROUTE_OUTBOX_KEY).map(normalizeRouteOutboxRow).filter(Boolean);
+  }
+
+  function savePartyRouteOutbox(rows = []) {
+    const normalized = (Array.isArray(rows) ? rows : [])
+      .map(normalizeRouteOutboxRow)
+      .filter(Boolean)
+      .sort((a, b) => Date.parse(a.created_at || "") - Date.parse(b.created_at || ""));
+    const trimmed =
+      normalized.length > PARTY_ROUTE_OUTBOX_LIMIT
+        ? normalized.slice(normalized.length - PARTY_ROUTE_OUTBOX_LIMIT)
+        : normalized;
+    writeStoredArray(PARTY_ROUTE_OUTBOX_KEY, trimmed);
+    scheduleActivePartyHudRender();
+    return trimmed;
+  }
+
+  function partyRouteOutboxRows(partyId = null) {
+    const id = partyId ? String(partyId) : "";
+    return loadPartyRouteOutbox().filter((row) => !id || String(row.party_id) === id);
+  }
+
+  function partyRouteSyncStatus(partyId = null) {
+    const rows = partyRouteOutboxRows(partyId);
+    const lastErrorRow = rows
+      .filter((row) => row.last_error)
+      .sort((a, b) => Date.parse(b.last_attempt_at || "") - Date.parse(a.last_attempt_at || ""))[0];
+    return {
+      pending: rows.length,
+      syncing: partyRouteFlushPromise !== null,
+      lastError: lastErrorRow?.last_error || null
+    };
+  }
+
+  function partyRouteSyncLabel(partyId) {
+    const status = partyRouteSyncStatus(partyId);
+    if (status.syncing && status.pending) return `Saving route (${status.pending} queued)`;
+    if (status.pending && status.lastError) return `Route retrying (${status.pending} queued)`;
+    if (status.pending) return `Route queued (${status.pending})`;
+    return "Route saved";
+  }
+
+  function enqueuePartyRoutePoint(row = {}) {
+    const normalized = normalizeRouteOutboxRow(row);
+    if (!normalized) return null;
+    const rows = loadPartyRouteOutbox();
+    rows.push(normalized);
+    savePartyRouteOutbox(rows);
+    return normalized;
+  }
+
+  function removePartyRouteOutboxRow(id) {
+    if (!id) return;
+    savePartyRouteOutbox(loadPartyRouteOutbox().filter((row) => row.id !== id));
+  }
+
+  function updatePartyRouteOutboxRow(id, patch = {}) {
+    if (!id) return;
+    savePartyRouteOutbox(
+      loadPartyRouteOutbox().map((row) => (row.id === id ? { ...row, ...patch } : row))
+    );
+  }
+
+  function mergeRouteRowsWithOutbox(route = [], partyId) {
+    const rows = Array.isArray(route) ? route.slice() : [];
+    const existingOutboxIds = new Set(
+      rows.map((row) => row?._route_outbox_id || row?.outbox_id).filter(Boolean)
+    );
+    const existingKeys = new Set(
+      rows
+        .map((row) => {
+          const lat = Number(row?.lat);
+          const lng = Number(row?.lng);
+          const t = row?.created_at || row?.t || "";
+          return Number.isFinite(lat) && Number.isFinite(lng)
+            ? `${lat.toFixed(7)}:${lng.toFixed(7)}:${t}`
+            : "";
+        })
+        .filter(Boolean)
+    );
+
+    partyRouteOutboxRows(partyId).forEach((row) => {
+      const key = `${row.lat.toFixed(7)}:${row.lng.toFixed(7)}:${row.created_at}`;
+      if (existingOutboxIds.has(row.id) || existingKeys.has(key)) return;
+      rows.push({
+        id: row.optimistic_id || `queued_${row.id}`,
+        party_id: row.party_id,
+        player_id: window.GridWildAPI?.getPlayerId?.() || null,
+        lat: row.lat,
+        lng: row.lng,
+        accuracy_meters: row.accuracy_meters,
+        cell_key: row.cell_key,
+        created_at: row.created_at,
+        _optimistic: true,
+        _route_outbox_id: row.id
+      });
+    });
+
+    return rows.sort(
+      (a, b) => Date.parse(a.created_at || a.t || "") - Date.parse(b.created_at || b.t || "")
+    );
+  }
+
+  function replaceQueuedPartyRoutePoint(outboxRow, point) {
+    if (!outboxRow || !point) return;
+    window.__gwState = window.__gwState || {};
+    const route = Array.isArray(window.__gwState.partyRoute) ? window.__gwState.partyRoute : [];
+    window.__gwState.partyRoute = route;
+
+    const idx = route.findIndex(
+      (row) =>
+        row?._route_outbox_id === outboxRow.id ||
+        (outboxRow.optimistic_id && row?.id === outboxRow.optimistic_id)
+    );
+    const nextPoint = {
+      ...point,
+      cell_key: point.cell_key || outboxRow.cell_key || null,
+      _optimistic: false
+    };
+
+    if (idx >= 0) {
+      route[idx] = nextPoint;
+    } else if (
+      String(window.__gwState.partyRoutePartyId || "") === String(outboxRow.party_id) &&
+      !route.some((row) => row?.id && point?.id && row.id === point.id)
+    ) {
+      route.push(nextPoint);
+    }
+  }
+
+  async function flushPartyRouteOutbox(options = {}) {
+    if (partyRouteFlushPromise) return partyRouteFlushPromise;
+
+    partyRouteFlushPromise = (async () => {
+      const partyId = options.partyId ? String(options.partyId) : "";
+      if (!window.GridWildAPI?.addPartyRoutePoint) {
+        return { synced: 0, failed: 0, pending: partyRouteOutboxRows(partyId).length };
+      }
+
+      let synced = 0;
+      let failed = 0;
+      const candidates = partyRouteOutboxRows(partyId).slice(0, PARTY_ROUTE_FLUSH_BATCH);
+
+      for (const row of candidates) {
+        if (!loadPartyRouteOutbox().some((candidate) => candidate.id === row.id)) continue;
+        updatePartyRouteOutboxRow(row.id, {
+          attempts: row.attempts + 1,
+          last_attempt_at: nowISO()
+        });
+
+        try {
+          const result = await window.GridWildAPI.addPartyRoutePoint(
+            row.party_id,
+            row.lat,
+            row.lng,
+            row.accuracy_meters,
+            row.created_at
+          );
+          removePartyRouteOutboxRow(row.id);
+          replaceQueuedPartyRoutePoint(row, result?.point);
+          synced++;
+        } catch (err) {
+          failed++;
+          updatePartyRouteOutboxRow(row.id, {
+            attempts: row.attempts + 1,
+            last_attempt_at: nowISO(),
+            last_error: err?.message || String(err || "Route sync failed")
+          });
+          console.warn("Could not sync queued party route point:", err);
+          break;
+        }
+      }
+
+      if (synced) {
+        refreshMapBeacon();
+        scheduleActivePartyHudRender();
+      }
+
+      const pending = partyRouteOutboxRows(partyId).length;
+      if (pending && !options.noRetry) schedulePartyRouteOutboxFlush(PARTY_ROUTE_RETRY_MS);
+      return { synced, failed, pending };
+    })().finally(() => {
+      partyRouteFlushPromise = null;
+      scheduleActivePartyHudRender();
+    });
+
+    return partyRouteFlushPromise;
+  }
+
+  function schedulePartyRouteOutboxFlush(delayMs = PARTY_ROUTE_RETRY_MS) {
+    window.clearTimeout(partyRouteFlushTimer);
+    partyRouteFlushTimer = window.setTimeout(
+      () => {
+        flushPartyRouteOutbox().catch((err) => {
+          console.warn("Could not flush party route queue:", err);
+        });
+      },
+      Math.max(0, Number(delayMs) || 0)
+    );
+  }
+
+  function normalizePartyEndRow(row = {}) {
+    const id = String(row.party_id || row.id || "").trim();
+    if (!id) return null;
+    return {
+      party_id: id,
+      queued_at: isoOrNow(row.queued_at || row.queuedAt),
+      attempts: Math.max(0, Number(row.attempts) || 0),
+      last_attempt_at: row.last_attempt_at || null,
+      last_error: row.last_error || null
+    };
+  }
+
+  function loadPartyEndOutbox() {
+    return readStoredArray(PARTY_END_OUTBOX_KEY).map(normalizePartyEndRow).filter(Boolean);
+  }
+
+  function savePartyEndOutbox(rows = []) {
+    const byId = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const normalized = normalizePartyEndRow(row);
+      if (normalized) byId.set(normalized.party_id, normalized);
+    });
+    const saved = Array.from(byId.values());
+    writeStoredArray(PARTY_END_OUTBOX_KEY, saved);
+    scheduleActivePartyHudRender();
+    return saved;
+  }
+
+  function queuePartyEnd(id, error = null) {
+    if (!id) return;
+    const rows = loadPartyEndOutbox();
+    const existing = rows.find((row) => String(row.party_id) === String(id));
+    if (existing) {
+      existing.last_error = error?.message || error || existing.last_error || null;
+    } else {
+      rows.push({
+        party_id: id,
+        queued_at: nowISO(),
+        attempts: 0,
+        last_error: error?.message || error || null
+      });
+    }
+    savePartyEndOutbox(rows);
+    schedulePartyEndOutboxFlush(PARTY_END_RETRY_MS);
+  }
+
+  function removeQueuedPartyEnd(id) {
+    if (!id) return;
+    savePartyEndOutbox(loadPartyEndOutbox().filter((row) => String(row.party_id) !== String(id)));
+  }
+
+  function partyEndQueued(id) {
+    return loadPartyEndOutbox().some((row) => String(row.party_id) === String(id));
+  }
+
+  function setPartyEnding(id, value) {
+    if (!id) return;
+    window.__gwState = window.__gwState || {};
+    window.__gwState.partyEndingById = window.__gwState.partyEndingById || {};
+    if (value) window.__gwState.partyEndingById[id] = true;
+    else delete window.__gwState.partyEndingById[id];
+    scheduleActivePartyHudRender();
+  }
+
+  function partyIsEnding(id) {
+    return Boolean(window.__gwState?.partyEndingById?.[id] || partyEndQueued(id));
+  }
+
+  function recordLatestPartyRoutePoint(partyId) {
+    const loc = window.__gwLastUserLocation;
+    if (!loc || !partyId) return false;
+    recordPartyPosition(loc.lat, loc.lng, loc.accuracyMeters, { partyId, force: true });
+    return true;
+  }
+
+  async function finishEndedPartyLocally(id, message = "Online party ended") {
+    removeQueuedPartyEnd(id);
+    setPartyEnding(id, false);
+    if (String(getActivePartyId() || "") === String(id)) {
+      window.GridWildPartyLive?.setActivePartyId?.(null);
+    }
+    await window.GridWildPartyLive?.loadParty?.({ forceHistory: true });
+    window.GridWildPartyLive?.refreshPartySheet?.();
+    refreshMapBeacon();
+    scheduleActivePartyHudRender();
+    rerenderPartySheet();
+    if (message) toast(message);
+  }
+
+  async function flushPartyEndOutbox(options = {}) {
+    if (partyEndFlushPromise) return partyEndFlushPromise;
+
+    partyEndFlushPromise = (async () => {
+      if (!window.GridWildAPI?.endParty) return { ended: 0, failed: 0 };
+
+      let ended = 0;
+      let failed = 0;
+      const rows = loadPartyEndOutbox();
+
+      for (const row of rows) {
+        if (options.partyId && String(row.party_id) !== String(options.partyId)) continue;
+        setPartyEnding(row.party_id, true);
+        await flushPartyRouteOutbox({ partyId: row.party_id }).catch(() => null);
+
+        try {
+          await window.GridWildAPI.endParty(row.party_id);
+          await finishEndedPartyLocally(row.party_id, options.silent ? "" : "Queued party ended");
+          ended++;
+        } catch (err) {
+          failed++;
+          savePartyEndOutbox(
+            loadPartyEndOutbox().map((pending) =>
+              String(pending.party_id) === String(row.party_id)
+                ? {
+                    ...pending,
+                    attempts: Number(pending.attempts || 0) + 1,
+                    last_attempt_at: nowISO(),
+                    last_error: err?.message || String(err || "Party end failed")
+                  }
+                : pending
+            )
+          );
+          setPartyEnding(row.party_id, false);
+          console.warn("Could not flush queued party end:", err);
+          break;
+        }
+      }
+
+      if (failed && !options.noRetry) schedulePartyEndOutboxFlush(PARTY_END_RETRY_MS);
+      return { ended, failed };
+    })().finally(() => {
+      partyEndFlushPromise = null;
+      scheduleActivePartyHudRender();
+    });
+
+    return partyEndFlushPromise;
+  }
+
+  function schedulePartyEndOutboxFlush(delayMs = PARTY_END_RETRY_MS) {
+    window.clearTimeout(partyEndFlushTimer);
+    partyEndFlushTimer = window.setTimeout(
+      () => {
+        flushPartyEndOutbox({ silent: true }).catch((err) => {
+          console.warn("Could not flush party end queue:", err);
+        });
+      },
+      Math.max(0, Number(delayMs) || 0)
+    );
+  }
 
   function joinParty(id) {
     if (!id) return;
@@ -1805,6 +2323,8 @@
 
       <div class="gw-party-modal-actions">
         <button class="gw-mini-btn" data-party-close>Close</button>
+        <button class="gw-mini-btn" id="gwPartySyncRecapBtn">Sync</button>
+        <button class="gw-mini-btn" id="gwPartyWildlistRecapBtn">Wildlist</button>
         <button class="gw-mini-btn" id="gwPartyShareRecapBtn">Share</button>
         ${
           getActivePartyId() === id
@@ -1832,6 +2352,38 @@
 
     root.querySelector("#gwPartyShareRecapBtn")?.addEventListener("click", () => {
       shareParty(id);
+    });
+
+    root.querySelector("#gwPartySyncRecapBtn")?.addEventListener("click", () => {
+      syncPartyINatObservationsForRecap(id, root, closeRecap);
+    });
+
+    root.querySelector("#gwPartyWildlistRecapBtn")?.addEventListener("click", async (evt) => {
+      const btn = evt.currentTarget;
+      if (!window.GridWildPlaylists?.createFromParty) {
+        toast("Wildlists are unavailable");
+        return;
+      }
+
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Building...";
+
+      try {
+        const playlist = await window.GridWildPlaylists.createFromParty(id, {
+          force: false,
+          open: true
+        });
+        if (playlist) toast("Party Wildlist created");
+      } catch (err) {
+        console.warn("Could not create Party Wildlist:", err);
+        toast("Could not create Party Wildlist");
+      } finally {
+        if (root.isConnected) {
+          btn.disabled = false;
+          btn.textContent = oldText;
+        }
+      }
     });
 
     root.querySelector("#gwPartyEndRecapBtn")?.addEventListener("click", () => {
@@ -1870,10 +2422,7 @@
       return window.createStreetBaseLayer();
     }
 
-    return L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 20,
-      attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
-    });
+    return window.createGridWildBlankBaseLayer?.() || L.layerGroup();
   }
 
   function destroyPartyRecapMaps(root = document) {
@@ -2266,6 +2815,13 @@
     if (type === "player_left") return "Player left";
     if (type === "party_ended") return "Party ended";
     if (type === "evidence_counted") return "Observation counted";
+    if (type === "inat_sync") {
+      const imported = Number(e?.payload?.imported || 0);
+      const linked = Number(e?.payload?.linked_members || 0);
+      return imported
+        ? `Synced ${imported} iNaturalist observation${imported === 1 ? "" : "s"} from ${linked || 1} linked member${linked === 1 ? "" : "s"}`
+        : "Checked linked iNaturalist accounts";
+    }
 
     return type.replaceAll("_", " ");
   }
@@ -3108,9 +3664,14 @@
     const target = Math.max(1, Number(party.target || 1));
     const pct = Math.max(0, Math.min(100, (evidenceCount / target) * 100));
     const pending = Boolean(party.pending || String(party.id || "").startsWith("pending_party_"));
-    const partySubline = pending
-      ? `Starting online party...`
-      : `${evidenceCount}/${target} counted &middot; ${getPartyDurationLabel(party)} &middot; ${formatDistance(getRouteDistanceMeters(route))}`;
+    const ending = partyIsEnding(party.id);
+    const syncStatus = partyRouteSyncStatus(party.id);
+    const syncLabel = partyRouteSyncLabel(party.id);
+    const partySubline = ending
+      ? `Ending party; saving route...`
+      : pending
+        ? `Starting online party...`
+        : `${evidenceCount}/${target} counted &middot; ${getPartyDurationLabel(party)} &middot; ${formatDistance(getRouteDistanceMeters(route))}`;
 
     let hud = existing;
     if (!hud) {
@@ -3121,16 +3682,23 @@
     }
 
     hud.classList.toggle("is-pending", pending);
+    hud.classList.toggle("is-ending", ending);
+    hud.classList.toggle("has-route-queue", syncStatus.pending > 0);
     hud.innerHTML = `
-    <button class="gw-active-party-main" id="gwActivePartyOpenBtn" type="button" ${pending ? "disabled" : ""}>
+    <button class="gw-active-party-main" id="gwActivePartyOpenBtn" type="button" ${pending || ending ? "disabled" : ""}>
       <div class="gw-active-party-topline">
         <span class="gw-active-party-dot">🎉</span>
         <span class="gw-active-party-title">${esc(party.title || "Active Party")}</span>
         ${pending ? `<span class="gw-active-party-status">Starting</span>` : ""}
+        ${ending ? `<span class="gw-active-party-status">Ending</span>` : ""}
       </div>
 
       <div class="gw-active-party-sub">
         ${partySubline}
+      </div>
+
+      <div class="gw-active-party-sync" aria-live="polite">
+        ${esc(syncLabel)}
       </div>
 
       <div class="gw-active-party-bar">
@@ -3141,12 +3709,12 @@
     <div class="gw-active-party-actions">
       <button class="gw-active-party-btn" id="gwActivePartyCollapseBtn" type="button" aria-label="Minimize party banner" title="Minimize party banner">Hide</button>
       <button class="gw-active-party-btn" id="gwActivePartyRecapBtn" type="button" ${pending ? "disabled" : ""}>Recap</button>
-      <button class="gw-active-party-btn danger" id="gwActivePartyEndBtn" type="button" ${pending ? "disabled" : ""}>End</button>
+      <button class="gw-active-party-btn danger" id="gwActivePartyEndBtn" type="button" ${pending || ending ? "disabled" : ""}>${ending ? "Ending" : "End"}</button>
     </div>
   `;
 
     hud.querySelector("#gwActivePartyOpenBtn")?.addEventListener("click", () => {
-      if (pending) return;
+      if (pending || ending) return;
       openPartyCover(party.id);
     });
 
@@ -3160,7 +3728,7 @@
     });
 
     hud.querySelector("#gwActivePartyEndBtn")?.addEventListener("click", () => {
-      if (pending) return;
+      if (pending || ending) return;
       endParty(party.id);
     });
   }
@@ -3755,6 +4323,20 @@
     text-overflow: ellipsis;
     }
 
+    .gw-active-party-sync {
+    margin-top: 3px;
+    font-size: 10px;
+    font-weight: 850;
+    color: rgba(158,230,189,0.74);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    }
+
+    .gw-active-party-hud.has-route-queue .gw-active-party-sync {
+    color: rgba(255,224,130,0.92);
+    }
+
     .gw-active-party-bar {
     margin-top: 7px;
     height: 7px;
@@ -4236,9 +4818,23 @@
         <div class="gw-obs-party-chip ${cls}">
         <div class="gw-obs-party-chip-title">${icon} ${esc(s.label)}</div>
         <div class="gw-obs-party-chip-sub">${esc(s.reason)}</div>
-        </div>
+    </div>
     `;
   }
+
+  function retryPartyDurabilityQueues(delayMs = 500) {
+    if (partyRouteOutboxRows().length) schedulePartyRouteOutboxFlush(delayMs);
+    if (loadPartyEndOutbox().length) schedulePartyEndOutboxFlush(delayMs + 250);
+  }
+
+  window.addEventListener("online", () => retryPartyDurabilityQueues(250));
+  window.addEventListener("focus", () => retryPartyDurabilityQueues(350));
+  window.addEventListener("pageshow", () => retryPartyDurabilityQueues(350));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") retryPartyDurabilityQueues(350);
+  });
+  window.setTimeout(() => retryPartyDurabilityQueues(1200), 0);
+
   window.GridWildParty = {
     renderSheetHtml,
     bindSheetControls,
@@ -4266,6 +4862,8 @@
     endParty,
     recordPartyPosition,
     loadPartyRoutes,
+    flushPartyRouteOutbox,
+    partyRouteSyncStatus,
     rememberPartySnapshot,
     hydratePartySnapshot,
 

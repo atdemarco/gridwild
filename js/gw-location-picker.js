@@ -1,7 +1,8 @@
 (function () {
   const STORAGE_KEY = "gw_saved_locations_v1";
-  const SEARCH_ENDPOINT = "https://nominatim.openstreetmap.org/search";
-  const REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
+  const PUBLIC_NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
+  const PUBLIC_NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
+  const NOMINATIM_MIN_REQUEST_INTERVAL_MS = 1100;
 
   let root = null;
   let pickerMap = null;
@@ -11,6 +12,8 @@
   let reverseTimer = null;
   let activeSearchController = null;
   let activeReverseController = null;
+  let lastNominatimRequestAt = 0;
+  let nominatimQueue = Promise.resolve();
   let suppressMapMove = false;
 
   function escapeHtml(value) {
@@ -386,17 +389,76 @@
     document.head.appendChild(style);
   }
 
+  function osmServiceEndpoint(kind) {
+    return String(window.GridWildExternalServices?.getOsmEndpoint?.(kind) || "").trim();
+  }
+
+  function nominatimEndpoint(kind) {
+    if (window.GW_DISABLE_LOCATION_PICKER_GEOCODE === true) return "";
+    const configured = osmServiceEndpoint(kind);
+    if (configured) return configured;
+    return kind === "nominatimReverse" ? PUBLIC_NOMINATIM_REVERSE_URL : PUBLIC_NOMINATIM_SEARCH_URL;
+  }
+
+  function abortError() {
+    try {
+      return new window.DOMException("Aborted", "AbortError");
+    } catch {
+      const err = new Error("Aborted");
+      err.name = "AbortError";
+      return err;
+    }
+  }
+
+  function delayWithAbort(ms, signal) {
+    if (!ms || ms <= 0) return Promise.resolve();
+    if (signal?.aborted) return Promise.reject(abortError());
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        signal?.removeEventListener?.("abort", onAbort);
+        resolve();
+      }, ms);
+      function onAbort() {
+        clearTimeout(timer);
+        signal?.removeEventListener?.("abort", onAbort);
+        reject(abortError());
+      }
+      signal?.addEventListener?.("abort", onAbort, { once: true });
+    });
+  }
+
+  function waitForNominatimSlot(signal) {
+    const job = nominatimQueue
+      .catch(() => null)
+      .then(async () => {
+        const waitMs = Math.max(
+          0,
+          NOMINATIM_MIN_REQUEST_INTERVAL_MS - (Date.now() - lastNominatimRequestAt)
+        );
+        await delayWithAbort(waitMs, signal);
+        if (signal?.aborted) throw abortError();
+        lastNominatimRequestAt = Date.now();
+      });
+    nominatimQueue = job.catch(() => null);
+    return job;
+  }
+
   function geocodeUrl(query) {
+    const endpoint = nominatimEndpoint("nominatimSearch");
+    if (!endpoint) return "";
     const params = new URLSearchParams({
       q: query,
       format: "jsonv2",
       addressdetails: "1",
       limit: "6"
     });
-    return `${SEARCH_ENDPOINT}?${params.toString()}`;
+    return `${endpoint}?${params.toString()}`;
   }
 
   function reverseUrl(lat, lng) {
+    const endpoint = nominatimEndpoint("nominatimReverse");
+    if (!endpoint) return "";
     const params = new URLSearchParams({
       lat: String(lat),
       lon: String(lng),
@@ -404,7 +466,7 @@
       zoom: "16",
       addressdetails: "1"
     });
-    return `${REVERSE_ENDPOINT}?${params.toString()}`;
+    return `${endpoint}?${params.toString()}`;
   }
 
   function setStatus(message) {
@@ -475,7 +537,15 @@
     setStatus("Looking up locations...");
 
     try {
-      const response = await fetch(geocodeUrl(query), {
+      const url = geocodeUrl(query);
+      if (!url) {
+        renderResults([]);
+        setStatus("Search by coordinates until address lookup is configured.");
+        return;
+      }
+
+      await waitForNominatimSlot(activeSearchController.signal);
+      const response = await fetch(url, {
         signal: activeSearchController.signal,
         headers: { Accept: "application/json" }
       });
@@ -496,7 +566,15 @@
     activeReverseController = new AbortController();
 
     try {
-      const response = await fetch(reverseUrl(lat, lng), {
+      const url = reverseUrl(lat, lng);
+      if (!url) {
+        if (selectedLocation) selectedLocation.label ||= formatCoordPair(lat, lng);
+        setStatus(selectedLocation?.label || formatCoordPair(lat, lng));
+        return;
+      }
+
+      await waitForNominatimSlot(activeReverseController.signal);
+      const response = await fetch(url, {
         signal: activeReverseController.signal,
         headers: { Accept: "application/json" }
       });
@@ -614,10 +692,11 @@
       attributionControl: true
     }).setView([center.lat, center.lng], Math.min(Math.max(zoom, 12), 18));
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 20,
-      attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
-    }).addTo(pickerMap);
+    (
+      window.createGridWildDefaultBaseLayer?.({ flavor: "light" }) ||
+      window.createStreetBaseLayer?.() ||
+      L.layerGroup()
+    ).addTo(pickerMap);
 
     marker = L.circleMarker([center.lat, center.lng], {
       radius: 7,

@@ -2065,9 +2065,11 @@
       doubleClickZoom: false
     });
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 20
-    }).addTo(designerMap);
+    (
+      window.createGridWildDefaultBaseLayer?.({ flavor: "light" }) ||
+      window.createStreetBaseLayer?.() ||
+      L.layerGroup()
+    ).addTo(designerMap);
 
     designerMap.setView(startCenter, startZoom);
 

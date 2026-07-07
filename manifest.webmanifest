@@ -1,0 +1,27 @@
+{
+  "name": "GridWild",
+  "short_name": "GridWild",
+  "description": "A nature discovery map for finding, playing, and learning from nearby wild places.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#10130f",
+  "theme_color": "#10130f",
+  "orientation": "any",
+  "categories": ["education", "navigation", "games"],
+  "icons": [
+    {
+      "src": "assets/gridwild-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "favicon.ico",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ]
+}
