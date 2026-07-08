@@ -49,6 +49,21 @@ function accountTableHint(err) {
   return message;
 }
 
+function responseStatusForError(err) {
+  const status = Number(err?.statusCode || err?.status);
+  return Number.isFinite(status) && status >= 400 && status < 600 ? status : 500;
+}
+
+function retryAfterForError(err) {
+  return (
+    err?.retryAfter ||
+    err?.retry_after ||
+    err?.headers?.["retry-after"] ||
+    err?.headers?.["Retry-After"] ||
+    ""
+  );
+}
+
 exports.handler = async function (event) {
   try {
     const body = JSON.parse(event.body || "{}");
@@ -117,9 +132,15 @@ exports.handler = async function (event) {
       })
     };
   } catch (err) {
+    const retryAfter = retryAfterForError(err);
+    const headers = retryAfter ? { "Retry-After": String(retryAfter) } : {};
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: accountTableHint(err) })
+      statusCode: responseStatusForError(err),
+      headers,
+      body: JSON.stringify({
+        error: accountTableHint(err) || "Login is temporarily unavailable.",
+        code: err?.code || ""
+      })
     };
   }
 };

@@ -28,6 +28,98 @@
     }
   }
 
+  function isQuotaExceededError(err) {
+    const name = String(err?.name || "");
+    const message = String(err?.message || "");
+    return (
+      name === "QuotaExceededError" ||
+      name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+      err?.code === 22 ||
+      err?.code === 1014 ||
+      /quota|exceed/i.test(message)
+    );
+  }
+
+  function storageFullError(cause) {
+    const err = new Error(
+      "GridWild could not save your login because this browser's site storage is full. Clear GridWild site data, then log in again."
+    );
+    err.code = "storage_quota_exceeded";
+    err.cause = cause;
+    return err;
+  }
+
+  function removeStorageKeys(keys = []) {
+    keys.forEach((key) => {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // Storage cleanup is best-effort.
+      }
+    });
+  }
+
+  function writeStorage(key, value, options = {}) {
+    const text = String(value ?? "");
+
+    const attempt = () => {
+      if (options.removeFirst) localStorage.removeItem(key);
+      localStorage.setItem(key, text);
+    };
+
+    try {
+      attempt();
+      return;
+    } catch (err) {
+      if (!isQuotaExceededError(err)) throw err;
+      removeStorageKeys(options.retryRemoveKeys || []);
+      try {
+        localStorage.removeItem(key);
+        localStorage.setItem(key, text);
+      } catch (retryErr) {
+        if (isQuotaExceededError(retryErr)) throw storageFullError(retryErr);
+        throw retryErr;
+      }
+    }
+  }
+
+  function writeJson(key, value, options = {}) {
+    writeStorage(key, JSON.stringify(value), options);
+  }
+
+  function boundedSessionString(value, maxLength, fieldName) {
+    const text = String(value || "").trim();
+    if (text.length > maxLength) {
+      const err = new Error(
+        `GridWild login returned an unexpectedly large ${fieldName}. Refresh and try again.`
+      );
+      err.code = "account_session_payload_too_large";
+      throw err;
+    }
+    return text;
+  }
+
+  function compactAccountRecord(account, player) {
+    return {
+      username: boundedSessionString(account?.username || "", 120, "username"),
+      playerId: boundedSessionString(player?.id || account?.player_id || "", 160, "player id")
+    };
+  }
+
+  function compactSessionRecord(session) {
+    const token = boundedSessionString(session?.token || "", 4096, "session token");
+    if (!token) throw new Error("GridWild login did not return a usable session token.");
+
+    return {
+      token,
+      expiresAt: boundedSessionString(
+        session?.expires_at || session?.expiresAt || "",
+        120,
+        "session expiration"
+      )
+    };
+  }
+
   function getAccount() {
     return readJson(ACCOUNT_KEY);
   }
@@ -90,25 +182,23 @@
     const account = payload?.account || {};
     const session = payload?.session || {};
     const player = payload?.player || null;
+    const accountRecord = compactAccountRecord(account, player);
+    const sessionRecord = compactSessionRecord(session);
 
-    localStorage.setItem(
-      ACCOUNT_KEY,
-      JSON.stringify({
-        username: account.username || "",
-        playerId: player?.id || account.player_id || ""
-      })
-    );
-
-    localStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify({
-        token: session.token || "",
-        expiresAt: session.expires_at || ""
-      })
-    );
+    writeJson(ACCOUNT_KEY, accountRecord, {
+      removeFirst: true,
+      retryRemoveKeys: [SESSION_KEY, PLAYER_SESSION_KEY]
+    });
+    writeJson(SESSION_KEY, sessionRecord, {
+      removeFirst: true,
+      retryRemoveKeys: [SESSION_KEY, PLAYER_SESSION_KEY]
+    });
 
     if (player?.id) {
-      localStorage.setItem(PLAYER_KEY, player.id);
+      writeStorage(PLAYER_KEY, player.id, {
+        removeFirst: true,
+        retryRemoveKeys: [PLAYER_SESSION_KEY]
+      });
       localStorage.removeItem(PLAYER_SESSION_KEY);
       window.GridWildAPI?.setPlayerId?.(player.id);
       window.GridWildAPI?.clearPlayerSession?.();
@@ -165,6 +255,46 @@
     if (message) showToast(message);
   }
 
+  function retryAfterMs(value) {
+    const text = String(value || "").trim();
+    if (!text) return 0;
+
+    const seconds = Number(text);
+    if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+
+    const at = Date.parse(text);
+    return Number.isFinite(at) ? Math.max(0, at - Date.now()) : 0;
+  }
+
+  function formatRetryAfter(ms) {
+    if (!Number.isFinite(ms) || ms <= 0) return "a little while";
+    const minutes = Math.ceil(ms / 60000);
+    if (minutes <= 1) return "about 1 minute";
+    if (minutes < 60) return `about ${minutes} minutes`;
+    const hours = Math.ceil(minutes / 60);
+    return hours <= 1 ? "about 1 hour" : `about ${hours} hours`;
+  }
+
+  function accountRequestError(res, data, text) {
+    const raw = String(data?.error || text || "").trim();
+    const retryMs = retryAfterMs(res.headers.get("Retry-After"));
+    let message = raw || `Request failed: HTTP ${res.status}`;
+
+    if (res.status === 429) {
+      message = `Too many login attempts. Try again in ${formatRetryAfter(retryMs)}.`;
+    } else if (/rate.?limit|too many|temporar|try again|locked/i.test(raw)) {
+      message = retryMs
+        ? `${raw} Try again in ${formatRetryAfter(retryMs)}.`
+        : raw || "Login is temporarily unavailable. Try again in a little while.";
+    }
+
+    const err = new Error(message);
+    err.status = res.status;
+    err.retryAfterMs = retryMs;
+    err.code = data?.code || "";
+    return err;
+  }
+
   async function post(path, body, timeoutMs = 18000) {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -196,7 +326,7 @@
     }
 
     if (!res.ok) {
-      throw new Error(data?.error || text || `Request failed: HTTP ${res.status}`);
+      throw accountRequestError(res, data, text);
     }
 
     return data;

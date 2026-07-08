@@ -123,6 +123,8 @@ const COMPASS_HEADING_DEADBAND_DEG = 2.5;
 const COMPASS_HEADING_MIN_UPDATE_MS = 80;
 const COMPASS_SOURCE_ACTIVE_MS = 4500;
 const COMPASS_SOURCE_DECISION_LOG_LIMIT = 80;
+const COMPASS_MAP_BEARING_EVENT_MIN_MS = 120;
+const COMPASS_MAP_BEARING_EVENT_MIN_DELTA_DEG = 8;
 const LOCK_ZOOM_CLOSE = 19;
 const LOCK_ZOOM_WIDE = 17;
 const LOCK_PROGRAMMATIC_MOVE_GRACE_MS = 900;
@@ -146,6 +148,8 @@ let orientationTransition = null;
 let orientationTransitionTarget = null;
 let orientationTransitionRaf = null;
 let orientationTransitionToken = 0;
+let lastMapBearingEventAt = 0;
+let lastMapBearingEventDeg = null;
 
 function normalizeLockZoomMode(mode) {
   return mode === "wide" ? "wide" : "close";
@@ -1038,6 +1042,48 @@ function getHeadingTransformOrigin(pos) {
   };
 }
 
+function publishMapBearingPresentation(cameraBearingDeg, rotationDeg, options = {}) {
+  const bearing = normalizeHeading(Number(cameraBearingDeg) || 0);
+  const rotation = Number(rotationDeg) || 0;
+  const counterRotation = -rotation;
+  const active = Math.abs(rotation) > 0.01;
+
+  document.documentElement.style.setProperty("--gw-map-bearing-deg", `${bearing}deg`);
+  document.documentElement.style.setProperty(
+    "--gw-map-label-counter-rotation",
+    `${counterRotation}deg`
+  );
+  document.documentElement.classList.toggle("gw-map-bearing-active", active);
+
+  window.__gwCompassMapBearing = active ? bearing : 0;
+  window.__gwCompassMapRotationDeg = active ? rotation : 0;
+
+  const now = performance.now();
+  const delta =
+    lastMapBearingEventDeg === null
+      ? Number.POSITIVE_INFINITY
+      : Math.abs(signedHeadingDeltaDeg(lastMapBearingEventDeg, bearing));
+  const shouldDispatch =
+    options.force === true ||
+    now - lastMapBearingEventAt >= COMPASS_MAP_BEARING_EVENT_MIN_MS ||
+    delta >= COMPASS_MAP_BEARING_EVENT_MIN_DELTA_DEG;
+
+  if (!shouldDispatch) return;
+
+  lastMapBearingEventAt = now;
+  lastMapBearingEventDeg = bearing;
+  window.dispatchEvent(
+    new CustomEvent("gridwild:mapbearingchange", {
+      detail: {
+        active,
+        bearingDeg: active ? bearing : 0,
+        rotationDeg: active ? rotation : 0,
+        counterRotationDeg: active ? counterRotation : 0
+      }
+    })
+  );
+}
+
 function setMapPaneHeadingTransform() {
   if (!MAP_HEADING_ROTATION_ENABLED) return;
 
@@ -1057,6 +1103,9 @@ function setMapPaneHeadingTransform() {
     ? `translate3d(${pos.x}px, ${pos.y}px, 0) rotate(${rotationDeg}deg)`
     : `translate3d(${pos.x}px, ${pos.y}px, 0)`;
   mapHeadingTransformApplied = shouldRotate;
+  publishMapBearingPresentation(shouldRotate ? mapHeadingDeg : 0, shouldRotate ? rotationDeg : 0, {
+    force: !shouldRotate
+  });
 }
 
 function scheduleMapHeadingTransform() {

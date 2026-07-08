@@ -1375,6 +1375,7 @@ function createGridWildOsmBasemapLayer(options = {}) {
       maxZoom: 20,
       levelDiff: 0,
       tileDelay: 0,
+      keepBuffer: 4,
       noWrap: true,
       bounds: activeShardBounds,
       attribution:

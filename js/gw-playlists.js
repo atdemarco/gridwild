@@ -1828,13 +1828,20 @@
 
     const playlist = getById(playlistId);
     const observations = playlist?.snapshotObservations || [];
+    const cleanPointName = (value) => {
+      const label = String(value || "").trim();
+      if (!label || /^(unknown|unknown taxon|unknown organism)$/i.test(label)) {
+        return "Observation needing ID";
+      }
+      return label;
+    };
 
     const pts = observations
       .filter((o) => Number.isFinite(Number(o.lat)) && Number.isFinite(Number(o.lng)))
       .map((o) => ({
         lat: Number(o.lat),
         lng: Number(o.lng),
-        name: o.taxon || o.common_name || o.scientific_name || "Observation"
+        name: cleanPointName(o.taxon || o.common_name || o.scientific_name)
       }));
 
     if (!pts.length) {
@@ -1872,9 +1879,11 @@
         radius: 5,
         stroke: true,
         weight: 1,
+        color: "#201711",
+        fillColor: "#f0d18a",
         fillOpacity: 0.85
       })
-        .bindPopup(p.name)
+        .bindPopup(esc(p.name))
         .addTo(group);
     });
 

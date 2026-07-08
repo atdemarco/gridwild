@@ -111,9 +111,6 @@ window.__gwUser = window.__gwUser || {
 
       <div class="gw-card">
         <div class="gw-card-title">Wildlists</div>
-        <div class="gw-muted" style="font-size:12px;line-height:1.35;margin-bottom:10px;">
-          Build shareable galleries from your observations.
-        </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <button class="gw-mini-btn" id="gwCreateWildlistBtn">Create</button>
@@ -1248,11 +1245,6 @@ window.__gwUser = window.__gwUser || {
     return `
     <div class="gw-card">
       <div class="gw-card-title">Quest Generator</div>
-
-      <div class="gw-muted" style="font-size:12px;line-height:1.35;margin-bottom:10px;">
-        Generate a field quest from recipe ingredients: target location, taxon flavor,
-        objective, difficulty, timeframe, evidence, and optional survey.
-      </div>
 
       <button class="gw-mini-btn" id="gwGenerateQuestBtn">
         Generate Quest

@@ -2278,6 +2278,15 @@
         filter: drop-shadow(0 0 4px rgba(125,223,255,0.52));
       }
 
+      .gw-patch-hud-label-shell {
+        width: 158px;
+        height: 32px;
+        pointer-events: none;
+        transform: rotate(var(--gw-map-label-counter-rotation, 0deg));
+        transform-origin: 50% 50%;
+        will-change: transform;
+      }
+
       .gw-patch-hud-label {
         position: relative;
         isolation: isolate;
@@ -2920,18 +2929,20 @@
       icon: L.divIcon({
         className: "",
         html: `
-          <div
-            class="gw-patch-hud-label${selected ? " is-selected" : ""}"
-            data-patch-id="${esc(patch.id)}"
-            title="${esc(`${title}: ${percentText} complete${completeness.sampled ? " (estimated)" : ""}`)}"
-            style="--gw-patch-completeness-width:${esc(percentWidth)};--gw-patch-completeness-color:${esc(color)};${esc(patchHudThemeVars(theme))};"
-          >
-            <div class="gw-patch-completeness-bar" aria-hidden="true">
-              <div class="gw-patch-completeness-fill"></div>
-            </div>
-            <div class="gw-patch-label-row">
-              <span class="gw-patch-label-name">${esc(title)}</span>
-              <span class="gw-patch-completeness-text">${esc(percentText)}</span>
+          <div class="gw-patch-hud-label-shell">
+            <div
+              class="gw-patch-hud-label${selected ? " is-selected" : ""}"
+              data-patch-id="${esc(patch.id)}"
+              title="${esc(`${title}: ${percentText} complete${completeness.sampled ? " (estimated)" : ""}`)}"
+              style="--gw-patch-completeness-width:${esc(percentWidth)};--gw-patch-completeness-color:${esc(color)};${esc(patchHudThemeVars(theme))};"
+            >
+              <div class="gw-patch-completeness-bar" aria-hidden="true">
+                <div class="gw-patch-completeness-fill"></div>
+              </div>
+              <div class="gw-patch-label-row">
+                <span class="gw-patch-label-name">${esc(title)}</span>
+                <span class="gw-patch-completeness-text">${esc(percentText)}</span>
+              </div>
             </div>
           </div>
         `,

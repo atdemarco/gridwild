@@ -190,12 +190,28 @@ function hasStoredGridWildAccount() {
   }
 }
 
+function hasLiveGridWildAccountSession() {
+  return Boolean(window.GridWildAPI?.getSessionToken?.());
+}
+
 async function ensureGridWildPlayerSession(options = {}) {
   if (hasGridWildPlayerSession() && options.force !== true) return true;
   if (!window.GridWildAPI?.getBootstrap) return false;
   if (hasStoredGridWildAccount()) {
-    window.GridWildAccount?.markSessionInvalid?.("GridWild login expired on this device.");
-    throw gridWildReloginError({ status: 401 });
+    if (!hasLiveGridWildAccountSession()) {
+      window.GridWildAccount?.markSessionInvalid?.("GridWild login expired on this device.");
+      throw gridWildReloginError({ status: 401 });
+    }
+
+    const data = await window.GridWildAPI.getBootstrap({
+      force: true,
+      applySession: true
+    });
+
+    if (data?.player?.id) window.GridWildAPI.setPlayerId(data.player.id);
+    if (data?.player_session) window.GridWildAPI.setPlayerSession(data.player_session);
+
+    return hasGridWildPlayerSession();
   }
 
   const data = await window.GridWildAPI.getBootstrap({
