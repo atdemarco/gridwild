@@ -44,16 +44,21 @@
     return Boolean(window.GridWildAPI?.getPlayerId?.() && window.GridWildAPI?.getSessionToken?.());
   }
 
+  function hasLiveAccountSession() {
+    return Boolean(window.GridWildAccount?.isSignedIn?.() || window.GridWildAPI?.getSessionToken?.());
+  }
+
   function isOnlineGameplayReady() {
     return window.GridWildOnline?.isReady?.() === true || window.__gwState?.bootstrapReady === true;
   }
 
   function inboxAccountStatus() {
-    const signedIn = isSignedIn();
+    const accountSignedIn = hasLiveAccountSession();
+    const interactionReady = isSignedIn();
     const onlineReady = isOnlineGameplayReady();
     const bootState = window.__gwState || {};
 
-    if (!signedIn) {
+    if (!accountSignedIn) {
       return {
         key: "signed-out",
         badge: "!",
@@ -61,7 +66,7 @@
       };
     }
 
-    if (!onlineReady) {
+    if (!onlineReady || !interactionReady) {
       if (bootState.onlineBootstrapDeferred || bootState.onlineGameplayReady !== false) {
         return {
           key: "checking",
@@ -1232,6 +1237,10 @@
     const mutedQuestAssignments = state.mutedQuestAssignments || [];
 
     if (!isOnlineGameplayReady() || !isSignedIn() || !window.GridWildAPI?.getPlayerInteractions) {
+      if (hasLiveAccountSession() && !isSignedIn()) {
+        window.requestGridWildResumeBootstrap?.("inbox-auth");
+      }
+
       state = {
         notifications: [],
         conversations: [],

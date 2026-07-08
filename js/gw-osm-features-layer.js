@@ -199,6 +199,7 @@
       lastFetchScheduleZoom = Number(map?.getZoom?.());
       map.on("moveend zoomend", handleFetchMapEvent);
       map.on("zoomstart zoomend", handleOsmRenderZoomLifecycle);
+      window.addEventListener("gridwild:mapbearingchange", scheduleRender);
     }
   }
 

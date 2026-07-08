@@ -56,6 +56,20 @@
     );
   }
 
+  function lowerGuildSheetForPartyHud() {
+    const guildSheet = document.getElementById("sheetCommunity");
+    if (!guildSheet?.classList?.contains("is-open")) return;
+
+    if (typeof window.GridWildSheets?.close === "function") {
+      window.GridWildSheets.close("community");
+      return;
+    }
+
+    guildSheet.classList.remove("is-open");
+    document.getElementById("btnCommunity")?.classList?.remove("is-active");
+    document.getElementById("gwBackdrop")?.classList?.remove("is-open");
+  }
+
   function setActivePartyId(id) {
     window.__gwState = window.__gwState || {};
     window.__gwState.activePartyId = id || null;
@@ -177,6 +191,7 @@
     window.GridWildParty?.scheduleActivePartyHudRender?.();
     window.GridWildParty?.refreshMapBeacon?.();
     refreshPartySheet();
+    lowerGuildSheetForPartyHud();
 
     return { id, party };
   }
@@ -440,6 +455,7 @@
 
           if (result?.party?.id) {
             setActivePartyId(result.party.id);
+            lowerGuildSheetForPartyHud();
           }
 
           await loadParty();
@@ -543,6 +559,7 @@
       if (dbParty?.id) {
         promoteOptimisticParty(optimisticParty?.id, dbParty);
         setActivePartyId(dbParty.id);
+        lowerGuildSheetForPartyHud();
       }
 
       await loadParty();

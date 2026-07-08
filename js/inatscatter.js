@@ -45,12 +45,46 @@ async function fetchINatObservationsNearCenter() {
     Actinopterygii: { fillColor: "#2f6fb3", fillOpacity: 0.85 },
     Mollusca: { fillColor: "#8a6d4a", fillOpacity: 0.85 },
     Arachnida: { fillColor: "#6b5b5b", fillOpacity: 0.85 },
-    Unknown: { fillColor: "#666666", fillOpacity: 0.75 }
+    NeedsId: { fillColor: "#8f8778", fillOpacity: 0.58 }
   };
 
+  function esc(value) {
+    return String(value ?? "").replace(
+      /[&<>"']/g,
+      (ch) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;"
+        })[ch]
+    );
+  }
+
+  function cleanObservationLabel(value) {
+    const label = String(value || "").trim();
+    if (!label) return "";
+    if (/^(unknown|unknown taxon|unknown organism)$/i.test(label)) return "";
+    return label;
+  }
+
+  function observationTaxonLabel(obs) {
+    return (
+      cleanObservationLabel(obs?.taxon?.preferred_common_name) ||
+      cleanObservationLabel(obs?.species_guess) ||
+      cleanObservationLabel(obs?.taxon?.name) ||
+      "Observation needing ID"
+    );
+  }
+
+  function observationIconicLabel(obs) {
+    return cleanObservationLabel(obs?.taxon?.iconic_taxon_name) || "Needs ID";
+  }
+
   function styleForObs(obs) {
-    const iconic = obs?.taxon?.iconic_taxon_name || "Unknown";
-    const s = ICONIC_STYLE[iconic] || ICONIC_STYLE.Unknown;
+    const iconic = cleanObservationLabel(obs?.taxon?.iconic_taxon_name);
+    const s = ICONIC_STYLE[iconic] || ICONIC_STYLE.NeedsId;
 
     // Keep markers small + quiet
     return {
@@ -144,10 +178,10 @@ async function fetchINatObservationsNearCenter() {
 
     const marker = L.circleMarker([oLat, oLng], styleForObs(obs));
 
-    const taxon = obs?.taxon?.name ?? "Unknown taxon";
-    const iconic = obs?.taxon?.iconic_taxon_name ?? "Unknown";
-    const when = obs?.observed_on ?? obs?.time_observed_at ?? "Unknown date";
-    marker.bindPopup(`<b>${taxon}</b><br/>${iconic}<br/>${when}`);
+    const taxon = observationTaxonLabel(obs);
+    const iconic = observationIconicLabel(obs);
+    const when = obs?.observed_on ?? obs?.time_observed_at ?? "date unavailable";
+    marker.bindPopup(`<b>${esc(taxon)}</b><br/>${esc(iconic)}<br/>${esc(when)}`);
 
     marker.addTo(window.iNatLayer);
   }

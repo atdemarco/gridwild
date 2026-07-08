@@ -7,6 +7,10 @@
   const PANE = "gwPartyPane";
   const PARTY_ROUTE_THROTTLE_MS = 8000;
   const PARTY_ROUTE_MAX_ACCURACY_M = 60;
+  const PARTY_ROUTE_SAMPLE_GAP_MS = 90 * 1000;
+  const PARTY_ROUTE_SAMPLE_GAP_MIN_METERS = 35;
+  const PARTY_ROUTE_SAMPLE_GAP_SPEED_MPS = 4.5;
+  const PARTY_ROUTE_SAMPLE_GAP_FORCE_METERS = 500;
   const PARTY_HUD_COLLAPSED_KEY = "gw_party_hud_collapsed";
   const PARTY_ROUTE_OUTBOX_KEY = "gw_party_route_outbox_v1";
   const PARTY_ROUTE_OUTBOX_LIMIT = 1200;
@@ -643,7 +647,9 @@
         partyId: e.party_id,
         draftId: e.draft_id,
         status: e.status || "counted",
-        taxon: e.taxon || e.iconic_taxon || "Observation",
+        rawTaxon: e.taxon || null,
+        iconicTaxon: e.iconic_taxon || null,
+        taxon: partyEvidenceDisplayTaxon(e),
         cellKey: e.cell_key || null,
         lat: e.lat || null,
         lng: e.lng || null,
@@ -653,6 +659,24 @@
 
       return acc;
     }, {});
+  }
+
+  function cleanPartyEvidenceTaxonLabel(value) {
+    const label = String(value || "").trim();
+    if (!label) return "";
+    if (/^(unknown|unknown taxon|unknown organism|unknown observation)$/i.test(label)) return "";
+    return label;
+  }
+
+  function partyEvidenceDisplayTaxon(row = {}) {
+    const taxon = cleanPartyEvidenceTaxonLabel(row.taxon);
+    if (taxon && !/^observation$/i.test(taxon)) return taxon;
+
+    const iconic = cleanPartyEvidenceTaxonLabel(row.iconic_taxon || row.iconicTaxon);
+    if (iconic) return `${iconic} observation`;
+
+    if (taxon) return "Party observation";
+    return "Observation needing ID";
   }
 
   function savePartyEvidence() {
@@ -908,7 +932,9 @@
         .map((e) => ({
           partyId: e.party_id,
           draftId: e.draft_id,
-          taxon: e.taxon || e.iconic_taxon || "Observation",
+          rawTaxon: e.taxon || null,
+          iconicTaxon: e.iconic_taxon || null,
+          taxon: partyEvidenceDisplayTaxon(e),
           cellKey: e.cell_key || null,
           lat: e.lat || null,
           lng: e.lng || null,
@@ -933,7 +959,9 @@
         .map((e) => ({
           partyId: e.party_id,
           draftId: e.draft_id,
-          taxon: e.taxon || e.iconic_taxon || "Observation",
+          rawTaxon: e.taxon || null,
+          iconicTaxon: e.iconic_taxon || null,
+          taxon: partyEvidenceDisplayTaxon(e),
           cellKey: e.cell_key || null,
           lat: e.lat || null,
           lng: e.lng || null,
@@ -1019,6 +1047,87 @@
     return 2 * R * Math.asin(Math.sqrt(x));
   }
 
+  function routePointTimeMs(point) {
+    const t = Date.parse(point?.t || point?.created_at || "");
+    return Number.isFinite(t) ? t : 0;
+  }
+
+  function isPartyRouteSampleGap(a, b) {
+    const distance = haversineMeters(a, b);
+    if (!Number.isFinite(distance) || distance <= 0) return false;
+    if (distance >= PARTY_ROUTE_SAMPLE_GAP_FORCE_METERS) return true;
+
+    const aTime = routePointTimeMs(a);
+    const bTime = routePointTimeMs(b);
+    if (!aTime || !bTime || bTime <= aTime) return false;
+
+    const dt = bTime - aTime;
+    const speedMps = distance / (dt / 1000);
+
+    return (
+      (dt >= PARTY_ROUTE_SAMPLE_GAP_MS && distance >= PARTY_ROUTE_SAMPLE_GAP_MIN_METERS) ||
+      (dt >= PARTY_ROUTE_THROTTLE_MS * 3 &&
+        distance >= PARTY_ROUTE_SAMPLE_GAP_MIN_METERS &&
+        speedMps >= PARTY_ROUTE_SAMPLE_GAP_SPEED_MPS)
+    );
+  }
+
+  function splitPartyRouteBySampleGaps(points = []) {
+    const clean = (Array.isArray(points) ? points : [])
+      .map((p) => ({
+        ...p,
+        lat: Number(p?.lat),
+        lng: Number(p?.lng)
+      }))
+      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+
+    const segments = [];
+    const gaps = [];
+    let current = [];
+
+    clean.forEach((point) => {
+      const previous = current[current.length - 1];
+      if (previous && isPartyRouteSampleGap(previous, point)) {
+        if (current.length) segments.push(current);
+        gaps.push({
+          from: previous,
+          to: point,
+          latLngs: [
+            [previous.lat, previous.lng],
+            [point.lat, point.lng]
+          ],
+          distanceMeters: haversineMeters(previous, point),
+          durationMs: routePointTimeMs(point) - routePointTimeMs(previous)
+        });
+        current = [point];
+        return;
+      }
+
+      current.push(point);
+    });
+
+    if (current.length) segments.push(current);
+
+    return {
+      points: clean,
+      segments: segments.filter((segment) => segment.length >= 2),
+      gaps
+    };
+  }
+
+  function routeSegmentLatLngs(segment = []) {
+    return segment.map((point) => [Number(point.lat), Number(point.lng)]);
+  }
+
+  function formatPartyRouteGap(gap = {}) {
+    const durationMs = Number(gap.durationMs);
+    const minutes = Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs / 60000) : 0;
+    const distance = formatDistance(gap.distanceMeters || 0);
+    return minutes
+      ? `Route samples missing: ${minutes} min gap, ${distance} connector`
+      : `Route samples missing: ${distance} connector`;
+  }
+
   function getRouteDistanceMeters(points) {
     if (!Array.isArray(points) || points.length < 2) {
       const fallback = Number(points?.routeDistanceMeters);
@@ -1028,6 +1137,7 @@
     let total = 0;
 
     for (let i = 1; i < points.length; i++) {
+      if (isPartyRouteSampleGap(points[i - 1], points[i])) continue;
       const d = haversineMeters(points[i - 1], points[i]);
       if (Number.isFinite(d) && d < 500) total += d;
     }
@@ -1056,18 +1166,41 @@
     return `${miles.toFixed(miles < 10 ? 1 : 0)} mi`;
   }
 
-  async function endParty(id) {
-    if (!id) return;
+  async function confirmEndParty(id) {
+    const party = getParty(id);
+    const title = party?.title || window.__gwState?.party?.title || "Active Party";
+
+    if (typeof window.GridWildQuests?.openQuestConfirmDialog === "function") {
+      return window.GridWildQuests.openQuestConfirmDialog({
+        title: "End Party?",
+        message: "This will stop the live party, save the route, and open the recap.",
+        subject: title,
+        confirmLabel: "End Party",
+        cancelLabel: "Keep Party",
+        danger: true
+      });
+    }
+
+    return window.confirm(`End party "${title}"? This will stop the live party and open the recap.`);
+  }
+
+  async function endParty(id, options = {}) {
+    if (!id) return false;
 
     if (!window.GridWildAPI?.endParty) {
       toast("Party service unavailable");
-      return;
+      return false;
     }
 
     if (partyIsEnding(id)) {
       toast("Party end is already queued");
       schedulePartyEndOutboxFlush(0);
-      return;
+      return true;
+    }
+
+    if (options.confirm !== false) {
+      const ok = await confirmEndParty(id);
+      if (!ok) return false;
     }
 
     setPartyEnding(id, true);
@@ -1081,7 +1214,7 @@
 
     try {
       await window.GridWildAPI.endParty(id);
-      await finishEndedPartyLocally(id, "Online party ended");
+      await finishEndedPartyLocally(id, "Online party ended", { openRecap: true });
     } catch (err) {
       console.error("DB end failed:", err);
       queuePartyEnd(id, err);
@@ -1093,7 +1226,7 @@
       toast("Party end queued; will retry");
     }
 
-    return;
+    return true;
   }
 
   function shareParty(id) {
@@ -1637,7 +1770,23 @@
     return true;
   }
 
-  async function finishEndedPartyLocally(id, message = "Online party ended") {
+  async function finishEndedPartyLocally(id, message = "Online party ended", options = {}) {
+    const activeParty = window.__gwState?.party;
+    if (String(activeParty?.id || "") === String(id)) {
+      rememberPartySnapshot({
+        party: {
+          ...activeParty,
+          status: "ended",
+          ended_at: activeParty.ended_at || activeParty.endedAt || nowISO()
+        },
+        members: window.__gwState?.partyMembers || [],
+        events: window.__gwState?.partyEvents || [],
+        evidence: window.__gwState?.partyEvidence || [],
+        progress: window.__gwState?.partyProgress || 0,
+        route: window.__gwState?.partyRoute || []
+      });
+    }
+
     removeQueuedPartyEnd(id);
     setPartyEnding(id, false);
     if (String(getActivePartyId() || "") === String(id)) {
@@ -1649,6 +1798,13 @@
     scheduleActivePartyHudRender();
     rerenderPartySheet();
     if (message) toast(message);
+    if (options.openRecap === true) {
+      await hydratePartySnapshot(id, { force: true }).catch((err) => {
+        console.warn("Could not refresh ended party recap:", err);
+        return false;
+      });
+      openPartyRecap(id);
+    }
   }
 
   async function flushPartyEndOutbox(options = {}) {
@@ -1997,10 +2153,6 @@
     return `
       <div class="gw-card gw-party-hero-card">
         <div class="gw-card-title">Party</div>
-
-        <div class="gw-muted" style="font-size:12px;line-height:1.35;margin-bottom:10px;">
-          Start a live field session, schedule a bird walk, join nearby parties, or show a QR cover screen so others can join from their phones.
-        </div>
 
         <div class="gw-party-action-row">
           <button class="gw-mini-btn gw-party-start-main" id="gwStartPartyBtn">
@@ -2386,9 +2538,9 @@
       }
     });
 
-    root.querySelector("#gwPartyEndRecapBtn")?.addEventListener("click", () => {
-      endParty(id);
-      closeRecap();
+    root.querySelector("#gwPartyEndRecapBtn")?.addEventListener("click", async () => {
+      const ended = await endParty(id);
+      if (ended) closeRecap();
     });
 
     root.querySelectorAll(".gw-party-evidence-exclude-btn").forEach((btn) => {
@@ -2441,9 +2593,8 @@
       host._gwPartyRecapMap = null;
     }
 
-    const routePoints = route
-      .map((point) => [Number(point.lat), Number(point.lng)])
-      .filter((point) => Number.isFinite(point[0]) && Number.isFinite(point[1]));
+    const routeSplit = splitPartyRouteBySampleGaps(route);
+    const routePoints = routeSplit.points.map((point) => [point.lat, point.lng]);
     const observations = evidence
       .filter((row) => Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lng)))
       .map((row) => ({
@@ -2479,23 +2630,51 @@
 
     const features = L.featureGroup().addTo(recapMap);
     if (routePoints.length) {
-      L.polyline(routePoints, {
-        color: "rgba(20,17,15,0.72)",
-        weight: 8,
-        opacity: 0.88,
-        lineCap: "round",
-        lineJoin: "round",
-        interactive: false
-      }).addTo(features);
+      routeSplit.segments.forEach((segment) => {
+        const latLngs = routeSegmentLatLngs(segment);
 
-      L.polyline(routePoints, {
-        color: "#f0b85a",
-        weight: 4,
-        opacity: 1,
-        lineCap: "round",
-        lineJoin: "round",
-        interactive: false
-      }).addTo(features);
+        L.polyline(latLngs, {
+          color: "rgba(20,17,15,0.72)",
+          weight: 8,
+          opacity: 0.88,
+          lineCap: "round",
+          lineJoin: "round",
+          interactive: false
+        }).addTo(features);
+
+        L.polyline(latLngs, {
+          color: "#f0b85a",
+          weight: 4,
+          opacity: 1,
+          lineCap: "round",
+          lineJoin: "round",
+          interactive: false
+        }).addTo(features);
+      });
+
+      routeSplit.gaps.forEach((gap) => {
+        L.polyline(gap.latLngs, {
+          color: "rgba(20,17,15,0.54)",
+          weight: 7,
+          opacity: 0.48,
+          dashArray: "4 8",
+          lineCap: "round",
+          lineJoin: "round",
+          interactive: false
+        }).addTo(features);
+
+        L.polyline(gap.latLngs, {
+          color: "#f28e7d",
+          weight: 3,
+          opacity: 0.86,
+          dashArray: "4 8",
+          lineCap: "round",
+          lineJoin: "round",
+          interactive: true
+        })
+          .bindTooltip(formatPartyRouteGap(gap), { direction: "top", opacity: 0.94 })
+          .addTo(features);
+      });
 
       L.circleMarker(routePoints[0], {
         radius: 7,
@@ -3430,33 +3609,66 @@
     if (!p) return;
 
     const route = loadPartyRoutes()[p.id] || [];
-    const routeLatLngs = route
-      .filter((pt) => Number.isFinite(Number(pt.lat)) && Number.isFinite(Number(pt.lng)))
-      .map((pt) => [Number(pt.lat), Number(pt.lng)]);
+    const routeSplit = splitPartyRouteBySampleGaps(route);
+    const routeLatLngs = routeSplit.points.map((pt) => [pt.lat, pt.lng]);
 
     // ---------------------------------------------------------------------------
     // Live route line
     // ---------------------------------------------------------------------------
     if (routeLatLngs.length >= 2) {
-      L.polyline(routeLatLngs, {
-        pane: PANE,
-        color: "#f0d18a",
-        weight: 5,
-        opacity: 0.92,
-        lineCap: "round",
-        lineJoin: "round",
-        interactive: false
-      }).addTo(layer);
+      routeSplit.segments.forEach((segment) => {
+        const latLngs = routeSegmentLatLngs(segment);
 
-      L.polyline(routeLatLngs, {
-        pane: PANE,
-        color: "#1a1209",
-        weight: 9,
-        opacity: 0.35,
-        lineCap: "round",
-        lineJoin: "round",
-        interactive: false
-      }).addTo(layer);
+        L.polyline(latLngs, {
+          pane: PANE,
+          color: "#1a1209",
+          weight: 9,
+          opacity: 0.35,
+          lineCap: "round",
+          lineJoin: "round",
+          interactive: false
+        }).addTo(layer);
+
+        L.polyline(latLngs, {
+          pane: PANE,
+          color: "#f0d18a",
+          weight: 5,
+          opacity: 0.92,
+          lineCap: "round",
+          lineJoin: "round",
+          interactive: false
+        }).addTo(layer);
+      });
+
+      routeSplit.gaps.forEach((gap) => {
+        L.polyline(gap.latLngs, {
+          pane: PANE,
+          color: "#1a1209",
+          weight: 8,
+          opacity: 0.28,
+          dashArray: "4 8",
+          lineCap: "round",
+          lineJoin: "round",
+          interactive: false
+        }).addTo(layer);
+
+        L.polyline(gap.latLngs, {
+          pane: PANE,
+          color: "#f28e7d",
+          weight: 3,
+          opacity: 0.82,
+          dashArray: "4 8",
+          lineCap: "round",
+          lineJoin: "round",
+          interactive: true
+        })
+          .bindTooltip(formatPartyRouteGap(gap), {
+            direction: "top",
+            offset: [0, -6],
+            opacity: 0.94
+          })
+          .addTo(layer);
+      });
     }
 
     // ---------------------------------------------------------------------------
@@ -3639,6 +3851,14 @@
     partyHudRaiseTab = null;
   }
 
+  function partyCollapseIconSvg() {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="5" y="6" width="14" height="12" rx="2"></rect>
+      <path d="M5 10h14"></path>
+      <path d="M10 15h4"></path>
+    </svg>`;
+  }
+
   function renderActivePartyHud() {
     injectStyles();
 
@@ -3707,8 +3927,7 @@
     </button>
 
     <div class="gw-active-party-actions">
-      <button class="gw-active-party-btn" id="gwActivePartyCollapseBtn" type="button" aria-label="Minimize party banner" title="Minimize party banner">Hide</button>
-      <button class="gw-active-party-btn" id="gwActivePartyRecapBtn" type="button" ${pending ? "disabled" : ""}>Recap</button>
+      <button class="gw-active-party-btn gw-active-party-icon-btn" id="gwActivePartyCollapseBtn" type="button" aria-label="Minimize party banner" title="Minimize party banner">${partyCollapseIconSvg()}</button>
       <button class="gw-active-party-btn danger" id="gwActivePartyEndBtn" type="button" ${pending || ending ? "disabled" : ""}>${ending ? "Ending" : "End"}</button>
     </div>
   `;
@@ -3720,11 +3939,6 @@
 
     hud.querySelector("#gwActivePartyCollapseBtn")?.addEventListener("click", () => {
       setPartyHudCollapsed(true);
-    });
-
-    hud.querySelector("#gwActivePartyRecapBtn")?.addEventListener("click", () => {
-      if (pending) return;
-      openPartyRecap(party.id);
     });
 
     hud.querySelector("#gwActivePartyEndBtn")?.addEventListener("click", () => {
@@ -4378,6 +4592,23 @@
     text-transform: uppercase;
     letter-spacing: 0.35px;
     box-shadow: 0 8px 20px rgba(0,0,0,0.32);
+    }
+
+    .gw-active-party-icon-btn {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    padding: 0;
+    }
+
+    .gw-active-party-icon-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
     }
 
     .gw-active-party-btn:disabled {

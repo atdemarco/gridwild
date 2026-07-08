@@ -26,6 +26,22 @@ function closeAllSheets() {
   window.GridWildPartyLive?.stopPartyPolling?.();
 }
 
+function closeSheet(name) {
+  const sheet = sheets[name];
+  if (!sheet) return;
+
+  sheet.classList.remove("is-open");
+  navButtons[name]?.classList.remove("is-active");
+
+  if (name === "community") {
+    window.GridWildPartyLive?.stopPartyPolling?.();
+  }
+
+  if (!getOpenSheetName()) {
+    gwBackdrop.classList.remove("is-open");
+  }
+}
+
 function setQuestBadge(visible) {
   const dot = document.getElementById("questNotifyDot");
   if (!dot) return;
@@ -185,8 +201,11 @@ function dispatchGridWildBootstrapUnavailable(err) {
 
 const GRIDWILD_ONLINE_BOOT_DELAY_MS = 2500;
 const GRIDWILD_ONLINE_BOOT_TIMEOUT_MS = 9000;
+const GRIDWILD_RESUME_BOOTSTRAP_THROTTLE_MS = 3500;
 let gwOnlineBootstrapPromise = null;
 let gwOnlineBootstrapScheduled = false;
+let gwLastResumeBootstrapAt = 0;
+let gwLastPageHiddenAt = 0;
 
 function applyGridWildBootstrapData(data) {
   window.__gwState = window.__gwState || {};
@@ -312,6 +331,49 @@ function scheduleGridWildOnlineBootstrap() {
 
 window.startGridWildOnlineBootstrap = startGridWildOnlineBootstrap;
 window.scheduleGridWildOnlineBootstrap = scheduleGridWildOnlineBootstrap;
+
+function hasGridWildResumeSession() {
+  return Boolean(
+    window.GridWildAPI?.getSessionToken?.() ||
+      (window.GridWildAPI?.getPlayerId?.() && window.GridWildAPI?.getPlayerSessionToken?.())
+  );
+}
+
+function refreshGridWildAfterResumeBootstrap() {
+  window.GridWildPlayerUI?.refreshPlayerUI?.();
+  window.GridWildPlayerInteractions?.refresh?.({ quiet: true });
+  window.GridWildPartyLive?.loadParty?.({ forceHistory: true, forceNearby: true });
+  window.GridWildPartyLive?.refreshPartySheet?.();
+  window.GridWildParty?.refreshMapBeacon?.();
+  window.refreshGridWildMobileInfo?.();
+}
+
+function requestGridWildResumeBootstrap(reason = "resume") {
+  if (document.visibilityState === "hidden") return null;
+  if (!hasGridWildResumeSession()) return null;
+
+  const now = Date.now();
+  if (now - gwLastResumeBootstrapAt < GRIDWILD_RESUME_BOOTSTRAP_THROTTLE_MS) return null;
+  gwLastResumeBootstrapAt = now;
+
+  window.__gwState = window.__gwState || {};
+  window.__gwState.onlineBootstrapDeferred = true;
+
+  return startGridWildOnlineBootstrap({
+    force: true,
+    timeoutMs: GRIDWILD_ONLINE_BOOT_TIMEOUT_MS
+  })
+    .then((data) => {
+      if (data) refreshGridWildAfterResumeBootstrap();
+      return data;
+    })
+    .catch((err) => {
+      warnGridWildLoadFailure(`GridWild mobile ${reason} session refresh failed.`, err);
+      return null;
+    });
+}
+
+window.requestGridWildResumeBootstrap = requestGridWildResumeBootstrap;
 
 let gwPlayerDetailsPromise = null;
 async function ensurePlayerBootstrapDetailsLoaded(options = {}) {
@@ -524,6 +586,7 @@ function getOpenSheetName() {
 
 window.GridWildSheets = {
   open: openSheet,
+  close: closeSheet,
   closeAll: closeAllSheets,
   getOpen: getOpenSheetName
 };
@@ -2018,6 +2081,35 @@ recenterFab?.addEventListener("click", () => {
 // --------------------------------------------------------------------
 // Init
 // --------------------------------------------------------------------
+window.addEventListener("pageshow", (evt) => {
+  if (evt.persisted || gwLastPageHiddenAt) {
+    requestGridWildResumeBootstrap("pageshow");
+  }
+});
+
+window.addEventListener("focus", () => {
+  requestGridWildResumeBootstrap("focus");
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    gwLastPageHiddenAt = Date.now();
+    return;
+  }
+
+  if (gwLastPageHiddenAt) {
+    requestGridWildResumeBootstrap("visibility");
+  }
+});
+
+window.addEventListener("online", () => {
+  requestGridWildResumeBootstrap("online");
+});
+
+window.addEventListener("gwBootstrapRefreshRequested", () => {
+  requestGridWildResumeBootstrap("account-refresh");
+});
+
 (function initGridWildMobileShell() {
   bootGridWildLocalMapShell();
   scheduleGridWildOnlineBootstrap();

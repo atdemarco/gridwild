@@ -124,6 +124,8 @@ window.GridWildCanvasPerf = (function (existing = {}) {
   const DEFAULT_BUFFER_PX = 128;
   const MOBILE_BUFFER_PX = 96;
   const MAX_PADDED_AREA_RATIO = 1.65;
+  const ROTATED_MAX_PADDED_AREA_RATIO = 2.5;
+  const ROTATED_OVERSCAN_GUARD_PX = 18;
   const BUFFER_EDGE_PX = 16;
 
   function isMobileLike() {
@@ -143,7 +145,61 @@ window.GridWildCanvasPerf = (function (existing = {}) {
     return Math.max(1, Math.min(nativeDpr, cap));
   }
 
-  function getBufferPx(requestedPx, viewport = map.getSize()) {
+  function currentMapBearingDeg() {
+    const stateBearing = Number(window.GridWildCompass?.getState?.()?.cameraBearing);
+    if (Number.isFinite(stateBearing)) return stateBearing;
+    const debugBearing = Number(window.__gwCompassMapBearing);
+    return Number.isFinite(debugBearing) ? debugBearing : 0;
+  }
+
+  function normalizeHalfTurnDeg(deg) {
+    const n = Math.abs(((Number(deg) || 0) % 180 + 180) % 180);
+    return n > 90 ? 180 - n : n;
+  }
+
+  function rotatedViewportPadding(viewport = map.getSize(), bearingDeg = currentMapBearingDeg()) {
+    const angleDeg = normalizeHalfTurnDeg(bearingDeg);
+    if (angleDeg < 0.5) return { x: 0, y: 0, active: false };
+
+    const width = Math.max(1, Number(viewport?.x) || 1);
+    const height = Math.max(1, Number(viewport?.y) || 1);
+    const theta = (angleDeg * Math.PI) / 180;
+    const cos = Math.abs(Math.cos(theta));
+    const sin = Math.abs(Math.sin(theta));
+    const rotatedWidth = width * cos + height * sin;
+    const rotatedHeight = width * sin + height * cos;
+
+    return {
+      x: Math.max(0, (rotatedWidth - width) / 2 + ROTATED_OVERSCAN_GUARD_PX),
+      y: Math.max(0, (rotatedHeight - height) / 2 + ROTATED_OVERSCAN_GUARD_PX),
+      active: true
+    };
+  }
+
+  function fitBufferPadding(width, height, targetX, targetY, maxAreaRatio) {
+    const maxArea = width * height * maxAreaRatio;
+    if ((width + targetX * 2) * (height + targetY * 2) <= maxArea) {
+      return { x: targetX, y: targetY };
+    }
+
+    let low = 0;
+    let high = 1;
+    for (let i = 0; i < 18; i++) {
+      const mid = (low + high) / 2;
+      const x = targetX * mid;
+      const y = targetY * mid;
+      const area = (width + x * 2) * (height + y * 2);
+      if (area <= maxArea) low = mid;
+      else high = mid;
+    }
+
+    return {
+      x: targetX * low,
+      y: targetY * low
+    };
+  }
+
+  function getBufferPaddingPx(requestedPx, viewport = map.getSize()) {
     const requested = Number(requestedPx);
     const preferred =
       Number.isFinite(requested) && requested >= 0
@@ -153,19 +209,29 @@ window.GridWildCanvasPerf = (function (existing = {}) {
           : DEFAULT_BUFFER_PX;
     const width = Math.max(1, Number(viewport?.x) || 1);
     const height = Math.max(1, Number(viewport?.y) || 1);
-    const areaDelta = width * height * (MAX_PADDED_AREA_RATIO - 1);
-    const span = width + height;
-    const areaLimitedBuffer = (-span + Math.sqrt(span * span + 4 * areaDelta)) / 4;
+    const rotated = rotatedViewportPadding(viewport);
+    const targetX = Math.max(preferred, rotated.x);
+    const targetY = Math.max(preferred, rotated.y);
+    const maxAreaRatio = rotated.active ? ROTATED_MAX_PADDED_AREA_RATIO : MAX_PADDED_AREA_RATIO;
+    const fitted = fitBufferPadding(width, height, targetX, targetY, maxAreaRatio);
 
-    return Math.max(0, Math.floor(Math.min(preferred, areaLimitedBuffer)));
+    return {
+      x: Math.max(0, Math.floor(fitted.x)),
+      y: Math.max(0, Math.floor(fitted.y)),
+      max: Math.max(0, Math.floor(Math.max(fitted.x, fitted.y)))
+    };
+  }
+
+  function getBufferPx(requestedPx, viewport = map.getSize()) {
+    return getBufferPaddingPx(requestedPx, viewport).max;
   }
 
   function layoutPaddedCanvas(canvas, ctx, label = "canvas", options = {}) {
     const viewport = map.getSize();
-    const bufferPx = getBufferPx(options.bufferPx, viewport);
-    const width = Math.max(1, Math.round(viewport.x + bufferPx * 2));
-    const height = Math.max(1, Math.round(viewport.y + bufferPx * 2));
-    const topLeft = map.containerPointToLayerPoint([-bufferPx, -bufferPx]);
+    const padding = getBufferPaddingPx(options.bufferPx, viewport);
+    const width = Math.max(1, Math.round(viewport.x + padding.x * 2));
+    const height = Math.max(1, Math.round(viewport.y + padding.y * 2));
+    const topLeft = map.containerPointToLayerPoint([-padding.x, -padding.y]);
     const dpr = getDpr(label);
     const wantW = Math.round(width * dpr);
     const wantH = Math.round(height * dpr);
@@ -185,7 +251,9 @@ window.GridWildCanvasPerf = (function (existing = {}) {
       topLeft,
       width,
       height,
-      bufferPx,
+      bufferPx: padding.max,
+      bufferX: padding.x,
+      bufferY: padding.y,
       viewportWidth: viewport.x,
       viewportHeight: viewport.y,
       zoom: map.getZoom()
@@ -202,13 +270,20 @@ window.GridWildCanvasPerf = (function (existing = {}) {
 
     const topLeft = map.containerPointToLayerPoint([0, 0]);
     const bottomRight = map.containerPointToLayerPoint(viewport);
-    const edge = Math.max(0, Math.min(layout.bufferPx, Number(edgePx) || 0));
+    const edgeX = Math.max(
+      0,
+      Math.min(Number(layout.bufferX ?? layout.bufferPx) || 0, Number(edgePx) || 0)
+    );
+    const edgeY = Math.max(
+      0,
+      Math.min(Number(layout.bufferY ?? layout.bufferPx) || 0, Number(edgePx) || 0)
+    );
 
     return (
-      topLeft.x >= layout.topLeft.x + edge &&
-      topLeft.y >= layout.topLeft.y + edge &&
-      bottomRight.x <= layout.topLeft.x + layout.width - edge &&
-      bottomRight.y <= layout.topLeft.y + layout.height - edge
+      topLeft.x >= layout.topLeft.x + edgeX &&
+      topLeft.y >= layout.topLeft.y + edgeY &&
+      bottomRight.x <= layout.topLeft.x + layout.width - edgeX &&
+      bottomRight.y <= layout.topLeft.y + layout.height - edgeY
     );
   }
 
@@ -217,6 +292,7 @@ window.GridWildCanvasPerf = (function (existing = {}) {
     getDpr,
     isMobileLike,
     getBufferPx,
+    getBufferPaddingPx,
     layoutPaddedCanvas,
     canvasCoversViewport
   };
@@ -4364,6 +4440,9 @@ if (window.GridWildMapMotionQueue?.subscribe) {
 } else {
   map.on("move zoom resize viewreset zoomend moveend", scheduleGridHeatCanvasRender);
 }
+window.addEventListener("gridwild:mapbearingchange", () => {
+  scheduleGridHeatCanvasRender({ force: true, reason: "map-bearing-changed" });
+});
 map.on("movestart zoomstart", beginGridHeatMotion);
 map.on("moveend zoomend", endGridHeatMotion);
 map.on("zoomend resize moveend", updateGrid);
