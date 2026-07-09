@@ -288,7 +288,7 @@
         position: fixed;
         top: calc(max(12px, env(safe-area-inset-top)) + 50px);
         right: 12px;
-        z-index: 1498;
+        z-index: 1418;
         display: grid;
         justify-items: end;
         pointer-events: none;

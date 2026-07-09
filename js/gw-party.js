@@ -11,6 +11,17 @@
   const PARTY_ROUTE_SAMPLE_GAP_MIN_METERS = 35;
   const PARTY_ROUTE_SAMPLE_GAP_SPEED_MPS = 4.5;
   const PARTY_ROUTE_SAMPLE_GAP_FORCE_METERS = 500;
+  const PARTY_ROUTE_OUTLIER_MIN_DISTANCE_M = 24;
+  const PARTY_ROUTE_OUTLIER_FAST_SPEED_MPS = 4.5;
+  const PARTY_ROUTE_OUTLIER_SOFT_SPEED_MPS = 2.4;
+  const PARTY_ROUTE_OUTLIER_SOFT_ACCURACY_M = 25;
+  const PARTY_ROUTE_OUTLIER_CONFIRM_M = 30;
+  const PARTY_ROUTE_OUTLIER_PENDING_TTL_MS = 90 * 1000;
+  const PARTY_ROUTE_RESUME_UNCERTAIN_AFTER_MS = 10 * 1000;
+  const PARTY_ROUTE_RESUME_UNCERTAIN_WINDOW_MS = 45 * 1000;
+  const PARTY_ROUTE_UNCERTAIN_MIN_DISTANCE_M = 12;
+  const PARTY_ROUTE_LOW_QUALITY_GAP_MS = 25 * 1000;
+  const PARTY_ROUTE_LOW_QUALITY_GAP_ACCURACY_M = 35;
   const PARTY_HUD_COLLAPSED_KEY = "gw_party_hud_collapsed";
   const PARTY_ROUTE_OUTBOX_KEY = "gw_party_route_outbox_v1";
   const PARTY_ROUTE_OUTBOX_LIMIT = 1200;
@@ -20,12 +31,26 @@
   const PARTY_END_RETRY_MS = 20000;
 
   let partyLayer = null;
+  let partyMapLayers = null;
+  const partyLiveRouteState = {
+    partyId: null,
+    segments: [],
+    gaps: [],
+    startMarker: null,
+    latestMarker: null,
+    beaconMarker: null
+  };
   let partyHudRaiseTab = null;
   let partyRaiseTabPositionBound = false;
   let partyRouteFlushTimer = null;
   let partyRouteFlushPromise = null;
   let partyEndFlushTimer = null;
   let partyEndFlushPromise = null;
+  let partyRouteBackgroundedAt = document.hidden ? Date.now() : 0;
+  let partyRouteResumeUncertainUntil = 0;
+  let partyRouteResumeToken = 0;
+  const partyRouteOutlierCandidates = new Map();
+  const partyRouteResumeTokenByParty = new Map();
 
   const PARTY_TEMPLATES = [
     {
@@ -825,7 +850,8 @@
     accuracyMeters,
     cellKey,
     createdAt,
-    outboxId = null
+    outboxId = null,
+    routeMeta = {}
   ) {
     window.__gwState = window.__gwState || {};
     const route = Array.isArray(window.__gwState.partyRoute) ? window.__gwState.partyRoute : [];
@@ -843,6 +869,11 @@
       accuracy_meters: Number.isFinite(Number(accuracyMeters)) ? Number(accuracyMeters) : null,
       cell_key: cellKey || null,
       created_at: createdAt,
+      uncertain_gap_after: routeMeta.uncertain_gap_after === true,
+      uncertain_gap_reason: routeMeta.uncertain_gap_reason || null,
+      uncertain_gap_distance_m: Number.isFinite(Number(routeMeta.uncertain_gap_distance_m))
+        ? Number(routeMeta.uncertain_gap_distance_m)
+        : null,
       _route_outbox_id: outboxId || null,
       _optimistic: true
     });
@@ -863,6 +894,204 @@
     }
   }
 
+  function routeAccuracyMeters(point) {
+    const acc = Number(point?.accuracyMeters ?? point?.accuracy_meters);
+    return Number.isFinite(acc) && acc >= 0 ? acc : PARTY_ROUTE_MAX_ACCURACY_M;
+  }
+
+  function latestAcceptedPartyRoutePoint(partyId) {
+    const route = loadPartyRoutes()[partyId] || [];
+    for (let i = route.length - 1; i >= 0; i--) {
+      const point = route[i];
+      const lat = Number(point?.lat);
+      const lng = Number(point?.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      return {
+        ...point,
+        lat,
+        lng,
+        accuracyMeters: routeAccuracyMeters(point)
+      };
+    }
+    return null;
+  }
+
+  function routeOutlierConfirmDistance(a, b) {
+    return Math.max(
+      PARTY_ROUTE_OUTLIER_CONFIRM_M,
+      routeAccuracyMeters(a) + routeAccuracyMeters(b) + 10
+    );
+  }
+
+  function logPartyRouteFilterDecision(decision = {}) {
+    window.__gwState = window.__gwState || {};
+    const rows = Array.isArray(window.__gwState.partyRouteFilterLog)
+      ? window.__gwState.partyRouteFilterLog
+      : [];
+    rows.push({ at: new Date().toISOString(), ...decision });
+    if (rows.length > 40) rows.splice(0, rows.length - 40);
+    window.__gwState.partyRouteFilterLog = rows;
+    if (window.__gwDebugPartyRouteFilter === true) {
+      console.debug("GridWild party route filter", decision);
+    }
+  }
+
+  function markPartyRouteBackgrounded() {
+    if (!partyRouteBackgroundedAt) partyRouteBackgroundedAt = Date.now();
+  }
+
+  function markPartyRouteResumed(source = "resume") {
+    const now = Date.now();
+    const hiddenFor = partyRouteBackgroundedAt ? now - partyRouteBackgroundedAt : 0;
+    partyRouteBackgroundedAt = 0;
+    if (hiddenFor < PARTY_ROUTE_RESUME_UNCERTAIN_AFTER_MS) return;
+
+    partyRouteResumeToken += 1;
+    partyRouteResumeUncertainUntil = now + PARTY_ROUTE_RESUME_UNCERTAIN_WINDOW_MS;
+    logPartyRouteFilterDecision({
+      decision: "resume-window",
+      source,
+      hiddenMs: Math.round(hiddenFor),
+      uncertainWindowMs: PARTY_ROUTE_RESUME_UNCERTAIN_WINDOW_MS
+    });
+  }
+
+  function routePointUncertainGapAfter(point) {
+    return Boolean(point?.uncertain_gap_after || point?.route_uncertain_gap_after);
+  }
+
+  function routePointUncertainGapReason(point) {
+    return String(point?.uncertain_gap_reason || point?.route_uncertain_gap_reason || "");
+  }
+
+  function partyRouteTransitionUncertainty(partyId, candidate, options = {}) {
+    const last = latestAcceptedPartyRoutePoint(partyId);
+    if (!last) return null;
+
+    const now = Number(options.now) || Date.now();
+    const distance = haversineMeters(last, candidate);
+    if (!Number.isFinite(distance) || distance < PARTY_ROUTE_UNCERTAIN_MIN_DISTANCE_M) {
+      return null;
+    }
+
+    const explicitReason = String(options.reason || "");
+    if (explicitReason) {
+      return {
+        uncertain_gap_after: true,
+        uncertain_gap_reason: explicitReason,
+        uncertain_gap_distance_m: Math.round(distance)
+      };
+    }
+
+    if (
+      partyRouteResumeToken &&
+      now <= partyRouteResumeUncertainUntil &&
+      partyRouteResumeTokenByParty.get(partyId) !== partyRouteResumeToken
+    ) {
+      partyRouteResumeTokenByParty.set(partyId, partyRouteResumeToken);
+      return {
+        uncertain_gap_after: true,
+        uncertain_gap_reason: "resume",
+        uncertain_gap_distance_m: Math.round(distance)
+      };
+    }
+
+    const dtMs = routePointTimeMs(last) ? now - routePointTimeMs(last) : 0;
+    const accuracy = routeAccuracyMeters(candidate);
+    if (
+      dtMs >= PARTY_ROUTE_LOW_QUALITY_GAP_MS &&
+      distance >= PARTY_ROUTE_SAMPLE_GAP_MIN_METERS &&
+      accuracy >= PARTY_ROUTE_LOW_QUALITY_GAP_ACCURACY_M
+    ) {
+      return {
+        uncertain_gap_after: true,
+        uncertain_gap_reason: "low_quality",
+        uncertain_gap_distance_m: Math.round(distance)
+      };
+    }
+
+    return null;
+  }
+
+  function assessPartyRouteCandidate(partyId, candidate, options = {}) {
+    const last = latestAcceptedPartyRoutePoint(partyId);
+    if (!last) {
+      partyRouteOutlierCandidates.delete(partyId);
+      return { accept: true, forceAccept: false };
+    }
+
+    const now = Number(options.now) || Date.now();
+    const pending = partyRouteOutlierCandidates.get(partyId);
+    if (pending && now - Number(pending.seenAt || 0) > PARTY_ROUTE_OUTLIER_PENDING_TTL_MS) {
+      partyRouteOutlierCandidates.delete(partyId);
+    } else if (pending) {
+      const confirmDistance = haversineMeters(pending, candidate);
+      if (
+        Number.isFinite(confirmDistance) &&
+        confirmDistance <= routeOutlierConfirmDistance(pending, candidate)
+      ) {
+        partyRouteOutlierCandidates.delete(partyId);
+        logPartyRouteFilterDecision({
+          partyId,
+          decision: "confirmed",
+          distanceMeters: Math.round(confirmDistance)
+        });
+        return {
+          accept: true,
+          forceAccept: true,
+          uncertainGapReason: "confirmed_jump"
+        };
+      }
+    }
+
+    const distance = haversineMeters(last, candidate);
+    const lastTime = routePointTimeMs(last);
+    const dtMs = lastTime ? now - lastTime : PARTY_ROUTE_THROTTLE_MS;
+    const dtSec = Math.max(1, dtMs / 1000);
+    const speedMps = distance / dtSec;
+    const candidateAcc = routeAccuracyMeters(candidate);
+    const lastAcc = routeAccuracyMeters(last);
+    const uncertaintyM = Math.max(18, candidateAcc + lastAcc + 8);
+
+    if (
+      !Number.isFinite(distance) ||
+      distance < PARTY_ROUTE_OUTLIER_MIN_DISTANCE_M ||
+      dtMs <= 0 ||
+      dtMs > PARTY_ROUTE_SAMPLE_GAP_MS ||
+      distance <= uncertaintyM * 0.75
+    ) {
+      partyRouteOutlierCandidates.delete(partyId);
+      return { accept: true, forceAccept: false };
+    }
+
+    const hardJump = speedMps >= PARTY_ROUTE_OUTLIER_FAST_SPEED_MPS;
+    const softJump =
+      candidateAcc >= PARTY_ROUTE_OUTLIER_SOFT_ACCURACY_M &&
+      speedMps >= PARTY_ROUTE_OUTLIER_SOFT_SPEED_MPS;
+    const worsenedAccuracyJump =
+      lastAcc <= PARTY_ROUTE_OUTLIER_SOFT_ACCURACY_M &&
+      candidateAcc >= lastAcc * 1.8 &&
+      distance >= PARTY_ROUTE_SAMPLE_GAP_MIN_METERS;
+
+    if (!hardJump && !softJump && !worsenedAccuracyJump) {
+      partyRouteOutlierCandidates.delete(partyId);
+      return { accept: true, forceAccept: false };
+    }
+
+    partyRouteOutlierCandidates.set(partyId, {
+      ...candidate,
+      seenAt: now
+    });
+    logPartyRouteFilterDecision({
+      partyId,
+      decision: "held",
+      distanceMeters: Math.round(distance),
+      speedMps: Number(speedMps.toFixed(2)),
+      accuracyMeters: Number.isFinite(candidateAcc) ? Math.round(candidateAcc) : null
+    });
+    return { accept: false, forceAccept: false };
+  }
+
   function recordPartyPosition(lat, lng, accuracyMeters, options = {}) {
     const partyId = options.partyId || getActivePartyId();
     if (!partyId) return;
@@ -878,15 +1107,38 @@
     window.__gwState.lastPartyRoutePointAtByParty =
       window.__gwState.lastPartyRoutePointAtByParty || {};
 
+    const now = Date.now();
+    const candidate = {
+      lat: latNum,
+      lng: lngNum,
+      accuracyMeters: Number.isFinite(acc) ? acc : null,
+      t: new Date(now).toISOString()
+    };
+    const routeDecision = assessPartyRouteCandidate(partyId, candidate, {
+      now,
+      force: options.force === true
+    });
+    if (!routeDecision.accept) return;
+
     const cellKey = getPartyRouteCellKey(latNum, lngNum);
     const lastCellKey = getLastRecordedPartyRouteCell(partyId);
     const enteredNewCell = Boolean(cellKey && cellKey !== lastCellKey);
-    const now = Date.now();
     const lastTime = Number(window.__gwState.lastPartyRoutePointAtByParty[partyId] || 0);
 
-    if (options.force !== true && !enteredNewCell && now - lastTime < PARTY_ROUTE_THROTTLE_MS) {
+    if (
+      options.force !== true &&
+      routeDecision.forceAccept !== true &&
+      !enteredNewCell &&
+      now - lastTime < PARTY_ROUTE_THROTTLE_MS
+    ) {
       return;
     }
+
+    const routeMeta =
+      partyRouteTransitionUncertainty(partyId, candidate, {
+        now,
+        reason: routeDecision.uncertainGapReason
+      }) || {};
 
     window.__gwState.lastPartyRoutePointAtByParty[partyId] = now;
     window.__gwState.lastPartyRoutePointAt = now;
@@ -899,7 +1151,10 @@
       lng: lngNum,
       accuracy_meters: Number.isFinite(acc) ? acc : null,
       cell_key: cellKey,
-      created_at: createdAt
+      created_at: createdAt,
+      uncertain_gap_after: routeMeta.uncertain_gap_after === true,
+      uncertain_gap_reason: routeMeta.uncertain_gap_reason || null,
+      uncertain_gap_distance_m: routeMeta.uncertain_gap_distance_m || null
     });
     const optimisticId = appendOptimisticPartyRoutePoint(
       partyId,
@@ -908,7 +1163,8 @@
       Number.isFinite(acc) ? acc : null,
       cellKey,
       createdAt,
-      queued?.id || null
+      queued?.id || null,
+      routeMeta
     );
     if (queued?.id) {
       updatePartyRouteOutboxRow(queued.id, { optimistic_id: optimisticId });
@@ -1053,6 +1309,8 @@
   }
 
   function isPartyRouteSampleGap(a, b) {
+    if (routePointUncertainGapAfter(b)) return true;
+
     const distance = haversineMeters(a, b);
     if (!Number.isFinite(distance) || distance <= 0) return false;
     if (distance >= PARTY_ROUTE_SAMPLE_GAP_FORCE_METERS) return true;
@@ -1096,6 +1354,7 @@
             [previous.lat, previous.lng],
             [point.lat, point.lng]
           ],
+          reason: routePointUncertainGapReason(point),
           distanceMeters: haversineMeters(previous, point),
           durationMs: routePointTimeMs(point) - routePointTimeMs(previous)
         });
@@ -1123,6 +1382,10 @@
     const durationMs = Number(gap.durationMs);
     const minutes = Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs / 60000) : 0;
     const distance = formatDistance(gap.distanceMeters || 0);
+    const reason = String(gap.reason || "");
+    if (reason === "resume") return `Route uncertain after app resume: ${distance} connector`;
+    if (reason === "low_quality") return `Low GPS confidence: ${distance} connector`;
+    if (reason === "confirmed_jump") return `Route transition uncertain: ${distance} connector`;
     return minutes
       ? `Route samples missing: ${minutes} min gap, ${distance} connector`
       : `Route samples missing: ${distance} connector`;
@@ -1229,31 +1492,66 @@
     return true;
   }
 
-  function shareParty(id) {
+  function shareCancelled(err) {
+    return /abort|cancel/i.test(String(err?.name || err?.message || ""));
+  }
+
+  function partyShareText(p, id, shareUrl) {
+    const route = loadPartyRoutes()[id] || [];
+    const counted = countEvidenceForParty(id);
+    const distance = formatDistance(getRouteDistanceMeters(route));
+
+    return [
+      `GridWild Party Report: ${p.title}`,
+      `Counted observations: ${counted}`,
+      `Duration: ${getPartyDurationLabel(p)}`,
+      `Route: ${distance}`,
+      shareUrl
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  async function copyPartyShareText(p, id, shareUrl) {
+    const text = partyShareText(p, id, shareUrl);
+
+    try {
+      await navigator.clipboard?.writeText(text);
+      toast("Party report link copied");
+      return true;
+    } catch (err) {
+      console.warn("Could not copy party share link:", err);
+      toast("Could not share party link");
+      return false;
+    }
+  }
+
+  async function shareParty(id) {
     const p = getParty(id);
-    if (!p) return;
+    if (!p) return false;
 
     const url = partyReportUrl(id);
-
+    const title = `GridWild Party Report: ${p.title}`;
     const text = [
-      `GridWild Party Report: ${p.title}`,
       `Counted observations: ${countEvidenceForParty(id)}`,
       `Duration: ${getPartyDurationLabel(p)}`,
-      `Open static report: ${url}`
-    ].join("\n");
+      `Route: ${formatDistance(getRouteDistanceMeters(loadPartyRoutes()[id] || []))}`
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const shareData = { title, text, url };
 
-    if (navigator.share) {
-      navigator
-        .share({
-          title: `GridWild Party Report: ${p.title}`,
-          text,
-          url
-        })
-        .catch(() => {});
-    } else {
-      navigator.clipboard?.writeText(url);
-      toast("🔗 Static report link copied");
+    if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
+      try {
+        await navigator.share(shareData);
+        return true;
+      } catch (err) {
+        if (shareCancelled(err)) return false;
+        console.warn("Could not open party share sheet:", err);
+      }
     }
+
+    return copyPartyShareText(p, id, url);
   }
 
   function partyINatSyncToast(result = {}) {
@@ -1478,6 +1776,7 @@
     if (!partyId || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
 
     const accuracy = Number(row.accuracy_meters ?? row.accuracyMeters);
+    const uncertainDistance = Number(row.uncertain_gap_distance_m ?? row.uncertainGapDistanceM);
     return {
       id: String(row.id || `route_outbox_${partyId}_${shortRouteId()}`),
       party_id: partyId,
@@ -1486,6 +1785,10 @@
       accuracy_meters: Number.isFinite(accuracy) ? accuracy : null,
       cell_key: String(row.cell_key || row.cellKey || "").trim() || null,
       created_at: isoOrNow(row.created_at || row.createdAt),
+      uncertain_gap_after: row.uncertain_gap_after === true || row.uncertainGapAfter === true,
+      uncertain_gap_reason:
+        String(row.uncertain_gap_reason || row.uncertainGapReason || "").trim() || null,
+      uncertain_gap_distance_m: Number.isFinite(uncertainDistance) ? uncertainDistance : null,
       optimistic_id: row.optimistic_id || row.optimisticId || null,
       attempts: Math.max(0, Number(row.attempts) || 0),
       last_attempt_at: row.last_attempt_at || null,
@@ -1587,6 +1890,9 @@
         accuracy_meters: row.accuracy_meters,
         cell_key: row.cell_key,
         created_at: row.created_at,
+        uncertain_gap_after: row.uncertain_gap_after === true,
+        uncertain_gap_reason: row.uncertain_gap_reason || null,
+        uncertain_gap_distance_m: row.uncertain_gap_distance_m || null,
         _optimistic: true,
         _route_outbox_id: row.id
       });
@@ -1611,6 +1917,9 @@
     const nextPoint = {
       ...point,
       cell_key: point.cell_key || outboxRow.cell_key || null,
+      uncertain_gap_after: outboxRow.uncertain_gap_after === true,
+      uncertain_gap_reason: outboxRow.uncertain_gap_reason || null,
+      uncertain_gap_distance_m: outboxRow.uncertain_gap_distance_m || null,
       _optimistic: false
     };
 
@@ -2026,22 +2335,9 @@
     };
   }
 
-  function encodePartyReport(payload) {
-    const json = JSON.stringify(payload);
-    return btoa(unescape(encodeURIComponent(json)));
-  }
-
-  function decodePartyReport(encoded) {
-    const json = decodeURIComponent(escape(atob(encoded)));
-    return JSON.parse(json);
-  }
-
   function partyReportUrl(id) {
-    const payload = makePartyReportPayload(id);
-    if (!payload) return "";
-
     const base = `${window.location.origin}${window.location.pathname}`;
-    return `${base}?party_report=${encodeURIComponent(encodePartyReport(payload))}`;
+    return `${base}?party_report=${encodeURIComponent(id)}`;
   }
 
   function partyUrl(id) {
@@ -3385,20 +3681,30 @@
     });
   }
 
+  async function loadSharedPartyReport(id) {
+    if (!id) throw new Error("party_report is required");
+    if (typeof window.GridWildAPI?.getPartyReport !== "function") {
+      throw new Error("Party report service is unavailable.");
+    }
+
+    const data = await window.GridWildAPI.getPartyReport(id);
+    if (!data?.report?.party?.id) throw new Error("Party report not found.");
+    return data.report;
+  }
+
   function handlePartyReportFromUrl() {
     const params = new URLSearchParams(window.location.search);
-    const encoded = params.get("party_report");
+    const reportId = params.get("party_report");
 
-    if (!encoded || window.__gwHandledPartyReportUrl) return;
+    if (!reportId || window.__gwHandledPartyReportUrl) return;
     window.__gwHandledPartyReportUrl = true;
 
-    try {
-      const report = decodePartyReport(encoded);
-      openStaticPartyReport(report);
-    } catch (err) {
-      console.warn("Could not decode party report:", err);
-      alert("Could not open this GridWild party report.");
-    }
+    loadSharedPartyReport(reportId)
+      .then((report) => openStaticPartyReport(report))
+      .catch((err) => {
+        console.warn("Could not load party report:", err);
+        alert(err?.message || "Could not open this GridWild party report.");
+      });
   }
 
   function openStaticPartyReport(report) {
@@ -3415,7 +3721,7 @@
       <div class="gw-party-cover-art">
         <div class="gw-party-rune">📜</div>
         <div>
-          <div class="gw-party-cover-kicker">Static GridWild Report</div>
+          <div class="gw-party-cover-kicker">Shared GridWild Report</div>
           <div class="gw-party-cover-title">${esc(p.title || "Party Report")}</div>
           <div class="gw-party-cover-sub">
             Hosted by ${esc(p.host || "Unknown")} · ${esc(p.locationLabel || "field site")}
@@ -3521,9 +3827,196 @@
 
     if (!partyLayer) {
       partyLayer = L.layerGroup([], { pane: PANE }).addTo(map);
+      partyMapLayers = null;
     }
 
     return partyLayer;
+  }
+
+  function ensurePartyMapLayers() {
+    const root = ensurePartyLayer();
+    if (!root || !window.L) return null;
+
+    if (!partyMapLayers) {
+      partyMapLayers = {
+        public: L.layerGroup([], { pane: PANE }),
+        route: L.layerGroup([], { pane: PANE }),
+        evidence: L.layerGroup([], { pane: PANE }),
+        beacon: L.layerGroup([], { pane: PANE })
+      };
+
+      root.addLayer(partyMapLayers.public);
+      root.addLayer(partyMapLayers.route);
+      root.addLayer(partyMapLayers.evidence);
+      root.addLayer(partyMapLayers.beacon);
+    }
+
+    return partyMapLayers;
+  }
+
+  function clearPartyLiveRouteLayers() {
+    const layers = ensurePartyMapLayers();
+    layers?.route?.clearLayers?.();
+    layers?.beacon?.clearLayers?.();
+    partyLiveRouteState.partyId = null;
+    partyLiveRouteState.segments = [];
+    partyLiveRouteState.gaps = [];
+    partyLiveRouteState.startMarker = null;
+    partyLiveRouteState.latestMarker = null;
+    partyLiveRouteState.beaconMarker = null;
+  }
+
+  function trimPartyRouteLayerList(layerGroup, rows, targetLength) {
+    while (rows.length > targetLength) {
+      const row = rows.pop();
+      Object.values(row || {}).forEach((layer) => {
+        if (layer?.removeFrom && layerGroup) layer.removeFrom(layerGroup);
+      });
+    }
+  }
+
+  function updatePartyRoutePair(layerGroup, rows, index, latLngs, options) {
+    let row = rows[index];
+    if (!row) {
+      row = {
+        shadow: L.polyline(latLngs, options.shadow).addTo(layerGroup),
+        line: L.polyline(latLngs, options.line).addTo(layerGroup)
+      };
+      rows[index] = row;
+      return row;
+    }
+
+    row.shadow.setLatLngs(latLngs);
+    row.line.setLatLngs(latLngs);
+    return row;
+  }
+
+  function updatePartyRouteEndpointMarker(layerGroup, key, latLng, options) {
+    let marker = partyLiveRouteState[key];
+    if (!latLng) {
+      if (marker?.removeFrom) marker.removeFrom(layerGroup);
+      partyLiveRouteState[key] = null;
+      return;
+    }
+
+    if (!marker) {
+      marker = L.circleMarker(latLng, options).addTo(layerGroup);
+      partyLiveRouteState[key] = marker;
+      return;
+    }
+
+    marker.setLatLng(latLng);
+  }
+
+  function updatePartyLiveRouteLayer(partyId, routeSplit, routeLatLngs) {
+    const layers = ensurePartyMapLayers();
+    const routeLayer = layers?.route;
+    if (!routeLayer) return;
+
+    if (partyLiveRouteState.partyId && partyLiveRouteState.partyId !== partyId) {
+      clearPartyLiveRouteLayers();
+    }
+    partyLiveRouteState.partyId = partyId;
+
+    const segmentOptions = {
+      shadow: {
+        pane: PANE,
+        color: "#1a1209",
+        weight: 9,
+        opacity: 0.35,
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: false
+      },
+      line: {
+        pane: PANE,
+        color: "#f0d18a",
+        weight: 5,
+        opacity: 0.92,
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: false
+      }
+    };
+    const gapOptions = {
+      shadow: {
+        pane: PANE,
+        color: "#1a1209",
+        weight: 8,
+        opacity: 0.28,
+        dashArray: "4 8",
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: false
+      },
+      line: {
+        pane: PANE,
+        color: "#f28e7d",
+        weight: 3,
+        opacity: 0.82,
+        dashArray: "4 8",
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: true
+      }
+    };
+
+    routeSplit.segments.forEach((segment, index) => {
+      updatePartyRoutePair(
+        routeLayer,
+        partyLiveRouteState.segments,
+        index,
+        routeSegmentLatLngs(segment),
+        segmentOptions
+      );
+    });
+    trimPartyRouteLayerList(routeLayer, partyLiveRouteState.segments, routeSplit.segments.length);
+
+    routeSplit.gaps.forEach((gap, index) => {
+      const row = updatePartyRoutePair(
+        routeLayer,
+        partyLiveRouteState.gaps,
+        index,
+        gap.latLngs,
+        gapOptions
+      );
+      const label = formatPartyRouteGap(gap);
+      const tooltip = row.line.getTooltip?.();
+      if (tooltip?.setContent) tooltip.setContent(label);
+      else {
+        row.line.bindTooltip(label, {
+          direction: "top",
+          offset: [0, -6],
+          opacity: 0.94
+        });
+      }
+    });
+    trimPartyRouteLayerList(routeLayer, partyLiveRouteState.gaps, routeSplit.gaps.length);
+
+    updatePartyRouteEndpointMarker(routeLayer, "startMarker", routeLatLngs[0] || null, {
+      pane: PANE,
+      radius: 6,
+      color: "#14110f",
+      weight: 2,
+      fillColor: "#9ee6bd",
+      fillOpacity: 0.95,
+      interactive: false
+    });
+
+    updatePartyRouteEndpointMarker(
+      routeLayer,
+      "latestMarker",
+      routeLatLngs[routeLatLngs.length - 1] || null,
+      {
+        pane: PANE,
+        radius: 7,
+        color: "#14110f",
+        weight: 2,
+        fillColor: "#ffe082",
+        fillOpacity: 0.95,
+        interactive: false
+      }
+    );
   }
 
   function isPublicPartyVisibleOnMap(p) {
@@ -3598,103 +4091,24 @@
   }
 
   function refreshMapBeacon() {
-    const layer = ensurePartyLayer();
-    if (!layer) return;
-
-    layer.clearLayers();
+    const layers = ensurePartyMapLayers();
+    if (!layers) return;
 
     const activeId = getActivePartyId();
-    addNearbyPublicPartyMarkers(layer);
+    layers.public.clearLayers();
+    layers.evidence.clearLayers();
+    addNearbyPublicPartyMarkers(layers.public);
+
     const p = activeId ? getParty(activeId) : null;
-    if (!p) return;
+    if (!p) {
+      clearPartyLiveRouteLayers();
+      return;
+    }
 
     const route = loadPartyRoutes()[p.id] || [];
     const routeSplit = splitPartyRouteBySampleGaps(route);
     const routeLatLngs = routeSplit.points.map((pt) => [pt.lat, pt.lng]);
-
-    // ---------------------------------------------------------------------------
-    // Live route line
-    // ---------------------------------------------------------------------------
-    if (routeLatLngs.length >= 2) {
-      routeSplit.segments.forEach((segment) => {
-        const latLngs = routeSegmentLatLngs(segment);
-
-        L.polyline(latLngs, {
-          pane: PANE,
-          color: "#1a1209",
-          weight: 9,
-          opacity: 0.35,
-          lineCap: "round",
-          lineJoin: "round",
-          interactive: false
-        }).addTo(layer);
-
-        L.polyline(latLngs, {
-          pane: PANE,
-          color: "#f0d18a",
-          weight: 5,
-          opacity: 0.92,
-          lineCap: "round",
-          lineJoin: "round",
-          interactive: false
-        }).addTo(layer);
-      });
-
-      routeSplit.gaps.forEach((gap) => {
-        L.polyline(gap.latLngs, {
-          pane: PANE,
-          color: "#1a1209",
-          weight: 8,
-          opacity: 0.28,
-          dashArray: "4 8",
-          lineCap: "round",
-          lineJoin: "round",
-          interactive: false
-        }).addTo(layer);
-
-        L.polyline(gap.latLngs, {
-          pane: PANE,
-          color: "#f28e7d",
-          weight: 3,
-          opacity: 0.82,
-          dashArray: "4 8",
-          lineCap: "round",
-          lineJoin: "round",
-          interactive: true
-        })
-          .bindTooltip(formatPartyRouteGap(gap), {
-            direction: "top",
-            offset: [0, -6],
-            opacity: 0.94
-          })
-          .addTo(layer);
-      });
-    }
-
-    // ---------------------------------------------------------------------------
-    // Start / latest route points
-    // ---------------------------------------------------------------------------
-    if (routeLatLngs.length) {
-      L.circleMarker(routeLatLngs[0], {
-        pane: PANE,
-        radius: 6,
-        color: "#14110f",
-        weight: 2,
-        fillColor: "#9ee6bd",
-        fillOpacity: 0.95,
-        interactive: false
-      }).addTo(layer);
-
-      L.circleMarker(routeLatLngs[routeLatLngs.length - 1], {
-        pane: PANE,
-        radius: 7,
-        color: "#14110f",
-        weight: 2,
-        fillColor: "#ffe082",
-        fillOpacity: 0.95,
-        interactive: false
-      }).addTo(layer);
-    }
+    updatePartyLiveRouteLayer(p.id, routeSplit, routeLatLngs);
 
     // ---------------------------------------------------------------------------
     // Counted observation dots
@@ -3722,7 +4136,7 @@
         opacity: 0.95
       });
 
-      dot.addTo(layer);
+      dot.addTo(layers.evidence);
     });
 
     // ---------------------------------------------------------------------------
@@ -3738,7 +4152,16 @@
       if (mapLatLng) beaconLatLng = [mapLatLng.lat, mapLatLng.lng];
     }
 
-    if (!beaconLatLng) return;
+    if (!beaconLatLng) {
+      layers.beacon.clearLayers();
+      partyLiveRouteState.beaconMarker = null;
+      return;
+    }
+
+    if (partyLiveRouteState.beaconMarker) {
+      partyLiveRouteState.beaconMarker.setLatLng(beaconLatLng);
+      return;
+    }
 
     const icon = L.divIcon({
       className: "gw-party-marker",
@@ -3754,7 +4177,8 @@
     });
 
     marker.on("click", () => openPartyCover(p.id));
-    marker.addTo(layer);
+    marker.addTo(layers.beacon);
+    partyLiveRouteState.beaconMarker = marker;
   }
 
   function toast(message) {
@@ -5060,9 +5484,20 @@
 
   window.addEventListener("online", () => retryPartyDurabilityQueues(250));
   window.addEventListener("focus", () => retryPartyDurabilityQueues(350));
-  window.addEventListener("pageshow", () => retryPartyDurabilityQueues(350));
+  window.addEventListener("pagehide", () => markPartyRouteBackgrounded());
+  window.addEventListener("pageshow", () => {
+    markPartyRouteResumed("pageshow");
+    retryPartyDurabilityQueues(350);
+  });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") retryPartyDurabilityQueues(350);
+    if (document.visibilityState === "hidden") {
+      markPartyRouteBackgrounded();
+      return;
+    }
+    if (document.visibilityState === "visible") {
+      markPartyRouteResumed("visibilitychange");
+      retryPartyDurabilityQueues(350);
+    }
   });
   window.setTimeout(() => retryPartyDurabilityQueues(1200), 0);
 
@@ -5124,11 +5559,9 @@
     excludePartyEvidence,
     reincludePartyEvidence,
 
-    //  makes recap Share button generate clickable static report link
+    // Party recap sharing
     partyReportUrl,
     makePartyReportPayload,
-    encodePartyReport,
-    decodePartyReport,
     openStaticPartyReport,
 
     // show parties on main hud

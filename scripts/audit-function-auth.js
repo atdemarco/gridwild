@@ -7,6 +7,7 @@ const functionsDir = path.join(root, "netlify", "functions");
 const intentionalPublicServiceRoleFunctions = new Set([
   "get-bootstrap.js",
   "get-grid-assets-build.js",
+  "get-party-report.js",
   "gridwild-account-login.js",
   "gridwild-account-signup.js"
 ]);

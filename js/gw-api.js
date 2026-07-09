@@ -464,6 +464,17 @@ window.GridWildAPI = {
     return postFunction("get-party-route", { party_id: partyId });
   },
 
+  async getPartyReport(partyId) {
+    return postFunction(
+      "get-party-report",
+      { party_id: partyId },
+      {
+        requireOnline: false,
+        ensurePlayerSession: false
+      }
+    );
+  },
+
   async claimQuestEvidence(questId, obsId, source = "observation") {
     const data = await postFunction(
       "claim-quest-evidence",

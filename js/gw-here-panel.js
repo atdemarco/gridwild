@@ -46,6 +46,8 @@
   let hereMap3dDrag = null;
   let hereMap3dMotionUntil = 0;
   let hereMap3dMotionSettleTimer = null;
+  let here3dPuckActive = false;
+  let here3dPuckSuppressDismiss = false;
   let hereInsetPanDrag = null;
   const hereInsetPointers = new Map();
   const hereMap3dPointers = new Map();
@@ -65,6 +67,7 @@
   const hereElevationPending = new Map();
   const hereElevationRequestedAt = new Map();
   const here3dOsmFallbackRequestedAt = new Map();
+  let here3dStableOsmSnapshot = null;
   const hereObservationDownload = {
     busy: false,
     progressText: "",
@@ -99,10 +102,10 @@
     pinchPitchDegPerPx: 0.24,
     wheelZoomPerPx: 0.0016
   };
-  const HERE_3D_PATCH_MAX_LABELS = 3;
+  const HERE_3D_PATCH_MAX_LABELS = 5;
   const HERE_3D_PATCH_MAX_RING_POINTS = 140;
-  const HERE_3D_ROAD_MAX_LABELS = 5;
-  const HERE_3D_PLACE_MAX_LABELS = 6;
+  const HERE_3D_ROAD_MAX_LABELS = 8;
+  const HERE_3D_PLACE_MAX_LABELS = 10;
   const HERE_3D_HABITAT_MAX_FEATURES = 42;
   const HERE_3D_WATER_MAX_FEATURES = 48;
   const HERE_3D_BUILDING_MAX_FEATURES = 96;
@@ -110,11 +113,13 @@
   const HERE_3D_BARRIER_MAX_EDGES = 160;
   const HERE_3D_GROUND_DETAIL_MAX_MARKS = 180;
   const HERE_3D_GROUND_MAX_QUADS = 720;
-  const HERE_3D_TREE_MAX_SPRITES = 72;
+  const HERE_3D_TREE_MAX_SPRITES = 104;
   const HERE_SKY_REFRESH_MS = 1000 * 60;
   const HERE_3D_OSM_MAX_REQUEST_CELLS =
     HERE_3D_CAMERA.maxAutoViewCells * HERE_3D_CAMERA.maxAutoViewCells;
   const HERE_3D_OSM_FALLBACK_COOLDOWN_MS = 1000 * 12;
+  const HERE_3D_OSM_STABLE_HOLD_MS = 1000 * 10;
+  const HERE_3D_OSM_STABLE_GROUPS = ["parks", "water", "roads", "trails", "places", "buildings"];
   const HERE_3D_FEATURE_TIERS = {
     close: {
       id: "close",
@@ -134,8 +139,8 @@
       maxHabitatPoints: 88,
       maxWaterFeatures: HERE_3D_WATER_MAX_FEATURES,
       maxWaterPoints: 100,
-      maxLinearFeatures: 90,
-      maxLinearSegments: 180,
+      maxLinearFeatures: 110,
+      maxLinearSegments: 220,
       buildingScale: 1,
       treeScale: 1,
       maxOsmCells: 61 * 61
@@ -153,15 +158,15 @@
       showRoadLabels: true,
       showPlaceLabels: true,
       showTrees: true,
-      showPatchLabels: false,
+      showPatchLabels: true,
       maxHabitatFeatures: 76,
       maxHabitatPoints: 76,
       maxWaterFeatures: 72,
       maxWaterPoints: 84,
-      maxLinearFeatures: 110,
-      maxLinearSegments: 190,
+      maxLinearFeatures: 140,
+      maxLinearSegments: 240,
       buildingScale: 0.42,
-      treeScale: 0.72,
+      treeScale: 0.9,
       maxOsmCells: 95 * 95
     },
     wide: {
@@ -177,15 +182,15 @@
       showRoadLabels: true,
       showPlaceLabels: true,
       showTrees: true,
-      showPatchLabels: false,
+      showPatchLabels: true,
       maxHabitatFeatures: 92,
       maxHabitatPoints: 58,
       maxWaterFeatures: 86,
       maxWaterPoints: 64,
-      maxLinearFeatures: 72,
-      maxLinearSegments: 112,
+      maxLinearFeatures: 110,
+      maxLinearSegments: 180,
       buildingScale: 0,
-      treeScale: 0.28,
+      treeScale: 0.55,
       maxOsmCells: HERE_3D_OSM_MAX_REQUEST_CELLS
     }
   };
@@ -3251,6 +3256,14 @@
       return distanceFromCamera(ix, iy) > detailRadius;
     }
 
+    function cull3dDetailCell(cell) {
+      return !hereUsesLarge3dFrame() && isSlimCell(cell);
+    }
+
+    function cull3dDetailPoint(ix, iy) {
+      return !hereUsesLarge3dFrame() && isSlimPoint(ix, iy);
+    }
+
     const sorted = cells
       .slice()
       .sort(
@@ -3264,16 +3277,26 @@
     const osmByKey = new Map();
     if (!lightweightMotion && featureTier.includeCellPriors) {
       for (const item of sorted) {
-        if (isSlimCell(item)) continue;
+        if (cull3dDetailCell(item)) continue;
         const prior = window.GridWildOsmPriorsLayer?.getCell?.(item.ix, item.iy) || null;
         if (prior) osmByKey.set(item.key, prior.osm || null);
       }
     }
     const patchRows = visiblePatch3dRows(renderBounds);
-    const osmFeatures =
+    const rawOsmFeatures =
       window.GridWildOsmFeaturesLayer?.getFeatures?.({
-        includeDetail: featureTier.showBuildings
+        includeDetail: true,
+        includeClippedBasemapPolygons: true
       }) || {};
+    const osmFeatures = stabilizeHere3dOsmFeatures(
+      rawOsmFeatures,
+      featureTier,
+      renderLatLngBounds,
+      {
+        lightweightMotion,
+        stableHold: hereUsesLarge3dFrame()
+      }
+    );
     const roadLabelCandidates = [];
 
     function renderRaisedOsmLines() {
@@ -3313,7 +3336,12 @@
           for (let i = 1; i < points.length; i++) {
             const clipped = clipSegmentToCellBounds(points[i - 1], points[i], renderBounds);
             if (!clipped) continue;
-            if (isSlimPoint((clipped.a.ix + clipped.b.ix) / 2, (clipped.a.iy + clipped.b.iy) / 2))
+            if (
+              cull3dDetailPoint(
+                (clipped.a.ix + clipped.b.ix) / 2,
+                (clipped.a.iy + clipped.b.iy) / 2
+              )
+            )
               continue;
 
             const lift = cls === "trail" ? 0.33 : cls === "major" ? 0.52 : 0.43;
@@ -3427,7 +3455,12 @@
         if (Math.hypot(a.ix - b.ix, a.iy - b.iy) < 1e-6) continue;
         const clipped = clipSegmentToCellBounds(a, b, renderBounds, pad);
         if (!clipped) continue;
-        if (isSlimPoint((clipped.a.ix + clipped.b.ix) / 2, (clipped.a.iy + clipped.b.iy) / 2))
+        if (
+          cull3dDetailPoint(
+            (clipped.a.ix + clipped.b.ix) / 2,
+            (clipped.a.iy + clipped.b.iy) / 2
+          )
+        )
           continue;
 
         const pa = terrainPoint(clipped.a, lift);
@@ -3587,7 +3620,7 @@
         if (!boundsOverlap(rawBounds, renderBounds, 1.1)) continue;
 
         const center = centerForGridPoints(rawRing);
-        if (!center || isSlimPoint(center.ix, center.iy)) continue;
+        if (!center || cull3dDetailPoint(center.ix, center.iy)) continue;
 
         const areaSigned = signedGridPolygonArea(rawRing);
         const areaCells = Math.abs(areaSigned);
@@ -3643,12 +3676,23 @@
       if ((window.__gwState?.showOsmParks ?? true) === false) return "";
 
       return (osmFeatures.parks || [])
-        .slice(0, featureTier.maxHabitatFeatures)
         .map((feature) => {
           const points = featureGridPoints(feature, featureTier.maxHabitatPoints);
           if (points.length < 2 || !boundsOverlap(gridBoundsForPoints(points), renderBounds, 1.5))
-            return "";
-
+            return null;
+          return { feature, points };
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+          const ca = centerForGridPoints(a.points);
+          const cb = centerForGridPoints(b.points);
+          return (
+            distanceFromCamera(ca?.ix || 0, ca?.iy || 0) -
+            distanceFromCamera(cb?.ix || 0, cb?.iy || 0)
+          );
+        })
+        .slice(0, featureTier.maxHabitatFeatures)
+        .map(({ feature, points }) => {
           const theme = osmHabitatTheme(feature.tags);
           const isTreeRow = feature.tags?.natural === "tree_row";
           if (feature.closed && points.length >= 3) {
@@ -3688,12 +3732,23 @@
       if ((window.__gwState?.showOsmWater ?? true) === false) return "";
 
       return (osmFeatures.water || [])
-        .slice(0, featureTier.maxWaterFeatures)
         .map((feature) => {
           const points = featureGridPoints(feature, featureTier.maxWaterPoints);
           if (points.length < 2 || !boundsOverlap(gridBoundsForPoints(points), renderBounds, 1.6))
-            return "";
-
+            return null;
+          return { feature, points };
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+          const ca = centerForGridPoints(a.points);
+          const cb = centerForGridPoints(b.points);
+          return (
+            distanceFromCamera(ca?.ix || 0, ca?.iy || 0) -
+            distanceFromCamera(cb?.ix || 0, cb?.iy || 0)
+          );
+        })
+        .slice(0, featureTier.maxWaterFeatures)
+        .map(({ feature, points }) => {
           const width = waterStrokeWidth(feature.tags);
           const closed = feature.closed && points.length >= 3;
           const fill = closed
@@ -3739,7 +3794,7 @@
 
       for (const item of sorted) {
         if (edges.length >= HERE_3D_BARRIER_MAX_EDGES) break;
-        if (isSlimCell(item)) continue;
+        if (cull3dDetailCell(item)) continue;
         const barrier = osmByKey.get(item.key)?.barrierBetweenNeighbors;
         if (!barrier?.any) continue;
 
@@ -3787,7 +3842,7 @@
       const marks = [];
       for (const item of sorted) {
         if (marks.length >= HERE_3D_GROUND_DETAIL_MAX_MARKS) break;
-        if (isSlimCell(item)) continue;
+        if (cull3dDetailCell(item)) continue;
         const osm = osmByKey.get(item.key);
         const cls = osm?.landuseClass;
         if (
@@ -3957,7 +4012,7 @@
 
       featureRows
         .sort((a, b) => b.score - a.score)
-        .slice(0, hereUsesLarge3dFrame() ? 32 : 24)
+        .slice(0, hereUsesLarge3dFrame() ? 54 : 28)
         .forEach((row) => {
           if (rows.length >= cap) return;
           const step =
@@ -3989,7 +4044,7 @@
               const jy = ((stableHash(`y:${seed}`) % 19) / 18 - 0.5) * jitterRange;
               const x = ix + jx;
               const y = iy + jy;
-              if (isSlimPoint(x, y)) continue;
+              if (cull3dDetailPoint(x, y)) continue;
               if (!gridPointInRing({ ix: x, iy: y }, row.ring)) continue;
 
               const dupeKey = `${Math.floor(x * 2)},${Math.floor(y * 2)}`;
@@ -4006,7 +4061,7 @@
 
       for (const item of sorted) {
         if (rows.length >= cap) break;
-        if (isSlimCell(item)) continue;
+        if (cull3dDetailCell(item)) continue;
         const osm = osmByKey.get(item.key);
         const cls = ["wood", "park", "cemetery", "scrub"].includes(osm?.landuseClass)
           ? osm.landuseClass
@@ -4049,8 +4104,9 @@
 
       function addCandidate(feature, kind, priority) {
         const name = osmFeatureName(feature.tags);
+        if (!name) return;
         const key = name.toLowerCase();
-        if (!name || seen.has(key)) return;
+        if (seen.has(key)) return;
         const points = featureGridPoints(feature, kind === "place" ? 2 : 80);
         const featureBounds = gridBoundsForPoints(points);
         if (!points.length || !boundsOverlap(featureBounds, renderBounds, 1.4)) return;
@@ -4067,7 +4123,7 @@
                     Math.min(featureBounds.maxIy, renderBounds.maxIy)) /
                   2
               };
-        if (!center || isSlimPoint(center.ix, center.iy)) return;
+        if (!center || cull3dDetailPoint(center.ix, center.iy)) return;
         const p = terrainPoint(center, 0.34);
         if (p.x < -12 || p.x > w + 12 || p.y < -12 || p.y > h + 12) return;
         seen.add(key);
@@ -4479,10 +4535,10 @@
     const waterFeatures = renderWaterFeatures();
     const groundDetails = lightweightMotion ? "" : renderGroundDetails();
     const barrierEdges = lightweightMotion ? "" : renderBarrierEdges();
-    const patchOutlines = lightweightMotion ? "" : renderPatchOutlines();
+    const patchOutlines = renderPatchOutlines();
     const osmLines = renderRaisedOsmLines();
-    const roadLabels = lightweightMotion ? "" : renderRoadLabels();
-    const placeLabels = lightweightMotion ? "" : renderPlaceLabels();
+    const roadLabels = renderRoadLabels();
+    const placeLabels = renderPlaceLabels();
     const buildings = renderBuildingExtrusions();
     const trees = renderTreeSprites();
 
@@ -4503,8 +4559,7 @@
             return `<g data-layer="niches">${polys}</g>`;
           })
           .join("");
-    const patchLabels =
-      lightweightMotion || !featureTier.showPatchLabels ? "" : renderPatchLabels();
+    const patchLabels = featureTier.showPatchLabels ? renderPatchLabels() : "";
 
     const questTarget = activeQuestTarget();
     const questMarker = questTarget ? renderQuestTarget3d(questTarget) : "";
@@ -5151,31 +5206,125 @@
     );
   }
 
+  function here3dLatLngBoundsOverlap(a, b, padRatio = 0.18) {
+    if (!a?.getSouth || !b?.getSouth) return false;
+
+    const aSouth = a.getSouth();
+    const aNorth = a.getNorth();
+    const aWest = a.getWest();
+    const aEast = a.getEast();
+    const bSouth = b.getSouth();
+    const bNorth = b.getNorth();
+    const bWest = b.getWest();
+    const bEast = b.getEast();
+    if (![aSouth, aNorth, aWest, aEast, bSouth, bNorth, bWest, bEast].every(Number.isFinite)) {
+      return false;
+    }
+
+    const padLat =
+      Math.max(Math.abs(aNorth - aSouth), Math.abs(bNorth - bSouth), 0.0001) * padRatio;
+    const padLng =
+      Math.max(Math.abs(aEast - aWest), Math.abs(bEast - bWest), 0.0001) * padRatio;
+    return !(
+      aNorth < bSouth - padLat ||
+      aSouth > bNorth + padLat ||
+      aEast < bWest - padLng ||
+      aWest > bEast + padLng
+    );
+  }
+
+  function here3dVisibleOsmFeatureGroups(
+    features = {},
+    featureTier = HERE_3D_FEATURE_TIERS.close
+  ) {
+    return {
+      parks: (window.__gwState?.showOsmParks ?? true) !== false ? features.parks || [] : [],
+      water: (window.__gwState?.showOsmWater ?? true) !== false ? features.water || [] : [],
+      roads:
+        featureTier.showLinear && (window.__gwState?.showOsmRoads ?? true) !== false
+          ? features.roads || []
+          : [],
+      trails:
+        featureTier.showTrails && (window.__gwState?.showOsmTrails ?? true) !== false
+          ? features.trails || []
+          : [],
+      places: featureTier.showPlaceLabels ? features.places || [] : [],
+      buildings:
+        featureTier.showBuildings && (window.__gwState?.showOsmBuildings ?? true) !== false
+          ? features.buildings || []
+          : []
+    };
+  }
+
+  function here3dVisibleOsmFeatureCounts(features, featureTier, latLngBounds) {
+    const groups = here3dVisibleOsmFeatureGroups(features, featureTier);
+    return HERE_3D_OSM_STABLE_GROUPS.reduce((acc, key) => {
+      const rows = Array.isArray(groups[key]) ? groups[key] : [];
+      acc[key] = rows.reduce(
+        (count, feature) =>
+          latLngBounds && here3dFeatureOverlapsLatLngBounds(feature, latLngBounds)
+            ? count + 1
+            : count,
+        0
+      );
+      acc.total += acc[key];
+      return acc;
+    }, { total: 0 });
+  }
+
+  function here3dOsmSnapshotUsable(snapshot, featureTier, latLngBounds) {
+    if (!snapshot?.features || !snapshot.bounds || !latLngBounds?.getSouth) return false;
+    if (Date.now() - Number(snapshot.at || 0) > HERE_3D_OSM_STABLE_HOLD_MS) return false;
+    if (snapshot.profile !== featureTier.fetchProfile) return false;
+    return here3dLatLngBoundsOverlap(snapshot.bounds, latLngBounds);
+  }
+
+  function stabilizeHere3dOsmFeatures(features = {}, featureTier, latLngBounds, options = {}) {
+    const rawCounts = here3dVisibleOsmFeatureCounts(features, featureTier, latLngBounds);
+    const prior = here3dStableOsmSnapshot;
+    let stabilized = features;
+    let usedPrior = false;
+    const stableHold = options.lightweightMotion === true || options.stableHold === true;
+
+    if (stableHold && here3dOsmSnapshotUsable(prior, featureTier, latLngBounds)) {
+      const priorCounts = here3dVisibleOsmFeatureCounts(prior.features, featureTier, latLngBounds);
+      const merged = { ...features };
+
+      for (const key of HERE_3D_OSM_STABLE_GROUPS) {
+        if (rawCounts[key] > 0 || priorCounts[key] <= 0) continue;
+        merged[key] = prior.features[key] || [];
+        usedPrior = true;
+      }
+
+      if (usedPrior) stabilized = merged;
+    }
+
+    if (rawCounts.total > 0) {
+      if (!usedPrior) {
+        here3dStableOsmSnapshot = {
+          at: Date.now(),
+          bounds: latLngBounds,
+          profile: featureTier.fetchProfile,
+          features
+        };
+      }
+      return stabilized;
+    }
+
+    if (stableHold && here3dOsmSnapshotUsable(prior, featureTier, latLngBounds)) {
+      return prior.features;
+    }
+
+    return features;
+  }
+
   function here3dHasVisibleOsmFeatures(source, featureTier, latLngBounds) {
     const features =
       source?.getFeatures?.({
-        includeDetail: featureTier.showBuildings || featureTier.fetchProfile === "detail"
+        includeDetail: true,
+        includeClippedBasemapPolygons: true
       }) || {};
-    const groups = [];
-
-    if ((window.__gwState?.showOsmParks ?? true) !== false) groups.push(features.parks);
-    if ((window.__gwState?.showOsmWater ?? true) !== false) groups.push(features.water);
-    if (featureTier.showLinear && (window.__gwState?.showOsmRoads ?? true) !== false) {
-      groups.push(features.roads);
-    }
-    if (featureTier.showTrails && (window.__gwState?.showOsmTrails ?? true) !== false) {
-      groups.push(features.trails);
-    }
-    if (featureTier.showPlaceLabels) groups.push(features.places);
-    if (featureTier.showBuildings && (window.__gwState?.showOsmBuildings ?? true) !== false) {
-      groups.push(features.buildings);
-    }
-
-    return groups.some((group) =>
-      (Array.isArray(group) ? group : []).some((feature) =>
-        here3dFeatureOverlapsLatLngBounds(feature, latLngBounds)
-      )
-    );
+    return here3dVisibleOsmFeatureCounts(features, featureTier, latLngBounds).total > 0;
   }
 
   function requestHere3dFallbackOsmCoverage(source, latLngBounds, featureTier) {
@@ -5392,15 +5541,60 @@
     return document.getElementById("gwHudInvestigateBtn");
   }
 
+  function restoreHerePanelFrom3dPuck() {
+    here3dPuckActive = false;
+    setHereMap3dImmersed(false);
+    setHerePanelOpen(true);
+  }
+
+  function dismissHerePanelFrom3dPuck() {
+    if (here3dPuckSuppressDismiss) return;
+    here3dPuckActive = false;
+    setHerePanelOpen(false);
+  }
+
+  function showHere3dPuck() {
+    if (!window.GridWildInfoPuck?.minimize) {
+      here3dPuckActive = false;
+      return false;
+    }
+
+    here3dPuckActive = true;
+    window.GridWildInfoPuck.minimize({
+      kind: "here-3d",
+      mark: "3D",
+      title: "Here 3D",
+      restore: restoreHerePanelFrom3dPuck,
+      onDismiss: dismissHerePanelFrom3dPuck
+    });
+    return true;
+  }
+
+  function hideHere3dPuck(options = {}) {
+    const isHerePuck = window.GridWildInfoPuck?.currentKind?.() === "here-3d";
+    here3dPuckActive = false;
+    if (!isHerePuck || !window.GridWildInfoPuck?.dismiss) return;
+
+    here3dPuckSuppressDismiss = options.suppressDismiss === true;
+    window.GridWildInfoPuck.dismiss();
+    here3dPuckSuppressDismiss = false;
+  }
+
   function syncHerePanelState() {
     const panel = ensurePanel();
     const btn = investigateButton();
-    if (panel) panel.hidden = !herePanelOpen;
+    const minimizedToPuck = herePanelOpen && hereMap3dImmersed && here3dPuckActive;
+    if (panel) panel.hidden = !herePanelOpen || minimizedToPuck;
     if (btn) {
       btn.classList.toggle("is-on", herePanelOpen);
-      btn.setAttribute("aria-expanded", herePanelOpen ? "true" : "false");
-      btn.setAttribute("aria-label", herePanelOpen ? "Close investigation" : "Investigate here");
-      btn.title = herePanelOpen ? "Close investigation" : "Investigate";
+      btn.setAttribute("aria-expanded", herePanelOpen && !minimizedToPuck ? "true" : "false");
+      const label = minimizedToPuck
+        ? "Close immersive Here view"
+        : herePanelOpen
+          ? "Close investigation"
+          : "Investigate here";
+      btn.setAttribute("aria-label", label);
+      btn.title = label === "Investigate here" ? "Investigate" : label;
     }
     if (!herePanelOpen) syncHereImmersiveViewport();
   }
@@ -5415,7 +5609,12 @@
       hereMap3dPointers.clear();
     }
     hereMap3dImmersed = next;
-    if (!next) syncHereImmersiveViewport();
+    if (next) showHere3dPuck();
+    else {
+      hideHere3dPuck({ suppressDismiss: true });
+      syncHereImmersiveViewport();
+    }
+    syncHerePanelState();
     if (options.refresh !== false) scheduleRefresh(10);
   }
 
