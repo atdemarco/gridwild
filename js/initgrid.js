@@ -4730,42 +4730,40 @@ function buildRPGPopupHTML({ ix, iy, centerLL, metrics, genusSummary }) {
   `;
 }
 
-// The function you asked for: attach the dblclick behavior
+// Attach the dblclick behavior
 window.enableGridRPGPopup = function enableGridRPGPopup() {
   map.off("dblclick", __onGridDblClick);
   map.on("dblclick", __onGridDblClick);
 };
 
 async function __onGridDblClick(e) {
-  if (window.GridWildCellSeededNiches?.claimsMapDoubleClick?.()) return;
-
   if (e?.originalEvent?.preventDefault) e.originalEvent.preventDefault();
   if (e?.originalEvent?.stopPropagation) e.originalEvent.stopPropagation();
 
-  const pMeters = map.options.crs.project(e.latlng);
-  const { ix, iy } = metersToGridIndex(pMeters);
+  if (window.GridWildHudActionMenu?.showPatchHere) {
+    await window.GridWildHudActionMenu.showPatchHere(e.latlng);
+    return;
+  }
 
-  const { swLL, neLL } = gridIndexToBoundsLL(ix, iy);
-  flashGridCell(swLL, neLL);
+  if (window.GridWildPatches?.showPatchViewAtLatLng) {
+    const rows =
+      (await window.GridWildPatches.showPatchViewAtLatLng(e.latlng, {
+        includeINatProjects: false,
+        debug: true
+      })) || [];
+    if (typeof window.showGridWildToast === "function") {
+      window.showGridWildToast(
+        rows.length
+          ? `Showing ${rows.length} patch${rows.length === 1 ? "" : "es"} here.`
+          : "No patch geometry found here."
+      );
+    }
+    return;
+  }
 
-  const centerLL = L.latLng((swLL.lat + neLL.lat) / 2, (swLL.lng + neLL.lng) / 2);
-
-  // Pull precomputed square metrics from static heat store
-  const metrics = getStaticMetricsForCell(ix, iy);
-
-  // Load optional genus record from superchunk asset
-  const squareGeneraRec = await getSquareGeneraRecord(ix, iy);
-  const genusSummary = summarizeSquareGenera(squareGeneraRec);
-
-  const html = buildRPGPopupHTML({
-    ix,
-    iy,
-    centerLL,
-    metrics,
-    genusSummary
-  });
-
-  showGridWildTopPopup(e.latlng, html);
+  if (typeof window.showGridWildToast === "function") {
+    window.showGridWildToast("Patch tools are still loading.");
+  }
 }
 
 // Enable by default

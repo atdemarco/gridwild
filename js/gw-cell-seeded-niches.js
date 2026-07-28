@@ -1541,7 +1541,7 @@
   }
 
   function claimsMapDoubleClick() {
-    return true;
+    return false;
   }
 
   function bindMap() {
@@ -1549,11 +1549,6 @@
     bindMap.bound = true;
 
     map.doubleClickZoom?.disable?.();
-
-    map.on("dblclick", (evt) => {
-      if (evt && L.DomEvent) L.DomEvent.stop(evt);
-      deployFromLatLng(evt.latlng, { openDetail: false });
-    });
 
     map.on("moveend zoomend resize", scheduleSparkles);
     window.addEventListener("gwOsmFeaturesUpdated", () => {

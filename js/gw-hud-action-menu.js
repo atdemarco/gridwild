@@ -260,10 +260,10 @@
   function menuItems(context) {
     const items = [
       {
-        id: "view-patch",
-        icon: "H",
-        label: "Patch Here",
-        sub: "Reveal patch geometry at this point"
+        id: "niche-here",
+        icon: "N",
+        label: "Niche Here",
+        sub: "Start a niche from this grid cell"
       },
       {
         id: "patches",
@@ -726,18 +726,39 @@
     window.open(url.toString(), "_blank", "noopener,noreferrer");
   }
 
+  async function showPatchHere(latlng) {
+    if (!window.GridWildPatches?.showPatchViewAtLatLng) {
+      toast("Patch tools are still loading.");
+      return [];
+    }
+
+    const rows =
+      (await window.GridWildPatches.showPatchViewAtLatLng(latlng, {
+        includeINatProjects: false,
+        debug: true
+      })) || [];
+    toast(
+      rows.length
+        ? `Showing ${rows.length} patch${rows.length === 1 ? "" : "es"} here.`
+        : "No patch geometry found here."
+    );
+    return rows;
+  }
+
   async function handleAction(action, context) {
+    if (action === "niche-here") {
+      if (!window.GridWildCellSeededNiches?.deployFromLatLng) {
+        toast("Niche tools are still loading.");
+        return;
+      }
+      await window.GridWildCellSeededNiches.deployFromLatLng(context?.latlng, {
+        openDetail: false
+      });
+      return;
+    }
+
     if (action === "view-patch") {
-      const rows =
-        (await window.GridWildPatches?.showPatchViewAtLatLng?.(context?.latlng, {
-          includeINatProjects: false,
-          debug: true
-        })) || [];
-      toast(
-        rows.length
-          ? `Showing ${rows.length} patch${rows.length === 1 ? "" : "es"} here.`
-          : "No patch geometry found here."
-      );
+      await showPatchHere(context?.latlng);
       return;
     }
 
@@ -919,7 +940,8 @@
   window.GridWildHudActionMenu = {
     bind,
     close: closeMenu,
-    openMenu
+    openMenu,
+    showPatchHere
   };
 
   if (document.readyState === "loading") {

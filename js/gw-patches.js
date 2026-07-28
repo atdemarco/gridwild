@@ -47,6 +47,13 @@
   const PATCH_LABEL_VIEWPORT_PADDING_PX = 14;
   const PATCH_LABEL_SELECTED_LIFT_PX = 16;
   const PATCH_LABEL_DEFAULT_LIFT_PX = 3;
+  const PATCH_GEOFENCE_ENTER_RADIUS_M = 28;
+  const PATCH_GEOFENCE_EXIT_BUFFER_M = 18;
+  const PATCH_GEOFENCE_ACCURACY_FACTOR = 0.45;
+  const PATCH_GEOFENCE_MAX_ACCURACY_PADDING_M = 22;
+  const PATCH_GEOFENCE_CHECK_MIN_INTERVAL_MS = 1400;
+  const PATCH_GEOFENCE_MIN_MOVE_M = 5;
+  const PATCH_GEOFENCE_SWITCH_COOLDOWN_MS = 2600;
   const PATCH_GROUP_DICE_THRESHOLD = 0.82;
   const PATCH_GROUP_SAMPLE_STEPS = 22;
   const PATCH_GROUP_YEAR_DICE_THRESHOLD = 0.04;
@@ -156,7 +163,11 @@
     labelUpdateRaf: null,
     patchCompletenessCache: new Map(),
     patchCompletenessPending: new Map(),
+    patchCompletenessRetryTimer: null,
     patchCompletenessVersion: 0,
+    patchGeofenceActivePatchId: null,
+    patchGeofenceLastCheck: { at: 0, point: null },
+    patchGeofenceLastRaiseAt: 0,
     suppressPatchInfoUntil: 0,
     suppressHudActionMenuUntil: 0,
     subscriptionPollTimer: null,
@@ -753,6 +764,14 @@
     });
   }
 
+  function schedulePatchCompletenessRetry(delayMs = 900) {
+    if (state.patchCompletenessRetryTimer) return;
+    state.patchCompletenessRetryTimer = window.setTimeout(() => {
+      state.patchCompletenessRetryTimer = null;
+      render();
+    }, Math.max(120, Number(delayMs) || 900));
+  }
+
   function targetSortOrigin() {
     return userLocationOrigin() || mapCenterOrigin() || null;
   }
@@ -1346,7 +1365,7 @@
 
   function patchCompleteness(patch, rings = patchRings(patch)) {
     const bounds = patchCellBounds(rings);
-    if (!bounds) return { total: 0, observed: 0, percent: 0, sampled: false };
+    if (!bounds) return { total: 0, observed: 0, percent: 0, sampled: false, pending: false };
 
     const bboxCells = (bounds.maxIx - bounds.minIx + 1) * (bounds.maxIy - bounds.minIy + 1);
     const exact = bboxCells <= PATCH_COMPLETENESS_MAX_EXACT_CELLS;
@@ -1370,13 +1389,30 @@
 
     const signature = patchCompletenessSignature(patch, bounds, cells.length, stride);
     const cached = state.patchCompletenessCache.get(signature);
-    if (cached) return cached;
+    if (cached) return { ...cached, pending: false };
 
     const fallback = patchCompletenessFromCells(cells, {
       sampled: !exact && stride > 1,
       source: "runtime-cache"
     });
-    schedulePatchCompletenessHydration(signature, cells, fallback);
+
+    const waitingForMetadata =
+      cells.length > 0 &&
+      (metadataGridMemoryAvailable() ||
+        Boolean(window.GridWildGrid && !window.GridWildGrid?.mergedGeneraRecordForCells));
+    const hydrationQueued = schedulePatchCompletenessHydration(signature, cells, fallback);
+    const hydrationPending = state.patchCompletenessPending.has(signature);
+    if (waitingForMetadata || hydrationQueued || hydrationPending) {
+      if (!hydrationQueued && !hydrationPending) schedulePatchCompletenessRetry();
+      return {
+        ...fallback,
+        percent: 0,
+        observed: null,
+        pending: true,
+        source: hydrationQueued ? "metadata-shards-pending" : "metadata-shards-waiting"
+      };
+    }
+
     return fallback;
   }
 
@@ -1406,6 +1442,7 @@
       observed,
       percent,
       sampled: options.sampled === true,
+      pending: options.pending === true,
       source: options.source || "runtime-cache"
     };
   }
@@ -1440,8 +1477,9 @@
 
   function schedulePatchCompletenessHydration(signature, cells = [], fallback) {
     const api = window.GridWildGrid;
-    if (!api?.mergedGeneraRecordForCells || state.patchCompletenessPending.has(signature)) return;
-    if (!cells.length) return;
+    if (!api?.mergedGeneraRecordForCells || state.patchCompletenessPending.has(signature))
+      return false;
+    if (!cells.length) return false;
 
     const sampledCells = representativePatchCompletenessCells(cells);
     const sampled = fallback.sampled === true || sampledCells.length < cells.length;
@@ -1457,6 +1495,7 @@
           observed,
           percent,
           sampled,
+          pending: false,
           source: "metadata-shards"
         });
         render();
@@ -1469,6 +1508,7 @@
       });
 
     state.patchCompletenessPending.set(signature, job);
+    return true;
   }
 
   function completenessColor(percent) {
@@ -2330,6 +2370,37 @@
         background: var(--gw-patch-completeness-color, #f97373);
       }
 
+      .gw-patch-hud-label.is-completeness-pending .gw-patch-completeness-fill {
+        width: 100%;
+        opacity: 0.28;
+        background: linear-gradient(
+          90deg,
+          rgba(255,255,255,0.08),
+          rgba(255,232,164,0.44),
+          rgba(255,255,255,0.08)
+        );
+        background-size: 220% 100%;
+      }
+
+      .gw-patch-hud-label.is-completeness-pending.is-selected .gw-patch-completeness-fill {
+        opacity: 0.86;
+        animation: gwPatchCompletenessPending 960ms linear infinite;
+      }
+
+      .gw-patch-hud-label.is-completeness-pending.is-selected .gw-patch-completeness-bar {
+        border-color: rgba(255,232,164,0.78);
+        box-shadow: 0 0 0 1px rgba(255,232,164,0.28), 0 0 12px rgba(255,232,164,0.22);
+      }
+
+      @keyframes gwPatchCompletenessPending {
+        from {
+          background-position: 160% 0;
+        }
+        to {
+          background-position: -60% 0;
+        }
+      }
+
       .gw-patch-label-row {
         display: flex;
         align-items: center;
@@ -2381,6 +2452,15 @@
       .gw-patch-hud-label.is-selected .gw-patch-completeness-text {
         opacity: 1;
         transform: translateX(0);
+      }
+
+      .gw-patch-hud-label.is-completeness-pending:not(.is-selected) .gw-patch-completeness-text {
+        opacity: 0;
+      }
+
+      .gw-patch-hud-label.is-completeness-pending.is-selected .gw-patch-completeness-text {
+        color: #ffe8a4;
+        border-color: rgba(255,232,164,0.44);
       }
 
       .gw-patch-peek-outline {
@@ -2612,6 +2692,131 @@
     setPatchHudLabelState(patchId, "is-selected", true);
     applySelectedPatchLayerStyles();
     updatePatchLabelPositions();
+  }
+
+  function patchGeofenceLatLngFromEvent(event) {
+    const detail = event?.detail || {};
+    const lat = Number(detail.latitude ?? detail.lat);
+    const lng = Number(detail.longitude ?? detail.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return {
+      lat,
+      lng,
+      accuracy: Number(detail.accuracy ?? detail.accuracyMeters)
+    };
+  }
+
+  function patchGeofenceEnterRadiusM(accuracyMeters) {
+    const accuracy = Number(accuracyMeters);
+    const accuracyPadding = Number.isFinite(accuracy)
+      ? Math.min(
+          PATCH_GEOFENCE_MAX_ACCURACY_PADDING_M,
+          Math.max(0, accuracy * PATCH_GEOFENCE_ACCURACY_FACTOR)
+        )
+      : 0;
+    return PATCH_GEOFENCE_ENTER_RADIUS_M + accuracyPadding;
+  }
+
+  function patchGeofenceKnownRows() {
+    const rows = [];
+    if (state.layerVisible) rows.push(...patchesWithDistance());
+    if (Array.isArray(state.peekRows) && state.peekRows.length) rows.push(...state.peekRows);
+
+    const out = [];
+    const seen = new Set();
+    rows.forEach((patch) => {
+      [patch, ...(Array.isArray(patch?.child_patches) ? patch.child_patches : [])].forEach(
+        (row) => {
+          if (!row?.id || seen.has(String(row.id))) return;
+          const rings = patchRings(row).filter((ring) => Array.isArray(ring) && ring.length >= 3);
+          if (!rings.length) return;
+          seen.add(String(row.id));
+          out.push({ ...row, __gwGeofenceRings: rings });
+        }
+      );
+    });
+    return out;
+  }
+
+  function patchGeofenceCandidateAt(point, accuracyMeters) {
+    const enterRadiusM = patchGeofenceEnterRadiusM(accuracyMeters);
+    const activeId = String(state.patchGeofenceActivePatchId || "");
+    const rows = patchGeofenceKnownRows();
+    const candidates = rows
+      .map((patch) => {
+        const rings = patch.__gwGeofenceRings || patchRings(patch);
+        const inside = pointInRings(point, rings);
+        const distance = inside ? 0 : distanceToRingsM(point, rings);
+        const active = activeId && String(patch.id) === activeId;
+        const threshold = enterRadiusM + (active ? PATCH_GEOFENCE_EXIT_BUFFER_M : 0);
+        if (!Number.isFinite(distance) || distance > threshold) return null;
+        return {
+          patch,
+          inside,
+          distance,
+          areaM2: ringsAreaM2(rings) || rawBoundsAreaM2(rawBoundsFromRings(rings)) || Infinity
+        };
+      })
+      .filter(Boolean);
+
+    return candidates.sort((a, b) => {
+      if (a.inside !== b.inside) return a.inside ? -1 : 1;
+      if (a.distance !== b.distance) return a.distance - b.distance;
+      if (a.areaM2 !== b.areaM2) return a.areaM2 - b.areaM2;
+      return patchTitle(a.patch).localeCompare(patchTitle(b.patch));
+    })[0];
+  }
+
+  function raisePatchFromGeofence(candidate) {
+    const patch = candidate?.patch;
+    if (!patch?.id) return;
+    const target = patchSelectionTarget(patch) || patch;
+    const targetId = String(target.id || patch.id);
+    const now = Date.now();
+    const selectedId = String(state.selectedPatchId || "");
+    const activeId = String(state.patchGeofenceActivePatchId || "");
+
+    if (
+      targetId !== selectedId &&
+      targetId !== activeId &&
+      now - state.patchGeofenceLastRaiseAt < PATCH_GEOFENCE_SWITCH_COOLDOWN_MS &&
+      !candidate.inside
+    ) {
+      return;
+    }
+
+    state.patchGeofenceActivePatchId = targetId;
+    if (targetId === selectedId) return;
+
+    state.patchGeofenceLastRaiseAt = now;
+    selectPatch(patch);
+    if (!getPatch(patch.id)) highlightPatchRows(state.peekRows);
+  }
+
+  function handlePatchGeofenceLocationUpdate(event) {
+    if (!state.layerVisible && !(Array.isArray(state.peekRows) && state.peekRows.length)) return;
+
+    const point = patchGeofenceLatLngFromEvent(event);
+    if (!point) return;
+
+    const now = Date.now();
+    const last = state.patchGeofenceLastCheck;
+    const movedM = last?.point ? distanceM(point, last.point) : Infinity;
+    if (
+      now - Number(last?.at || 0) < PATCH_GEOFENCE_CHECK_MIN_INTERVAL_MS &&
+      movedM < PATCH_GEOFENCE_MIN_MOVE_M
+    ) {
+      return;
+    }
+
+    state.patchGeofenceLastCheck = { at: now, point };
+    const candidate = patchGeofenceCandidateAt(point, point.accuracy);
+    if (!candidate) {
+      state.patchGeofenceActivePatchId = null;
+      return;
+    }
+
+    raisePatchFromGeofence(candidate);
   }
 
   function closePatchActionMenu() {
@@ -2912,13 +3117,19 @@
     if (!latlng) return;
 
     const completeness = patchCompleteness(patch, rings);
-    const percentText = formatCompletenessPercent(completeness.percent);
-    const percentWidth = `${Math.round(completeness.percent * 1000) / 10}%`;
+    const completenessPending = completeness.pending === true;
+    const percentText = completenessPending ? "sync" : formatCompletenessPercent(completeness.percent);
+    const percentWidth = completenessPending
+      ? "100%"
+      : `${Math.round(completeness.percent * 1000) / 10}%`;
     const title = patchTitle(patch);
-    const color = completenessColor(completeness.percent);
+    const color = completenessPending ? "rgba(255,232,164,0.56)" : completenessColor(completeness.percent);
     const theme = patchBoundaryTheme(patch);
     const targetLayer = options.layer || state.layer;
     if (!targetLayer) return;
+    const completionTitle = completenessPending
+      ? `${title}: hydrating patch health`
+      : `${title}: ${percentText} complete${completeness.sampled ? " (estimated)" : ""}`;
 
     const marker = L.marker(latlng, {
       pane: LABEL_PANE,
@@ -2931,9 +3142,9 @@
         html: `
           <div class="gw-patch-hud-label-shell">
             <div
-              class="gw-patch-hud-label${selected ? " is-selected" : ""}"
+              class="gw-patch-hud-label${selected ? " is-selected" : ""}${completenessPending ? " is-completeness-pending" : ""}"
               data-patch-id="${esc(patch.id)}"
-              title="${esc(`${title}: ${percentText} complete${completeness.sampled ? " (estimated)" : ""}`)}"
+              title="${esc(completionTitle)}"
               style="--gw-patch-completeness-width:${esc(percentWidth)};--gw-patch-completeness-color:${esc(color)};${esc(patchHudThemeVars(theme))};"
             >
               <div class="gw-patch-completeness-bar" aria-hidden="true">
@@ -5761,6 +5972,7 @@
       }, 100);
     });
     window.addEventListener("gwUserLocationUpdated", render);
+    window.addEventListener("gwUserLocationUpdated", handlePatchGeofenceLocationUpdate);
     window.addEventListener("gwRecentINatUpdated", render);
     window.addEventListener("gridwild:staticheatloaded", render);
     window.addEventListener("gridwild:filterschange", render);

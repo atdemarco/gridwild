@@ -5795,12 +5795,132 @@
           font-size: 20px;
         }
 
+        .gw-duo-body {
+          padding: 10px;
+        }
+
+        .gw-duo-lesson-card,
+        .gw-duo-result-card {
+          padding: 12px;
+        }
+
+        .gw-duo-lesson-layout {
+          gap: 10px;
+        }
+
+        .gw-duo-question {
+          margin-top: 8px;
+          line-height: 1.08;
+        }
+
+        .gw-duo-choice-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          margin-top: 10px;
+        }
+
         .gw-duo-track-tab {
           min-width: 118px;
         }
 
         .gw-duo-choice {
-          min-height: 150px;
+          min-height: 124px;
+          grid-template-rows: 74px minmax(0, auto);
+          gap: 6px;
+          padding: 7px;
+        }
+
+        .gw-duo-choice .gw-duo-visual {
+          min-height: 74px;
+          border-radius: 12px;
+          box-shadow: inset 0 -5px 0 rgba(0,0,0,0.07);
+        }
+
+        .gw-duo-choice .gw-duo-visual-shape {
+          width: 52px;
+          height: 52px;
+          border-width: 2px;
+          border-radius: 16px 16px 20px 20px;
+          font-size: 10px;
+        }
+
+        .gw-duo-choice b {
+          font-size: 12px;
+          line-height: 1.12;
+        }
+
+        .gw-duo-choice span {
+          font-size: 10px;
+          line-height: 1.18;
+        }
+
+        .gw-duo-lesson-card.is-answered {
+          padding-top: 10px;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-status-row {
+          margin-bottom: 7px;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-lesson-layout {
+          gap: 8px;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-lesson-layout > aside .gw-duo-region-title,
+        .gw-duo-lesson-card.is-answered .gw-duo-lesson-layout > aside .gw-duo-visual,
+        .gw-duo-lesson-card.is-answered .gw-duo-lesson-layout > aside p {
+          display: none;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-question {
+          margin-top: 6px;
+          font-size: 18px;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-choice {
+          min-height: 112px;
+          grid-template-rows: 62px minmax(0, auto);
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-choice .gw-duo-visual {
+          min-height: 62px;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-choice .gw-duo-visual-shape {
+          width: 44px;
+          height: 44px;
+          font-size: 9px;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-feedback {
+          gap: 7px;
+          margin-top: 8px;
+          padding: 8px;
+          border-radius: 12px;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-feedback-mark {
+          width: 24px;
+          height: 24px;
+          font-size: 10px;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-feedback .gw-duo-small {
+          font-size: 10px;
+          line-height: 1.2;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-actions {
+          margin-top: 8px;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-actions .gw-duo-small {
+          display: none;
+        }
+
+        .gw-duo-lesson-card.is-answered .gw-duo-btn {
+          min-height: 34px;
+          padding: 6px 10px;
         }
       }
     `;
@@ -6065,8 +6185,9 @@
     if (!lesson) return renderMap(TRACK_BY_ID[state.selectedTrackId] || TRACKS[0]);
     const item = lesson.items[state.itemIndex] || lesson.items[0];
     const itemPct = pct(state.itemIndex, lesson.items.length);
+    const answeredClass = state.feedback ? " is-answered" : "";
     return `
-      <div class="gw-duo-lesson-card">
+      <div class="gw-duo-lesson-card${answeredClass}">
         <div class="gw-duo-status-row">
           <button class="gw-duo-btn secondary" type="button" data-gw-duo-back>Back to path</button>
           <span class="gw-duo-pill">${state.itemIndex + 1} / ${lesson.items.length}</span>

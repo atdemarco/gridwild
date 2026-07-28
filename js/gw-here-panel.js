@@ -120,6 +120,11 @@
   const HERE_3D_OSM_FALLBACK_COOLDOWN_MS = 1000 * 12;
   const HERE_3D_OSM_STABLE_HOLD_MS = 1000 * 10;
   const HERE_3D_OSM_STABLE_GROUPS = ["parks", "water", "roads", "trails", "places", "buildings"];
+  const HERE_3D_FULLSCREEN_FEATURE_BUFFER = {
+    close: { ratio: 0.62, minCells: 18, maxCells: 36, featureBoost: 1.28 },
+    mid: { ratio: 0.36, minCells: 22, maxCells: 34, featureBoost: 1.32 },
+    wide: { ratio: 0.28, minCells: 20, maxCells: 32, featureBoost: 1.42 }
+  };
   const HERE_3D_FEATURE_TIERS = {
     close: {
       id: "close",
@@ -1783,11 +1788,11 @@
     return parts.slice(0, 3).join(" / ") || "Patch";
   }
 
-  function visiblePatch3dRows(renderBounds) {
+  function visiblePatch3dRows(renderBounds, options = {}) {
     if (window.GridWildPatches?.isVisible?.() === false) return [];
     const api = gridApi();
     const gridSizeM = Number(api?.gridSizeM) || 1;
-    const hudBounds = hudLatLngBounds();
+    const hudBounds = options.latLngBounds || hudLatLngBounds();
     const seen = new Set();
 
     return (window.GridWildPatches?.getPatches?.() || [])
@@ -2413,8 +2418,36 @@
     return HERE_3D_FEATURE_TIERS.wide;
   }
 
-  function squareBoundsAround(bounds, spanCells) {
-    const span = oddCellSpan(spanCells, 1, HERE_3D_CAMERA.maxAutoViewCells);
+  function here3dFrameFeatureTier(baseTier, options = {}) {
+    if (!baseTier || options.largeFrame !== true) return baseTier;
+
+    const policy = HERE_3D_FULLSCREEN_FEATURE_BUFFER[baseTier.id] || {};
+    const boost = Number(policy.featureBoost) || 1;
+    return {
+      ...baseTier,
+      maxHabitatFeatures: Math.round(baseTier.maxHabitatFeatures * boost),
+      maxWaterFeatures: Math.round(baseTier.maxWaterFeatures * boost),
+      maxLinearFeatures: Math.round(baseTier.maxLinearFeatures * boost),
+      maxLinearSegments: Math.round(baseTier.maxLinearSegments * boost),
+      maxHabitatPoints: Math.round(baseTier.maxHabitatPoints * Math.min(1.22, boost)),
+      maxWaterPoints: Math.round(baseTier.maxWaterPoints * Math.min(1.2, boost))
+    };
+  }
+
+  function expandCellBounds(bounds, padCells = 0) {
+    const pad = Math.max(0, Math.round(Number(padCells) || 0));
+    if (!bounds || pad <= 0) return bounds;
+    return {
+      minIx: Math.floor(Number(bounds.minIx)) - pad,
+      maxIx: Math.ceil(Number(bounds.maxIx)) + pad,
+      minIy: Math.floor(Number(bounds.minIy)) - pad,
+      maxIy: Math.ceil(Number(bounds.maxIy)) + pad
+    };
+  }
+
+  function squareBoundsAround(bounds, spanCells, options = {}) {
+    const maxSpan = Number(options.maxSpanCells) || HERE_3D_CAMERA.maxAutoViewCells;
+    const span = oddCellSpan(spanCells, 1, maxSpan);
     const radius = (span - 1) / 2;
     const cx = Math.round((Number(bounds.minIx) + Number(bounds.maxIx)) / 2);
     const cy = Math.round((Number(bounds.minIy) + Number(bounds.maxIy)) / 2);
@@ -2794,8 +2827,15 @@
     if (!api) return "";
 
     const immersive = options.immersive === true;
+    const largeFeatureFrame = immersive || hereUsesLarge3dFrame();
     const hudFov = here3dHudFovState(selectedContext);
-    const featureTier = here3dFeatureTierFor(hudFov);
+    const baseFeatureTier = here3dFeatureTierFor(hudFov);
+    const featureTier = here3dFrameFeatureTier(baseFeatureTier, {
+      largeFrame: largeFeatureFrame
+    });
+    const patchLabelLimit = largeFeatureFrame ? 8 : HERE_3D_PATCH_MAX_LABELS;
+    const roadLabelLimit = largeFeatureFrame ? 12 : HERE_3D_ROAD_MAX_LABELS;
+    const placeLabelLimit = largeFeatureFrame ? 16 : HERE_3D_PLACE_MAX_LABELS;
     const lightweightMotion = options.lightweightMotion === true || here3dUsesLightweightMotion();
     const renderBounds = here3dRenderBoundsFor(bounds, selectedContext, hudFov);
     const cells = api.cellsForBounds(renderBounds);
@@ -2804,6 +2844,11 @@
     const { w, h } = here3dFrameSize(immersive);
     const gridSizeM = Number(api.gridSizeM) || 1;
     const renderLatLngBounds = api.boundsToLatLngBounds?.(renderBounds) || null;
+    const featureRenderBounds = here3dFeatureBoundsFor(renderBounds, featureTier, {
+      largeFrame: largeFeatureFrame
+    });
+    const featureLatLngBounds =
+      api.boundsToLatLngBounds?.(featureRenderBounds) || renderLatLngBounds;
     const widthCells = renderBounds.maxIx - renderBounds.minIx + 1;
     const heightCells = renderBounds.maxIy - renderBounds.minIy + 1;
     const userCell = api.currentUserCell?.();
@@ -3282,7 +3327,9 @@
         if (prior) osmByKey.set(item.key, prior.osm || null);
       }
     }
-    const patchRows = visiblePatch3dRows(renderBounds);
+    const patchRows = visiblePatch3dRows(featureRenderBounds, {
+      latLngBounds: featureLatLngBounds
+    });
     const rawOsmFeatures =
       window.GridWildOsmFeaturesLayer?.getFeatures?.({
         includeDetail: true,
@@ -3291,7 +3338,7 @@
     const osmFeatures = stabilizeHere3dOsmFeatures(
       rawOsmFeatures,
       featureTier,
-      renderLatLngBounds,
+      featureLatLngBounds,
       {
         lightweightMotion,
         stableHold: hereUsesLarge3dFrame()
@@ -3314,13 +3361,60 @@
       const segments = [];
       const maxFeatures = featureTier.maxLinearFeatures;
       const maxSegments = featureTier.maxLinearSegments;
+      let drawnSegments = 0;
+
+      function linePointToken(point) {
+        return `${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+      }
+
+      function lineDeflectionDegrees(a, b, c) {
+        const abx = b.x - a.x;
+        const aby = b.y - a.y;
+        const bcx = c.x - b.x;
+        const bcy = c.y - b.y;
+        const abLen = Math.hypot(abx, aby);
+        const bcLen = Math.hypot(bcx, bcy);
+        if (abLen < 1e-6 || bcLen < 1e-6) return 0;
+        const dot = clamp((abx * bcx + aby * bcy) / (abLen * bcLen), -1, 1);
+        return (Math.acos(dot) * 180) / Math.PI;
+      }
+
+      function appendLinePart(parts, a, b) {
+        const previous = parts[parts.length - 1];
+        if (previous) {
+          const gap = Math.hypot(previous.end.x - a.x, previous.end.y - a.y);
+          const previousPoint = previous.points[previous.points.length - 2];
+          const deflection = previousPoint
+            ? lineDeflectionDegrees(previousPoint, previous.end, b)
+            : 180;
+          if (gap <= 1.25 || (gap <= 4 && deflection <= 15)) {
+            if (deflection <= 15 && previous.points.length > 1) {
+              previous.points[previous.points.length - 1] = b;
+            } else {
+              previous.points.push(b);
+            }
+            previous.end = b;
+            return;
+          }
+        }
+        parts.push({ points: [a, b], end: b });
+      }
+
+      function linePartPath(part) {
+        if (!part?.points?.length) return "";
+        return part.points
+          .map((point, index) => `${index === 0 ? "M" : "L"}${linePointToken(point)}`)
+          .join(" ");
+      }
+
       for (const group of groups) {
         let usedFeatures = 0;
         for (const feature of group.features || []) {
           if (usedFeatures >= maxFeatures) break;
+          if (drawnSegments >= maxSegments) break;
           if (
-            renderLatLngBounds &&
-            !here3dFeatureOverlapsLatLngBounds(feature, renderLatLngBounds)
+            featureLatLngBounds &&
+            !here3dFeatureOverlapsLatLngBounds(feature, featureLatLngBounds)
           ) {
             continue;
           }
@@ -3332,9 +3426,29 @@
           if (points.length < 2) continue;
 
           const cls = group.kind === "trail" ? "trail" : highwayClass(feature.tags);
+          const lift = cls === "trail" ? 0.33 : cls === "major" ? 0.52 : 0.43;
+          const width =
+            cls === "major" ? 2.7 : cls === "street" ? 2.1 : cls === "trail" ? 1.35 : 1.75;
+          const stroke = cls === "trail" ? "rgba(212,177,112,0.78)" : "rgba(108,96,86,0.86)";
+          const core = cls === "trail" ? "rgba(255,231,163,0.72)" : "rgba(239,222,194,0.50)";
+          const isBridge = osmFlag(feature.tags?.bridge);
+          const isTunnel = osmFlag(feature.tags?.tunnel);
+          const crossingGlow =
+            isBridge || osmFlag(feature.tags?.ford) || osmFlag(feature.tags?.crossing);
+          const lineCap = feature.clipped_to_tile ? "butt" : "round";
+          const shadowCap = "butt";
+          const groundParts = [];
+          const raisedParts = [];
+          let depthSum = 0;
+          let depthCount = 0;
           let drewFeature = false;
           for (let i = 1; i < points.length; i++) {
-            const clipped = clipSegmentToCellBounds(points[i - 1], points[i], renderBounds);
+            if (drawnSegments >= maxSegments) break;
+            const clipped = clipSegmentToCellBounds(
+              points[i - 1],
+              points[i],
+              featureRenderBounds
+            );
             if (!clipped) continue;
             if (
               cull3dDetailPoint(
@@ -3344,7 +3458,6 @@
             )
               continue;
 
-            const lift = cls === "trail" ? 0.33 : cls === "major" ? 0.52 : 0.43;
             const groundA = project(
               clipped.a.ix,
               clipped.a.iy,
@@ -3367,17 +3480,7 @@
             );
             if (!isVisibleLine([groundA, groundB, raisedA, raisedB])) continue;
 
-            const width =
-              cls === "major" ? 2.7 : cls === "street" ? 2.1 : cls === "trail" ? 1.35 : 1.75;
-            const stroke = cls === "trail" ? "rgba(212,177,112,0.78)" : "rgba(108,96,86,0.86)";
-            const core = cls === "trail" ? "rgba(255,231,163,0.72)" : "rgba(239,222,194,0.50)";
-            const dGround = `M${groundA.x.toFixed(1)} ${groundA.y.toFixed(1)} L${groundB.x.toFixed(1)} ${groundB.y.toFixed(1)}`;
-            const dRaised = `M${raisedA.x.toFixed(1)} ${raisedA.y.toFixed(1)} L${raisedB.x.toFixed(1)} ${raisedB.y.toFixed(1)}`;
             const screenLength = Math.hypot(raisedB.x - raisedA.x, raisedB.y - raisedA.y);
-            const isBridge = osmFlag(feature.tags?.bridge);
-            const isTunnel = osmFlag(feature.tags?.tunnel);
-            const crossingGlow =
-              isBridge || osmFlag(feature.tags?.ford) || osmFlag(feature.tags?.crossing);
 
             if (
               featureTier.showRoadLabels &&
@@ -3398,28 +3501,38 @@
               });
             }
 
+            appendLinePart(groundParts, groundA, groundB);
+            appendLinePart(raisedParts, raisedA, raisedB);
+            depthSum += (raisedA.forward + raisedB.forward) / 2;
+            depthCount += 1;
+            drawnSegments += 1;
+            drewFeature = true;
+          }
+
+          if (drewFeature && raisedParts.length) {
+            const dGround = groundParts.map(linePartPath).filter(Boolean).join(" ");
+            const dRaised = raisedParts.map(linePartPath).filter(Boolean).join(" ");
+            const shadowJoin = "bevel";
+            const lineJoin = "round";
             segments.push({
-              depth: (raisedA.forward + raisedB.forward) / 2,
+              depth: depthSum / Math.max(1, depthCount),
               markup: `
                 <g data-layer="osm-${cls}">
-                  <path d="${dGround}" fill="none" stroke="rgba(0,0,0,0.26)" stroke-width="${(width + 2.2).toFixed(1)}" stroke-linecap="round"></path>
-                  ${isTunnel ? `<path d="${dRaised}" fill="none" stroke="rgba(8,10,10,0.60)" stroke-width="${(width + 4.4).toFixed(1)}" stroke-linecap="round" stroke-dasharray="2.4 2.2"></path>` : ""}
-                  <path d="${dRaised}" fill="none" stroke="rgba(255,231,163,0.18)" stroke-width="${(width + 3.1).toFixed(1)}" stroke-linecap="round"></path>
-                  ${isBridge ? `<path d="${dRaised}" fill="none" stroke="rgba(244,224,181,0.44)" stroke-width="${(width + 4).toFixed(1)}" stroke-linecap="round"></path>` : ""}
-                  <path d="${dRaised}" fill="none" stroke="${stroke}" stroke-width="${width.toFixed(1)}" stroke-linecap="round"></path>
-                  <path d="${dRaised}" fill="none" stroke="${core}" stroke-width="${Math.max(0.5, width * 0.34).toFixed(1)}" stroke-linecap="round"></path>
-                  ${crossingGlow ? `<path d="${dRaised}" fill="none" stroke="rgba(255,245,205,0.48)" stroke-width="0.8" stroke-linecap="round" stroke-dasharray="1.2 2"></path>` : ""}
+                  <path d="${dGround}" fill="none" stroke="rgba(0,0,0,0.26)" stroke-width="${(width + 2.2).toFixed(1)}" stroke-linecap="${shadowCap}" stroke-linejoin="${shadowJoin}"></path>
+                  ${isTunnel ? `<path d="${dRaised}" fill="none" stroke="rgba(8,10,10,0.60)" stroke-width="${(width + 4.4).toFixed(1)}" stroke-linecap="${shadowCap}" stroke-linejoin="${shadowJoin}" stroke-dasharray="2.4 2.2"></path>` : ""}
+                  <path d="${dRaised}" fill="none" stroke="rgba(255,231,163,0.18)" stroke-width="${(width + 3.1).toFixed(1)}" stroke-linecap="${shadowCap}" stroke-linejoin="${shadowJoin}"></path>
+                  ${isBridge ? `<path d="${dRaised}" fill="none" stroke="rgba(244,224,181,0.44)" stroke-width="${(width + 4).toFixed(1)}" stroke-linecap="${shadowCap}" stroke-linejoin="${shadowJoin}"></path>` : ""}
+                  <path d="${dRaised}" fill="none" stroke="${stroke}" stroke-width="${width.toFixed(1)}" stroke-linecap="${lineCap}" stroke-linejoin="${lineJoin}"></path>
+                  <path d="${dRaised}" fill="none" stroke="${core}" stroke-width="${Math.max(0.5, width * 0.34).toFixed(1)}" stroke-linecap="${lineCap}" stroke-linejoin="${lineJoin}"></path>
+                  ${crossingGlow ? `<path d="${dRaised}" fill="none" stroke="rgba(255,245,205,0.48)" stroke-width="0.8" stroke-linecap="${lineCap}" stroke-linejoin="${lineJoin}" stroke-dasharray="1.2 2"></path>` : ""}
                 </g>
               `
             });
-            drewFeature = true;
-
-            if (segments.length >= maxSegments) break;
+            usedFeatures++;
           }
-          if (drewFeature) usedFeatures++;
-          if (segments.length >= maxSegments) break;
+          if (drawnSegments >= maxSegments) break;
         }
-        if (segments.length >= maxSegments) break;
+        if (drawnSegments >= maxSegments) break;
       }
 
       return segments
@@ -3446,6 +3559,7 @@
       const lift = Number(options.lift ?? 0.08);
       const pad = Number(options.pad ?? 0.8);
       const closed = options.closed === true;
+      const clipBounds = options.bounds || renderBounds;
       const segments = [];
       const count = closed ? points.length : points.length - 1;
 
@@ -3453,7 +3567,7 @@
         const a = points[i];
         const b = points[(i + 1) % points.length];
         if (Math.hypot(a.ix - b.ix, a.iy - b.iy) < 1e-6) continue;
-        const clipped = clipSegmentToCellBounds(a, b, renderBounds, pad);
+        const clipped = clipSegmentToCellBounds(a, b, clipBounds, pad);
         if (!clipped) continue;
         if (
           cull3dDetailPoint(
@@ -3617,7 +3731,7 @@
         const rawRing = featureGridRing(feature);
         if (rawRing.length < 3) continue;
         const rawBounds = gridBoundsForPoints(rawRing);
-        if (!boundsOverlap(rawBounds, renderBounds, 1.1)) continue;
+        if (!boundsOverlap(rawBounds, featureRenderBounds, 1.1)) continue;
 
         const center = centerForGridPoints(rawRing);
         if (!center || cull3dDetailPoint(center.ix, center.iy)) continue;
@@ -3678,7 +3792,10 @@
       return (osmFeatures.parks || [])
         .map((feature) => {
           const points = featureGridPoints(feature, featureTier.maxHabitatPoints);
-          if (points.length < 2 || !boundsOverlap(gridBoundsForPoints(points), renderBounds, 1.5))
+          if (
+            points.length < 2 ||
+            !boundsOverlap(gridBoundsForPoints(points), featureRenderBounds, 1.5)
+          )
             return null;
           return { feature, points };
         })
@@ -3705,7 +3822,11 @@
             `;
           }
 
-          const lines = terrainPolylineSegments(points, { lift: isTreeRow ? 0.18 : 0.1, pad: 1.2 });
+          const lines = terrainPolylineSegments(points, {
+            lift: isTreeRow ? 0.18 : 0.1,
+            pad: 1.2,
+            bounds: featureRenderBounds
+          });
           if (!lines.length) return "";
           return `
             <g data-layer="osm-habitat-line">
@@ -3734,7 +3855,10 @@
       return (osmFeatures.water || [])
         .map((feature) => {
           const points = featureGridPoints(feature, featureTier.maxWaterPoints);
-          if (points.length < 2 || !boundsOverlap(gridBoundsForPoints(points), renderBounds, 1.6))
+          if (
+            points.length < 2 ||
+            !boundsOverlap(gridBoundsForPoints(points), featureRenderBounds, 1.6)
+          )
             return null;
           return { feature, points };
         })
@@ -3758,7 +3882,12 @@
                 return `<polygon points="${pointsAttr(poly)}" fill="rgba(43,108,143,0.24)" stroke="rgba(139,209,232,0.24)" stroke-width="0.6" stroke-linejoin="round"></polygon>`;
               })()
             : "";
-          const lines = terrainPolylineSegments(points, { lift: 0.12, pad: 1.4, closed });
+          const lines = terrainPolylineSegments(points, {
+            lift: 0.12,
+            pad: 1.4,
+            closed,
+            bounds: featureRenderBounds
+          });
           if (!fill && !lines.length) return "";
 
           return `
@@ -3983,7 +4112,7 @@
         const rawRing = featureGridRing(feature);
         if (rawRing.length < 3) continue;
         const rawBounds = gridBoundsForPoints(rawRing);
-        if (!boundsOverlap(rawBounds, renderBounds, 0.8)) continue;
+        if (!boundsOverlap(rawBounds, featureRenderBounds, 0.8)) continue;
 
         const areaCells = Math.abs(signedGridPolygonArea(rawRing));
         if (areaCells < 0.18) continue;
@@ -3999,10 +4128,10 @@
           cls,
           ring: downsampleRing(rawRing, hereUsesLarge3dFrame() ? 180 : 120),
           bounds: {
-            minIx: Math.max(rawBounds.minIx, renderBounds.minIx - 0.5),
-            maxIx: Math.min(rawBounds.maxIx, renderBounds.maxIx + 1.5),
-            minIy: Math.max(rawBounds.minIy, renderBounds.minIy - 0.5),
-            maxIy: Math.min(rawBounds.maxIy, renderBounds.maxIy + 1.5)
+            minIx: Math.max(rawBounds.minIx, featureRenderBounds.minIx - 0.5),
+            maxIx: Math.min(rawBounds.maxIx, featureRenderBounds.maxIx + 1.5),
+            minIy: Math.max(rawBounds.minIy, featureRenderBounds.minIy - 0.5),
+            maxIy: Math.min(rawBounds.maxIy, featureRenderBounds.maxIy + 1.5)
           },
           areaCells,
           score:
@@ -4108,19 +4237,19 @@
         const key = name.toLowerCase();
         if (seen.has(key)) return;
         const points = featureGridPoints(feature, kind === "place" ? 2 : 80);
-        const featureBounds = gridBoundsForPoints(points);
-        if (!points.length || !boundsOverlap(featureBounds, renderBounds, 1.4)) return;
+        const candidateBounds = gridBoundsForPoints(points);
+        if (!points.length || !boundsOverlap(candidateBounds, featureRenderBounds, 1.4)) return;
         const center =
           kind === "place"
             ? points[0]
             : {
                 ix:
-                  (Math.max(featureBounds.minIx, renderBounds.minIx) +
-                    Math.min(featureBounds.maxIx, renderBounds.maxIx)) /
+                  (Math.max(candidateBounds.minIx, featureRenderBounds.minIx) +
+                    Math.min(candidateBounds.maxIx, featureRenderBounds.maxIx)) /
                   2,
                 iy:
-                  (Math.max(featureBounds.minIy, renderBounds.minIy) +
-                    Math.min(featureBounds.maxIy, renderBounds.maxIy)) /
+                  (Math.max(candidateBounds.minIy, featureRenderBounds.minIy) +
+                    Math.min(candidateBounds.maxIy, featureRenderBounds.maxIy)) /
                   2
               };
         if (!center || cull3dDetailPoint(center.ix, center.iy)) return;
@@ -4143,8 +4272,8 @@
           if (added >= maxCandidates) break;
           if (options.namedOnly && !osmFeatureName(feature.tags)) continue;
           if (
-            renderLatLngBounds &&
-            !here3dFeatureOverlapsLatLngBounds(feature, renderLatLngBounds)
+            featureLatLngBounds &&
+            !here3dFeatureOverlapsLatLngBounds(feature, featureLatLngBounds)
           ) {
             continue;
           }
@@ -4161,7 +4290,7 @@
 
       return candidates
         .sort((a, b) => b.score - a.score)
-        .slice(0, HERE_3D_PLACE_MAX_LABELS)
+        .slice(0, placeLabelLimit)
         .map((candidate) => {
           const text = candidate.name.slice(0, 28);
           const angle = groundTextAngle(candidate.center.ix, candidate.center.iy);
@@ -4210,7 +4339,7 @@
 
       return Array.from(byFeature.values())
         .sort((a, b) => b.score - a.score)
-        .slice(0, HERE_3D_ROAD_MAX_LABELS)
+        .slice(0, roadLabelLimit)
         .map((candidate, index) => {
           const text = roadLabelText(candidate.name, candidate.screenLength);
           if (!text) return "";
@@ -4330,7 +4459,7 @@
             for (let i = 0; i < ring.length; i++) {
               const a = ring[i];
               const b = ring[(i + 1) % ring.length];
-              const clipped = clipSegmentToCellBounds(a, b, renderBounds, 1.2);
+              const clipped = clipSegmentToCellBounds(a, b, featureRenderBounds, 1.2);
               if (!clipped) continue;
               const d = patchLinePath(clipped.a, clipped.b, home ? 0.46 : 0.34);
               if (d) segments.push(d);
@@ -4360,7 +4489,7 @@
           const clipped = clipSegmentToCellBounds(
             ring[i],
             ring[(i + 1) % ring.length],
-            renderBounds,
+            featureRenderBounds,
             1.2
           );
           if (!clipped) continue;
@@ -4465,7 +4594,7 @@
             distanceFromCamera(a.center.ix, a.center.iy) -
             distanceFromCamera(b.center.ix, b.center.iy)
         )
-        .slice(0, HERE_3D_PATCH_MAX_LABELS)
+        .slice(0, patchLabelLimit)
         .map(renderPatchLabel)
         .join("");
     }
@@ -4569,13 +4698,7 @@
           const ux = userCell.ix + 0.5;
           const uy = userCell.iy + 0.5;
           const ground = project(ux, uy, terrainZAt(ux, uy, 0.02));
-          const avatarTop = project(ux, uy, terrainZAt(ux, uy, 3.02));
-          const projectedSixtyFeet = Math.hypot(avatarTop.x - ground.x, avatarTop.y - ground.y);
-          const size = clamp(
-            projectedSixtyFeet,
-            hereUsesLarge3dFrame() ? 9.5 : 8,
-            hereUsesLarge3dFrame() ? 32 : 28
-          );
+          const size = hereUsesLarge3dFrame() ? 20 : 18;
           const x = ground.x;
           const ay = ground.y - size * 0.47;
           const bodyBottom = ay + size * 0.47;
@@ -5256,6 +5379,21 @@
     };
   }
 
+  function here3dFeatureBoundsFor(renderBounds, featureTier, options = {}) {
+    if (!renderBounds || options.largeFrame !== true) return renderBounds;
+
+    const policy = HERE_3D_FULLSCREEN_FEATURE_BUFFER[featureTier?.id] || {};
+    const width = Math.max(1, Number(renderBounds.maxIx) - Number(renderBounds.minIx) + 1);
+    const height = Math.max(1, Number(renderBounds.maxIy) - Number(renderBounds.minIy) + 1);
+    const span = Math.max(width, height);
+    const padCells = clamp(
+      Math.round(span * (Number(policy.ratio) || 0.28)),
+      Number(policy.minCells) || 16,
+      Number(policy.maxCells) || 32
+    );
+    return expandCellBounds(renderBounds, padCells);
+  }
+
   function here3dVisibleOsmFeatureCounts(features, featureTier, latLngBounds) {
     const groups = here3dVisibleOsmFeatureGroups(features, featureTier);
     return HERE_3D_OSM_STABLE_GROUPS.reduce((acc, key) => {
@@ -5377,12 +5515,18 @@
     if (!herePanelOpen || !hereMap3dEnabled) return;
     const api = gridApi();
     const hudFov = here3dHudFovState(selectedContext);
-    const featureTier = here3dFeatureTierFor(hudFov);
+    const baseFeatureTier = here3dFeatureTierFor(hudFov);
+    const featureTier = here3dFrameFeatureTier(baseFeatureTier, {
+      largeFrame: hereMap3dImmersed || hereMap3dExpanded
+    });
     const renderBounds = here3dRenderBoundsFor(bounds, selectedContext, hudFov);
     if (!api || !renderBounds) return;
-    if (cellCountForBounds(renderBounds) > featureTier.maxOsmCells) return;
+    if (cellCountForBounds(renderBounds) > baseFeatureTier.maxOsmCells) return;
 
-    const latLngBounds = api.boundsToLatLngBounds?.(renderBounds);
+    const featureBounds = here3dFeatureBoundsFor(renderBounds, featureTier, {
+      largeFrame: hereMap3dImmersed || hereMap3dExpanded
+    });
+    const latLngBounds = api.boundsToLatLngBounds?.(featureBounds);
     if (!latLngBounds?.isValid?.()) return;
 
     const source = window.GridWildOsmFeaturesLayer;
